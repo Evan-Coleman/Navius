@@ -3,6 +3,10 @@ use reqwest::Client;
 use serde::Deserialize;
 use std::sync::Arc;
 
+#[derive(OpenApi)]
+#[openapi(paths(get_pet), components(schemas(Pet)))]
+struct ApiDoc;
+
 #[tokio::main]
 async fn main() {
     let client = Arc::new(Client::new());
@@ -11,6 +15,8 @@ async fn main() {
     let app = Router::new()
         .route("/", get(|| async { "Hello, World!" }))
         .route("/data", get(get_data))
+        .route("/pet", get(get_pet_handler))
+        .merge(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .with_state(client);
 
     // run our app with hyper, listening globally on port 3000
@@ -19,6 +25,11 @@ async fn main() {
 }
 
 #[derive(Deserialize)]
+struct ApiResponse {
+    fact: String,
+}
+
+#[derive(Deserialize, serde::Serialize)]
 struct Data {
     data: String,
 }
@@ -30,8 +41,26 @@ async fn get_data(State(client): State<Arc<Client>>) -> Json<Data> {
         .send()
         .await
         .unwrap()
-        .json::<Data>()
+        .json::<ApiResponse>() // Deserialize into ApiResponse first
         .await
         .unwrap();
-    Json(response)
+
+    // Map to your desired structure
+    Json(Data {
+        data: response.fact,
+    })
+}
+
+async fn get_pet_handler() -> impl axum::response::IntoResponse {
+    match get_pet_by_id(1).await {
+        Ok(pet) => axum::Json(pet),
+        Err(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Pet {
+    pub id: i64,
+    pub name: String,
+    pub status: Option<String>,
 }
