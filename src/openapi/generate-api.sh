@@ -8,7 +8,7 @@ OPENAPI_SPEC_PATH="./src/openapi/petstore-swagger.yaml"  # Adjust to your OpenAP
 CONFIG_PATH="./src/openapi/petstore-config.yaml"  # Adjust to your YAML config file path
 
 
-OUTPUT_DIR="./src/petstore-api"
+OUTPUT_DIR="./src/petstore_api"
 IGNORE_FILE_PATH="./.openapi-generator-ignore"
 
 # Move the .openapi-generator-ignore file to the output directory before running OpenAPI Generator
@@ -17,17 +17,17 @@ IGNORE_FILE_PATH="./.openapi-generator-ignore"
 # Run OpenAPI Generator using the YAML configuration file
 # openapi-generator generate --ignore-file-override $IGNORE_FILE_PATH -i $OPENAPI_SPEC_PATH -c $CONFIG_PATH
 
-rm -rf /src/petstore-api/
+rm -rf $OUTPUT_DIR
 openapi-generator generate -i $OPENAPI_SPEC_PATH -c $CONFIG_PATH --openapi-generator-ignore-list "README.md,/docs/*,src/apis/*,.travis.yml,git_push.sh,.gitignore"
 
 
-rm -rf src/petstore-api/.openapi-generator
-rm -rf src/petstore-api/.openapi-generator-ignore
-rm -rf src/petstore-api/Cargo.toml
-mv src/petstore-api/src/models src/petstore-api/models
-rm -rf src/petstore-api/src
+rm -rf $OUTPUT_DIR/.openapi-generator
+rm -rf $OUTPUT_DIR/.openapi-generator-ignore
+rm -rf $OUTPUT_DIRCargo/.toml
+mv $OUTPUT_DIRsrc/models $OUTPUT_DIR/models
+rm -rf $OUTPUT_DIR/src
 
-touch ./src/petstore-api/mod.rs
+touch $OUTPUT_DIR/mod.rs
 echo "#![allow(unused_imports)]
 #![allow(clippy::too_many_arguments)]
-pub mod models;" > ./src/petstore-api/mod.rs
+pub mod models;" > $OUTPUT_DIR/mod.rs
