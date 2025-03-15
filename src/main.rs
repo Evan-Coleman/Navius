@@ -4,7 +4,7 @@ use axum::{
     response::IntoResponse,
     routing::get,
 };
-use generated::*;
+
 use reqwest::Client;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
