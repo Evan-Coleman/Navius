@@ -8,6 +8,10 @@ axum = "0.8.1"
 reqwest = { version = "0.12.14", features = ["json"] }
 serde = { version = "1.0.219", features = ["derive"] }
 tokio = {version = "1.44.1", features = ["rt-multi-thread", "macros"] }
-utoipa = {version = "5.3.1", features = ["axum_extras"]}
+utoipa = {version = "5.3.1", features = ["axum_extras", "yaml"]}
 utoipa-axum = "0.2.0"
-utoipa-swagger-ui = "9.0.0"
+utoipa-swagger-ui = {version = "9.0.0", features = ["axum"]}
+
+[build-dependencies]
+utoipa-gen = "5.3.1"
+serde_yaml = "0.9.33"

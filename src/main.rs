@@ -1,26 +1,34 @@
-use axum::{Json, Router, extract::State, routing::get};
+use axum::{
+    Json, Router,
+    extract::{Path, State},
+    response::IntoResponse,
+    routing::get,
+};
+use generated::*;
 use reqwest::Client;
-use serde::Deserialize;
+use reqwest::StatusCode;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tokio::net::TcpListener;
+use utoipa::{OpenApi, ToSchema};
+use utoipa_swagger_ui::SwaggerUi;
 
 #[derive(OpenApi)]
-#[openapi(paths(get_pet), components(schemas(Pet)))]
+#[openapi(paths(get_pet_by_id), components(schemas(Pet)))]
 struct ApiDoc;
 
 #[tokio::main]
 async fn main() {
     let client = Arc::new(Client::new());
 
-    // build our application with a single route
     let app = Router::new()
         .route("/", get(|| async { "Hello, World!" }))
         .route("/data", get(get_data))
-        .route("/pet", get(get_pet_handler))
+        .route("/pet/{id}", get(get_pet_by_id)) // ✅ Now properly referenced
         .merge(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .with_state(client);
 
-    // run our app with hyper, listening globally on port 3000
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -29,7 +37,7 @@ struct ApiResponse {
     fact: String,
 }
 
-#[derive(Deserialize, serde::Serialize)]
+#[derive(Serialize, Deserialize)]
 struct Data {
     data: String,
 }
@@ -41,26 +49,41 @@ async fn get_data(State(client): State<Arc<Client>>) -> Json<Data> {
         .send()
         .await
         .unwrap()
-        .json::<ApiResponse>() // Deserialize into ApiResponse first
+        .json::<ApiResponse>()
         .await
         .unwrap();
 
-    // Map to your desired structure
     Json(Data {
         data: response.fact,
     })
 }
 
-async fn get_pet_handler() -> impl axum::response::IntoResponse {
-    match get_pet_by_id(1).await {
-        Ok(pet) => axum::Json(pet),
-        Err(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    }
+async fn get_pet_by_id_request(client: &Client, pet_id: i64) -> Result<Pet, reqwest::Error> {
+    let url = format!("https://petstore3.swagger.io/api/v3/pet/{}", pet_id);
+    let response = client.get(&url).send().await?.json::<Pet>().await?;
+    Ok(response)
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Pet {
-    pub id: i64,
-    pub name: String,
-    pub status: Option<String>,
+#[utoipa::path(
+    get,
+    path = "/pet/{id}",
+    responses(
+        (status = 200, description = "Returns pet", body = Pet),
+        (status = 500, description = "Internal server error")
+    )
+)]
+async fn get_pet_by_id(
+    State(client): State<Arc<Client>>,
+    Path(pet_id): Path<i64>,
+) -> impl IntoResponse {
+    match get_pet_by_id_request(&client, pet_id).await {
+        Ok(pet) => {
+            print!("Hello");
+            Json(pet).into_response()
+        }
+        Err(_) => {
+            print!("Wrong!");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
 }
