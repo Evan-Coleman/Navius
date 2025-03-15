@@ -1,5 +1,5 @@
 generatorName: rust
-outputDir: petstore-api
+outputDir: ./src/petstore-api
 additionalProperties:
   packageName: petstore
   serverFramework: axum
