@@ -13,5 +13,3 @@ utoipa-axum = "0.2.0"
 utoipa-swagger-ui = {version = "9.0.0", features = ["axum"]}
 
 [build-dependencies]
-utoipa-gen = "5.3.1"
-serde_yaml = "0.9.33"
