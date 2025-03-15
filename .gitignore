@@ -2,3 +2,8 @@
 Cargo.lock
 .env
 /src/generated
+
+
+
+# Here ignore any generated API
+/src/petstore-api
