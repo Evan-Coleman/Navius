@@ -1,0 +1,18 @@
+generatorName: rust
+outputDir: petstore-api
+additionalProperties:
+  packageName: petstore
+  serverFramework: axum
+  async: true
+  crateType: mod    # Change to mod instead of lib
+  edition: "2021"
+  defaultCargoFeatures: false
+  rustVersion: "1.56.0"
+  defaultFeature: false
+  features: []
+  with-derive: true
+  with-serde: true
+  with-serde-derive: true
+generateModels: true  # Only generate model files
+generateApis: false   # Do not generate API files
+generateSupportingFiles: false  # Do not generate supporting files (like server files)
