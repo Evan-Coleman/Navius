@@ -1,5 +1,6 @@
 generatorName: rust
 outputDir: ./src/petstore-api
+ignore-file-override: ./.openapi-ignore
 additionalProperties:
   packageName: petstore
   serverFramework: axum
