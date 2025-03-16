@@ -41,7 +41,7 @@ pub async fn get_pet_by_id(
                 return Ok(Json(pet));
             }
             Err(err) => {
-                warn!("Failed to get pet with ID {}: {}", id, err);
+                // Error is already logged in fetch_pet_with_retry
                 if err.contains("not found") {
                     return Err((StatusCode::NOT_FOUND, err));
                 } else {
@@ -57,7 +57,7 @@ pub async fn get_pet_by_id(
                 return Ok(Json(pet));
             }
             Err(err) => {
-                warn!("Failed to get pet with ID {}: {}", id, err);
+                // Error is already logged in fetch_pet_with_retry
                 if err.contains("not found") {
                     return Err((StatusCode::NOT_FOUND, err));
                 } else {
@@ -80,6 +80,12 @@ async fn fetch_pet_with_retry(state: &Arc<AppState>, id: i64) -> Result<Upet, St
         match fetch_pet(state, id).await {
             Ok(pet) => return Ok(pet),
             Err(err) => {
+                // Don't log attempt number or retry on 404 Not Found errors
+                if err.contains("not found (HTTP 404)") {
+                    warn!("Pet not found: {}", err);
+                    return Err(err);
+                }
+
                 warn!("Attempt {} failed: {}", attempt + 1, err);
                 last_error = Some(err);
 
