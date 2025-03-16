@@ -9,6 +9,7 @@ CONFIG_DIR="config"
 ENV_FILE=".env"
 RUN_ENV="development"
 API_REGISTRY="config/api_registry.json"
+PRESERVE_REGISTRY=true  # New flag to preserve registry settings
 
 print_usage() {
     echo "Usage: $0 [OPTIONS]"
@@ -18,6 +19,7 @@ print_usage() {
     echo "  --config-dir=DIR     Use specified config directory (default: config)"
     echo "  --env=FILE           Use specified .env file (default: .env)"
     echo "  --environment=ENV    Use specified environment (default: development)"
+    echo "  --update-registry    Allow updating API registry settings (default: preserve)"
     echo "  --help               Show this help message"
 }
 
@@ -42,6 +44,10 @@ for arg in "$@"; do
             ;;
         --environment=*)
             RUN_ENV="${arg#*=}"
+            shift
+            ;;
+        --update-registry)
+            PRESERVE_REGISTRY=false
             shift
             ;;
         --help)
@@ -108,6 +114,11 @@ if [ "$SKIP_GEN" = false ]; then
         # Create generated directory if it doesn't exist
         mkdir -p generated/openapi
         
+        # If we're preserving registry settings, make a backup
+        if [ "$PRESERVE_REGISTRY" = true ]; then
+            cp "$API_REGISTRY" "${API_REGISTRY}.bak"
+        fi
+        
         # Read the API registry and generate missing APIs
         api_count=$(jq '.apis | length' "$API_REGISTRY")
         
@@ -119,8 +130,15 @@ if [ "$SKIP_GEN" = false ]; then
                 
                 # Check if this API has generation enabled
                 generate_models=$(jq -r ".apis[$i].options.generate_models // true" "$API_REGISTRY")
-                generate_api=$(jq -r ".apis[$i].options.generate_api // true" "$API_REGISTRY")
-                generate_handlers=$(jq -r ".apis[$i].options.generate_handlers // true" "$API_REGISTRY")
+                
+                # If preserving registry, get the original settings for generate_api and generate_handlers
+                if [ "$PRESERVE_REGISTRY" = true ]; then
+                    generate_api=$(jq -r ".apis[$i].options.generate_api // true" "${API_REGISTRY}.bak")
+                    generate_handlers=$(jq -r ".apis[$i].options.generate_handlers // true" "${API_REGISTRY}.bak")
+                else
+                    generate_api=$(jq -r ".apis[$i].options.generate_api // true" "$API_REGISTRY")
+                    generate_handlers=$(jq -r ".apis[$i].options.generate_handlers // true" "$API_REGISTRY")
+                fi
                 
                 # Skip if all generation options are disabled
                 if [ "$generate_models" != "true" ] && [ "$generate_api" != "true" ] && [ "$generate_handlers" != "true" ]; then
@@ -131,6 +149,18 @@ if [ "$SKIP_GEN" = false ]; then
                 # Check if this API is already generated
                 if [ ! -d "generated/${api_name}_api" ]; then
                     echo "Generating API client for $api_name..."
+                    
+                    # If preserving registry, use the backup for generation
+                    if [ "$PRESERVE_REGISTRY" = true ]; then
+                        # Temporarily update the registry with preserved settings
+                        jq --arg i "$i" \
+                           --arg generate_api "$generate_api" \
+                           --arg generate_handlers "$generate_handlers" \
+                           '.apis[$i | tonumber].options.generate_api = ($generate_api == "true") | 
+                            .apis[$i | tonumber].options.generate_handlers = ($generate_handlers == "true")' \
+                           "$API_REGISTRY" > "${API_REGISTRY}.tmp"
+                        mv "${API_REGISTRY}.tmp" "$API_REGISTRY"
+                    fi
                     
                     # Run the add_api.sh script with just the API name to use registry configuration
                     ./scripts/add_api.sh "$api_name"
@@ -144,6 +174,12 @@ if [ "$SKIP_GEN" = false ]; then
                     echo "API client for $api_name already exists, skipping generation."
                 fi
             done
+            
+            # Restore the original registry if we're preserving settings
+            if [ "$PRESERVE_REGISTRY" = true ]; then
+                mv "${API_REGISTRY}.bak" "$API_REGISTRY"
+                echo "Preserved original API registry settings."
+            fi
         else
             echo "No APIs registered in $API_REGISTRY."
         fi
