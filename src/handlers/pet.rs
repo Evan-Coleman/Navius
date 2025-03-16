@@ -43,10 +43,7 @@ pub async fn get_pet_by_id(
             Err(err) => {
                 warn!("Failed to get pet with ID {}: {}", id, err);
                 if err.contains("not found") {
-                    return Err((
-                        StatusCode::NOT_FOUND,
-                        format!("Pet with ID {} not found", id),
-                    ));
+                    return Err((StatusCode::NOT_FOUND, err));
                 } else {
                     return Err((StatusCode::INTERNAL_SERVER_ERROR, err));
                 }
@@ -62,10 +59,7 @@ pub async fn get_pet_by_id(
             Err(err) => {
                 warn!("Failed to get pet with ID {}: {}", id, err);
                 if err.contains("not found") {
-                    return Err((
-                        StatusCode::NOT_FOUND,
-                        format!("Pet with ID {} not found", id),
-                    ));
+                    return Err((StatusCode::NOT_FOUND, err));
                 } else {
                     return Err((StatusCode::INTERNAL_SERVER_ERROR, err));
                 }
@@ -113,12 +107,21 @@ async fn fetch_pet(state: &Arc<AppState>, id: i64) -> Result<Upet, String> {
         .await
         .map_err(|e| format!("Failed to send request: {}", e))?;
 
-    if response.status() == StatusCode::NOT_FOUND {
-        return Err(format!("Pet with ID {} not found", id));
+    let status = response.status();
+
+    if status == StatusCode::NOT_FOUND {
+        return Err(format!(
+            "Pet with ID {} not found (HTTP {})",
+            id,
+            status.as_u16()
+        ));
     }
 
-    if !response.status().is_success() {
-        return Err(format!("API returned error status: {}", response.status()));
+    if !status.is_success() {
+        return Err(format!(
+            "API returned error status: HTTP {}",
+            status.as_u16()
+        ));
     }
 
     response
