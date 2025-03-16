@@ -15,7 +15,7 @@ fi
 # Check for OpenAPI Generator
 if ! command -v openapi-generator &> /dev/null; then
   echo "Warning: OpenAPI Generator is not installed."
-  echo "This script needs it to generate API clients, but will continue without it for now."
+  echo "This script normally needs it to generate API clients, but will continue without it for now."
   echo "To install, see https://openapi-generator.tech/docs/installation/"
   SKIP_API_GENERATION=true
 else
@@ -41,18 +41,25 @@ echo "Parameter Name: $PARAM_NAME"
 
 # Create directories
 echo "Creating directories..."
-mkdir -p "src/openapi/$API_NAME"
+mkdir -p "generated/openapi/$API_NAME"
 mkdir -p "src/models"
+
+# Make sure the generated directory exists in gitignore
+if ! grep -q "^/generated/" .gitignore; then
+  echo "Adding /generated/ to .gitignore..."
+  echo -e "\n# Generated API clients\n/generated/" >> .gitignore
+fi
 
 # 1. Download OpenAPI schema if it's a URL
 if [[ "$SCHEMA_URL" == http* ]]; then
   echo "Downloading OpenAPI schema..."
-  curl -s -o "src/openapi/$API_NAME/swagger.json" "$SCHEMA_URL"
+  curl -s -o "generated/openapi/$API_NAME/schema.json" "$SCHEMA_URL"
+  SCHEMA_FILE="generated/openapi/$API_NAME/schema.json"
 elif [[ -f "$SCHEMA_URL" ]]; then
   echo "Using local OpenAPI schema file..."
-  # If schema is local file, just use it directly for the next steps
-  # No need to download
-  SCHEMA_FILE="$SCHEMA_URL"
+  # If schema is local file, copy it to our directory with a consistent name
+  cp "$SCHEMA_URL" "generated/openapi/$API_NAME/schema.json"
+  SCHEMA_FILE="generated/openapi/$API_NAME/schema.json"
 else
   echo "Error: Schema URL is not a valid URL or file path"
   exit 1
@@ -60,9 +67,9 @@ fi
 
 # 2. Create OpenAPI Generator config
 echo "Creating OpenAPI Generator config..."
-cat > "src/openapi/$API_NAME/config.yaml" << EOF
+cat > "generated/openapi/$API_NAME/config.yaml" << EOF
 generatorName: rust
-outputDir: ./src/${API_NAME}_api
+outputDir: ./generated/${API_NAME}_api
 additionalProperties:
   packageName: ${API_NAME}
   serverFramework: axum
@@ -70,41 +77,43 @@ EOF
 
 # 3. Create generation script
 echo "Creating API generation script..."
-cat > "src/openapi/$API_NAME/generate-api.sh" << EOF
+cat > "generated/openapi/$API_NAME/generate-api.sh" << EOF
 #!/bin/bash
 
 set -e
 
 # Clean up previous generated files if they exist
-if [ -d "./src/${API_NAME}_api" ]; then
+if [ -d "./generated/${API_NAME}_api" ]; then
     echo "Cleaning up previous generated files..."
-    rm -rf ./src/${API_NAME}_api
+    rm -rf ./generated/${API_NAME}_api
 fi
 
 # Run OpenAPI Generator
 echo "Running OpenAPI Generator..."
-openapi-generator generate -i ./src/openapi/${API_NAME}/swagger.json -c ./src/openapi/${API_NAME}/config.yaml
+openapi-generator generate -i ./generated/openapi/${API_NAME}/schema.json -c ./generated/openapi/${API_NAME}/config.yaml
 
 # Create a module file
 echo "Creating module declaration file..."
-cat > ./src/${API_NAME}_api/mod.rs << EOF2
+cat > ./generated/${API_NAME}_api/mod.rs << EOF2
 pub mod models;
 EOF2
 
 echo "API generation complete."
 EOF
 
-chmod +x "src/openapi/$API_NAME/generate-api.sh"
+chmod +x "generated/openapi/$API_NAME/generate-api.sh"
 
 # 4. Run the script to generate the API client
 if [ "$SKIP_API_GENERATION" = false ]; then
   echo "Generating API client..."
-  ./src/openapi/$API_NAME/generate-api.sh
+  ./generated/openapi/$API_NAME/generate-api.sh
 else
   echo "Skipping API client generation due to missing OpenAPI Generator..."
   # Create a simple models directory for temporary use
-  mkdir -p ./src/${API_NAME}_api/models
-  echo "pub mod models;" > ./src/${API_NAME}_api/mod.rs
+  mkdir -p ./generated/${API_NAME}_api/models
+  echo "pub mod models;" > ./generated/${API_NAME}_api/mod.rs
+  mkdir -p ./generated/${API_NAME}_api/models
+  touch ./generated/${API_NAME}_api/models/mod.rs
 fi
 
 # 5. Create models file
@@ -160,7 +169,7 @@ use crate::models::${API_NAME}::Enhanced${API_NAME_PASCAL};
     get,
     path = "/${ENDPOINT_PATH}/{${PARAM_NAME}}/enhanced",
     params(
-        ("${PARAM_NAME}" = i32, Path, description = "Item ID to fetch and enhance")
+        ("${PARAM_NAME}" = String, Path, description = "Item ID or name to fetch and enhance")
     ),
     responses(
         (status = 200, description = "Enhanced item retrieved successfully", body = Enhanced${API_NAME_PASCAL}),
@@ -169,14 +178,14 @@ use crate::models::${API_NAME}::Enhanced${API_NAME_PASCAL};
     ),
     tag = "${ENDPOINT_PATH}"
 )]
-pub async fn get_enhanced_${API_NAME_CAMEL}(
-    Path(${PARAM_NAME}): Path<i32>,
+pub async fn get_enhanced_${API_NAME}(
+    Path(${PARAM_NAME}): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Enhanced${API_NAME_PASCAL}>, (axum::http::StatusCode, String)> {
     info!("Fetching and enhancing ${API_NAME} with ID: {}", ${PARAM_NAME});
 
     // Construct the URL to fetch the item by ID
-    let url = format!("{}/posts/{}", state.config.api.${API_NAME}_url, ${PARAM_NAME});
+    let url = format!("{}/pokemon/{}", state.config.api.${API_NAME}_url, ${PARAM_NAME});
     
     // Make request to the API
     let response = state
@@ -204,22 +213,80 @@ pub async fn get_enhanced_${API_NAME_CAMEL}(
         })?;
         
         // Extract content from the response - adjust these based on actual API response structure
-        let title = item["title"].as_str().unwrap_or("No title").to_string();
-        let body = item["body"].as_str().unwrap_or("No content").to_string();
+        let pokemon_id = item["id"].as_i64().unwrap_or_default() as i32;
+        let name = item["name"].as_str().unwrap_or("unknown").to_string();
         
-        // Transform the data
-        let words = body.split_whitespace().count();
-        let reading_time = (words as f64 / 200.0).ceil() as usize;  // Assuming 200 words per minute
+        // For PokeAPI, get the first character uppercase
+        let title = format!("Pokemon: {}", name.chars().next().unwrap_or('u').to_uppercase().collect::<String>() + &name[1..]);
+        
+        // Extract description from species endpoint
+        let species_url = item["species"]["url"].as_str().unwrap_or_default();
+        let body_text = if !species_url.is_empty() {
+            match state.client.get(species_url).send().await {
+                Ok(res) if res.status().is_success() => {
+                    match res.json::<serde_json::Value>().await {
+                        Ok(data) => {
+                            // Find English flavor text
+                            let flavor_texts = data["flavor_text_entries"].as_array();
+                            let mut description = String::new();
+                            
+                            if let Some(texts) = flavor_texts {
+                                for entry in texts {
+                                    if let Some(lang) = entry["language"]["name"].as_str() {
+                                        if lang == "en" {
+                                            description = entry["flavor_text"].as_str()
+                                                .unwrap_or_default()
+                                                .replace(r"\n", " ")
+                                                .replace(r"\f", " ");
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            description
+                        },
+                        Err(_) => "No description available.".to_string()
+                    }
+                },
+                _ => "No description available.".to_string()
+            }
+        } else {
+            "No description available.".to_string()
+        };
+        
+        let word_count = body_text.split_whitespace().count();
+        let reading_time = (word_count as f64 / 200.0).ceil() as usize;  // Assuming 200 words per minute
+        
+        // Extract types for metadata
+        let mut types = Vec::new();
+        if let Some(types_array) = item["types"].as_array() {
+            for type_entry in types_array {
+                if let Some(type_name) = type_entry["type"]["name"].as_str() {
+                    types.push(type_name.to_string());
+                }
+            }
+        }
+        
+        // Extract abilities for metadata
+        let mut abilities = Vec::new();
+        if let Some(abilities_array) = item["abilities"].as_array() {
+            for ability_entry in abilities_array {
+                if let Some(ability_name) = ability_entry["ability"]["name"].as_str() {
+                    abilities.push(ability_name.to_string());
+                }
+            }
+        }
         
         // Create enhanced item
         let enhanced_item = Enhanced${API_NAME_PASCAL} {
-            id: item["id"].as_i64().unwrap_or_default() as i32,
-            title: format!("Enhanced: {}", title),
-            enhanced_body: format!("{}. Word count: {}. Reading time: {} minute(s).", 
-                              body, words, reading_time),
-            word_count: words,
+            id: pokemon_id,
+            title,
+            enhanced_body: body_text,
+            word_count,
             reading_time_minutes: reading_time,
-            metadata: format!("Fetched from {}", "${API_URL}"),
+            metadata: format!("Types: {}. Abilities: {}.", 
+                           types.join(", "), 
+                           abilities.join(", "))
         };
         
         info!("Successfully enhanced ${API_NAME} ID: {}", ${PARAM_NAME});
@@ -249,9 +316,24 @@ cp config/default.yaml config/default.yaml.bak
 # 8. Update lib.rs to include the new API module
 echo "Updating lib.rs..."
 if ! grep -q "${API_NAME}_api" src/lib.rs; then
-    sed -i.tmp "/pub mod petstore_api;/a\\
-/// ${API_NAME_PASCAL} API client\\
-pub mod ${API_NAME}_api;" src/lib.rs
+    # Create a module to import the generated API
+    cat > "src/generated_apis.rs" << EOM
+//! This module re-exports APIs from the generated directory
+#[path = "../generated/${API_NAME}_api/mod.rs"]
+pub mod ${API_NAME}_api;
+EOM
+
+    # Add the generated_apis module to lib.rs if it doesn't exist
+    if ! grep -q "pub mod generated_apis;" src/lib.rs; then
+        sed -i.tmp "/pub mod petstore_api;/a\\
+/// Re-exports generated API clients\\
+pub mod generated_apis;" src/lib.rs
+        rm -f src/lib.rs.tmp
+    fi
+    
+    # Add the API to the generated_apis module
+    sed -i.tmp "/pub mod generated_apis;/a\\
+pub use generated_apis::${API_NAME}_api;" src/lib.rs
     rm -f src/lib.rs.tmp
 fi
 
@@ -264,10 +346,6 @@ pub mod ${API_NAME};" src/models/mod.rs
 fi
 
 if ! grep -q "use ${API_NAME}::Enhanced${API_NAME_PASCAL};" src/models/mod.rs; then
-    line_number=$(grep -n "pub use schemas::" src/models/mod.rs | cut -d':' -f1)
-    last_line=$(grep -n "};" src/models/mod.rs | cut -d':' -f1)
-    sed -i.tmp "${last_line}s/};/    Enhanced${API_NAME_PASCAL},\\
-};/" src/models/mod.rs
     sed -i.tmp "/pub use schemas::/a\\
 pub use ${API_NAME}::Enhanced${API_NAME_PASCAL};" src/models/mod.rs
     rm -f src/models/mod.rs.tmp
@@ -281,9 +359,9 @@ pub mod ${ENDPOINT_PATH};" src/handlers/mod.rs
     rm -f src/handlers/mod.rs.tmp
 fi
 
-if ! grep -q "pub use ${ENDPOINT_PATH}::get_enhanced_${API_NAME_CAMEL};" src/handlers/mod.rs; then
+if ! grep -q "pub use ${ENDPOINT_PATH}::get_enhanced_${API_NAME};" src/handlers/mod.rs; then
     sed -i.tmp "/pub use pet::get_pet_by_id;/a\\
-pub use ${ENDPOINT_PATH}::get_enhanced_${API_NAME_CAMEL};" src/handlers/mod.rs
+pub use ${ENDPOINT_PATH}::get_enhanced_${API_NAME};" src/handlers/mod.rs
     rm -f src/handlers/mod.rs.tmp
 fi
 
@@ -295,20 +373,37 @@ if ! grep -q "${API_NAME}_url" src/config/app_config.rs; then
     rm -f src/config/app_config.rs.tmp
 fi
 
+# Add default value to AppConfig::new()
+if ! grep -q "${API_NAME}_url" src/config/app_config.rs | grep -q "set_default"; then
+    sed -i.tmp "/set_default(\"api.petstore_url\".*)/a\\
+            .set_default(\"api.${API_NAME}_url\", \"${API_URL}\")?" src/config/app_config.rs
+    rm -f src/config/app_config.rs.tmp
+fi
+
 # 12. Update config/default.yaml to include the new API URL
 echo "Updating config/default.yaml..."
 if ! grep -q "${API_NAME}_url" config/default.yaml; then
-    sed -i.tmp "/petstore_url:/a\\
-  ${API_NAME}_url: \"${API_URL}\"" config/default.yaml
-    rm -f config/default.yaml.tmp
+    # Ensure proper YAML formatting when adding new line - add to new line after petstore_url
+    # Use awk to ensure proper formatting and avoid syntax errors
+    awk -v api_name="${API_NAME}" -v api_url="${API_URL}" '
+    /petstore_url:/ {
+        print $0;
+        print "  " api_name "_url: \"" api_url "\"";
+        next;
+    }
+    { print }
+    ' config/default.yaml > config/default.yaml.new
+    
+    # Replace the original file with the modified one
+    mv config/default.yaml.new config/default.yaml
 fi
 
 # 13. Update router.rs to add the new route and documentation
 echo "Updating app/router.rs..."
-if ! grep -q "get_enhanced_${API_NAME_CAMEL}" src/app/router.rs; then
+if ! grep -q "get_enhanced_${API_NAME}" src/app/router.rs; then
     # Add to API paths
     sed -i.tmp "/crate::handlers::pet::get_pet_by_id,/a\\
-        crate::handlers::${ENDPOINT_PATH}::get_enhanced_${API_NAME_CAMEL}," src/app/router.rs
+        crate::handlers::${ENDPOINT_PATH}::get_enhanced_${API_NAME}," src/app/router.rs
     
     # Add to schemas
     sed -i.tmp "/crate::cache::CacheStats,/a\\
@@ -318,15 +413,33 @@ if ! grep -q "get_enhanced_${API_NAME_CAMEL}" src/app/router.rs; then
     sed -i.tmp "/(name = \"pets\", description = \"Pet endpoints\"),/a\\
         (name = \"${ENDPOINT_PATH}\", description = \"${API_NAME_PASCAL} endpoints\")," src/app/router.rs
     
-    # Add route
-    sed -i.tmp "/route(\"\/pet\/{id}\", get(handlers::pet::get_pet_by_id))/a\\
-        .route(\"/${ENDPOINT_PATH}/{${PARAM_NAME}}/enhanced\", get(handlers::${ENDPOINT_PATH}::get_enhanced_${API_NAME_CAMEL}))" src/app/router.rs
+    # Add route (ensuring proper formatting and no trailing comma issues)
+    sed -i.tmp "s|.route(\"/pet/{id}\", get(handlers::pet::get_pet_by_id))|.route(\"/pet/{id}\", get(handlers::pet::get_pet_by_id))\n        .route(\"/${ENDPOINT_PATH}/{${PARAM_NAME}}/enhanced\", get(handlers::${ENDPOINT_PATH}::get_enhanced_${API_NAME}))|" src/app/router.rs
     
     rm -f src/app/router.rs.tmp
 fi
 
+# 14. Verify directory structures for API module
+echo "Verifying API module structure..."
+mkdir -p "./generated/${API_NAME}_api/models"
+touch "./generated/${API_NAME}_api/models/mod.rs"
+
+# 15. Create a custom build script to copy generated files if needed
+echo "Creating custom build script..."
+if [ ! -f "build.rs" ]; then
+    cat > "build.rs" << EOF
+fn main() {
+    // Tell Cargo to rerun this build script if any file in the generated directory changes
+    println!("cargo:rerun-if-changed=generated");
+}
+EOF
+fi
+
 echo "==== Integration Complete ===="
 echo "New API endpoint added: /${ENDPOINT_PATH}/{${PARAM_NAME}}/enhanced"
+echo ""
+echo "Generated files placed in: /generated/${API_NAME}_api"
+echo "The /generated/ directory has been added to .gitignore"
 echo ""
 echo "Next Steps:"
 echo "1. Run 'cargo build' to verify everything compiles"
