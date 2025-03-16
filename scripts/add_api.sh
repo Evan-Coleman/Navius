@@ -110,9 +110,13 @@ if [ "$GENERATE_MODELS" != "true" ] && [ "$GENERATE_API" != "true" ] && [ "$GENE
     
     # Update the API registry
     if jq -e ".apis[] | select(.name == \"$API_NAME\")" "$API_REGISTRY" > /dev/null; then
+        # Get the existing schema path
+        EXISTING_SCHEMA_PATH=$(jq -r ".apis[] | select(.name == \"$API_NAME\") | .schema_path" "$API_REGISTRY")
+        
+        # Update with existing schema path
         jq --arg name "$API_NAME" \
            --arg url "$API_URL" \
-           --arg schema "${SWAGGER_DIR}/${API_NAME}.yaml" \
+           --arg schema "$EXISTING_SCHEMA_PATH" \
            --arg entity "$ENTITY_NAME" \
            --arg id "$ID_FIELD" \
            --argjson options "$OPTIONS_JSON" \
@@ -205,18 +209,40 @@ mkdir -p ${SWAGGER_DIR}
 # Download schema if it's a URL
 if [[ "$SCHEMA_PATH" == http* ]]; then
     echo "Downloading schema from $SCHEMA_PATH..."
-    SCHEMA_FILE="${SWAGGER_DIR}/${API_NAME}.yaml"
+    # For new downloads, use either the existing schema path or fallback to the default
+    if jq -e ".apis[] | select(.name == \"$API_NAME\")" "$API_REGISTRY" > /dev/null; then
+        SCHEMA_FILE=$(jq -r ".apis[] | select(.name == \"$API_NAME\") | .schema_path" "$API_REGISTRY")
+    else
+        SCHEMA_FILE="${SWAGGER_DIR}/${API_NAME}.yaml"
+    fi
     curl -s -o "$SCHEMA_FILE" "$SCHEMA_PATH"
     SCHEMA_PATH="$SCHEMA_FILE"
 elif [[ ! -f "$SCHEMA_PATH" ]]; then
     echo "Error: Schema file not found at $SCHEMA_PATH"
     exit 1
 else
-    # Copy the schema to our swagger folder for consistency
-    echo "Copying schema from $SCHEMA_PATH..."
+    # Copy the schema to our swagger folder - but respect the existing filename from registry if available
+    echo "Processing schema from $SCHEMA_PATH..."
     mkdir -p "${SWAGGER_DIR}"
-    cp "$SCHEMA_PATH" "${SWAGGER_DIR}/${API_NAME}.yaml"
-    SCHEMA_PATH="${SWAGGER_DIR}/${API_NAME}.yaml"
+    
+    # Determine the target schema file
+    if jq -e ".apis[] | select(.name == \"$API_NAME\")" "$API_REGISTRY" > /dev/null; then
+        TARGET_SCHEMA=$(jq -r ".apis[] | select(.name == \"$API_NAME\") | .schema_path" "$API_REGISTRY")
+        
+        # Only copy if source and target are different
+        if [[ "$SCHEMA_PATH" != "$TARGET_SCHEMA" ]]; then
+            echo "Copying schema to $TARGET_SCHEMA..."
+            cp "$SCHEMA_PATH" "$TARGET_SCHEMA"
+        else
+            echo "Schema file already in correct location."
+        fi
+    else
+        TARGET_SCHEMA="${SWAGGER_DIR}/${API_NAME}.yaml"
+        echo "Copying schema to $TARGET_SCHEMA..."
+        cp "$SCHEMA_PATH" "$TARGET_SCHEMA"
+    fi
+    
+    SCHEMA_PATH="$TARGET_SCHEMA"
 fi
 
 # Create OpenAPI Generator config file
@@ -423,10 +449,17 @@ OPTIONS_JSON=$(jq -n \
 echo "Updating API registry..."
 if jq -e ".apis[] | select(.name == \"$API_NAME\")" "$API_REGISTRY" > /dev/null; then
     echo "API $API_NAME already exists in registry. Updating..."
+    
+    # Get the existing schema path from the registry
+    EXISTING_SCHEMA_PATH=$(jq -r ".apis[] | select(.name == \"$API_NAME\") | .schema_path" "$API_REGISTRY")
+    
+    # Use the existing schema path if it exists, otherwise use the default
+    SCHEMA_PATH_TO_USE="${EXISTING_SCHEMA_PATH:-${SWAGGER_DIR}/${API_NAME}.yaml}"
+    
     # Update the existing entry
     jq --arg name "$API_NAME" \
        --arg url "$API_URL" \
-       --arg schema "${SWAGGER_DIR}/${API_NAME}.yaml" \
+       --arg schema "$SCHEMA_PATH_TO_USE" \
        --arg entity "$ENTITY_NAME" \
        --arg id "$ID_FIELD" \
        --argjson options "$OPTIONS_JSON" \
@@ -441,7 +474,7 @@ if jq -e ".apis[] | select(.name == \"$API_NAME\")" "$API_REGISTRY" > /dev/null;
        "$API_REGISTRY" > "${API_REGISTRY}.new"
     mv "${API_REGISTRY}.new" "$API_REGISTRY"
 else
-    # Add a new entry
+    # Add a new entry - for new entries use the standard name
     jq --arg name "$API_NAME" \
        --arg url "$API_URL" \
        --arg schema "${SWAGGER_DIR}/${API_NAME}.yaml" \
