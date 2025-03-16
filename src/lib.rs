@@ -44,5 +44,6 @@ pub mod handlers;
 /// Data models and schemas
 pub mod models;
 
-/// Generated Petstore API client
-pub mod petstore_api;
+/// Generated API clients
+#[path = "generated_apis.rs"]
+pub mod generated_apis;

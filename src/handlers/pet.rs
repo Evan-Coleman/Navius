@@ -6,7 +6,7 @@ use reqwest::StatusCode;
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use crate::{app::AppState, models::schemas::PetSchema, petstore_api::models::Pet};
+use crate::{app::AppState, models::Pet, models::schemas::PetSchema};
 
 /// Handler for the pet endpoint
 #[utoipa::path(

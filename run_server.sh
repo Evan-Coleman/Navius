@@ -62,9 +62,9 @@ echo "==================================================="
 # Check for required tools
 echo "Checking dependencies..."
 if ! command -v openapi-generator &> /dev/null; then
-    echo "Error: OpenAPI Generator CLI is not installed."
-    echo "Please install it with: npm install @openapitools/openapi-generator-cli -g"
-    exit 1
+    echo "Warning: OpenAPI Generator is not installed."
+    echo "This is needed for API generation. You can install it from: https://openapi-generator.tech/docs/installation/"
+    echo "Continuing without API generation capabilities..."
 fi
 
 # Check if config files exist
@@ -96,18 +96,13 @@ else
     echo "Warning: Environment file $ENV_FILE not found. Using defaults."
 fi
 
-# Generate downstream API files
+# Skip API generation step as we now use the scripts/add_api.sh script on demand
 if [ "$SKIP_GEN" = true ]; then
     echo "Skipping API model generation (--skip-gen flag used)"
     export SKIP_API_GEN=1
 else
-    echo "Generating API models from OpenAPI specification..."
-    ./src/openapi/generate-api.sh
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to generate API files. See errors above."
-        exit 1
-    fi
-    echo "API models generated successfully."
+    echo "Note: API generation is now handled by scripts/add_api.sh"
+    echo "Run this script separately to add new APIs"
 fi
 
 # Build the project

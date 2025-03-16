@@ -5,7 +5,7 @@ use std::time::Duration;
 use tracing::{debug, info};
 use utoipa::ToSchema;
 
-use crate::petstore_api::models::Pet;
+use crate::models::Pet;
 
 /// Type alias for the pet cache
 pub type PetCache = Arc<Cache<i64, Pet>>;
