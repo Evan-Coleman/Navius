@@ -3,6 +3,13 @@ name = "rust-backend"
 version = "0.1.0"
 edition = "2024"
 build = "build.rs"
+authors = ["Evan Coleman"]
+description = "A modular Rust backend application with RESTful API endpoints, OpenAPI documentation, caching, and metrics"
+license = "MIT"
+repository = "https://github.com/evan-coleman/rust-backend"
+readme = "README.md"
+keywords = ["api", "backend", "axum", "openapi", "metrics"]
+categories = ["web-programming"]
 
 # Suppress specific warnings
 [lints.rust]
