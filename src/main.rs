@@ -1,3 +1,6 @@
+mod petstore_api;
+
+use crate::petstore_api::models::*;
 use axum::{
     Json, Router,
     extract::{Path, State},
@@ -13,8 +16,20 @@ use tokio::net::TcpListener;
 use utoipa::{OpenApi, ToSchema};
 use utoipa_swagger_ui::SwaggerUi;
 
+#[derive(Serialize, Deserialize)] // ✅ Now implements DeserializeOwned
+struct PetSchema {
+    inner: Pet, // Wraps Pet inside
+}
+
+// Manually implement `ToSchema` for `PetSchema`
+impl ToSchema for PetSchema {
+    fn schemas() -> utoipa::openapi::schema::Schema {
+        <Pet as ToSchema>::schemas()
+    }
+}
+
 #[derive(OpenApi)]
-#[openapi(paths(get_pet_by_id), components(schemas(Pet)))]
+#[openapi(paths(get_pet_by_id), components(schemas(PetSchema)))]
 struct ApiDoc;
 
 #[tokio::main]
@@ -58,9 +73,9 @@ async fn get_data(State(client): State<Arc<Client>>) -> Json<Data> {
     })
 }
 
-async fn get_pet_by_id_request(client: &Client, pet_id: i64) -> Result<Pet, reqwest::Error> {
+async fn get_pet_by_id_request(client: &Client, pet_id: i64) -> Result<PetSchema, reqwest::Error> {
     let url = format!("https://petstore3.swagger.io/api/v3/pet/{}", pet_id);
-    let response = client.get(&url).send().await?.json::<Pet>().await?;
+    let response = client.get(&url).send().await?.json::<PetSchema>().await?;
     Ok(response)
 }
 
@@ -68,7 +83,7 @@ async fn get_pet_by_id_request(client: &Client, pet_id: i64) -> Result<Pet, reqw
     get,
     path = "/pet/{id}",
     responses(
-        (status = 200, description = "Returns pet", body = Pet),
+        (status = 200, description = "Returns pet", body = PetSchema),
         (status = 500, description = "Internal server error")
     )
 )]

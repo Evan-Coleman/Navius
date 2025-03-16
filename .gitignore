@@ -6,4 +6,4 @@ Cargo.lock
 
 
 # Here ignore any generated API
-/src/petstore-api
+/src/petstore_api

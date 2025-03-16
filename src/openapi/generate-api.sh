@@ -23,11 +23,23 @@ openapi-generator generate -i $OPENAPI_SPEC_PATH -c $CONFIG_PATH --openapi-gener
 
 rm -rf $OUTPUT_DIR/.openapi-generator
 rm -rf $OUTPUT_DIR/.openapi-generator-ignore
-rm -rf $OUTPUT_DIRCargo/.toml
-mv $OUTPUT_DIRsrc/models $OUTPUT_DIR/models
+rm -rf $OUTPUT_DIRCargo/Cargo.toml
+mv $OUTPUT_DIR/src/models $OUTPUT_DIR/models
 rm -rf $OUTPUT_DIR/src
 
 touch $OUTPUT_DIR/mod.rs
 echo "#![allow(unused_imports)]
 #![allow(clippy::too_many_arguments)]
 pub mod models;" > $OUTPUT_DIR/mod.rs
+
+
+
+# Find all Rust files (.rs) in the directory and subdirectories
+find "$OUTPUT_DIR" -type f -name "*.rs" | while read -r file; do
+    # Check if the file contains 'use crate::models;'
+    if grep -q "use crate::models;" "$file"; then
+        # Replace 'use crate::models;' with 'use crate::petstore_api::models;'
+        sed -i '' 's|use crate::models;|use crate::petstore_api::models;|g' "$file"
+        echo "Updated $file"
+    fi
+done
