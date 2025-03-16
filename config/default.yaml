@@ -9,6 +9,7 @@ api:
   petstore_url: "https://petstore3.swagger.io/api/v3"
   api_key: null
 
+  petstore_url: "https://petstore3.swagger.io/api/v3"
 app:
   name: "Petstore API Server"
   version: "1.0.0"

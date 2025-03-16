@@ -1,0 +1,48 @@
+{
+  "template": {
+    "name": "example_api",
+    "url": "https://api.example.com/v1",
+    "schema_path": "config/swagger/example_api.yaml",
+    "entity_name": "item",
+    "id_field": "id",
+    "options": {
+      "generate_models": false,
+      "generate_api": false,
+      "generate_handlers": false,
+      "update_router": false,
+      "include_models": [
+        "Model1",
+        "Model2"
+      ],
+      "exclude_models": [
+        "IgnoredModel"
+      ],
+      "description": "This is a template API - copy this section to create a new API with your desired settings",
+      "options_description": {
+        "generate_models": "Whether to generate model files",
+        "generate_api": "Whether to generate API client files",
+        "generate_handlers": "Whether to generate handler files",
+        "update_router": "Whether to update the router",
+        "include_models": "If populated, ONLY these models will be generated (leave empty to generate all models)",
+        "exclude_models": "Models to exclude from generation (ignored if include_models is populated)"
+      }
+    }
+  },
+  "apis": [
+    {
+      "name": "petstore",
+      "url": "https://petstore3.swagger.io/api/v3",
+      "schema_path": "config/swagger/petstore.yaml",
+      "entity_name": "pet",
+      "id_field": "id",
+      "options": {
+        "generate_models": true,
+        "generate_api": true,
+        "generate_handlers": true,
+        "update_router": true,
+        "include_models": [],
+        "exclude_models": []
+      }
+    }
+  ]
+}

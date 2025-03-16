@@ -4,35 +4,87 @@
 #
 # This script automates the process of adding a new API client to the system:
 # 1. Downloads the OpenAPI/Swagger schema if needed
-# 2. Generates API client code in Rust
-# 3. Creates basic models and handlers
+# 2. Generates API client code in Rust based on registry configuration
+# 3. Creates models and handlers as specified in the registry
 # 4. Updates configuration
 # 5. Registers the API in the registry for future regeneration
 
 set -e  # Exit immediately if a command exits with a non-zero status
 
 # Argument handling
-if [ "$#" -lt 4 ]; then
-    echo "Usage: $0 <api_name> <api_url> <schema_path> <entity_name> [<id_field>]"
+if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <api_name> [<api_url> <schema_path> <entity_name> <id_field>]"
     echo ""
     echo "Parameters:"
-    echo "  api_name    - Name of the API (e.g., 'petstore', 'pokeapi')"
+    echo "  api_name    - Name of the API to add or update (e.g., 'petstore', 'pokeapi')"
     echo "  api_url     - Base URL of the API (e.g., 'https://petstore3.swagger.io/api/v3')"
     echo "  schema_path - Path to OpenAPI/Swagger schema (local file or URL)"
     echo "  entity_name - Name of the main entity (e.g., 'pet', 'pokemon')"
     echo "  id_field    - Optional: Name of ID field (default: 'id')"
     echo ""
+    echo "If only api_name is provided, the script will look for an existing entry in the registry."
+    echo "If the entry exists, it will use those settings. Otherwise, you must provide all parameters."
+    echo ""
+    echo "To create a new API with custom options, first add a new entry to config/api_registry.json"
+    echo "based on the template, then run this script with just the API name."
+    echo ""
     echo "Example:"
-    echo "  $0 petstore https://petstore3.swagger.io/api/v3 src/openapi/petstore/openapi.yaml pet id"
+    echo "  $0 petstore                                                  # Use existing registry entry"
+    echo "  $0 petstore https://petstore3.swagger.io/api/v3 config/swagger/petstore.yaml pet id  # Create new entry"
     exit 1
 fi
 
 API_NAME="$1"
-API_URL="$2"
-SCHEMA_PATH="$3"
-ENTITY_NAME="$4"
-ID_FIELD="${5:-id}"
-API_REGISTRY="api_registry.json"
+API_REGISTRY="config/api_registry.json"
+SWAGGER_DIR="config/swagger"
+
+# Check if API registry exists
+if [ ! -f "$API_REGISTRY" ]; then
+    echo "Error: API registry file not found at $API_REGISTRY"
+    exit 1
+fi
+
+# Check if API exists in registry
+if jq -e ".apis[] | select(.name == \"$API_NAME\")" "$API_REGISTRY" > /dev/null; then
+    echo "Found existing API '$API_NAME' in registry. Using registry configuration."
+    
+    # Extract API details from registry
+    API_URL=$(jq -r ".apis[] | select(.name == \"$API_NAME\") | .url" "$API_REGISTRY")
+    SCHEMA_PATH=$(jq -r ".apis[] | select(.name == \"$API_NAME\") | .schema_path" "$API_REGISTRY")
+    ENTITY_NAME=$(jq -r ".apis[] | select(.name == \"$API_NAME\") | .entity_name" "$API_REGISTRY")
+    ID_FIELD=$(jq -r ".apis[] | select(.name == \"$API_NAME\") | .id_field" "$API_REGISTRY")
+    
+    # Extract options
+    GENERATE_MODELS=$(jq -r ".apis[] | select(.name == \"$API_NAME\") | .options.generate_models // true" "$API_REGISTRY")
+    GENERATE_API=$(jq -r ".apis[] | select(.name == \"$API_NAME\") | .options.generate_api // true" "$API_REGISTRY")
+    GENERATE_HANDLERS=$(jq -r ".apis[] | select(.name == \"$API_NAME\") | .options.generate_handlers // true" "$API_REGISTRY")
+    UPDATE_ROUTER=$(jq -r ".apis[] | select(.name == \"$API_NAME\") | .options.update_router // true" "$API_REGISTRY")
+    INCLUDE_MODELS=$(jq -r ".apis[] | select(.name == \"$API_NAME\") | .options.include_models | join(\",\")" "$API_REGISTRY")
+    EXCLUDE_MODELS=$(jq -r ".apis[] | select(.name == \"$API_NAME\") | .options.exclude_models | join(\",\")" "$API_REGISTRY")
+else
+    # New API, check if all required parameters are provided
+    if [ "$#" -lt 4 ]; then
+        echo "Error: API '$API_NAME' not found in registry. You must provide all parameters for a new API."
+        echo "Usage: $0 <api_name> <api_url> <schema_path> <entity_name> [<id_field>]"
+        exit 1
+    fi
+    
+    API_URL="$2"
+    SCHEMA_PATH="$3"
+    ENTITY_NAME="$4"
+    ID_FIELD="${5:-id}"
+    
+    # Default options for new APIs
+    GENERATE_MODELS=true
+    GENERATE_API=true
+    GENERATE_HANDLERS=true
+    UPDATE_ROUTER=true
+    INCLUDE_MODELS=""
+    EXCLUDE_MODELS=""
+    
+    echo "Creating new API '$API_NAME' with default options."
+    echo "To customize options, edit the config/api_registry.json file after creation."
+fi
 
 # Convert API_NAME to CamelCase for handler function
 API_NAME_CAMEL=$(echo "$API_NAME" | sed -r 's/(^|_)([a-z])/\U\2/g')
@@ -47,21 +99,23 @@ ENTITY_NAME_CAMEL=$(echo "$ENTITY_NAME" | sed -r 's/(^|_)([a-z])/\U\2/g')
 mkdir -p generated/openapi/${API_NAME}
 mkdir -p generated/${API_NAME}_api/src/api
 mkdir -p generated/${API_NAME}_api/src/models
+mkdir -p ${SWAGGER_DIR}
 
 # Download schema if it's a URL
 if [[ "$SCHEMA_PATH" == http* ]]; then
     echo "Downloading schema from $SCHEMA_PATH..."
-    SCHEMA_FILE="generated/openapi/${API_NAME}/openapi.yaml"
+    SCHEMA_FILE="${SWAGGER_DIR}/${API_NAME}.yaml"
     curl -s -o "$SCHEMA_FILE" "$SCHEMA_PATH"
     SCHEMA_PATH="$SCHEMA_FILE"
 elif [[ ! -f "$SCHEMA_PATH" ]]; then
     echo "Error: Schema file not found at $SCHEMA_PATH"
     exit 1
 else
-    # Copy the schema to our generated folder for consistency
+    # Copy the schema to our swagger folder for consistency
     echo "Copying schema from $SCHEMA_PATH..."
-    mkdir -p "$(dirname "generated/openapi/${API_NAME}/openapi.yaml")"
-    cp "$SCHEMA_PATH" "generated/openapi/${API_NAME}/openapi.yaml"
+    mkdir -p "${SWAGGER_DIR}"
+    cp "$SCHEMA_PATH" "${SWAGGER_DIR}/${API_NAME}.yaml"
+    SCHEMA_PATH="${SWAGGER_DIR}/${API_NAME}.yaml"
 fi
 
 # Create OpenAPI Generator config file
@@ -85,6 +139,13 @@ additionalProperties:
   useSingleRequestParameter: true
 EOF
 
+# Add model filtering if specified
+if [ -n "$INCLUDE_MODELS" ]; then
+    echo "  # Only generate the specified models (comma-separated list)" >> "$CONFIG_FILE"
+    echo "  modelsDtsModels: $INCLUDE_MODELS" >> "$CONFIG_FILE"
+    echo "⚠️ Note: Only generating the following models: $INCLUDE_MODELS"
+fi
+
 # Check for OpenAPI Generator
 if ! command -v openapi-generator &> /dev/null; then
     echo "Error: OpenAPI Generator is not installed."
@@ -94,7 +155,7 @@ fi
 
 # Run OpenAPI Generator
 echo "Running OpenAPI Generator..."
-openapi-generator generate -i "generated/openapi/${API_NAME}/openapi.yaml" -c "$CONFIG_FILE"
+openapi-generator generate -i "$SCHEMA_PATH" -c "$CONFIG_FILE"
 
 if [ $? -ne 0 ]; then
     echo "Error: OpenAPI Generator failed."
@@ -104,17 +165,17 @@ fi
 echo "API client generated successfully in generated/${API_NAME}_api/"
 
 # Fix structure issues - create the API and models modules
-if [ ! -f "generated/${API_NAME}_api/src/api/mod.rs" ]; then
+if [ "$GENERATE_API" = true ] && [ ! -f "generated/${API_NAME}_api/src/api/mod.rs" ]; then
     echo "Creating API module..."
     mkdir -p "generated/${API_NAME}_api/src/api"
     echo "// API module - stub for compatibility" > "generated/${API_NAME}_api/src/api/mod.rs"
 fi
 
-if [ ! -f "generated/${API_NAME}_api/src/models/mod.rs" ]; then
+if [ "$GENERATE_MODELS" = true ] && [ ! -f "generated/${API_NAME}_api/src/models/mod.rs" ]; then
     echo "Creating models module..."
     mkdir -p "generated/${API_NAME}_api/src/models"
     
-    # Create a simple Pet model for demonstration
+    # Create a simple model for demonstration
     cat > "generated/${API_NAME}_api/src/models/mod.rs" << EOF
 // Generated models for the ${API_NAME} API
 use serde::{Deserialize, Serialize};
@@ -162,11 +223,12 @@ pub struct Category {
 EOF
 fi
 
-# Create basic handlers file
-echo "Creating basic handlers file..."
-mkdir -p "generated/${API_NAME}_api/src/handlers"
+# Create basic handlers file if needed
+if [ "$GENERATE_HANDLERS" = true ]; then
+    echo "Creating basic handlers file..."
+    mkdir -p "generated/${API_NAME}_api/src/handlers"
 
-cat > "generated/${API_NAME}_api/src/handlers/mod.rs" << EOF
+    cat > "generated/${API_NAME}_api/src/handlers/mod.rs" << EOF
 // Handlers for ${API_NAME_SNAKE} API
 
 use axum::{
@@ -179,6 +241,7 @@ use tracing::{info, warn};
 
 // Basic handlers for the ${API_NAME} API can be added here
 EOF
+fi
 
 # Create module file
 echo "Creating module file..."
@@ -187,13 +250,26 @@ cat > "generated/${API_NAME}_api/src/lib.rs" << EOF
 //!
 //! This is an auto-generated API client for the ${API_NAME} API.
 
-pub mod api;
-pub mod models;
-pub mod handlers;
-
-// Re-export commonly used types
-pub use models::${ENTITY_NAME_CAMEL};
 EOF
+
+# Add module declarations based on what was generated
+if [ "$GENERATE_API" = true ]; then
+    echo "pub mod api;" >> "generated/${API_NAME}_api/src/lib.rs"
+fi
+
+if [ "$GENERATE_MODELS" = true ]; then
+    echo "pub mod models;" >> "generated/${API_NAME}_api/src/lib.rs"
+fi
+
+if [ "$GENERATE_HANDLERS" = true ]; then
+    echo "pub mod handlers;" >> "generated/${API_NAME}_api/src/lib.rs"
+fi
+
+# Add re-exports
+if [ "$GENERATE_MODELS" = true ]; then
+    echo -e "\n// Re-export commonly used types" >> "generated/${API_NAME}_api/src/lib.rs"
+    echo "pub use models::${ENTITY_NAME_CAMEL};" >> "generated/${API_NAME}_api/src/lib.rs"
+fi
 
 # Update the bridge file to include the new API
 echo "Updating generated_apis.rs..."
@@ -206,9 +282,13 @@ cat > "src/generated_apis.rs" << EOF
 #[path = "../generated/${API_NAME}_api/src/lib.rs"]
 pub mod ${API_NAME}_api;
 
-// The following re-exports make the API types available directly from generated_apis
-pub use ${API_NAME}_api::${ENTITY_NAME_CAMEL};
 EOF
+
+# Add re-exports to the bridge file
+if [ "$GENERATE_MODELS" = true ]; then
+    echo "// The following re-exports make the API types available directly from generated_apis" >> "src/generated_apis.rs"
+    echo "pub use ${API_NAME}_api::${ENTITY_NAME_CAMEL};" >> "src/generated_apis.rs"
+fi
 
 # Update the config file to include the API URL
 echo "Updating configuration..."
@@ -231,48 +311,79 @@ awk -v api_name="$API_NAME_SNAKE" -v api_url="$API_URL" '
 ' "$CONFIG_FILE" > "${CONFIG_FILE}.new"
 mv "${CONFIG_FILE}.new" "$CONFIG_FILE"
 
+# Prepare options for the registry
+OPTIONS_JSON=$(jq -n \
+    --arg models "$GENERATE_MODELS" \
+    --arg api "$GENERATE_API" \
+    --arg handlers "$GENERATE_HANDLERS" \
+    --arg router "$UPDATE_ROUTER" \
+    --arg include "$INCLUDE_MODELS" \
+    --arg exclude "$EXCLUDE_MODELS" \
+    '{
+        generate_models: ($models == "true"),
+        generate_api: ($api == "true"),
+        generate_handlers: ($handlers == "true"),
+        update_router: ($router == "true"),
+        include_models: (if $include == "" then [] else $include | split(",") end),
+        exclude_models: (if $exclude == "" then [] else $exclude | split(",") end)
+    }')
+
 # Update the API registry
 echo "Updating API registry..."
-if [ -f "$API_REGISTRY" ]; then
-    # Check if this API is already in the registry
-    if jq -e ".apis[] | select(.name == \"$API_NAME\")" "$API_REGISTRY" > /dev/null; then
-        echo "API $API_NAME already exists in registry. Updating..."
-        # Update the existing entry
-        jq --arg name "$API_NAME" \
-           --arg url "$API_URL" \
-           --arg schema "generated/openapi/${API_NAME}/openapi.yaml" \
-           --arg entity "$ENTITY_NAME" \
-           --arg id "$ID_FIELD" \
-           '.apis = [.apis[] | if .name == $name then {name: $name, url: $url, schema_path: $schema, entity_name: $entity, id_field: $id} else . end]' \
-           "$API_REGISTRY" > "${API_REGISTRY}.new"
-        mv "${API_REGISTRY}.new" "$API_REGISTRY"
-    else
-        # Add a new entry
-        jq --arg name "$API_NAME" \
-           --arg url "$API_URL" \
-           --arg schema "generated/openapi/${API_NAME}/openapi.yaml" \
-           --arg entity "$ENTITY_NAME" \
-           --arg id "$ID_FIELD" \
-           '.apis += [{name: $name, url: $url, schema_path: $schema, entity_name: $entity, id_field: $id}]' \
-           "$API_REGISTRY" > "${API_REGISTRY}.new"
-        mv "${API_REGISTRY}.new" "$API_REGISTRY"
-    fi
+if jq -e ".apis[] | select(.name == \"$API_NAME\")" "$API_REGISTRY" > /dev/null; then
+    echo "API $API_NAME already exists in registry. Updating..."
+    # Update the existing entry
+    jq --arg name "$API_NAME" \
+       --arg url "$API_URL" \
+       --arg schema "${SWAGGER_DIR}/${API_NAME}.yaml" \
+       --arg entity "$ENTITY_NAME" \
+       --arg id "$ID_FIELD" \
+       --argjson options "$OPTIONS_JSON" \
+       '.apis = [.apis[] | if .name == $name then {
+           name: $name,
+           url: $url,
+           schema_path: $schema,
+           entity_name: $entity,
+           id_field: $id,
+           options: $options
+       } else . end]' \
+       "$API_REGISTRY" > "${API_REGISTRY}.new"
+    mv "${API_REGISTRY}.new" "$API_REGISTRY"
 else
-    # Create a new registry file
-    cat > "$API_REGISTRY" << EOF
-{
-  "apis": [
-    {
-      "name": "$API_NAME",
-      "url": "$API_URL",
-      "schema_path": "generated/openapi/${API_NAME}/openapi.yaml",
-      "entity_name": "$ENTITY_NAME",
-      "id_field": "$ID_FIELD"
-    }
-  ]
-}
-EOF
+    # Add a new entry
+    jq --arg name "$API_NAME" \
+       --arg url "$API_URL" \
+       --arg schema "${SWAGGER_DIR}/${API_NAME}.yaml" \
+       --arg entity "$ENTITY_NAME" \
+       --arg id "$ID_FIELD" \
+       --argjson options "$OPTIONS_JSON" \
+       '.apis += [{
+           name: $name,
+           url: $url,
+           schema_path: $schema,
+           entity_name: $entity,
+           id_field: $id,
+           options: $options
+       }]' \
+       "$API_REGISTRY" > "${API_REGISTRY}.new"
+    mv "${API_REGISTRY}.new" "$API_REGISTRY"
 fi
 
-echo "✅ Successfully added ${API_NAME} API!"
-echo "📁 Generated code in: generated/${API_NAME}_api/" 
+echo "✅ Successfully added/updated ${API_NAME} API!"
+echo "📁 Generated code in: generated/${API_NAME}_api/"
+echo "📄 OpenAPI schema stored in: ${SWAGGER_DIR}/${API_NAME}.yaml"
+
+# Print generation options summary
+echo -e "\n📋 Generation options:"
+echo "   Generate models: $GENERATE_MODELS"
+echo "   Generate API client: $GENERATE_API"
+echo "   Generate handlers: $GENERATE_HANDLERS"
+echo "   Update router: $UPDATE_ROUTER"
+if [ -n "$INCLUDE_MODELS" ]; then
+    echo "   Include models (only these will be generated): $INCLUDE_MODELS"
+fi
+if [ -n "$EXCLUDE_MODELS" ]; then
+    echo "   Exclude models: $EXCLUDE_MODELS"
+fi
+
+echo -e "\nTo modify these options, edit the config/api_registry.json file and run this script again." 
