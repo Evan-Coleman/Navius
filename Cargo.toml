@@ -19,6 +19,13 @@ tracing-subscriber = "0.3"
 config = { version = "0.13", features = ["yaml"] }
 dotenvy = "0.15"
 thiserror = "1.0"
+# Caching dependencies
+moka = { version = "0.12", features = ["future"] }
+# Metrics dependencies
+metrics = "0.22"
+metrics-exporter-prometheus = "0.13"
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
 
 [build-dependencies]
 # Don't need full regex crate, just simple string manipulation
