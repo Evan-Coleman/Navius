@@ -1,32 +1,4 @@
-// Modules with better organization
-mod app {
-    pub use crate::app::router::*;
-    pub mod router;
-}
-
-mod cache {
-    pub use crate::cache::cache_manager::*;
-    pub mod cache_manager;
-}
-
-mod config {
-    pub use crate::config::app_config::*;
-    pub mod app_config;
-}
-
-mod error {
-    pub use crate::error::error_types::*;
-    pub mod error_types;
-}
-
-mod metrics {
-    pub use crate::metrics::metrics_service::*;
-    pub mod metrics_service;
-}
-
-mod handlers;
-mod models;
-mod petstore_api;
+use rust_backend::app;
 
 use tracing::{Level, info};
 use tracing_subscriber::FmtSubscriber;
