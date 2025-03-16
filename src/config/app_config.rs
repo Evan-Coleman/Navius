@@ -115,25 +115,44 @@ impl AppConfig {
 
 /// Load configuration from files and environment variables
 pub fn load_config() -> Result<AppConfig, ConfigError> {
+    // Load .env file for secrets and overrides
+    let _ = dotenv();
+
     // Determine the configuration directory
     let config_dir = env::var("CONFIG_DIR").unwrap_or_else(|_| "./config".to_string());
 
-    // Build configuration
+    // Determine the environment (development, production, etc.)
+    let environment = env::var("RUN_ENV").unwrap_or_else(|_| "development".to_string());
+
+    info!("Loading configuration for environment: {}", environment);
+
+    // Build configuration with the following priority (highest to lowest):
+    // 1. Environment variables (for secrets and CI/CD overrides)
+    // 2. Environment-specific local overrides (local-{env}.yaml - not in version control)
+    // 3. Environment-specific config ({env}.yaml)
+    // 4. Local overrides (local.yaml - not in version control)
+    // 5. Default config (default.yaml)
     let config = Config::builder()
-        // Start with default settings
+        // 5. Start with default settings
         .add_source(File::from(Path::new(&config_dir).join("default.yaml")).required(false))
-        // Add environment-specific settings
-        .add_source(
-            File::from(Path::new(&config_dir).join(format!(
-                "{}.yaml",
-                env::var("RUN_ENV").unwrap_or_else(|_| "development".to_string())
-            )))
-            .required(false),
-        )
-        // Add local settings (not in version control)
+        // 4. Add local settings (not in version control)
         .add_source(File::from(Path::new(&config_dir).join("local.yaml")).required(false))
-        // Add environment variables with prefix APP_
-        .add_source(Environment::with_prefix("APP").separator("__"))
+        // 3. Add environment-specific settings
+        .add_source(
+            File::from(Path::new(&config_dir).join(format!("{}.yaml", environment)))
+                .required(false),
+        )
+        // 2. Add environment-specific local overrides (not in version control)
+        .add_source(
+            File::from(Path::new(&config_dir).join(format!("local-{}.yaml", environment)))
+                .required(false),
+        )
+        // 1. Add environment variables (highest priority, for secrets and CI/CD)
+        // Only use specific prefixes for environment variables to avoid conflicts
+        .add_source(Environment::with_prefix("SERVER").separator("_"))
+        .add_source(Environment::with_prefix("API").separator("_"))
+        .add_source(Environment::with_prefix("APP").separator("_"))
+        .add_source(Environment::with_prefix("CACHE").separator("_"))
         // Build the config
         .build()?;
 

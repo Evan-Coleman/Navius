@@ -10,7 +10,7 @@ A modular Rust backend application with RESTful API endpoints, OpenAPI documenta
 - **Metrics Collection** using [metrics](https://github.com/metrics-rs/metrics)
 - **Prometheus Integration** for metrics reporting
 - **Structured Error Handling**
-- **Configuration Management** with environment variables and config files
+- **Configuration Management** with YAML files and environment variables
 - **Logging** with [tracing](https://github.com/tokio-rs/tracing)
 
 ## Project Structure
@@ -39,6 +39,12 @@ src/
 ├── petstore_api/         # Generated Petstore API client
 ├── lib.rs                # Library module declarations
 └── main.rs               # Application entry point
+
+config/
+├── default.yaml          # Default configuration
+├── development.yaml      # Development environment configuration
+├── production.yaml       # Production environment configuration
+└── local.yaml            # Local overrides (not in version control)
 ```
 
 ## Getting Started
@@ -59,29 +65,30 @@ cargo build
 
 ### Configuration
 
-Create a `.env` file in the project root with the following variables:
+The application uses a layered configuration approach:
+
+1. **YAML Configuration Files**:
+   - `config/default.yaml` - Base configuration for all environments
+   - `config/development.yaml` - Development-specific settings
+   - `config/production.yaml` - Production-specific settings
+   - `config/local.yaml` - Local overrides (not in version control)
+   - `config/local-{env}.yaml` - Environment-specific local overrides
+
+2. **Environment Variables**:
+   Create a `.env` file in the project root with at minimum:
 
 ```
-# Server Configuration
-SERVER_HOST=0.0.0.0
-SERVER_PORT=3000
-SERVER_TIMEOUT_SECONDS=10
-SERVER_MAX_RETRIES=3
+# Environment selection
+RUN_ENV=development
 
-# External API endpoints
-API_CAT_FACT_URL=https://catfact.ninja/fact
-API_PETSTORE_URL=https://petstore3.swagger.io/api/v3
+# Essential environment variables
+RUST_LOG=${APP_LOG_LEVEL:-info}
 
-# Application settings
-APP_NAME="Petstore API Server"
-APP_VERSION="1.0.0"
-APP_LOG_LEVEL=info
-
-# Cache settings
-CACHE_ENABLED=true
-CACHE_TTL_SECONDS=300
-CACHE_MAX_CAPACITY=1000
+# Secrets (if needed)
+# API_KEY=your_api_key_here
 ```
+
+Environment variables can also be used to override any configuration value from the YAML files.
 
 ### Running the Server
 

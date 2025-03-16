@@ -1,0 +1,14 @@
+# Development environment configuration
+server:
+  # Use localhost for development
+  host: "127.0.0.1"
+  # More frequent retries in development
+  max_retries: 5
+
+app:
+  # More verbose logging in development
+  log_level: "debug"
+
+cache:
+  # Shorter TTL for development to see changes faster
+  ttl_seconds: 60 
