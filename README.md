@@ -115,6 +115,23 @@ API documentation is available at http://localhost:3000/docs when the server is 
 - `GET /data` - Sample data endpoint (fetches cat facts)
 - `GET /pet/{id}` - Fetch pet by ID from the Petstore API
 
+## API Integration
+
+This project supports easy integration with downstream APIs. To add a new API endpoint:
+
+1. **Automated Method (Recommended)**:
+   ```bash
+   ./scripts/add_api.sh <api_name> <api_url> <schema_url> [endpoint_path] [param_name]
+   ```
+
+   For example:
+   ```bash
+   ./scripts/add_api.sh jsonplaceholder https://jsonplaceholder.typicode.com https://jsonplaceholder.typicode.com/swagger.json posts id
+   ```
+
+2. **Manual Method**:
+   See the detailed guide in [API Integration Guide](docs/API_INTEGRATION.md).
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details. 
