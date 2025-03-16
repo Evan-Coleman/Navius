@@ -49,54 +49,8 @@ pub struct ApplicationConfig {
 
 impl AppConfig {
     pub fn new() -> Result<Self, ConfigError> {
-        // Load .env file if it exists
-        let _ = dotenv();
-
-        let config = Config::builder()
-            // Start with default settings
-            .set_default("server.host", "127.0.0.1")?
-            .set_default("server.port", 3000)?
-            .set_default("server.timeout_seconds", 10)?
-            .set_default("server.max_retries", 3)?
-            .set_default("api.cat_fact_url", "https://catfact.ninja/fact")?
-            .set_default("api.petstore_url", "https://petstore3.swagger.io/api/v3")?
-            .set_default("app.name", "Petstore API Server")?
-            .set_default("app.version", "1.0.0")?
-            .set_default("app.log_level", "info")?
-            .set_default("cache.enabled", true)?
-            .set_default("cache.ttl_seconds", 300)? // 5 minutes
-            .set_default("cache.max_capacity", 1000)?
-            // Add config file
-            .add_source(File::with_name("config").required(false))
-            // Add environment variables with prefix
-            .add_source(
-                Environment::with_prefix("APP")
-                    .separator("_")
-                    .prefix_separator("_")
-                    .keep_prefix(false),
-            )
-            .add_source(
-                Environment::with_prefix("SERVER")
-                    .separator("_")
-                    .prefix_separator("_")
-                    .keep_prefix(false),
-            )
-            .add_source(
-                Environment::with_prefix("API")
-                    .separator("_")
-                    .prefix_separator("_")
-                    .keep_prefix(false),
-            )
-            .add_source(
-                Environment::with_prefix("CACHE")
-                    .separator("_")
-                    .prefix_separator("_")
-                    .keep_prefix(false),
-            )
-            .build()?;
-
-        // Deserialize the configuration
-        config.try_deserialize()
+        // Use the load_config function which implements the layered configuration approach
+        load_config()
     }
 
     pub fn server_addr(&self) -> String {

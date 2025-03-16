@@ -5,17 +5,19 @@ set -e  # Exit immediately if a command exits with a non-zero status
 # Parse command line arguments
 SKIP_GEN=false
 RELEASE_MODE=false
-CONFIG_FILE="config.yaml"
+CONFIG_DIR="config"
 ENV_FILE=".env"
+RUN_ENV="development"
 
 print_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo "Options:"
-    echo "  --skip-gen          Skip API model generation"
-    echo "  --release           Build and run in release mode"
-    echo "  --config=FILE       Use specified config file (default: config.yaml)"
-    echo "  --env=FILE          Use specified .env file (default: .env)"
-    echo "  --help              Show this help message"
+    echo "  --skip-gen           Skip API model generation"
+    echo "  --release            Build and run in release mode"
+    echo "  --config-dir=DIR     Use specified config directory (default: config)"
+    echo "  --env=FILE           Use specified .env file (default: .env)"
+    echo "  --environment=ENV    Use specified environment (default: development)"
+    echo "  --help               Show this help message"
 }
 
 for arg in "$@"; do
@@ -28,12 +30,16 @@ for arg in "$@"; do
             RELEASE_MODE=true
             shift
             ;;
-        --config=*)
-            CONFIG_FILE="${arg#*=}"
+        --config-dir=*)
+            CONFIG_DIR="${arg#*=}"
             shift
             ;;
         --env=*)
             ENV_FILE="${arg#*=}"
+            shift
+            ;;
+        --environment=*)
+            RUN_ENV="${arg#*=}"
             shift
             ;;
         --help)
@@ -62,10 +68,24 @@ if ! command -v openapi-generator &> /dev/null; then
 fi
 
 # Check if config files exist
-if [ -f "$CONFIG_FILE" ]; then
-    echo "Using config file: $CONFIG_FILE"
+if [ -d "$CONFIG_DIR" ]; then
+    echo "Using config directory: $CONFIG_DIR"
+    
+    # Check for environment-specific config file
+    if [ -f "$CONFIG_DIR/$RUN_ENV.yaml" ]; then
+        echo "Found environment config: $CONFIG_DIR/$RUN_ENV.yaml"
+    elif [ -f "$CONFIG_DIR/default.yaml" ]; then
+        echo "Found default config: $CONFIG_DIR/default.yaml"
+    else
+        echo "Warning: No configuration files found in $CONFIG_DIR. Using defaults."
+    fi
+    
+    # Export CONFIG_DIR for the application
+    export CONFIG_DIR="$CONFIG_DIR"
+    # Export RUN_ENV for the application
+    export RUN_ENV="$RUN_ENV"
 else
-    echo "Warning: Config file $CONFIG_FILE not found. Using defaults."
+    echo "Warning: Config directory $CONFIG_DIR not found. Using defaults."
 fi
 
 if [ -f "$ENV_FILE" ]; then
