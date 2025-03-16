@@ -2,6 +2,12 @@
 
 set -e  # Exit immediately if a command exits with a non-zero status
 
+# Check if API generation should be skipped
+if [ -n "$SKIP_API_GEN" ]; then
+    echo "Skipping API generation (SKIP_API_GEN is set)"
+    exit 0
+fi
+
 # Set the path to your OpenAPI specification file
 OPENAPI_SPEC_PATH="./src/openapi/petstore-swagger.yaml"  # Adjust to your OpenAPI spec path
 
@@ -41,14 +47,16 @@ cat > $OUTPUT_DIR/mod.rs << 'EOF'
 pub mod models;
 EOF
 
-# Fix imports in all Rust files
+# Fix imports in all Rust files - OS agnostic approach
 echo "Updating import paths in generated files..."
 find "$OUTPUT_DIR" -type f -name "*.rs" | while read -r file; do
     # Check if the file contains 'use crate::models;'
     if grep -q "use crate::models;" "$file"; then
-        # Replace 'use crate::models;' with 'use crate::petstore_api::models;'
-        sed -i '' 's|use crate::models;|use crate::petstore_api::models;|g' "$file"
-        echo "Updated imports in $file"
+        # Create a temporary file for the replacement to work on any OS
+        echo "Updating imports in $file"
+        temp_file=$(mktemp)
+        sed 's|use crate::models;|use crate::petstore_api::models;|g' "$file" > "$temp_file"
+        mv "$temp_file" "$file"
     fi
 done
 

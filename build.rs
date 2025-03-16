@@ -1,16 +1,22 @@
+use std::env;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::Path;
-use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-changed=src/openapi/generate-api.sh");
     println!("cargo:rerun-if-changed=src/openapi/petstore-swagger.yaml");
     println!("cargo:rerun-if-changed=src/openapi/petstore-config.yaml");
 
+    // Check if API generation should be skipped
+    if env::var("SKIP_API_GEN").is_ok() {
+        println!("cargo:warning=Skipping API model processing (SKIP_API_GEN is set)");
+        return;
+    }
+
     // Process the generated model files to add Utoipa annotations
     process_model_files().unwrap_or_else(|e| {
-        eprintln!("Warning: Failed to process model files: {}", e);
+        println!("cargo:warning=Failed to process model files: {}", e);
     });
 }
 
@@ -19,7 +25,7 @@ fn process_model_files() -> Result<(), Box<dyn std::error::Error>> {
 
     // Ensure the directory exists
     if !models_dir.exists() {
-        eprintln!("Models directory doesn't exist yet. Skipping processing.");
+        println!("cargo:warning=Models directory doesn't exist yet. Skipping processing.");
         return Ok(());
     }
 

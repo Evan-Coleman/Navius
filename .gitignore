@@ -1,9 +1,16 @@
 /target
-Cargo.lock
+**/*.rs.bk
+.idea/
+.vscode/
+.DS_Store
+
+# Config files that may contain sensitive information
 .env
-/src/generated
+.env.*
+!.env.example
+config.yaml
+config.*.yaml
+!config.example.yaml
 
-
-
-# Here ignore any generated API
-/src/petstore_api
+# Generated API files
+/src/petstore_api/
