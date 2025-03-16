@@ -10,11 +10,9 @@ use utoipa::{
 use crate::{
     cache::PetCache,
     config::AppConfig,
+    generated_apis::petstore_api::models::Upet,
     handlers,
-    models::schemas::{
-        ApiResponse, CategorySchema, Data, HealthCheckResponse, MetricsResponse, PetSchema,
-        StatusSchema, TagSchema,
-    },
+    models::{ApiResponse, Data, HealthCheckResponse, MetricsResponse},
 };
 
 /// Application state shared across all routes
@@ -59,10 +57,9 @@ impl Modify for SecurityAddon {
             MetricsResponse,
             Data,
             ApiResponse,
-            PetSchema,
-            CategorySchema,
-            TagSchema,
-            StatusSchema,
+            Upet,
+            crate::generated_apis::petstore_api::models::Category,
+            crate::generated_apis::petstore_api::models::Tag,
             crate::cache::CacheStats,
         )
     ),

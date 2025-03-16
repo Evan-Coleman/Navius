@@ -2,7 +2,7 @@ use axum::{Json, extract::State};
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use crate::{app::AppState, models::schemas::Data};
+use crate::{app::AppState, models::Data};
 
 /// Handler for the data endpoint
 #[utoipa::path(

@@ -5,10 +5,10 @@ use std::time::Duration;
 use tracing::{debug, info};
 use utoipa::ToSchema;
 
-use crate::models::Pet;
+use crate::generated_apis::petstore_api::models::Upet;
 
 /// Type alias for the pet cache
-pub type PetCache = Arc<Cache<i64, Pet>>;
+pub type PetCache = Arc<Cache<i64, Upet>>;
 
 /// Cache statistics
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -44,10 +44,10 @@ pub fn get_cache_stats(cache: &PetCache) -> CacheStats {
 }
 
 /// Get pet from cache or use provided function to fetch it
-pub async fn get_or_fetch<F, Fut>(cache: &PetCache, id: i64, fetch_fn: F) -> Result<Pet, String>
+pub async fn get_or_fetch<F, Fut>(cache: &PetCache, id: i64, fetch_fn: F) -> Result<Upet, String>
 where
     F: FnOnce() -> Fut,
-    Fut: std::future::Future<Output = Result<Pet, String>>,
+    Fut: std::future::Future<Output = Result<Upet, String>>,
 {
     // Try to get from cache first
     if let Some(pet) = cache.get(&id).await {

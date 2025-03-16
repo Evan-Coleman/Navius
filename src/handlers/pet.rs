@@ -6,7 +6,7 @@ use reqwest::StatusCode;
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use crate::{app::AppState, models::Pet, models::schemas::PetSchema};
+use crate::{app::AppState, generated_apis::petstore_api::models::Upet};
 
 /// Handler for the pet endpoint
 #[utoipa::path(
@@ -16,16 +16,16 @@ use crate::{app::AppState, models::Pet, models::schemas::PetSchema};
         ("id" = i64, Path, description = "Pet ID to fetch")
     ),
     responses(
-        (status = 200, description = "Pet found successfully", body = PetSchema),
-        (status = 404, description = "Pet not found", body = String),
-        (status = 500, description = "Internal server error", body = String)
+        (status = 200, description = "Pet found successfully", body = Upet, content_type = "application/json"),
+        (status = 404, description = "Pet not found", body = String, content_type = "text/plain"),
+        (status = 500, description = "Internal server error", body = String, content_type = "text/plain")
     ),
     tag = "pets"
 )]
 pub async fn get_pet_by_id(
     Path(id): Path<i64>,
     State(state): State<Arc<AppState>>,
-) -> Result<Json<Pet>, (StatusCode, String)> {
+) -> Result<Json<Upet>, (StatusCode, String)> {
     // Log request
     info!("Fetching pet with ID: {}", id);
 
@@ -74,7 +74,7 @@ pub async fn get_pet_by_id(
     }
 }
 
-async fn fetch_pet_with_retry(state: &Arc<AppState>, id: i64) -> Result<Pet, String> {
+async fn fetch_pet_with_retry(state: &Arc<AppState>, id: i64) -> Result<Upet, String> {
     let max_retries = state.config.server.max_retries;
     let mut last_error = None;
 
@@ -103,7 +103,7 @@ async fn fetch_pet_with_retry(state: &Arc<AppState>, id: i64) -> Result<Pet, Str
     Err(last_error.unwrap_or_else(|| "Unknown error fetching pet".to_string()))
 }
 
-async fn fetch_pet(state: &Arc<AppState>, id: i64) -> Result<Pet, String> {
+async fn fetch_pet(state: &Arc<AppState>, id: i64) -> Result<Upet, String> {
     let url = format!("{}/pet/{}", state.config.petstore_api_url(), id);
 
     let response = state
@@ -122,7 +122,7 @@ async fn fetch_pet(state: &Arc<AppState>, id: i64) -> Result<Pet, String> {
     }
 
     response
-        .json::<Pet>()
+        .json::<Upet>()
         .await
         .map_err(|e| format!("Failed to parse response: {}", e))
 }

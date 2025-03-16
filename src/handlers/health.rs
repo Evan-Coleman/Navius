@@ -2,7 +2,7 @@ use axum::{Json, extract::State};
 use std::sync::Arc;
 
 use crate::app::AppState;
-use crate::models::schemas::HealthCheckResponse;
+use crate::models::HealthCheckResponse;
 
 /// Handler for the health check endpoint
 #[utoipa::path(

@@ -4,7 +4,7 @@ use axum::response::{IntoResponse, Response};
 use std::sync::Arc;
 
 use crate::app::AppState;
-use crate::models::schemas::MetricsResponse;
+use crate::models::MetricsResponse;
 
 /// Handler for the metrics endpoint
 #[utoipa::path(
