@@ -32,7 +32,7 @@
     {
       "name": "petstore",
       "url": "https://petstore3.swagger.io/api/v3",
-      "schema_path": "config/swagger/petstore.yaml",
+      "schema_path": "config/swagger/petstore-swagger.yaml",
       "entity_name": "pet",
       "id_field": "id",
       "options": {

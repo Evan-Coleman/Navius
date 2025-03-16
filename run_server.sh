@@ -8,7 +8,7 @@ RELEASE_MODE=false
 CONFIG_DIR="config"
 ENV_FILE=".env"
 RUN_ENV="development"
-API_REGISTRY="api_registry.json"
+API_REGISTRY="config/api_registry.json"
 
 print_usage() {
     echo "Usage: $0 [OPTIONS]"
@@ -33,6 +33,7 @@ for arg in "$@"; do
             ;;
         --config-dir=*)
             CONFIG_DIR="${arg#*=}"
+            API_REGISTRY="${CONFIG_DIR}/api_registry.json"
             shift
             ;;
         --env=*)
@@ -115,17 +116,24 @@ if [ "$SKIP_GEN" = false ]; then
             
             for i in $(seq 0 $(($api_count - 1))); do
                 api_name=$(jq -r ".apis[$i].name" "$API_REGISTRY")
-                api_url=$(jq -r ".apis[$i].url" "$API_REGISTRY")
-                api_schema=$(jq -r ".apis[$i].schema_path" "$API_REGISTRY")
-                entity_name=$(jq -r ".apis[$i].entity_name" "$API_REGISTRY")
-                id_field=$(jq -r ".apis[$i].id_field" "$API_REGISTRY")
+                
+                # Check if this API has generation enabled
+                generate_models=$(jq -r ".apis[$i].options.generate_models // true" "$API_REGISTRY")
+                generate_api=$(jq -r ".apis[$i].options.generate_api // true" "$API_REGISTRY")
+                generate_handlers=$(jq -r ".apis[$i].options.generate_handlers // true" "$API_REGISTRY")
+                
+                # Skip if all generation options are disabled
+                if [ "$generate_models" != "true" ] && [ "$generate_api" != "true" ] && [ "$generate_handlers" != "true" ]; then
+                    echo "API $api_name has all generation options disabled, skipping."
+                    continue
+                fi
                 
                 # Check if this API is already generated
                 if [ ! -d "generated/${api_name}_api" ]; then
                     echo "Generating API client for $api_name..."
                     
-                    # Run the add_api.sh script
-                    ./scripts/add_api.sh "$api_name" "$api_url" "$api_schema" "$entity_name" "$id_field"
+                    # Run the add_api.sh script with just the API name to use registry configuration
+                    ./scripts/add_api.sh "$api_name"
                     
                     if [ $? -ne 0 ]; then
                         echo "Warning: Failed to generate API client for $api_name. Continuing..."

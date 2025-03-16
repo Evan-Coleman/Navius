@@ -86,6 +86,107 @@ else
     echo "To customize options, edit the config/api_registry.json file after creation."
 fi
 
+# Early exit if nothing is being generated
+if [ "$GENERATE_MODELS" != "true" ] && [ "$GENERATE_API" != "true" ] && [ "$GENERATE_HANDLERS" != "true" ]; then
+    echo "⚠️ All generation options are set to false. No code will be generated."
+    echo "Updating API registry only..."
+    
+    # Prepare options for the registry
+    OPTIONS_JSON=$(jq -n \
+        --arg models "$GENERATE_MODELS" \
+        --arg api "$GENERATE_API" \
+        --arg handlers "$GENERATE_HANDLERS" \
+        --arg router "$UPDATE_ROUTER" \
+        --arg include "$INCLUDE_MODELS" \
+        --arg exclude "$EXCLUDE_MODELS" \
+        '{
+            generate_models: ($models == "true"),
+            generate_api: ($api == "true"),
+            generate_handlers: ($handlers == "true"),
+            update_router: ($router == "true"),
+            include_models: (if $include == "" then [] else $include | split(",") end),
+            exclude_models: (if $exclude == "" then [] else $exclude | split(",") end)
+        }')
+    
+    # Update the API registry
+    if jq -e ".apis[] | select(.name == \"$API_NAME\")" "$API_REGISTRY" > /dev/null; then
+        jq --arg name "$API_NAME" \
+           --arg url "$API_URL" \
+           --arg schema "${SWAGGER_DIR}/${API_NAME}.yaml" \
+           --arg entity "$ENTITY_NAME" \
+           --arg id "$ID_FIELD" \
+           --argjson options "$OPTIONS_JSON" \
+           '.apis = [.apis[] | if .name == $name then {
+               name: $name,
+               url: $url,
+               schema_path: $schema,
+               entity_name: $entity,
+               id_field: $id,
+               options: $options
+           } else . end]' \
+           "$API_REGISTRY" > "${API_REGISTRY}.new"
+        mv "${API_REGISTRY}.new" "$API_REGISTRY"
+    else
+        jq --arg name "$API_NAME" \
+           --arg url "$API_URL" \
+           --arg schema "${SWAGGER_DIR}/${API_NAME}.yaml" \
+           --arg entity "$ENTITY_NAME" \
+           --arg id "$ID_FIELD" \
+           --argjson options "$OPTIONS_JSON" \
+           '.apis += [{
+               name: $name,
+               url: $url,
+               schema_path: $schema,
+               entity_name: $entity,
+               id_field: $id,
+               options: $options
+           }]' \
+           "$API_REGISTRY" > "${API_REGISTRY}.new"
+        mv "${API_REGISTRY}.new" "$API_REGISTRY"
+    fi
+    
+    # Update generated_apis.rs to include only active APIs
+    update_generated_apis
+    
+    echo "✅ Successfully updated API registry for ${API_NAME}"
+    exit 0
+fi
+
+# Function to update generated_apis.rs with only active APIs
+update_generated_apis() {
+    # Get all active APIs from the registry (those with at least one generation option enabled)
+    ACTIVE_APIS=$(jq -r '.apis[] | select(.options.generate_models == true or .options.generate_api == true or .options.generate_handlers == true) | .name' "$API_REGISTRY")
+    
+    # Update the bridge file to include all active APIs
+    echo "Updating generated_apis.rs..."
+    cat > "src/generated_apis.rs" << EOF
+//! Generated API modules
+//!
+//! This file serves as a bridge to the generated API code in the /generated directory.
+//! It uses the #[path] attribute to reference files outside of the src directory.
+
+EOF
+
+    # Add imports and re-exports for all active APIs
+    for ACTIVE_API in $ACTIVE_APIS; do
+        # Get entity name for this API
+        API_ENTITY=$(jq -r ".apis[] | select(.name == \"$ACTIVE_API\") | .entity_name" "$API_REGISTRY")
+        API_ENTITY_CAMEL=$(echo "$API_ENTITY" | sed -r 's/(^|_)([a-z])/\U\2/g')
+        
+        # Add import for this API
+        echo "#[path = \"../generated/${ACTIVE_API}_api/src/lib.rs\"]" >> "src/generated_apis.rs"
+        echo "pub mod ${ACTIVE_API}_api;" >> "src/generated_apis.rs"
+        echo "" >> "src/generated_apis.rs"
+        
+        # Add re-exports if models are generated
+        if jq -e ".apis[] | select(.name == \"$ACTIVE_API\") | .options.generate_models" "$API_REGISTRY" > /dev/null; then
+            echo "// Re-export from ${ACTIVE_API}_api" >> "src/generated_apis.rs"
+            echo "pub use ${ACTIVE_API}_api::${API_ENTITY_CAMEL};" >> "src/generated_apis.rs"
+            echo "" >> "src/generated_apis.rs"
+        fi
+    done
+}
+
 # Convert API_NAME to CamelCase for handler function
 API_NAME_CAMEL=$(echo "$API_NAME" | sed -r 's/(^|_)([a-z])/\U\2/g')
 
@@ -271,24 +372,8 @@ if [ "$GENERATE_MODELS" = true ]; then
     echo "pub use models::${ENTITY_NAME_CAMEL};" >> "generated/${API_NAME}_api/src/lib.rs"
 fi
 
-# Update the bridge file to include the new API
-echo "Updating generated_apis.rs..."
-cat > "src/generated_apis.rs" << EOF
-//! Generated API modules
-//!
-//! This file serves as a bridge to the generated API code in the /generated directory.
-//! It uses the #[path] attribute to reference files outside of the src directory.
-
-#[path = "../generated/${API_NAME}_api/src/lib.rs"]
-pub mod ${API_NAME}_api;
-
-EOF
-
-# Add re-exports to the bridge file
-if [ "$GENERATE_MODELS" = true ]; then
-    echo "// The following re-exports make the API types available directly from generated_apis" >> "src/generated_apis.rs"
-    echo "pub use ${API_NAME}_api::${ENTITY_NAME_CAMEL};" >> "src/generated_apis.rs"
-fi
+# Update generated_apis.rs with only active APIs
+update_generated_apis
 
 # Update the config file to include the API URL
 echo "Updating configuration..."
