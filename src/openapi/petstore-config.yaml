@@ -1,5 +1,0 @@
-generatorName: rust
-outputDir: ./src/petstore_api
-additionalProperties:
-  packageName: petstore
-  serverFramework: axum

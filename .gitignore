@@ -46,3 +46,5 @@ config.*.yaml
 
 # Generated API files
 /src/petstore_api/
+# Generated API clients
+/generated/
