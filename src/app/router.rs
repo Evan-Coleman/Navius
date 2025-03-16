@@ -1,7 +1,15 @@
-use axum::routing::{Router, get};
+use axum::{
+    body::Body,
+    extract::ConnectInfo,
+    http::Request,
+    middleware::{self, Next},
+    response::Response,
+    routing::{Router, get},
+};
 use metrics_exporter_prometheus::PrometheusHandle;
 use reqwest::Client;
 use std::{net::SocketAddr, sync::Arc, time::SystemTime};
+use tower_http::{timeout::TimeoutLayer, trace::TraceLayer};
 use utoipa::{
     Modify, OpenApi,
     openapi::security::{ApiKey, ApiKeyValue, SecurityScheme},
@@ -80,7 +88,27 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/metrics", get(handlers::metrics::metrics))
         .route("/data", get(handlers::data::get_data))
         .route("/pet/{id}", get(handlers::pet::get_pet_by_id))
+        // Add tracing
+        .layer(TraceLayer::new_for_http())
+        // Add timeout
+        .layer(TimeoutLayer::new(std::time::Duration::from_secs(
+            state.config.server.timeout_seconds,
+        )))
         .with_state(state)
+        // Add socket address info to request extensions
+        .layer(middleware::from_fn(
+            |req: Request<Body>, next: Next| async move {
+                let conn_info_opt = req.extensions().get::<ConnectInfo<SocketAddr>>().cloned();
+
+                if let Some(conn_info) = conn_info_opt {
+                    let mut req = req;
+                    req.extensions_mut().insert(ConnectInfo(conn_info.0));
+                    next.run(req).await
+                } else {
+                    next.run(req).await
+                }
+            },
+        ))
 }
 
 /// Initialize the application

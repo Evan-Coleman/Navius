@@ -6,7 +6,11 @@ use reqwest::StatusCode;
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use crate::{app::AppState, generated_apis::petstore_api::models::Upet};
+use crate::{
+    app::AppState,
+    error::{AppError, Result},
+    generated_apis::petstore_api::models::Upet,
+};
 
 /// Handler for the pet endpoint
 #[utoipa::path(
@@ -25,50 +29,43 @@ use crate::{app::AppState, generated_apis::petstore_api::models::Upet};
 pub async fn get_pet_by_id(
     Path(id): Path<i64>,
     State(state): State<Arc<AppState>>,
-) -> Result<Json<Upet>, (StatusCode, String)> {
+) -> Result<Json<Upet>> {
     // Log request
     info!("Fetching pet with ID: {}", id);
 
     // If cache is enabled, try to get from cache or fetch
     if let Some(cache) = &state.pet_cache {
-        match crate::cache::get_or_fetch(cache, id, || async {
-            fetch_pet_with_retry(&state, id).await
+        // We need to adapt the cache's Result<Upet, String> to our Result<Upet>
+        let pet_result = crate::cache::get_or_fetch(cache, id, || async {
+            // Temporarily convert our Result<Upet> to Result<Upet, String> for the cache
+            match fetch_pet_with_retry(&state, id).await {
+                Ok(pet) => Ok(pet),
+                Err(e) => Err(e.to_string()),
+            }
         })
-        .await
-        {
-            Ok(pet) => {
-                info!("Returning pet with ID: {}", id);
-                return Ok(Json(pet));
+        .await;
+
+        // Convert back from Result<Upet, String> to Result<Upet>
+        let pet = pet_result.map_err(|err| {
+            if err.contains("not found") {
+                AppError::NotFound(err)
+            } else {
+                AppError::InternalError(err)
             }
-            Err(err) => {
-                // Error is already logged in fetch_pet_with_retry
-                if err.contains("not found") {
-                    return Err((StatusCode::NOT_FOUND, err));
-                } else {
-                    return Err((StatusCode::INTERNAL_SERVER_ERROR, err));
-                }
-            }
-        }
+        })?;
+
+        info!("Returning pet with ID: {}", id);
+        Ok(Json(pet))
     } else {
         // No cache, fetch directly
-        match fetch_pet_with_retry(&state, id).await {
-            Ok(pet) => {
-                info!("Returning pet with ID: {}", id);
-                return Ok(Json(pet));
-            }
-            Err(err) => {
-                // Error is already logged in fetch_pet_with_retry
-                if err.contains("not found") {
-                    return Err((StatusCode::NOT_FOUND, err));
-                } else {
-                    return Err((StatusCode::INTERNAL_SERVER_ERROR, err));
-                }
-            }
-        }
+        let pet = fetch_pet_with_retry(&state, id).await?;
+
+        info!("Returning pet with ID: {}", id);
+        Ok(Json(pet))
     }
 }
 
-async fn fetch_pet_with_retry(state: &Arc<AppState>, id: i64) -> Result<Upet, String> {
+async fn fetch_pet_with_retry(state: &Arc<AppState>, id: i64) -> Result<Upet> {
     let max_retries = state.config.server.max_retries;
     let mut last_error = None;
 
@@ -81,9 +78,9 @@ async fn fetch_pet_with_retry(state: &Arc<AppState>, id: i64) -> Result<Upet, St
             Ok(pet) => return Ok(pet),
             Err(err) => {
                 // Don't log attempt number or retry on 404 Not Found errors
-                if err.contains("not found (HTTP 404)") {
+                if err.to_string().contains("not found (HTTP 404)") {
                     warn!("Pet not found: {}", err);
-                    return Err(err);
+                    return Err(AppError::NotFound(format!("Pet with ID {} not found", id)));
                 }
 
                 warn!("Attempt {} failed: {}", attempt + 1, err);
@@ -100,38 +97,37 @@ async fn fetch_pet_with_retry(state: &Arc<AppState>, id: i64) -> Result<Upet, St
         }
     }
 
-    Err(last_error.unwrap_or_else(|| "Unknown error fetching pet".to_string()))
+    Err(last_error
+        .unwrap_or_else(|| AppError::InternalError("Unknown error fetching pet".to_string())))
 }
 
-async fn fetch_pet(state: &Arc<AppState>, id: i64) -> Result<Upet, String> {
+async fn fetch_pet(state: &Arc<AppState>, id: i64) -> Result<Upet> {
     let url = format!("{}/pet/{}", state.config.petstore_api_url(), id);
 
-    let response = state
-        .client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to send request: {}", e))?;
+    let response =
+        state.client.get(&url).send().await.map_err(|e| {
+            AppError::ExternalServiceError(format!("Failed to send request: {}", e))
+        })?;
 
     let status = response.status();
 
     if status == StatusCode::NOT_FOUND {
-        return Err(format!(
+        return Err(AppError::NotFound(format!(
             "Pet with ID {} not found (HTTP {})",
             id,
             status.as_u16()
-        ));
+        )));
     }
 
     if !status.is_success() {
-        return Err(format!(
+        return Err(AppError::ExternalServiceError(format!(
             "API returned error status: HTTP {}",
             status.as_u16()
-        ));
+        )));
     }
 
     response
         .json::<Upet>()
         .await
-        .map_err(|e| format!("Failed to parse response: {}", e))
+        .map_err(|e| AppError::ExternalServiceError(format!("Failed to parse response: {}", e)))
 }

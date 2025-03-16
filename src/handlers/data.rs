@@ -1,8 +1,12 @@
 use axum::{Json, extract::State};
 use std::sync::Arc;
-use tracing::{info, warn};
+use tracing::info;
 
-use crate::{app::AppState, models::Data};
+use crate::{
+    app::AppState,
+    error::{AppError, Result},
+    models::Data,
+};
 
 /// Handler for the data endpoint
 #[utoipa::path(
@@ -14,9 +18,7 @@ use crate::{app::AppState, models::Data};
     ),
     tag = "data"
 )]
-pub async fn get_data(
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<Data>, (axum::http::StatusCode, String)> {
+pub async fn get_data(State(state): State<Arc<AppState>>) -> Result<Json<Data>> {
     // Log request
     info!("Fetching data from external API");
 
@@ -26,31 +28,21 @@ pub async fn get_data(
         .get(&state.config.api.cat_fact_url)
         .send()
         .await
-        .map_err(|e| {
-            warn!("Failed to fetch data: {}", e);
-            (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to fetch data: {}", e),
-            )
-        })?;
+        .map_err(|e| AppError::ExternalServiceError(format!("Failed to fetch data: {}", e)))?;
 
     // Check if response is successful
     if !response.status().is_success() {
-        warn!("API returned error status: {}", response.status());
-        return Err((
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            format!("API returned error status: {}", response.status()),
-        ));
+        return Err(AppError::ExternalServiceError(format!(
+            "API returned error status: {}",
+            response.status()
+        )));
     }
 
     // Parse response
-    let data = response.json::<Data>().await.map_err(|e| {
-        warn!("Failed to parse response: {}", e);
-        (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to parse response: {}", e),
-        )
-    })?;
+    let data = response
+        .json::<Data>()
+        .await
+        .map_err(|e| AppError::ExternalServiceError(format!("Failed to parse response: {}", e)))?;
 
     info!("Successfully fetched data");
     Ok(Json(data))

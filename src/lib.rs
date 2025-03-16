@@ -29,7 +29,13 @@ pub mod config {
 /// Error handling
 pub mod error {
     pub use crate::error::error_types::*;
+    pub use crate::error::logger::*;
+    pub use crate::error::middleware::*;
+    pub use crate::error::result_ext::*;
     pub mod error_types;
+    pub mod logger;
+    pub mod middleware;
+    pub mod result_ext;
 }
 
 /// Metrics collection and reporting

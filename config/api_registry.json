@@ -37,10 +37,12 @@
       "id_field": "id",
       "options": {
         "generate_models": true,
-        "generate_api": true,
-        "generate_handlers": true,
+        "generate_api": false,
+        "generate_handlers": false,
         "update_router": true,
-        "include_models": [],
+        "include_models": [
+          "Pet"
+        ],
         "exclude_models": []
       }
     }
