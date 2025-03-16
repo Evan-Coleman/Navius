@@ -1,6 +1,8 @@
 use rust_backend::app;
+use rust_backend::error::error_types::AppError;
 
-use tracing::{Level, info};
+use std::process;
+use tracing::{Level, error, info};
 use tracing_subscriber::FmtSubscriber;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -11,8 +13,20 @@ async fn main() {
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::INFO)
         .finish();
-    tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
 
+    if let Err(err) = tracing::subscriber::set_global_default(subscriber) {
+        eprintln!("Failed to set tracing subscriber: {}", err);
+        process::exit(1);
+    }
+
+    // Run the application
+    if let Err(err) = run_app().await {
+        error!("Application error: {}", err);
+        process::exit(1);
+    }
+}
+
+async fn run_app() -> Result<(), AppError> {
     // Initialize the application
     let (mut app, addr) = app::init().await;
 
@@ -23,7 +37,9 @@ async fn main() {
     info!("Starting server on http://{}", addr);
     info!("API documentation available at http://{}/docs", addr);
 
-    axum::serve(tokio::net::TcpListener::bind(addr).await.unwrap(), app)
+    axum::serve(tokio::net::TcpListener::bind(addr).await?, app)
         .await
-        .expect("Failed to start server");
+        .map_err(|e| AppError::InternalError(format!("Server error: {}", e)))?;
+
+    Ok(())
 }
