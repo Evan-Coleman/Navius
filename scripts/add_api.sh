@@ -375,26 +375,32 @@ fi
 # Update generated_apis.rs with only active APIs
 update_generated_apis
 
-# Update the config file to include the API URL
+# Update the config file to include the API URL if it doesn't already exist
 echo "Updating configuration..."
 CONFIG_FILE="config/default.yaml"
 
-# Use awk to add the new API URL to the api section
-awk -v api_name="$API_NAME_SNAKE" -v api_url="$API_URL" '
-/api:/ {
-    print $0;
-    in_api = 1;
-    next;
-}
-/^[a-z]/ {
-    if (in_api) {
-        in_api = 0;
-        print "  " api_name "_url: \"" api_url "\"";
+# Check if the API URL already exists in the config file
+if ! grep -q "${API_NAME_SNAKE}_url:" "$CONFIG_FILE"; then
+    echo "Adding ${API_NAME_SNAKE}_url to config file..."
+    # Use awk to add the new API URL to the api section
+    awk -v api_name="$API_NAME_SNAKE" -v api_url="$API_URL" '
+    /api:/ {
+        print $0;
+        in_api = 1;
+        next;
     }
-}
-1
-' "$CONFIG_FILE" > "${CONFIG_FILE}.new"
-mv "${CONFIG_FILE}.new" "$CONFIG_FILE"
+    /^[a-z]/ {
+        if (in_api) {
+            in_api = 0;
+            print "  " api_name "_url: \"" api_url "\"";
+        }
+    }
+    1
+    ' "$CONFIG_FILE" > "${CONFIG_FILE}.new"
+    mv "${CONFIG_FILE}.new" "$CONFIG_FILE"
+else
+    echo "${API_NAME_SNAKE}_url already exists in config file, skipping update."
+fi
 
 # Prepare options for the registry
 OPTIONS_JSON=$(jq -n \
