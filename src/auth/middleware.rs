@@ -11,10 +11,9 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use futures::future::BoxFuture;
-use jsonwebtoken::{Algorithm, DecodingKey, TokenData, Validation, decode, decode_header};
+use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use tower::{Layer, Service};
 use tracing::{debug, error, info};
 
@@ -43,9 +42,7 @@ struct Jwk {
 /// JWKS cache entry
 #[derive(Debug, Clone)]
 struct JwksCacheEntry {
-    /// The JWKS data
     jwks: JwksResponse,
-    /// When the cache entry expires
     expires_at: SystemTime,
 }
 
@@ -96,35 +93,44 @@ pub struct EntraAuthConfig {
     pub client_id: String,
     /// Expected audience value
     pub audience: String,
-    /// JWKS URI for token validation
-    pub jwks_uri: String,
     /// Whether to validate the token (disable for debugging)
     pub validate_token: bool,
     /// Required roles for authorization
     pub required_roles: RoleRequirement,
-    /// Cache for JWKS
-    pub jwks_cache: Arc<Mutex<Option<JwksCacheEntry>>>,
     /// HTTP client
     pub client: Client,
+    /// JWKS URI for token validation
+    pub jwks_uri: String,
+    /// JWKS cache
+    pub jwks_cache: Arc<Mutex<Option<JwksCacheEntry>>>,
+    /// Debug mode - skips signature validation
+    pub debug_validation: bool,
 }
 
 impl Default for EntraAuthConfig {
     fn default() -> Self {
         let tenant_id = std::env::var("RUST_BACKEND_TENANT_ID").unwrap_or_default();
         let client_id = std::env::var("RUST_BACKEND_CLIENT_ID").unwrap_or_default();
+        let debug_validation = std::env::var("DEBUG_AUTH")
+            .unwrap_or_else(|_| "false".to_string())
+            .parse::<bool>()
+            .unwrap_or(false);
+        let audience = std::env::var("RUST_BACKEND_AUDIENCE")
+            .unwrap_or_else(|_| format!("api://{}", client_id));
 
         Self {
             tenant_id: tenant_id.clone(),
             client_id: client_id.clone(),
-            audience: format!("api://{}", client_id),
+            audience,
+            validate_token: true,
+            required_roles: RoleRequirement::None,
+            client: Client::new(),
             jwks_uri: format!(
                 "https://login.microsoftonline.com/{}/discovery/v2.0/keys",
                 tenant_id
             ),
-            validate_token: true,
-            required_roles: RoleRequirement::None,
             jwks_cache: Arc::new(Mutex::new(None)),
-            client: Client::new(),
+            debug_validation,
         }
     }
 }
@@ -183,26 +189,52 @@ fn extract_token(headers: &HeaderMap) -> Result<String, AuthError> {
         return Err(AuthError::InvalidTokenFormat);
     }
 
-    Ok(header_str[7..].to_string())
-}
+    let token = header_str[7..].trim().to_string();
 
-/// Fetch and cache JWKS from the JWKS URI
-async fn fetch_and_cache_jwks(config: &EntraAuthConfig) -> Result<JwksResponse, AuthError> {
-    // Check cache first
-    {
-        let cache = config.jwks_cache.lock().unwrap();
-        if let Some(entry) = &*cache {
-            // Check if cache is still valid (with 1 hour TTL)
-            let now = SystemTime::now();
-            if entry.expires_at > now {
-                debug!("Using cached JWKS");
-                return Ok(entry.jwks.clone());
+    // Basic JWT format validation - should have 3 parts separated by dots
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        return Err(AuthError::ValidationFailed(
+            "Invalid JWT format: token must have three parts (header.payload.signature)"
+                .to_string(),
+        ));
+    }
+
+    // Each part should be non-empty and contain valid Base64URL characters
+    for (i, part) in parts.iter().enumerate() {
+        if part.is_empty() {
+            return Err(AuthError::ValidationFailed(format!(
+                "JWT token part {} is empty",
+                i + 1
+            )));
+        }
+
+        // Very basic Base64URL validation - more thorough validation happens later
+        for c in part.chars() {
+            if !(c.is_alphanumeric() || c == '_' || c == '-' || c == '=') {
+                return Err(AuthError::ValidationFailed(format!(
+                    "Invalid JWT token: contains non-base64url characters"
+                )));
             }
         }
     }
 
-    // Cache is stale or doesn't exist, fetch new JWKS
-    info!("Fetching JWKS from {}", config.jwks_uri);
+    Ok(token)
+}
+
+/// Fetch and cache JWKS from the Microsoft endpoint
+async fn fetch_jwks(config: &EntraAuthConfig) -> Result<JwksResponse, AuthError> {
+    // Check if we have a cached JWKS that's still valid
+    {
+        let cache = config.jwks_cache.lock().unwrap();
+        if let Some(cache_entry) = &*cache {
+            if cache_entry.expires_at > SystemTime::now() {
+                return Ok(cache_entry.jwks.clone());
+            }
+        }
+    }
+
+    // If not, fetch a new JWKS
     let response = config
         .client
         .get(&config.jwks_uri)
@@ -217,12 +249,12 @@ async fn fetch_and_cache_jwks(config: &EntraAuthConfig) -> Result<JwksResponse, 
         )));
     }
 
-    let jwks: JwksResponse = response
-        .json()
+    let jwks = response
+        .json::<JwksResponse>()
         .await
         .map_err(|e| AuthError::InternalError(format!("Failed to parse JWKS: {}", e)))?;
 
-    // Cache the JWKS with 1 hour TTL
+    // Cache the JWKS for 1 hour
     let expires_at = SystemTime::now() + Duration::from_secs(3600);
     {
         let mut cache = config.jwks_cache.lock().unwrap();
@@ -236,17 +268,18 @@ async fn fetch_and_cache_jwks(config: &EntraAuthConfig) -> Result<JwksResponse, 
 }
 
 /// Find a JWK by its key ID
-fn find_jwk_by_kid(jwks: &JwksResponse, kid: &str) -> Result<Jwk, AuthError> {
+fn find_jwk<'a>(jwks: &'a JwksResponse, kid: &str) -> Result<&'a Jwk, AuthError> {
     jwks.keys
         .iter()
         .find(|key| key.key_id == kid)
-        .cloned()
-        .ok_or_else(|| AuthError::ValidationFailed(format!("JWK with kid '{}' not found", kid)))
+        .ok_or_else(|| {
+            AuthError::ValidationFailed(format!("No matching key found for kid: {}", kid))
+        })
 }
 
 /// Create a decoding key from a JWK
 fn create_decoding_key(jwk: &Jwk) -> Result<DecodingKey, AuthError> {
-    // Try using x509 certificate chain first
+    // First try X.509 certificate chain
     if let Some(x509_chain) = &jwk.x509_chain {
         if let Some(cert) = x509_chain.first() {
             return DecodingKey::from_rsa_pem(
@@ -257,10 +290,7 @@ fn create_decoding_key(jwk: &Jwk) -> Result<DecodingKey, AuthError> {
                 .as_bytes(),
             )
             .map_err(|e| {
-                AuthError::ValidationFailed(format!(
-                    "Failed to create decoding key from x509: {}",
-                    e
-                ))
+                AuthError::ValidationFailed(format!("Failed to create key from certificate: {}", e))
             });
         }
     }
@@ -268,15 +298,12 @@ fn create_decoding_key(jwk: &Jwk) -> Result<DecodingKey, AuthError> {
     // Fall back to modulus and exponent
     if let (Some(n), Some(e)) = (&jwk.modulus, &jwk.exponent) {
         return DecodingKey::from_rsa_components(n, e).map_err(|e| {
-            AuthError::ValidationFailed(format!(
-                "Failed to create decoding key from components: {}",
-                e
-            ))
+            AuthError::ValidationFailed(format!("Failed to create key from components: {}", e))
         });
     }
 
     Err(AuthError::ValidationFailed(
-        "JWK doesn't contain required key material".to_string(),
+        "JWK doesn't contain necessary key material".to_string(),
     ))
 }
 
@@ -425,39 +452,132 @@ async fn validate_token_wrapper(
 
     // Extract the token from the Authorization header
     let token = extract_token(req.headers())?;
+    debug!("Token extracted from header, starting validation");
 
-    // Get token header to retrieve kid
-    let header = decode_header(&token).map_err(|e| {
-        AuthError::ValidationFailed(format!("Failed to decode token header: {}", e))
-    })?;
+    // Try to decode header - if this fails, the token is not a valid JWT
+    let header = match decode_header(&token) {
+        Ok(h) => h,
+        Err(e) => {
+            error!(
+                "Token tampering detected: failed to decode token header: {}",
+                e
+            );
+            // Provide a clearer error message for malformed tokens
+            if e.to_string().contains("control character") {
+                return Err(AuthError::ValidationFailed(
+                    "Invalid token format: not a valid JWT token".to_string(),
+                ));
+            } else {
+                return Err(AuthError::ValidationFailed(format!("Invalid token: {}", e)));
+            }
+        }
+    };
 
-    // Get the kid from the header
+    if config.debug_validation {
+        // In debug mode, use simplified validation (not recommended for production)
+        debug!("DEBUG MODE: Using simplified token validation without signature verification");
+
+        // Parse token without validating signature
+        let mut validation = Validation::new(Algorithm::RS256);
+        validation.validate_exp = true;
+        validation.validate_nbf = true;
+        validation.set_audience(&[config.audience.clone()]);
+        validation.insecure_disable_signature_validation();
+
+        // Use an empty key since we're not validating signatures
+        let dummy_key = DecodingKey::from_secret(&[]);
+
+        // Try to decode the token with better error handling
+        let token_data = match decode::<EntraClaims>(&token, &dummy_key, &validation) {
+            Ok(data) => data,
+            Err(e) => {
+                error!("Token validation failed: {}", e);
+                let detail = match e.kind() {
+                    jsonwebtoken::errors::ErrorKind::InvalidToken => "Token format is invalid",
+                    jsonwebtoken::errors::ErrorKind::InvalidSignature => "Invalid signature",
+                    jsonwebtoken::errors::ErrorKind::Base64(_) => {
+                        "Base64 decoding error - token may be malformed or corrupted"
+                    }
+                    jsonwebtoken::errors::ErrorKind::ExpiredSignature => "Token has expired",
+                    jsonwebtoken::errors::ErrorKind::InvalidAudience => {
+                        &format!("Invalid audience, expected: {}", config.audience)
+                    }
+                    jsonwebtoken::errors::ErrorKind::InvalidIssuer => "Invalid issuer",
+                    _ => "Token validation failed",
+                };
+                return Err(AuthError::ValidationFailed(format!("{}: {}", detail, e)));
+            }
+        };
+
+        // Role-based validation
+        validate_claims(&token_data.claims, config)?;
+
+        // Store claims in request extensions
+        req.extensions_mut().insert(token_data.claims);
+
+        info!("DEBUG MODE: Token accepted without signature verification");
+        return Ok(req);
+    }
+
+    // Full validation with signature verification
+
+    // Get the key ID
     let kid = header.kid.ok_or_else(|| {
-        AuthError::ValidationFailed("Token header does not contain a 'kid'".to_string())
+        AuthError::ValidationFailed("Token header missing 'kid' claim".to_string())
     })?;
 
-    // Fetch and cache JWKS
-    let jwks = fetch_and_cache_jwks(config).await?;
+    // Fetch JWKS (JSON Web Key Set) from Microsoft
+    let jwks = fetch_jwks(config).await?;
 
-    // Find the JWK for this kid
-    let jwk = find_jwk_by_kid(&jwks, &kid)?;
+    // Find the key matching our token's kid
+    let jwk = find_jwk(&jwks, &kid)?;
 
-    // Create a decoding key from the JWK
-    let decoding_key = create_decoding_key(&jwk)?;
+    // Create a decoding key
+    let decoding_key = create_decoding_key(jwk)?;
 
     // Set up validation parameters
     let mut validation = Validation::new(Algorithm::RS256);
+    validation.validate_exp = true;
+    validation.validate_nbf = true;
     validation.set_audience(&[config.audience.clone()]);
-    validation.set_issuer(&[format!(
-        "https://login.microsoftonline.com/{}/v2.0",
-        config.tenant_id
-    )]);
 
-    // Decode and validate the token
-    let token_data = decode::<EntraClaims>(&token, &decoding_key, &validation)
-        .map_err(|e| AuthError::ValidationFailed(format!("Token validation failed: {}", e)))?;
+    // Set valid issuers
+    validation.set_issuer(&[
+        format!(
+            "https://login.microsoftonline.com/{}/v2.0",
+            config.tenant_id
+        ),
+        format!(
+            "https://login.microsoftonline.com/{}/v2.0/",
+            config.tenant_id
+        ),
+        format!("https://sts.windows.net/{}", config.tenant_id),
+        format!("https://sts.windows.net/{}/", config.tenant_id),
+    ]);
 
-    // Additional role-based validation
+    // Validate token with better error handling
+    let token_data = match decode::<EntraClaims>(&token, &decoding_key, &validation) {
+        Ok(data) => data,
+        Err(e) => {
+            error!("Token validation failed: {}", e);
+            let detail = match e.kind() {
+                jsonwebtoken::errors::ErrorKind::InvalidToken => "Token format is invalid",
+                jsonwebtoken::errors::ErrorKind::InvalidSignature => "Invalid signature",
+                jsonwebtoken::errors::ErrorKind::Base64(_) => {
+                    "Base64 decoding error - token may be malformed or corrupted"
+                }
+                jsonwebtoken::errors::ErrorKind::ExpiredSignature => "Token has expired",
+                jsonwebtoken::errors::ErrorKind::InvalidAudience => {
+                    &format!("Invalid audience, expected: {}", config.audience)
+                }
+                jsonwebtoken::errors::ErrorKind::InvalidIssuer => "Invalid issuer",
+                _ => "Token validation failed",
+            };
+            return Err(AuthError::ValidationFailed(format!("{}: {}", detail, e)));
+        }
+    };
+
+    // Role-based authorization check
     validate_claims(&token_data.claims, config)?;
 
     info!(

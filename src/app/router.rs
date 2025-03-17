@@ -85,15 +85,7 @@ pub struct ApiDoc;
 
 /// Create the application router
 pub fn create_router(state: Arc<AppState>) -> Router {
-    // Create base router with all routes
-    let api_router = Router::new()
-        .route("/health", get(handlers::health::health_check))
-        .route("/metrics", get(handlers::metrics::metrics))
-        .route("/data", get(handlers::data::get_data))
-        .route("/pet/{id}", get(handlers::pet::get_pet_by_id))
-        .with_state(state.clone());
-
-    // Add auth middleware if enabled
+    // Check if auth is enabled
     let auth_enabled = std::env::var("AUTH_ENABLED")
         .unwrap_or_else(|_| "false".to_string())
         .parse::<bool>()
@@ -132,8 +124,13 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             .merge(service_routes)
             .with_state(state.clone())
     } else {
-        // No authentication
-        Router::new().merge(api_router).with_state(state.clone())
+        // No authentication - use the default router
+        Router::new()
+            .route("/health", get(handlers::health::health_check))
+            .route("/metrics", get(handlers::metrics::metrics))
+            .route("/data", get(handlers::data::get_data))
+            .route("/pet/{id}", get(handlers::pet::get_pet_by_id))
+            .with_state(state.clone())
     };
 
     // Add common middleware (tracing, timeout, etc)

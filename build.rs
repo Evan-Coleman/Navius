@@ -25,7 +25,7 @@ fn process_model_files() -> Result<(), Box<dyn std::error::Error>> {
 
     // Ensure the directory exists
     if !models_dir.exists() {
-        println!("cargo:warning=Models directory doesn't exist yet. Skipping processing.");
+        // Directory doesn't exist yet, silently skip processing
         return Ok(());
     }
 

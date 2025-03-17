@@ -23,25 +23,6 @@ pub async fn get_data(State(state): State<Arc<AppState>>) -> Result<Json<Data>> 
 
     let fact_url = &state.config.api.cat_fact_url;
 
-    // Try using the token client for secure downstream API calls
-    if let Some(token_client) = &state.token_client {
-        info!("Using token client for authenticated downstream API call");
-
-        // Example of calling a downstream API with client credentials
-        // In a real app, these would be from configuration
-        let downstream_api_scope = std::env::var("DOWNSTREAM_API_SCOPE")
-            .unwrap_or_else(|_| "api://your-downstream-api/.default".to_string());
-
-        // Get a dedicated client with auth headers
-        if let Ok(_auth_client) = token_client.create_client(&downstream_api_scope).await {
-            debug!("Successfully acquired authenticated client for downstream API");
-            // In a real implementation, you'd use this client instead
-            // let response = _auth_client.get(downstream_url).send().await?;
-        } else {
-            error!("Failed to create authenticated client");
-        }
-    }
-
     // Make request to external API
     let response = state
         .client

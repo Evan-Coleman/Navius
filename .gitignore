@@ -51,3 +51,6 @@ config.*.yaml
 /src/petstore_api/
 # Generated API clients
 /generated/
+
+# Bruno environment files
+bruno_collection/environments/Test.bru
