@@ -96,6 +96,22 @@ Environment variables can also be used to override any configuration value from 
 ./run_server.sh
 ```
 
+The script supports several options:
+
+```bash
+./run_server.sh [OPTIONS]
+```
+
+Options:
+- `--skip-gen` - Skip API model generation
+- `--release` - Build and run in release mode
+- `--config-dir=DIR` - Use specified config directory (default: config)
+- `--env=FILE` - Use specified .env file (default: .env)
+- `--environment=ENV` - Use specified environment (default: development)
+- `--help` - Show help message
+
+The script always preserves your manual settings in the API registry when generating APIs, ensuring that your customizations to `generate_api` and `generate_handlers` flags remain as you set them.
+
 Or manually (note the run_server.sh script has required steps to run the application so this may not work):
 
 ```bash

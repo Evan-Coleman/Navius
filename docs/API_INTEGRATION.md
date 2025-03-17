@@ -383,6 +383,8 @@ cargo build
 ./run_server.sh
 ```
 
+The `run_server.sh` script preserves your manual API registry settings by default.
+
 Test the new endpoint with curl:
 
 ```bash
