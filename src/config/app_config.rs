@@ -57,6 +57,271 @@ impl Default for LoggingConfig {
     }
 }
 
+/// Reliability configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReliabilityConfig {
+    /// Retry configuration
+    #[serde(default)]
+    pub retry: RetryConfig,
+
+    /// Circuit breaker configuration
+    #[serde(default)]
+    pub circuit_breaker: CircuitBreakerConfig,
+
+    /// Rate limiting configuration
+    #[serde(default)]
+    pub rate_limit: RateLimitConfig,
+
+    /// Timeout configuration
+    #[serde(default)]
+    pub timeout: TimeoutConfig,
+
+    /// Concurrency limits
+    #[serde(default)]
+    pub concurrency: ConcurrencyConfig,
+}
+
+/// Retry configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RetryConfig {
+    /// Whether retries are enabled
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Maximum number of retry attempts
+    #[serde(default = "default_retry_attempts")]
+    pub max_attempts: u32,
+
+    /// Base delay between retries in milliseconds
+    #[serde(default = "default_retry_delay")]
+    pub base_delay_ms: u64,
+
+    /// Max delay between retries in milliseconds
+    #[serde(default = "default_retry_max_delay")]
+    pub max_delay_ms: u64,
+
+    /// Whether to use exponential backoff
+    #[serde(default = "default_true")]
+    pub use_exponential_backoff: bool,
+
+    /// Status codes that should trigger a retry
+    #[serde(default = "default_retry_status_codes")]
+    pub retry_status_codes: Vec<u16>,
+}
+
+/// Circuit breaker configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CircuitBreakerConfig {
+    /// Whether circuit breaker is enabled
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Number of consecutive failures before opening the circuit (legacy mode)
+    #[serde(default = "default_failure_threshold")]
+    pub failure_threshold: u32,
+
+    /// Time window in seconds for tracking failure rate
+    #[serde(default = "default_window_seconds")]
+    pub window_seconds: u64,
+
+    /// Failure percentage threshold (0-100) that triggers the circuit breaker
+    #[serde(default = "default_failure_percentage")]
+    pub failure_percentage: u8,
+
+    /// Whether to use the legacy consecutive failures mode (false = use rolling window)
+    #[serde(default = "default_false")]
+    pub use_consecutive_failures: bool,
+
+    /// HTTP status codes that should be considered failures
+    #[serde(default = "default_failure_status_codes")]
+    pub failure_status_codes: Vec<u16>,
+
+    /// Time in milliseconds the circuit stays open before moving to half-open
+    #[serde(default = "default_reset_timeout")]
+    pub reset_timeout_ms: u64,
+
+    /// Number of successful requests in half-open state to close the circuit
+    #[serde(default = "default_success_threshold")]
+    pub success_threshold: u32,
+}
+
+/// Rate limiting configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RateLimitConfig {
+    /// Whether rate limiting is enabled
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Number of requests allowed per time window
+    #[serde(default = "default_rate_limit")]
+    pub requests_per_window: u32,
+
+    /// Time window in seconds
+    #[serde(default = "default_rate_window")]
+    pub window_seconds: u64,
+
+    /// Whether to apply per-client rate limiting
+    #[serde(default = "default_false")]
+    pub per_client: bool,
+}
+
+/// Timeout configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimeoutConfig {
+    /// Whether to enable request timeouts
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Timeout in seconds
+    #[serde(default = "default_timeout")]
+    pub timeout_seconds: u64,
+}
+
+/// Concurrency configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConcurrencyConfig {
+    /// Whether to limit concurrency
+    #[serde(default = "default_false")]
+    pub enabled: bool,
+
+    /// Maximum number of concurrent requests
+    #[serde(default = "default_max_concurrency")]
+    pub max_concurrent_requests: u32,
+}
+
+impl Default for ReliabilityConfig {
+    fn default() -> Self {
+        Self {
+            retry: RetryConfig::default(),
+            circuit_breaker: CircuitBreakerConfig::default(),
+            rate_limit: RateLimitConfig::default(),
+            timeout: TimeoutConfig::default(),
+            concurrency: ConcurrencyConfig::default(),
+        }
+    }
+}
+
+impl Default for RetryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_true(),
+            max_attempts: default_retry_attempts(),
+            base_delay_ms: default_retry_delay(),
+            max_delay_ms: default_retry_max_delay(),
+            use_exponential_backoff: default_true(),
+            retry_status_codes: default_retry_status_codes(),
+        }
+    }
+}
+
+impl Default for CircuitBreakerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_true(),
+            failure_threshold: default_failure_threshold(),
+            window_seconds: default_window_seconds(),
+            failure_percentage: default_failure_percentage(),
+            use_consecutive_failures: default_false(),
+            failure_status_codes: default_failure_status_codes(),
+            reset_timeout_ms: default_reset_timeout(),
+            success_threshold: default_success_threshold(),
+        }
+    }
+}
+
+impl Default for RateLimitConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_true(),
+            requests_per_window: default_rate_limit(),
+            window_seconds: default_rate_window(),
+            per_client: default_false(),
+        }
+    }
+}
+
+impl Default for TimeoutConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_true(),
+            timeout_seconds: default_timeout(),
+        }
+    }
+}
+
+impl Default for ConcurrencyConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_false(),
+            max_concurrent_requests: default_max_concurrency(),
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_false() -> bool {
+    false
+}
+
+fn default_retry_attempts() -> u32 {
+    3
+}
+
+fn default_retry_delay() -> u64 {
+    100
+}
+
+fn default_retry_max_delay() -> u64 {
+    1000
+}
+
+fn default_failure_threshold() -> u32 {
+    5
+}
+
+fn default_reset_timeout() -> u64 {
+    30000
+}
+
+fn default_success_threshold() -> u32 {
+    2
+}
+
+fn default_rate_limit() -> u32 {
+    100
+}
+
+fn default_rate_window() -> u64 {
+    60
+}
+
+fn default_timeout() -> u64 {
+    30
+}
+
+fn default_max_concurrency() -> u32 {
+    100
+}
+
+fn default_retry_status_codes() -> Vec<u16> {
+    vec![408, 429, 500, 502, 503, 504]
+}
+
+fn default_window_seconds() -> u64 {
+    60
+}
+
+fn default_failure_percentage() -> u8 {
+    50
+}
+
+fn default_failure_status_codes() -> Vec<u16> {
+    vec![500, 502, 503, 504]
+}
+
 /// Application configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -66,6 +331,8 @@ pub struct AppConfig {
     pub cache: CacheConfig,
     #[serde(default)]
     pub logging: LoggingConfig,
+    #[serde(default)]
+    pub reliability: ReliabilityConfig,
 }
 
 /// Application metadata configuration

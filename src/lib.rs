@@ -56,3 +56,6 @@ pub mod auth;
 /// Generated API clients
 #[path = "generated_apis.rs"]
 pub mod generated_apis;
+
+/// Reliability features for improved resilience
+pub mod reliability;

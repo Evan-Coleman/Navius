@@ -22,6 +22,7 @@ use crate::{
     generated_apis::petstore_api::models::Upet,
     handlers,
     models::{ApiResponse, Data, HealthCheckResponse, MetricsResponse},
+    reliability,
 };
 
 /// Application state shared across all routes
@@ -135,7 +136,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     };
 
     // Add common middleware (tracing, timeout, etc)
-    router
+    let router = router
         // Add tracing
         .layer(TraceLayer::new_for_http())
         // Add timeout
@@ -155,7 +156,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
                     next.run(req).await
                 }
             },
-        ))
+        ));
+
+    // Apply reliability features
+    reliability::apply_reliability(router, state)
 }
 
 /// Initialize the application

@@ -40,8 +40,8 @@ metrics-exporter-prometheus = "0.16.2"
 # Time handling
 chrono = { version = "0.4", features = ["serde"] }
 # Middleware and error handling
-tower = "0.5.2"
-tower-http = { version = "0.6.2", features = ["fs", "trace", "timeout", "add-extension", "util", "auth", "set-header"] }
+tower = { version = "0.5.2", features = ["full"] }
+tower-http = { version = "0.6.2", features = ["trace", "timeout", "catch-panic", "request-id", "cors"] }
 uuid = { version = "1.7", features = ["v4"] }
 tracing-futures = "0.2"
 
@@ -59,3 +59,7 @@ production = []
 [build-dependencies]
 # Don't need full regex crate, just simple string manipulation
 regex = "1.10.2"
+
+# Reliability features
+pin-project = "1.1"
+rand = "0.9.0"
