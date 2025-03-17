@@ -167,18 +167,15 @@ impl Default for EntraAuthConfig {
 
         // Ensure tenant_id is not empty
         let tenant_id = if tenant_id.is_empty() {
-            error!(
-                "TENANT_ID is empty! Authentication will fail. Please set RUST_BACKEND_TENANT_ID environment variable."
-            );
             // Use a placeholder to avoid URL formatting issues
             "common".to_string()
         } else {
             tenant_id
         };
 
-        // Use the well-known OpenID configuration endpoint format
+        // Use the direct JWKS endpoint
         let jwks_uri = format!(
-            "https://login.microsoftonline.com/{}/v2.0/.well-known/openid-configuration",
+            "https://login.microsoftonline.com/{}/discovery/v2.0/keys",
             tenant_id
         );
 
@@ -214,18 +211,15 @@ impl EntraAuthConfig {
 
         // Ensure tenant_id is not empty
         let tenant_id = if tenant_id.is_empty() {
-            error!(
-                "TENANT_ID is empty in config! Authentication will fail. Please set tenant_id in your configuration."
-            );
             // Use a placeholder to avoid URL formatting issues
             "common".to_string()
         } else {
             tenant_id
         };
 
-        // Use the well-known OpenID configuration endpoint format
+        // Use the direct JWKS endpoint
         let jwks_uri = format!(
-            "https://login.microsoftonline.com/{}/v2.0/.well-known/openid-configuration",
+            "https://login.microsoftonline.com/{}/discovery/v2.0/keys",
             tenant_id
         );
 
@@ -330,13 +324,6 @@ fn extract_token(headers: &HeaderMap) -> Result<String, AuthError> {
         ));
     }
 
-    // For debugging, log the token (only in debug mode to avoid security issues)
-    debug!("Received token: {}", token);
-    debug!(
-        "Token parts: Header={} / Payload={} / Signature={}",
-        parts[0], parts[1], "..."
-    );
-
     // Each part should be non-empty and contain valid Base64URL characters
     for (i, part) in parts.iter().enumerate() {
         if part.is_empty() {
@@ -371,88 +358,25 @@ async fn fetch_jwks(config: &EntraAuthConfig) -> Result<JwksResponse, AuthError>
         }
     }
 
-    // First, fetch the OpenID configuration to get the actual JWKS URI
-    info!("Fetching OpenID configuration from: {}", config.jwks_uri);
-    info!("Using tenant ID: {}", config.tenant_id);
-
-    // Ensure the tenant ID is not empty
-    if config.tenant_id.is_empty() {
-        return Err(AuthError::InternalError(
-            "Tenant ID is empty. Please set RUST_BACKEND_TENANT_ID environment variable."
-                .to_string(),
-        ));
-    }
-
-    let oidc_response = config
+    // If not, fetch a new JWKS
+    let response = config
         .client
         .get(&config.jwks_uri)
         .send()
         .await
-        .map_err(|e| {
-            AuthError::InternalError(format!("Failed to fetch OpenID configuration: {}", e))
-        })?;
-
-    let oidc_status = oidc_response.status();
-    info!("OpenID configuration response status: {}", oidc_status);
-
-    if !oidc_status.is_success() {
-        let error_text = oidc_response
-            .text()
-            .await
-            .unwrap_or_else(|_| "Could not read error response".to_string());
-        error!(
-            "OpenID configuration fetch failed. Status: {}, Error: {}",
-            oidc_status, error_text
-        );
-        return Err(AuthError::InternalError(format!(
-            "Failed to fetch OpenID configuration, status: {}",
-            oidc_status
-        )));
-    }
-
-    let oidc_config = oidc_response
-        .json::<OpenIdConfiguration>()
-        .await
-        .map_err(|e| {
-            AuthError::InternalError(format!("Failed to parse OpenID configuration: {}", e))
-        })?;
-
-    info!("Successfully fetched OpenID configuration");
-    info!("Using JWKS URI from discovery: {}", oidc_config.jwks_uri);
-    info!("Issuer from discovery: {}", oidc_config.issuer);
-
-    // Now fetch the actual JWKS using the URI from the OpenID configuration
-    let jwks_response = config
-        .client
-        .get(&oidc_config.jwks_uri)
-        .send()
-        .await
         .map_err(|e| AuthError::InternalError(format!("Failed to fetch JWKS: {}", e)))?;
 
-    let jwks_status = jwks_response.status();
-    info!("JWKS response status: {}", jwks_status);
-
-    if !jwks_status.is_success() {
-        let error_text = jwks_response
-            .text()
-            .await
-            .unwrap_or_else(|_| "Could not read error response".to_string());
-        error!(
-            "JWKS fetch failed. Status: {}, Error: {}",
-            jwks_status, error_text
-        );
+    if !response.status().is_success() {
         return Err(AuthError::InternalError(format!(
             "Failed to fetch JWKS, status: {}",
-            jwks_status
+            response.status()
         )));
     }
 
-    let jwks = jwks_response
+    let jwks = response
         .json::<JwksResponse>()
         .await
         .map_err(|e| AuthError::InternalError(format!("Failed to parse JWKS: {}", e)))?;
-
-    info!("Successfully fetched JWKS with {} keys", jwks.keys.len());
 
     // Cache the JWKS for 1 hour
     let expires_at = SystemTime::now() + Duration::from_secs(3600);
@@ -551,53 +475,22 @@ fn validate_claims(claims: &EntraClaims, config: &EntraAuthConfig) -> Result<(),
 fn validate_permissions(claims: &EntraClaims, config: &EntraAuthConfig) -> Result<(), AuthError> {
     let scopes = claims.get_scopes();
 
-    debug!("🔍 TOKEN ANALYSIS 🔍");
-    debug!("🔑 Subject: {}", claims.sub);
-    debug!("🔑 App ID: {:?}", claims.appid);
-    debug!("🔑 App URI: {:?}", claims.app_id_uri);
-    debug!("🔑 Raw roles in token: {:?}", claims.roles);
-    debug!("🔑 Raw scopes in token: {:?}", claims.scp);
-    debug!("🔑 All extracted permissions: {:?}", scopes);
-
     // Authorization based on permissions (scopes)
     match &config.required_permissions {
         PermissionRequirement::Any(required_permissions) => {
-            debug!(
-                "🛡️ ACCESS CHECK: Endpoint requires ANY of these permissions: {:?}",
-                required_permissions
-            );
-
             if required_permissions.is_empty() {
-                debug!("✅ No specific permissions required, allowing access");
                 return Ok(());
             }
 
             for permission in required_permissions {
-                debug!("🔍 Checking for permission: '{}'", permission);
                 if scopes.contains(permission) {
-                    debug!(
-                        "✅ PERMISSION MATCH: Found required permission '{}' in token",
-                        permission
-                    );
                     return Ok(());
                 }
             }
 
-            error!(
-                "❌ ACCESS DENIED: Token for subject '{}' does not have any of the required permissions: {:?}",
-                claims.sub, required_permissions
-            );
-            error!("⚠️ TOKEN PERMISSIONS AVAILABLE: {:?}", scopes);
-            error!(
-                "⚠️ POTENTIAL FIX: Update the endpoint to require one of these permissions OR update the app registration in Entra to include '{}' in the API permissions",
-                required_permissions
-                    .get(0)
-                    .unwrap_or(&"unknown".to_string())
-            );
-
             Err(AuthError::AccessDenied(format!(
-                "Access denied: Token for '{}' does not have any of the required permissions: {:?}. Available permissions: {:?}",
-                claims.sub, required_permissions, scopes
+                "Access denied: Token for '{}' does not have any of the required permissions: {:?}",
+                claims.sub, required_permissions
             )))
         }
         PermissionRequirement::All(required_permissions) => {
@@ -636,75 +529,8 @@ impl EntraAuthLayer {
 
     /// Create a new EntraAuthLayer from AppConfig
     pub fn from_app_config(config: &crate::config::app_config::AppConfig) -> Self {
-        // Test the JWKS endpoint before creating the layer
-        let auth_config = EntraAuthConfig::from_app_config(config);
-
-        // Log the tenant ID being used
-        info!(
-            "Using tenant ID for authentication: '{}'",
-            auth_config.tenant_id
-        );
-
-        // Spawn a task to test the OpenID configuration endpoint, but don't block on it
-        let oidc_uri = auth_config.jwks_uri.clone();
-        tokio::spawn(async move {
-            info!("Testing OpenID configuration endpoint: {}", oidc_uri);
-            match reqwest::Client::new().get(&oidc_uri).send().await {
-                Ok(response) => {
-                    info!(
-                        "OpenID configuration endpoint test result: {}",
-                        response.status()
-                    );
-                    if !response.status().is_success() {
-                        error!(
-                            "OpenID configuration endpoint test failed with status: {}",
-                            response.status()
-                        );
-                        if let Ok(text) = response.text().await {
-                            error!("OpenID configuration endpoint error response: {}", text);
-                        }
-                    } else {
-                        // Try to parse the OpenID configuration
-                        match response.json::<OpenIdConfiguration>().await {
-                            Ok(config) => {
-                                info!("Successfully parsed OpenID configuration");
-                                info!("JWKS URI from discovery: {}", config.jwks_uri);
-                                info!("Issuer from discovery: {}", config.issuer);
-
-                                // Test the JWKS URI from the configuration
-                                info!("Testing JWKS URI from discovery: {}", config.jwks_uri);
-                                match reqwest::Client::new().get(&config.jwks_uri).send().await {
-                                    Ok(jwks_response) => {
-                                        info!(
-                                            "JWKS endpoint test result: {}",
-                                            jwks_response.status()
-                                        );
-                                        if !jwks_response.status().is_success() {
-                                            error!(
-                                                "JWKS endpoint test failed with status: {}",
-                                                jwks_response.status()
-                                            );
-                                        }
-                                    }
-                                    Err(e) => {
-                                        error!("JWKS endpoint test failed: {}", e);
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                error!("Failed to parse OpenID configuration: {}", e);
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!("OpenID configuration endpoint test failed: {}", e);
-                }
-            }
-        });
-
         Self {
-            config: auth_config,
+            config: EntraAuthConfig::from_app_config(config),
         }
     }
 
@@ -836,21 +662,7 @@ async fn validate_token_wrapper(
         AuthError::ValidationFailed(format!("Failed to decode token header: {}", e))
     })?;
 
-    info!(
-        "🔐 AUTHENTICATION: Processing token for request: {} {}",
-        req.method(),
-        req.uri().path()
-    );
-    debug!(
-        "🔐 Token validation - Debug mode: {}, Audience: {}, Token: {}",
-        config.debug_validation, config.audience, token
-    );
-
     if config.debug_validation {
-        info!(
-            "⚠️ DEBUG MODE ACTIVE: Using simplified token validation (no signature verification)"
-        );
-
         // In debug mode, let's completely bypass JWT validation
         // and just accept any token format
         let mut req = req;
@@ -867,14 +679,12 @@ async fn validate_token_wrapper(
             scp: Some(constants::auth::permissions::DEFAULT_PERMISSION.to_string()),
         };
 
-        info!("✅ DEBUG MODE: Using dummy claims instead of token validation");
         req.extensions_mut().insert(claims);
         return Ok(req);
     }
 
     // Skip validation if disabled (for debugging or development)
     if !config.validate_token {
-        debug!("Token validation is disabled, skipping verification");
         return Ok(req);
     }
 
@@ -923,7 +733,6 @@ async fn validate_token_wrapper(
     let token_data = match decode::<EntraClaims>(&token, &decoding_key, &validation) {
         Ok(data) => data,
         Err(e) => {
-            error!("Token validation failed: {}", e);
             let detail = match e.kind() {
                 jsonwebtoken::errors::ErrorKind::InvalidToken => "Token format is invalid",
                 jsonwebtoken::errors::ErrorKind::InvalidSignature => "Invalid signature",
@@ -946,18 +755,6 @@ async fn validate_token_wrapper(
 
     // Permission-based authorization check
     validate_permissions(&token_data.claims, config)?;
-
-    info!(
-        "Successfully validated token for subject: {}",
-        token_data.claims.sub
-    );
-    if !token_data.claims.roles.is_empty() {
-        debug!("User roles: {:?}", token_data.claims.roles);
-    }
-    if token_data.claims.scp.is_some() {
-        debug!("User scopes from scp: {:?}", token_data.claims.scp);
-    }
-    debug!("Combined permissions: {:?}", token_data.claims.get_scopes());
 
     // Store claims in request extensions for handlers to access
     req.extensions_mut().insert(token_data.claims);
