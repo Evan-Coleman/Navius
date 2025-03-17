@@ -69,8 +69,26 @@ pub struct EntraClaims {
     /// App ID URI of the client
     #[serde(rename = "azp")]
     pub app_id_uri: Option<String>,
-    /// Scope in access token
+    /// Scope in access token (can be string or array)
+    #[serde(default)]
     pub scp: Option<String>,
+}
+
+impl EntraClaims {
+    /// Get scopes as a Vec<String>
+    pub fn get_scopes(&self) -> Vec<String> {
+        let mut permissions = Vec::new();
+
+        // Check for explicit scopes (delegated permissions)
+        if let Some(scope_str) = &self.scp {
+            permissions.extend(scope_str.split(' ').map(String::from));
+        }
+
+        // Include roles (application permissions) as well
+        permissions.extend(self.roles.clone());
+
+        permissions
+    }
 }
 
 /// Role requirements for authorization
@@ -81,6 +99,17 @@ pub enum RoleRequirement {
     /// All of the listed roles are required
     All(Vec<String>),
     /// No roles required (authentication only)
+    None,
+}
+
+/// Permission (scope) requirements for authorization
+#[derive(Debug, Clone)]
+pub enum PermissionRequirement {
+    /// Any of the listed permissions is sufficient
+    Any(Vec<String>),
+    /// All of the listed permissions are required
+    All(Vec<String>),
+    /// No permissions required (authentication only)
     None,
 }
 
@@ -97,6 +126,8 @@ pub struct EntraAuthConfig {
     pub validate_token: bool,
     /// Required roles for authorization
     pub required_roles: RoleRequirement,
+    /// Required permissions (scopes) for authorization
+    pub required_permissions: PermissionRequirement,
     /// HTTP client
     pub client: Client,
     /// JWKS URI for token validation
@@ -124,6 +155,7 @@ impl Default for EntraAuthConfig {
             audience,
             validate_token: true,
             required_roles: RoleRequirement::None,
+            required_permissions: PermissionRequirement::None,
             client: Client::new(),
             jwks_uri: format!(
                 "https://login.microsoftonline.com/{}/discovery/v2.0/keys",
@@ -152,28 +184,34 @@ pub enum AuthError {
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
-        let (status, error_message) = match self {
+        let (status, message) = match self {
             AuthError::MissingToken => (
                 StatusCode::UNAUTHORIZED,
-                "Missing authorization token".to_string(),
+                "Authentication required: Missing authorization token".to_string(),
             ),
-            AuthError::InvalidTokenFormat => {
-                (StatusCode::UNAUTHORIZED, "Invalid token format".to_string())
-            }
-            AuthError::ValidationFailed(msg) => (StatusCode::UNAUTHORIZED, msg),
-            AuthError::InternalError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
-            AuthError::AccessDenied(msg) => (StatusCode::FORBIDDEN, msg),
+            AuthError::InvalidTokenFormat => (
+                StatusCode::UNAUTHORIZED,
+                "Authentication failed: Invalid token format".to_string(),
+            ),
+            AuthError::ValidationFailed(reason) => (
+                StatusCode::UNAUTHORIZED,
+                format!("Authentication failed: {}", reason),
+            ),
+            AuthError::InternalError(reason) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Server error during authentication: {}", reason),
+            ),
+            AuthError::AccessDenied(reason) => (StatusCode::FORBIDDEN, reason),
         };
 
-        (
-            status,
-            [(
-                axum::http::header::CONTENT_TYPE,
-                HeaderValue::from_static("text/plain"),
-            )],
-            error_message,
-        )
-            .into_response()
+        let body = axum::Json(serde_json::json!({
+            "status": status.as_u16(),
+            "error": status.to_string(),
+            "message": message,
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+        }));
+
+        (status, body).into_response()
     }
 }
 
@@ -199,6 +237,13 @@ fn extract_token(headers: &HeaderMap) -> Result<String, AuthError> {
                 .to_string(),
         ));
     }
+
+    // For debugging, log the token (only in debug mode to avoid security issues)
+    debug!("Received token: {}", token);
+    debug!(
+        "Token parts: Header={} / Payload={} / Signature={}",
+        parts[0], parts[1], "..."
+    );
 
     // Each part should be non-empty and contain valid Base64URL characters
     for (i, part) in parts.iter().enumerate() {
@@ -347,6 +392,79 @@ fn validate_claims(claims: &EntraClaims, config: &EntraAuthConfig) -> Result<(),
     }
 }
 
+/// Validate permissions in the token
+fn validate_permissions(claims: &EntraClaims, config: &EntraAuthConfig) -> Result<(), AuthError> {
+    let scopes = claims.get_scopes();
+
+    debug!("🔍 TOKEN ANALYSIS 🔍");
+    debug!("🔑 Subject: {}", claims.sub);
+    debug!("🔑 App ID: {:?}", claims.appid);
+    debug!("🔑 App URI: {:?}", claims.app_id_uri);
+    debug!("🔑 Raw roles in token: {:?}", claims.roles);
+    debug!("🔑 Raw scopes in token: {:?}", claims.scp);
+    debug!("🔑 All extracted permissions: {:?}", scopes);
+
+    // Authorization based on permissions (scopes)
+    match &config.required_permissions {
+        PermissionRequirement::Any(required_permissions) => {
+            debug!(
+                "🛡️ ACCESS CHECK: Endpoint requires ANY of these permissions: {:?}",
+                required_permissions
+            );
+
+            if required_permissions.is_empty() {
+                debug!("✅ No specific permissions required, allowing access");
+                return Ok(());
+            }
+
+            for permission in required_permissions {
+                debug!("🔍 Checking for permission: '{}'", permission);
+                if scopes.contains(permission) {
+                    debug!(
+                        "✅ PERMISSION MATCH: Found required permission '{}' in token",
+                        permission
+                    );
+                    return Ok(());
+                }
+            }
+
+            error!(
+                "❌ ACCESS DENIED: Token for subject '{}' does not have any of the required permissions: {:?}",
+                claims.sub, required_permissions
+            );
+            error!("⚠️ TOKEN PERMISSIONS AVAILABLE: {:?}", scopes);
+            error!(
+                "⚠️ POTENTIAL FIX: Update the endpoint to require one of these permissions OR update the app registration in Entra to include '{}' in the API permissions",
+                required_permissions
+                    .get(0)
+                    .unwrap_or(&"unknown".to_string())
+            );
+
+            Err(AuthError::AccessDenied(format!(
+                "Access denied: Token for '{}' does not have any of the required permissions: {:?}. Available permissions: {:?}",
+                claims.sub, required_permissions, scopes
+            )))
+        }
+        PermissionRequirement::All(required_permissions) => {
+            if required_permissions.is_empty() {
+                return Ok(());
+            }
+
+            for permission in required_permissions {
+                if !scopes.contains(permission) {
+                    return Err(AuthError::AccessDenied(format!(
+                        "Access denied: Token missing required permission: {}",
+                        permission
+                    )));
+                }
+            }
+
+            Ok(())
+        }
+        PermissionRequirement::None => Ok(()),
+    }
+}
+
 /// Middleware layer for Entra ID authentication
 #[derive(Clone, Debug)]
 pub struct EntraAuthLayer {
@@ -381,6 +499,23 @@ impl EntraAuthLayer {
     /// Create a new auth layer that requires all of the specified roles
     pub fn require_all_roles(roles: Vec<String>) -> Self {
         Self::with_roles(RoleRequirement::All(roles))
+    }
+
+    /// Create a new auth layer with permission requirements
+    pub fn with_permissions(permissions: PermissionRequirement) -> Self {
+        let mut config = EntraAuthConfig::default();
+        config.required_permissions = permissions;
+        Self::new(config)
+    }
+
+    /// Create a new auth layer that requires any of the given permissions
+    pub fn require_any_permission(permissions: Vec<String>) -> Self {
+        Self::with_permissions(PermissionRequirement::Any(permissions))
+    }
+
+    /// Create a new auth layer that requires all of the specified permissions
+    pub fn require_all_permissions(permissions: Vec<String>) -> Self {
+        Self::with_permissions(PermissionRequirement::All(permissions))
     }
 }
 
@@ -444,78 +579,34 @@ async fn validate_token_wrapper(
     mut req: Request,
     config: &EntraAuthConfig,
 ) -> Result<Request, AuthError> {
+    // Extract the token
+    let headers = req.headers();
+    let token = extract_token(headers)?;
+
+    let header = decode_header(&token).map_err(|e| {
+        AuthError::ValidationFailed(format!("Failed to decode token header: {}", e))
+    })?;
+
+    info!(
+        "🔐 AUTHENTICATION: Processing token for request: {} {}",
+        req.method(),
+        req.uri().path()
+    );
+    debug!(
+        "🔐 Token validation - Debug mode: {}, Audience: {}",
+        config.debug_validation, config.audience
+    );
+
+    if config.debug_validation {
+        info!(
+            "⚠️ DEBUG MODE ACTIVE: Using simplified token validation (no signature verification)"
+        );
+        // ... rest of debug auth flow
+    }
+
     // Skip validation if disabled (for debugging or development)
     if !config.validate_token {
         debug!("Token validation is disabled, skipping verification");
-        return Ok(req);
-    }
-
-    // Extract the token from the Authorization header
-    let token = extract_token(req.headers())?;
-    debug!("Token extracted from header, starting validation");
-
-    // Try to decode header - if this fails, the token is not a valid JWT
-    let header = match decode_header(&token) {
-        Ok(h) => h,
-        Err(e) => {
-            error!(
-                "Token tampering detected: failed to decode token header: {}",
-                e
-            );
-            // Provide a clearer error message for malformed tokens
-            if e.to_string().contains("control character") {
-                return Err(AuthError::ValidationFailed(
-                    "Invalid token format: not a valid JWT token".to_string(),
-                ));
-            } else {
-                return Err(AuthError::ValidationFailed(format!("Invalid token: {}", e)));
-            }
-        }
-    };
-
-    if config.debug_validation {
-        // In debug mode, use simplified validation (not recommended for production)
-        debug!("DEBUG MODE: Using simplified token validation without signature verification");
-
-        // Parse token without validating signature
-        let mut validation = Validation::new(Algorithm::RS256);
-        validation.validate_exp = true;
-        validation.validate_nbf = true;
-        validation.set_audience(&[config.audience.clone()]);
-        validation.insecure_disable_signature_validation();
-
-        // Use an empty key since we're not validating signatures
-        let dummy_key = DecodingKey::from_secret(&[]);
-
-        // Try to decode the token with better error handling
-        let token_data = match decode::<EntraClaims>(&token, &dummy_key, &validation) {
-            Ok(data) => data,
-            Err(e) => {
-                error!("Token validation failed: {}", e);
-                let detail = match e.kind() {
-                    jsonwebtoken::errors::ErrorKind::InvalidToken => "Token format is invalid",
-                    jsonwebtoken::errors::ErrorKind::InvalidSignature => "Invalid signature",
-                    jsonwebtoken::errors::ErrorKind::Base64(_) => {
-                        "Base64 decoding error - token may be malformed or corrupted"
-                    }
-                    jsonwebtoken::errors::ErrorKind::ExpiredSignature => "Token has expired",
-                    jsonwebtoken::errors::ErrorKind::InvalidAudience => {
-                        &format!("Invalid audience, expected: {}", config.audience)
-                    }
-                    jsonwebtoken::errors::ErrorKind::InvalidIssuer => "Invalid issuer",
-                    _ => "Token validation failed",
-                };
-                return Err(AuthError::ValidationFailed(format!("{}: {}", detail, e)));
-            }
-        };
-
-        // Role-based validation
-        validate_claims(&token_data.claims, config)?;
-
-        // Store claims in request extensions
-        req.extensions_mut().insert(token_data.claims);
-
-        info!("DEBUG MODE: Token accepted without signature verification");
         return Ok(req);
     }
 
@@ -580,11 +671,20 @@ async fn validate_token_wrapper(
     // Role-based authorization check
     validate_claims(&token_data.claims, config)?;
 
+    // Permission-based authorization check
+    validate_permissions(&token_data.claims, config)?;
+
     info!(
         "Successfully validated token for subject: {}",
         token_data.claims.sub
     );
-    debug!("User roles: {:?}", token_data.claims.roles);
+    if !token_data.claims.roles.is_empty() {
+        debug!("User roles: {:?}", token_data.claims.roles);
+    }
+    if token_data.claims.scp.is_some() {
+        debug!("User scopes from scp: {:?}", token_data.claims.scp);
+    }
+    debug!("Combined permissions: {:?}", token_data.claims.get_scopes());
 
     // Store claims in request extensions for handlers to access
     req.extensions_mut().insert(token_data.claims);

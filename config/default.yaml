@@ -18,3 +18,16 @@ cache:
   enabled: true
   ttl_seconds: 300
   max_capacity: 1000 
+
+logging:
+  response_fields:
+    cat_fact_fields: 
+      - fact
+      - length
+      # Don't include length if you don't want it
+    health_fields:
+      - status
+      - uptime_seconds
+    api_response_fields:
+      - code
+      - message 

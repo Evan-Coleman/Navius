@@ -31,6 +31,32 @@ pub struct ApiConfig {
     pub api_key: Option<String>,
 }
 
+/// Logging configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoggingConfig {
+    pub response_fields: ResponseLoggingConfig,
+}
+
+/// Response logging configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResponseLoggingConfig {
+    pub cat_fact_fields: Vec<String>,
+    pub health_fields: Vec<String>,
+    pub api_response_fields: Vec<String>,
+}
+
+impl Default for LoggingConfig {
+    fn default() -> Self {
+        Self {
+            response_fields: ResponseLoggingConfig {
+                cat_fact_fields: vec!["fact".to_string(), "length".to_string()],
+                health_fields: vec!["status".to_string(), "uptime_seconds".to_string()],
+                api_response_fields: vec!["code".to_string(), "message".to_string()],
+            },
+        }
+    }
+}
+
 /// Application configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -38,8 +64,11 @@ pub struct AppConfig {
     pub api: ApiConfig,
     pub app: ApplicationConfig,
     pub cache: CacheConfig,
+    #[serde(default)]
+    pub logging: LoggingConfig,
 }
 
+/// Application metadata configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApplicationConfig {
     pub name: String,

@@ -99,9 +99,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             .route("/health", get(handlers::health::health_check))
             .route("/metrics", get(handlers::metrics::metrics));
 
-        // Protected routes - authentication required but no specific roles
+        // Protected routes - authentication required but no specific roles or permissions
         let authenticated_routes = Router::new()
             .route("/data", get(handlers::data::get_data))
+            .route("/pet/{id}", get(handlers::pet::get_pet_by_id))
             .layer(EntraAuthLayer::default());
 
         // Admin routes - require the "admin" role
@@ -109,10 +110,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             .route("/admin/pet/{id}", get(handlers::pet::get_pet_by_id))
             .layer(EntraAuthLayer::require_any_role(vec!["admin".to_string()]));
 
-        // Service routes - require service role
+        // Service routes - require permission instead of role
         let service_routes = Router::new()
             .route("/service/pet/{id}", get(handlers::pet::get_pet_by_id))
-            .layer(EntraAuthLayer::require_any_role(vec![
+            .layer(EntraAuthLayer::require_any_permission(vec![
                 "service".to_string(),
             ]));
 
