@@ -13,4 +13,9 @@ cache:
   # Longer TTL for production for better performance
   ttl_seconds: 3600
   # Larger cache capacity for production
-  max_capacity: 10000 
+  max_capacity: 10000
+
+# Environment-specific authentication settings
+auth:
+  enabled: true
+  debug: false 

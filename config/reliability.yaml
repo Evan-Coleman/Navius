@@ -1,0 +1,38 @@
+reliability:
+  # Retry settings
+  retry:
+    enabled: true
+    max_attempts: 3
+    base_delay_ms: 100
+    max_delay_ms: 1000
+    use_exponential_backoff: true
+
+  # Circuit Breaker Settings (Rolling Window Mode)
+  circuit_breaker:
+    enabled: true
+    use_consecutive_failures: false
+    window_seconds: 60
+    failure_percentage: 50
+    failure_status_codes: [500, 502, 503, 504]
+    reset_timeout_ms: 30000
+    success_threshold: 2
+    # Legacy Circuit Breaker Settings (Consecutive Failures Mode)
+    # use_consecutive_failures: true
+    # failure_threshold: 5
+
+  # Rate Limiting
+  rate_limit:
+    enabled: true
+    requests_per_window: 100
+    window_seconds: 60
+    per_client: false
+
+  # Timeout
+  timeout:
+    enabled: true
+    timeout_seconds: 30
+
+  # Concurrency
+  concurrency:
+    enabled: false
+    max_concurrent_requests: 100 

@@ -14,10 +14,20 @@ app:
   version: "1.0.0"
   log_level: "info"
 
+# Authentication settings
+auth:
+  enabled: true
+  debug: false
+
 cache:
   enabled: true
   ttl_seconds: 300
   max_capacity: 1000 
+
+# Reference to reliability settings
+# Detailed configuration in reliability.yaml
+reliability:
+  enabled: true
 
 logging:
   response_fields:
