@@ -3,13 +3,17 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
+use axum::http::Request;
 use axum::http::StatusCode;
 use axum::response::Response;
 use futures::future::BoxFuture;
-use pin_project::pin_project;
-use rand::Rng;
+use futures::{FutureExt, TryFutureExt};
 use tower::{Layer, Service};
-use tracing::{debug, info, warn, error};
+use tracing::{debug, info, warn};
+
+use rand::SeedableRng;
+use rand::prelude::*;
+use rand_chacha::ChaCha8Rng;
 
 /// Layer for adding retry capability to services
 #[derive(Clone, Debug)]
@@ -60,8 +64,8 @@ impl<S> Layer<S> for RetryLayer {
     }
 }
 
-/// Service implementing retry logic
-#[derive(Clone, Debug)]
+/// Service implementing retry pattern
+#[derive(Clone)]
 pub struct RetryService<S> {
     inner: S,
     max_attempts: u32,
@@ -74,17 +78,17 @@ pub struct RetryService<S> {
 impl<S, ReqBody, ResBody> Service<axum::http::Request<ReqBody>> for RetryService<S>
 where
     S: Service<axum::http::Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
-    S::Future: Send,
-    S::Error: Into<Box<dyn std::error::Error + Send + Sync>> + Send,
+    S::Error: std::error::Error + Send + Sync + 'static,
+    S::Future: Send + 'static,
     ReqBody: Send + 'static + Clone,
     ResBody: Send + 'static,
 {
     type Response = S::Response;
     type Error = Box<dyn std::error::Error + Send + Sync>;
-    type Future = RetryFuture<S, ReqBody, ResBody>;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx).map_err(Into::into)
+        self.inner.poll_ready(cx).map_err(|e| Box::new(e) as _)
     }
 
     fn call(&mut self, req: axum::http::Request<ReqBody>) -> Self::Future {
@@ -92,302 +96,80 @@ where
         let clone_service = self.inner.clone();
         let service = std::mem::replace(&mut self.inner, clone_service);
 
-        RetryFuture {
-            state: RetryState::Initial {
-                service,
-                request: req,
-                attempt: 1,
-                max_attempts: self.max_attempts,
-                base_delay: self.base_delay,
-                max_delay: self.max_delay,
-                use_exponential_backoff: self.use_exponential_backoff,
-                retry_status_codes: self.retry_status_codes.clone(),
-            },
-        }
-    }
-}
+        // Convert status codes to StatusCode objects
+        let retry_status_codes: Vec<StatusCode> = self
+            .retry_status_codes
+            .iter()
+            .filter_map(|&code| StatusCode::from_u16(code).ok())
+            .collect();
 
-/// State machine for the retry process
-enum RetryState<S, ReqBody, ResBody> {
-    /// Initial state - first attempt
-    Initial {
-        service: S,
-        request: axum::http::Request<ReqBody>,
-        attempt: u32,
-        max_attempts: u32,
-        base_delay: Duration,
-        max_delay: Duration,
-        use_exponential_backoff: bool,
-        retry_status_codes: Vec<u16>,
-    },
-    /// Service call is in progress
-    Running(BoxFuture<'static, Result<Response<ResBody>, Box<dyn std::error::Error + Send + Sync>>>),
-    /// Waiting for the retry delay
-    Waiting {
-        service: S,
-        request: axum::http::Request<ReqBody>,
-        attempt: u32,
-        max_attempts: u32,
-        base_delay: Duration,
-        max_delay: Duration,
-        use_exponential_backoff: bool,
-        retry_status_codes: Vec<u16>,
-        delay_future: Pin<Box<tokio::time::Sleep>>,
-    },
-    /// Terminal state for Poll
-    Empty,
-}
+        let max_attempts = self.max_attempts;
+        let base_delay = self.base_delay;
+        let max_delay = self.max_delay;
+        let use_exponential_backoff = self.use_exponential_backoff;
 
-/// Future that drives the retry process
-#[pin_project]
-pub struct RetryFuture<S, ReqBody, ResBody> {
-    #[pin]
-    state: RetryState<S, ReqBody, ResBody>,
-}
+        // Create a thread-safe RNG with a random seed
+        let rng_seed = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_else(|_| Duration::from_secs(0))
+            .as_nanos() as u64;
 
-impl<S, ReqBody, ResBody> Future for RetryFuture<S, ReqBody, ResBody>
-where
-    S: Service<axum::http::Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
-    S::Future: Send,
-    S::Error: Into<Box<dyn std::error::Error + Send + Sync>> + Send,
-    ReqBody: Send + Clone + 'static,
-    ResBody: Send + 'static,
-{
-    type Output = Result<Response<ResBody>, Box<dyn std::error::Error + Send + Sync>>;
+        async move {
+            let mut attempt = 0;
+            let mut service = service;
+            let request = req;
+            let mut rng = ChaCha8Rng::seed_from_u64(rng_seed);
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.project();
-        let mut state = std::mem::replace(this.state, RetryState::Empty);
+            loop {
+                attempt += 1;
+                debug!("Attempt {} of {}", attempt, max_attempts);
 
-        loop {
-            match state {
-                RetryState::Initial {
-                    mut service,
-                    request,
-                    attempt,
-                    max_attempts,
-                    base_delay,
-                    max_delay,
-                    use_exponential_backoff,
-                    retry_status_codes,
-                } => {
-                    debug!("Starting request attempt {}/{}", attempt, max_attempts);
-                    match service.poll_ready(cx) {
-                        Poll::Ready(Ok(())) => {
-                            let cloned_req = request.clone();
-                            let future = Box::pin(async move {
-                                service.call(cloned_req).await.map_err(Into::into)
-                            });
-                            state = RetryState::Running(future);
-                            continue;
-                        }
-                        Poll::Ready(Err(e)) => {
-                            return Poll::Ready(Err(e));
-                        }
-                        Poll::Pending => {
-                            *this.state = RetryState::Initial {
-                                service,
-                                request,
-                                attempt,
-                                max_attempts,
-                                base_delay,
-                                max_delay,
-                                use_exponential_backoff,
-                                retry_status_codes,
-                            };
-                            return Poll::Pending;
-                        }
-                    }
+                // Clone the request for this attempt
+                let cloned_req = clone_request(&request);
+
+                // Call the service
+                let response = service
+                    .call(cloned_req)
+                    .await
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+
+                // Check if we need to retry
+                let status = response.status();
+                let should_retry = attempt < max_attempts && retry_status_codes.contains(&status);
+
+                if !should_retry {
+                    return Ok(response);
                 }
-                RetryState::Running(mut future) => {
-                    match future.as_mut().poll(cx) {
-                        Poll::Ready(Ok(response)) => {
-                            // Check if we should retry based on status code
-                            let status = response.status();
-                            let status_code = status.as_u16();
-                            
-                            // We're done if the response is success or if we don't retry for this status
-                            if status.is_success() || !retry_status_codes.contains(&status_code) {
-                                return Poll::Ready(Ok(response));
-                            }
-                            
-                            // Extract state from the response to prepare for retry
-                            if let RetryState::Empty = *this.state {
-                                return Poll::Ready(Ok(response));
-                            }
-                            
-                            if let RetryState::Initial {
-                                service,
-                                request,
-                                attempt,
-                                max_attempts,
-                                base_delay,
-                                max_delay,
-                                use_exponential_backoff,
-                                retry_status_codes,
-                            } = std::mem::replace(this.state, RetryState::Empty)
-                            {
-                                if attempt >= max_attempts {
-                                    warn!("Request failed with status {}, reached max retries ({})", status, max_attempts);
-                                    return Poll::Ready(Ok(response));
-                                }
-                                
-                                let next_attempt = attempt + 1;
-                                
-                                // Calculate delay with optional exponential backoff and jitter
-                                let delay = if use_exponential_backoff {
-                                    let backoff_factor = 2_u32.pow(next_attempt - 1) as f64;
-                                    let delay_millis = base_delay.as_millis() as f64 * backoff_factor;
-                                    let max_millis = max_delay.as_millis() as f64;
-                                    let capped_millis = delay_millis.min(max_millis);
-                                    
-                                    // Add jitter (±10%)
-                                    let jitter_factor = 0.9 + rand::thread_rng().gen::<f64>() * 0.2;
-                                    let jittered_millis = capped_millis * jitter_factor;
-                                    
-                                    Duration::from_millis(jittered_millis as u64)
-                                } else {
-                                    base_delay
-                                };
-                                
-                                info!(
-                                    "Request failed with status {}. Retrying ({}/{}) after {:?}",
-                                    status, next_attempt, max_attempts, delay
-                                );
-                                
-                                let delay_future = Box::pin(tokio::time::sleep(delay));
-                                
-                                state = RetryState::Waiting {
-                                    service,
-                                    request,
-                                    attempt: next_attempt,
-                                    max_attempts,
-                                    base_delay,
-                                    max_delay,
-                                    use_exponential_backoff,
-                                    retry_status_codes,
-                                    delay_future,
-                                };
-                                continue;
-                            } else {
-                                return Poll::Ready(Ok(response));
-                            }
-                        }
-                        Poll::Ready(Err(err)) => {
-                            // Extract state to prepare for retry after error
-                            if let RetryState::Empty = *this.state {
-                                return Poll::Ready(Err(err));
-                            }
-                            
-                            if let RetryState::Initial {
-                                service,
-                                request,
-                                attempt,
-                                max_attempts,
-                                base_delay,
-                                max_delay,
-                                use_exponential_backoff,
-                                retry_status_codes,
-                            } = std::mem::replace(this.state, RetryState::Empty)
-                            {
-                                if attempt >= max_attempts {
-                                    error!("Request failed with error, reached max retries ({}): {:?}", max_attempts, err);
-                                    return Poll::Ready(Err(err));
-                                }
-                                
-                                let next_attempt = attempt + 1;
-                                
-                                // Calculate delay with exponential backoff and jitter
-                                let delay = if use_exponential_backoff {
-                                    let backoff_factor = 2_u32.pow(next_attempt - 1) as f64;
-                                    let delay_millis = base_delay.as_millis() as f64 * backoff_factor;
-                                    let max_millis = max_delay.as_millis() as f64;
-                                    let capped_millis = delay_millis.min(max_millis);
-                                    
-                                    // Add jitter (±10%)
-                                    let jitter_factor = 0.9 + rand::thread_rng().gen::<f64>() * 0.2;
-                                    let jittered_millis = capped_millis * jitter_factor;
-                                    
-                                    Duration::from_millis(jittered_millis as u64)
-                                } else {
-                                    base_delay
-                                };
-                                
-                                warn!(
-                                    "Request failed with error. Retrying ({}/{}) after {:?}: {:?}",
-                                    next_attempt, max_attempts, delay, err
-                                );
-                                
-                                let delay_future = Box::pin(tokio::time::sleep(delay));
-                                
-                                state = RetryState::Waiting {
-                                    service,
-                                    request,
-                                    attempt: next_attempt,
-                                    max_attempts,
-                                    base_delay,
-                                    max_delay,
-                                    use_exponential_backoff,
-                                    retry_status_codes,
-                                    delay_future,
-                                };
-                                continue;
-                            } else {
-                                return Poll::Ready(Err(err));
-                            }
-                        }
-                        Poll::Pending => {
-                            *this.state = RetryState::Running(future);
-                            return Poll::Pending;
-                        }
-                    }
-                }
-                RetryState::Waiting {
-                    service,
-                    request,
-                    attempt,
-                    max_attempts,
-                    base_delay,
-                    max_delay,
-                    use_exponential_backoff,
-                    retry_status_codes,
-                    mut delay_future,
-                } => {
-                    match delay_future.as_mut().poll(cx) {
-                        Poll::Ready(()) => {
-                            debug!("Retry delay complete, starting attempt {}/{}", attempt, max_attempts);
-                            state = RetryState::Initial {
-                                service,
-                                request,
-                                attempt,
-                                max_attempts,
-                                base_delay,
-                                max_delay,
-                                use_exponential_backoff,
-                                retry_status_codes,
-                            };
-                            continue;
-                        }
-                        Poll::Pending => {
-                            *this.state = RetryState::Waiting {
-                                service,
-                                request,
-                                attempt,
-                                max_attempts,
-                                base_delay,
-                                max_delay,
-                                use_exponential_backoff,
-                                retry_status_codes,
-                                delay_future,
-                            };
-                            return Poll::Pending;
-                        }
-                    }
-                }
-                RetryState::Empty => {
-                    panic!("RetryFuture polled after completion");
-                }
+
+                debug!("Retrying request due to status: {}", status);
+
+                // Calculate delay with jitter
+                let mut delay = if use_exponential_backoff {
+                    let exp_backoff = base_delay.as_millis() as u64 * 2u64.pow(attempt - 1);
+                    Duration::from_millis(exp_backoff.min(max_delay.as_millis() as u64))
+                } else {
+                    base_delay
+                };
+
+                // Add jitter (±20%)
+                let jitter_factor = 0.8 + (rng.random::<f64>() * 0.4); // 0.8 to 1.2
+                let jittered_millis = (delay.as_millis() as f64 * jitter_factor) as u64;
+                delay = Duration::from_millis(jittered_millis);
+
+                debug!("Waiting for {:?} before retry", delay);
+                tokio::time::sleep(delay).await;
+
+                // Clone the service for the next attempt
+                let next_service = service.clone();
+                service = next_service;
             }
         }
+        .boxed()
     }
-} 
+}
+
+// Helper function to clone a request
+fn clone_request<B: Clone>(req: &Request<B>) -> Request<B> {
+    let (parts, body) = req.clone().into_parts();
+    Request::from_parts(parts, body)
+}

@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use futures::future::BoxFuture;
+use futures::{FutureExt, TryFutureExt, future::BoxFuture};
 use pin_project::pin_project;
 use tower::{Layer, Service};
 use tracing::{debug, info, warn};
@@ -86,15 +86,13 @@ impl Drop for ConcurrencyPermit {
 /// Layer for adding concurrency limiting capability to services
 #[derive(Clone)]
 pub struct ConcurrencyLimitLayer {
-    tracker: Arc<Mutex<ConcurrencyTracker>>,
+    max_concurrent: u32,
 }
 
 impl ConcurrencyLimitLayer {
     /// Create a new concurrency limit layer
     pub fn new(max_concurrent: u32) -> Self {
-        Self {
-            tracker: Arc::new(Mutex::new(ConcurrencyTracker::new(max_concurrent))),
-        }
+        Self { max_concurrent }
     }
 }
 
@@ -104,7 +102,7 @@ impl<S> Layer<S> for ConcurrencyLimitLayer {
     fn layer(&self, service: S) -> Self::Service {
         ConcurrencyLimitService {
             inner: service,
-            tracker: self.tracker.clone(),
+            tracker: Arc::new(Mutex::new(ConcurrencyTracker::new(self.max_concurrent))),
         }
     }
 }
@@ -119,85 +117,100 @@ pub struct ConcurrencyLimitService<S> {
 impl<S, ReqBody, ResBody> Service<axum::http::Request<ReqBody>> for ConcurrencyLimitService<S>
 where
     S: Service<axum::http::Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
+    S::Error: std::error::Error + Send + Sync + 'static,
     S::Future: Send + 'static,
-    S::Error: Into<Box<dyn std::error::Error + Send + Sync>> + Send,
     ReqBody: Send + 'static,
     ResBody: Send + 'static,
 {
-    type Response = Response;
+    type Response = Response<ResBody>;
     type Error = Box<dyn std::error::Error + Send + Sync>;
-    type Future = ConcurrencyFuture<S, ReqBody, ResBody>;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        // Check if we're below the concurrency limit
-        let mut tracker = self.tracker.lock().unwrap();
-
-        if tracker.try_acquire() {
-            debug!(
-                "Concurrency permit acquired, current count: {}/{}",
-                tracker.count, tracker.max_concurrent
-            );
-
-            // Release the permit we just acquired, it will be properly acquired in the call method
-            tracker.release();
-
-            // Make sure the inner service is ready
-            self.inner.poll_ready(cx).map_err(Into::into)
-        } else {
-            // Register waker for when a permit becomes available
+        let mut state = self.tracker.lock().unwrap();
+        if !state.try_acquire() {
             debug!(
                 "Waiting for concurrency permit, current count: {}/{}",
-                tracker.count, tracker.max_concurrent
+                state.count, state.max_concurrent
             );
-            tracker.register_waiter(cx.waker());
-            Poll::Pending
+            state.register_waiter(cx.waker());
+            return Poll::Pending;
         }
+
+        debug!(
+            "Concurrency permit acquired, current count: {}/{}",
+            state.count, state.max_concurrent
+        );
+
+        // Release the permit we just acquired, it will be properly acquired in the call method
+        state.release();
+
+        // Make sure the inner service is ready
+        self.inner.poll_ready(cx).map_err(|e| Box::new(e) as _)
     }
 
     fn call(&mut self, req: axum::http::Request<ReqBody>) -> Self::Future {
         // Try to acquire a permit
-        let permit = {
-            let mut tracker = self.tracker.lock().unwrap();
+        let mut state = self.tracker.lock().unwrap();
+        if !state.try_acquire() {
+            debug!("Concurrency limit reached, rejecting request");
+            // Create a response using axum's response builder
+            // We'll use a type conversion to handle the body type
+            // Unused variable is intentional here, we're just creating the error
+            let _response = Response::builder()
+                .status(StatusCode::SERVICE_UNAVAILABLE)
+                .header("Retry-After", "5")
+                .body(axum::body::Body::from(
+                    "Server is at maximum capacity. Please try again later.",
+                ))
+                .unwrap();
 
-            if !tracker.try_acquire() {
-                // This shouldn't happen because poll_ready should have ensured we have capacity,
-                // but handle it by returning a 503 response
-                warn!(
-                    "Concurrency limit exceeded for {} despite poll_ready check",
-                    req.uri().path()
-                );
-                return ConcurrencyFuture {
-                    inner: InnerFuture::Rejected,
-                    permit: None,
-                    tracker: self.tracker.clone(),
-                };
-            }
+            // Convert the response to the expected type using a boxed future
+            return futures::future::ready(Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Service is at capacity",
+            ))
+                as Box<dyn std::error::Error + Send + Sync>))
+            .boxed();
+        }
+        drop(state);
 
-            // Create a permit to track this request
-            Some(ConcurrencyPermit {
-                tracker: self.tracker.clone(),
-            })
-        };
-
-        // Log concurrency info
-        let count = self.tracker.lock().unwrap().count;
-        let max = self.tracker.lock().unwrap().max_concurrent;
-        debug!("Handling request with concurrency {}/{}", count, max);
-
-        // Create clones for the future
-        let service = self.inner.clone();
+        // Get a clone to use after we finish
         let tracker = self.tracker.clone();
 
-        // Create the future to handle the request
-        ConcurrencyFuture {
-            inner: InnerFuture::Pending {
-                service,
-                request: req,
-                future: None,
-            },
-            permit,
-            tracker,
+        // Clone the service for use in the future
+        let clone_service = self.inner.clone();
+        let mut service = std::mem::replace(&mut self.inner, clone_service);
+
+        // Call the inner service
+        let future = service.call(req);
+
+        async move {
+            // Create a guard that will release the permit when dropped
+            let _guard = ConcurrencyGuard {
+                tracker: tracker.clone(),
+            };
+
+            // Call the inner service and propagate the result
+            let result = future
+                .await
+                .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+
+            Ok(result)
         }
+        .boxed()
+    }
+}
+
+/// Guard to ensure the permit is released when done
+struct ConcurrencyGuard {
+    tracker: Arc<Mutex<ConcurrencyTracker>>,
+}
+
+impl Drop for ConcurrencyGuard {
+    fn drop(&mut self) {
+        let mut tracker = self.tracker.lock().unwrap();
+        tracker.release();
     }
 }
 
@@ -219,65 +232,33 @@ enum InnerFuture<S, ReqBody, ResBody> {
 
 /// Future for concurrency limiting service
 #[pin_project]
-pub struct ConcurrencyFuture<S, ReqBody, ResBody> {
+pub struct ConcurrencyLimitFuture<F> {
     #[pin]
-    inner: InnerFuture<S, ReqBody, ResBody>,
-    permit: Option<ConcurrencyPermit>,
-    tracker: Arc<Mutex<ConcurrencyTracker>>,
+    inner: F,
+    state: Arc<Mutex<ConcurrencyTracker>>,
 }
 
-impl<S, ReqBody, ResBody> Future for ConcurrencyFuture<S, ReqBody, ResBody>
+impl<F, T, E> Future for ConcurrencyLimitFuture<F>
 where
-    S: Service<axum::http::Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
-    S::Future: Send + 'static,
-    S::Error: Into<Box<dyn std::error::Error + Send + Sync>> + Send,
-    ReqBody: Send + 'static,
-    ResBody: Send + 'static,
+    F: Future<Output = Result<T, E>>,
+    E: std::error::Error + Send + Sync + 'static,
 {
-    type Output = Result<Response, Box<dyn std::error::Error + Send + Sync>>;
+    type Output = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
-
-        match this.inner {
-            InnerFuture::Pending {
-                service,
-                request,
-                future,
-            } => {
-                if future.is_none() {
-                    // First poll, start the service call
-                    let mut svc = service.clone();
-                    let req = request.clone();
-
-                    // Create the future
-                    *future = Some(Box::pin(async move {
-                        let response = svc.call(req).await.map_err(Into::into)?;
-                        Ok(response)
-                    }));
-                }
-
-                // Poll the future
-                if let Some(f) = future {
-                    return Pin::new(f).poll(cx);
-                } else {
-                    // This should not happen
-                    return Poll::Ready(Err("Concurrency future in invalid state".into()));
-                }
+        match this.inner.poll(cx) {
+            Poll::Ready(Ok(response)) => {
+                let mut state = this.state.lock().unwrap();
+                state.release();
+                Poll::Ready(Ok(response))
             }
-            InnerFuture::Rejected => {
-                // Service unavailable response
-                let response = (
-                    StatusCode::SERVICE_UNAVAILABLE,
-                    "Service is at capacity. Please try again later.",
-                )
-                    .into_response();
-
-                return Poll::Ready(Ok(response));
+            Poll::Ready(Err(error)) => {
+                let mut state = this.state.lock().unwrap();
+                state.release();
+                Poll::Ready(Err(Box::new(error)))
             }
-            InnerFuture::Empty => {
-                panic!("ConcurrencyFuture polled after completion");
-            }
+            Poll::Pending => Poll::Pending,
         }
     }
 }

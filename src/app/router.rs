@@ -159,7 +159,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         ));
 
     // Apply reliability features
-    reliability::apply_reliability(router, state)
+    reliability::apply_reliability(router, &state.config.reliability)
 }
 
 /// Initialize the application

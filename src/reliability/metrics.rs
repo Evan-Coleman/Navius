@@ -8,6 +8,8 @@ use std::time::{Duration, Instant};
 
 use axum::http::StatusCode;
 use axum::response::Response;
+use futures::future::BoxFuture;
+use futures::{FutureExt, TryFutureExt};
 use metrics::{counter, gauge, histogram};
 use pin_project::pin_project;
 use tower::{Layer, Service};
@@ -84,46 +86,26 @@ impl ReliabilityMetrics {
     /// Update Prometheus metrics
     pub fn update_prometheus_metrics(&self) {
         // Update counters
-        counter!(
-            "reliability.requests.total",
-            self.total_requests.load(Ordering::Relaxed)
-        );
-        counter!(
-            "reliability.requests.successful",
-            self.successful_requests.load(Ordering::Relaxed)
-        );
-        counter!(
-            "reliability.requests.client_errors",
-            self.client_errors.load(Ordering::Relaxed)
-        );
-        counter!(
-            "reliability.requests.server_errors",
-            self.server_errors.load(Ordering::Relaxed)
-        );
-        counter!(
-            "reliability.requests.timeouts",
-            self.timeouts.load(Ordering::Relaxed)
-        );
-        counter!(
-            "reliability.requests.rate_limited",
-            self.rate_limited.load(Ordering::Relaxed)
-        );
-        counter!(
-            "reliability.requests.circuit_broken",
-            self.circuit_broken.load(Ordering::Relaxed)
-        );
-        counter!(
-            "reliability.requests.retry_attempts",
-            self.retry_attempts.load(Ordering::Relaxed)
-        );
+        counter!("reliability.requests.total", "type" => "total");
+        counter!("reliability.requests.successful", "type" => "successful");
+        counter!("reliability.requests.client_errors", "type" => "client_errors");
+        counter!("reliability.requests.server_errors", "type" => "server_errors");
+        counter!("reliability.requests.timeouts", "type" => "timeouts");
+        counter!("reliability.requests.rate_limited", "type" => "rate_limited");
+        counter!("reliability.requests.circuit_broken", "type" => "circuit_broken");
+        counter!("reliability.requests.retry_attempts", "type" => "retry_attempts");
 
         // Calculate error rate
-        let total = self.total_requests.load(Ordering::Relaxed) as f64;
-        if total > 0.0 {
-            let error_rate = (self.client_errors.load(Ordering::Relaxed) as f64
-                + self.server_errors.load(Ordering::Relaxed) as f64)
-                / total;
-            gauge!("reliability.error_rate", error_rate);
+        let total_requests = self.total_requests.load(Ordering::Relaxed) as f64;
+        if total_requests > 0.0 {
+            let error_requests = (self.client_errors.load(Ordering::Relaxed)
+                + self.server_errors.load(Ordering::Relaxed)
+                + self.timeouts.load(Ordering::Relaxed)
+                + self.rate_limited.load(Ordering::Relaxed)
+                + self.circuit_broken.load(Ordering::Relaxed))
+                as f64;
+            let error_rate = error_requests / total_requests;
+            metrics::gauge!("reliability.error_rate").set(error_rate);
         }
     }
 }
@@ -219,36 +201,82 @@ pub struct ReliabilityMetricsService<S> {
 impl<S, ReqBody, ResBody> Service<axum::http::Request<ReqBody>> for ReliabilityMetricsService<S>
 where
     S: Service<axum::http::Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
+    S::Error: std::error::Error + Send + Sync + 'static,
     S::Future: Send + 'static,
-    S::Error: Into<Box<dyn std::error::Error + Send + Sync>> + Send,
     ReqBody: Send + 'static,
     ResBody: Send + 'static,
 {
-    type Response = Response;
+    type Response = Response<ResBody>;
     type Error = Box<dyn std::error::Error + Send + Sync>;
-    type Future = ReliabilityMetricsFuture<S::Future>;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx).map_err(Into::into)
+        self.inner.poll_ready(cx).map_err(|e| Box::new(e) as _)
     }
 
     fn call(&mut self, req: axum::http::Request<ReqBody>) -> Self::Future {
-        // Record the request
-        self.metrics.record_request();
+        // Record the start time
+        let start = Instant::now();
+        let path = req.uri().path().to_string();
 
-        // Start timing the request
-        let start_time = Instant::now();
-        let path = req.uri().path().to_owned();
+        // Increment request counter
+        self.metrics.total_requests.fetch_add(1, Ordering::Relaxed);
+        counter!("reliability.requests.total");
+
+        // Get a clone of the service to handle the request
+        let clone_service = self.inner.clone();
+        let mut service = std::mem::replace(&mut self.inner, clone_service);
+
+        // Clone metrics for use in the future
+        let metrics = self.metrics.clone();
 
         // Call the inner service
-        let future = self.inner.call(req).map_err(Into::into);
+        let future = service.call(req);
 
-        ReliabilityMetricsFuture {
-            inner: future,
-            metrics: self.metrics.clone(),
-            start_time,
-            path,
+        async move {
+            let response = future
+                .await
+                .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+
+            // Record metrics based on response status
+            let status = response.status();
+            let status_code = status.as_u16();
+
+            if status.is_success() {
+                metrics.successful_requests.fetch_add(1, Ordering::Relaxed);
+                counter!("reliability.requests.successful");
+            } else if status.is_client_error() {
+                metrics.client_errors.fetch_add(1, Ordering::Relaxed);
+                counter!("reliability.requests.client_errors");
+            } else if status.is_server_error() {
+                metrics.server_errors.fetch_add(1, Ordering::Relaxed);
+                counter!("reliability.requests.server_errors");
+            }
+
+            // Record duration
+            let duration = start.elapsed();
+            let duration_ms = duration.as_millis() as f64;
+            metrics::histogram!("reliability.request.duration").record(duration_ms);
+
+            // Calculate and update error rate
+            let total_requests = metrics.total_requests.load(Ordering::Relaxed) as f64;
+            let error_requests = (metrics.client_errors.load(Ordering::Relaxed)
+                + metrics.server_errors.load(Ordering::Relaxed))
+                as f64;
+
+            if total_requests > 0.0 {
+                let error_rate = error_requests / total_requests;
+                metrics::gauge!("reliability.error_rate").set(error_rate);
+            }
+
+            debug!(
+                "Request completed: path={}, status={}, duration={:?}",
+                path, status_code, duration
+            );
+
+            Ok(response)
         }
+        .boxed()
     }
 }
 
@@ -257,51 +285,27 @@ where
 pub struct ReliabilityMetricsFuture<F> {
     #[pin]
     inner: F,
-    metrics: Arc<ReliabilityMetrics>,
     start_time: Instant,
     path: String,
 }
 
-impl<F, ResBody> Future for ReliabilityMetricsFuture<F>
+impl<F, ResBody, E> Future for ReliabilityMetricsFuture<F>
 where
-    F: Future<Output = Result<Response<ResBody>, Box<dyn std::error::Error + Send + Sync>>>,
-    ResBody: Send + 'static,
+    F: Future<Output = Result<Response<ResBody>, E>>,
+    E: std::error::Error + Send + Sync + 'static,
 {
-    type Output = Result<Response, Box<dyn std::error::Error + Send + Sync>>;
+    type Output = Result<Response<ResBody>, Box<dyn std::error::Error + Send + Sync>>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
-        let inner = this.inner;
-
-        match inner.poll(cx) {
+        match this.inner.poll(cx) {
             Poll::Ready(Ok(response)) => {
-                // Record response metrics
-                let status = response.status();
-                this.metrics.record_response(status);
-
-                // Record response time
                 let duration = this.start_time.elapsed();
-                let ms = duration.as_millis() as f64;
-                histogram!("reliability.request.duration_ms", ms);
-
-                // Log path and duration for debugging
+                let ms = duration.as_secs_f64() * 1000.0;
                 debug!("Request to {} completed in {:.2}ms", this.path, ms);
-
                 Poll::Ready(Ok(response))
             }
-            Poll::Ready(Err(err)) => {
-                // Check if it's a timeout error
-                let error_string = err.to_string();
-                if error_string.contains("timeout") || error_string.contains("timed out") {
-                    this.metrics.record_timeout();
-                } else {
-                    // Record as a server error
-                    this.metrics
-                        .record_response(StatusCode::INTERNAL_SERVER_ERROR);
-                }
-
-                Poll::Ready(Err(err))
-            }
+            Poll::Ready(Err(error)) => Poll::Ready(Err(Box::new(error))),
             Poll::Pending => Poll::Pending,
         }
     }

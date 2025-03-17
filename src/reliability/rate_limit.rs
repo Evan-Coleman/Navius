@@ -8,9 +8,9 @@ use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
 use axum::extract::ConnectInfo;
-use axum::http::Request;
+use axum::http::{Request, StatusCode};
 use axum::response::{IntoResponse, Response};
-use futures::future::BoxFuture;
+use futures::{FutureExt, TryFutureExt, future::BoxFuture};
 use pin_project::pin_project;
 use tower::{Layer, Service};
 use tracing::{debug, info, warn};
@@ -180,9 +180,9 @@ pub struct RateLimitService<S> {
 }
 
 /// Rate limit exceeded error response
-fn rate_limit_exceeded() -> Response {
+fn rate_limit_exceeded<T>() -> Response {
     (
-        axum::http::StatusCode::TOO_MANY_REQUESTS,
+        StatusCode::TOO_MANY_REQUESTS,
         "Rate limit exceeded. Please try again later.",
     )
         .into_response()
@@ -191,41 +191,51 @@ fn rate_limit_exceeded() -> Response {
 impl<S, ReqBody, ResBody> Service<Request<ReqBody>> for RateLimitService<S>
 where
     S: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
+    S::Error: std::error::Error + Send + Sync + 'static,
     S::Future: Send + 'static,
-    S::Error: Into<Box<dyn std::error::Error + Send + Sync>> + Send,
     ReqBody: Send + 'static,
     ResBody: Send + 'static,
+    ResBody: From<axum::body::Body>,
 {
-    type Response = Response;
+    type Response = Response<ResBody>;
     type Error = Box<dyn std::error::Error + Send + Sync>;
-    type Future = RateLimitFuture<S::Future>;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx).map_err(Into::into)
+        self.inner.poll_ready(cx).map_err(|e| Box::new(e) as _)
     }
 
-    fn call(&mut self, req: Request<ReqBody>) -> Self::Future {
-        // Apply global rate limit
-        if !self.global_limiter.try_consume() {
-            warn!("Global rate limit exceeded for {}", req.uri().path());
-            return RateLimitFuture {
-                inner: Box::pin(async { Ok(rate_limit_exceeded()) }),
-            };
+    fn call(&mut self, request: Request<ReqBody>) -> Self::Future {
+        // Try to consume a global token
+        let mut limiter = self.global_limiter.bucket.lock().unwrap();
+        if !limiter.try_consume() {
+            warn!("Global rate limit exceeded for {}", request.uri().path());
+            return futures::future::ready(Ok(Response::builder()
+                .status(StatusCode::TOO_MANY_REQUESTS)
+                .body(axum::body::Body::from("Rate limit exceeded. Please try again later.").into())
+                .unwrap()))
+            .boxed();
         }
+        drop(limiter);
 
         // Apply per-client rate limit if enabled
         if let Some(client_limiter) = &self.client_limiter {
             // Try to get client IP from ConnectInfo extension
-            if let Some(client_ip) = req
+            if let Some(client_ip) = request
                 .extensions()
                 .get::<ConnectInfo<std::net::SocketAddr>>()
                 .map(|connect_info| connect_info.0.ip())
             {
                 if !client_limiter.try_consume(&client_ip) {
                     warn!("Client rate limit exceeded for IP: {}", client_ip);
-                    return RateLimitFuture {
-                        inner: Box::pin(async { Ok(rate_limit_exceeded()) }),
-                    };
+                    return futures::future::ready(Ok(Response::builder()
+                        .status(StatusCode::TOO_MANY_REQUESTS)
+                        .body(
+                            axum::body::Body::from("Rate limit exceeded. Please try again later.")
+                                .into(),
+                        )
+                        .unwrap()))
+                    .boxed();
                 }
 
                 debug!("Rate limit check passed for client: {}", client_ip);
@@ -234,12 +244,22 @@ where
             }
         }
 
-        // Rate limit checks passed, call the inner service
-        let future = self.inner.call(req).map_err(Into::into);
+        // Get a clone for use in the future
+        let clone_service = self.inner.clone();
+        let mut service = std::mem::replace(&mut self.inner, clone_service);
 
-        RateLimitFuture {
-            inner: Box::pin(future),
+        // Rate limit checks passed, call the inner service
+        let future = service.call(request);
+
+        async move {
+            // Call the inner service and handle errors
+            let response = future
+                .await
+                .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+
+            Ok(response)
         }
+        .boxed()
     }
 }
 
@@ -247,14 +267,22 @@ where
 #[pin_project]
 pub struct RateLimitFuture<F> {
     #[pin]
-    inner: BoxFuture<'static, Result<Response, Box<dyn std::error::Error + Send + Sync>>>,
+    inner: F,
 }
 
-impl<F> Future for RateLimitFuture<F> {
-    type Output = Result<Response, Box<dyn std::error::Error + Send + Sync>>;
+impl<F, T, E> Future for RateLimitFuture<F>
+where
+    F: Future<Output = Result<T, E>>,
+    E: std::error::Error + Send + Sync + 'static,
+{
+    type Output = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
-        this.inner.poll(cx)
+        match this.inner.poll(cx) {
+            Poll::Ready(Ok(response)) => Poll::Ready(Ok(response)),
+            Poll::Ready(Err(error)) => Poll::Ready(Err(Box::new(error))),
+            Poll::Pending => Poll::Pending,
+        }
     }
 }

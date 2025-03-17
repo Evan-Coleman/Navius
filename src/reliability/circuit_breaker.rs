@@ -4,12 +4,16 @@ use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
+use std::error::Error as StdError;
+use std::fmt;
 
 use axum::http::StatusCode;
-use futures::FutureExt;
+use futures::{FutureExt, TryFutureExt, future::BoxFuture};
 use pin_project::pin_project;
 use tower::{Layer, Service};
 use tracing::{debug, error, info, warn};
+use axum::http::Request;
+use axum::response::Response;
 
 /// Circuit state
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -297,20 +301,17 @@ impl CircuitBreakerState {
         }
     }
 
-    /// Check if circuit is open and should transition to half-open
-    fn check_transition_to_half_open(&mut self) {
+    /// Check if the circuit should transition from open to half-open
+    pub fn check_transition_to_half_open(&mut self) -> bool {
         if self.state == CircuitState::Open {
-            if let Some(opened_at) = self.opened_at {
-                if opened_at.elapsed() >= self.reset_timeout {
-                    info!(
-                        "Circuit breaker state transition: {} -> HALF-OPEN (reset timeout elapsed)",
-                        self.state
-                    );
-                    self.state = CircuitState::HalfOpen;
-                    self.success_count = 0;
-                }
+            let now = Instant::now();
+            if now.duration_since(self.opened_at.unwrap()) >= self.reset_timeout {
+                self.state = CircuitState::HalfOpen;
+                self.success_count = 0;
+                return true;
             }
         }
+        false
     }
 
     /// Check if a status code should be considered a failure
@@ -381,123 +382,153 @@ pub struct CircuitBreakerService<S> {
     state: Arc<Mutex<CircuitBreakerState>>,
 }
 
-impl<S, ReqBody, ResBody> Service<axum::http::Request<ReqBody>> for CircuitBreakerService<S>
+/// Add this error type definition
+#[derive(Debug)]
+pub enum CircuitBreakerError {
+    CircuitOpen,
+    ServiceError(Box<dyn StdError + Send + Sync>),
+}
+
+impl fmt::Display for CircuitBreakerError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CircuitBreakerError::CircuitOpen => write!(f, "Circuit is open, requests are not allowed"),
+            CircuitBreakerError::ServiceError(e) => write!(f, "Service error: {}", e),
+        }
+    }
+}
+
+impl StdError for CircuitBreakerError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match self {
+            CircuitBreakerError::CircuitOpen => None,
+            CircuitBreakerError::ServiceError(e) => Some(e.as_ref()),
+        }
+    }
+}
+
+impl<S, ReqBody, ResBody> Service<Request<ReqBody>> for CircuitBreakerService<S>
 where
-    S: Service<axum::http::Request<ReqBody>, Response = axum::response::Response<ResBody>>
-        + Clone
-        + Send
-        + 'static,
+    S: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
+    S::Error: std::error::Error + Send + Sync + 'static,
     S::Future: Send + 'static,
-    S::Error: Into<Box<dyn std::error::Error + Send + Sync>> + Send,
     ReqBody: Send + 'static,
     ResBody: Send + 'static,
 {
-    type Response = S::Response;
+    type Response = Response<ResBody>;
     type Error = Box<dyn std::error::Error + Send + Sync>;
-    type Future = CircuitBreakerFuture<S::Future, ResBody>;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         // Check if the circuit is open
-        {
-            let mut state = self.state.lock().unwrap();
-            state.check_transition_to_half_open();
-
-            if state.state == CircuitState::Open {
-                return Poll::Ready(Err("Circuit is open, requests are not allowed".into()));
+        let mut state = self.state.lock().unwrap();
+        if state.state == CircuitState::Open {
+            // If the reset timeout has passed, transition to half-open
+            if state.check_transition_to_half_open() {
+                debug!("Circuit breaker moving from OPEN to HALF_OPEN state");
+            } else {
+                // Circuit is still open, request should be rejected
+                return Poll::Ready(Err(Box::new(CircuitBreakerError::CircuitOpen) as _));
             }
         }
 
-        // If circuit is closed or half-open, check if the service is ready
-        self.inner.poll_ready(cx).map_err(Into::into)
+        // Check if the inner service is ready
+        self.inner.poll_ready(cx).map_err(|e| Box::new(e) as _)
     }
 
-    fn call(&mut self, req: axum::http::Request<ReqBody>) -> Self::Future {
-        // Check circuit state
-        let current_state = {
-            let mut state = self.state.lock().unwrap();
-            state.check_transition_to_half_open();
-            state.state
-        };
-
-        // If circuit is open, fail fast
-        if current_state == CircuitState::Open {
-            debug!(
-                "Circuit is OPEN, failing fast for request to {}",
-                req.uri().path()
-            );
-            return CircuitBreakerFuture {
-                inner: futures::future::ready(Err(
-                    "Circuit is open, requests are not allowed".into()
-                ))
-                .boxed(),
-                state: self.state.clone(),
-            };
+    fn call(&mut self, req: Request<ReqBody>) -> Self::Future {
+        // Check if circuit is open (fail-fast)
+        let mut state = self.state.lock().unwrap();
+        if state.state == CircuitState::Open {
+            if !state.check_transition_to_half_open() {
+                debug!("Circuit breaker is OPEN, failing request fast");
+                return futures::future::ready(Err(Box::new(CircuitBreakerError::CircuitOpen) as _)).boxed();
+            }
+            
+            // If in half-open state, we'll try the request
+            debug!("Circuit breaker is in HALF_OPEN state, trying request");
         }
+        drop(state);
+
+        // Clone the service to allow for state tracking across async boundary
+        let clone_service = self.inner.clone();
+        let mut service = std::mem::replace(&mut self.inner, clone_service);
+        
+        // Clone the state to use in future
+        let state_clone = self.state.clone();
 
         // Call the inner service
-        let path = req.uri().path().to_owned();
-        debug!("Circuit is {}, allowing request to {}", current_state, path);
-        let future = self.inner.call(req).map_err(Into::into);
-
-        CircuitBreakerFuture {
-            inner: future.boxed(),
-            state: self.state.clone(),
-        }
+        let future = service.call(req);
+        
+        // Process the response
+        async move {
+            // Call the inner service and convert any errors
+            let result = future.await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>);
+            
+            // Update circuit breaker state based on result
+            let mut state = state_clone.lock().unwrap();
+            
+            match &result {
+                Ok(response) => {
+                    // Check if the status code is a failure
+                    let is_failure = state.is_failure_status(response.status());
+                    
+                    if is_failure {
+                        // Record failure
+                        state.record_failure();
+                        debug!("Circuit breaker recorded failure, consecutive={}, total={}, percentage={}%", 
+                               state.failure_count, state.failure_count, state.calculate_failure_percentage());
+                    } else {
+                        // Record success
+                        let old_state = state.state;
+                        state.record_success();
+                        
+                        // Log state transition if it happened
+                        if old_state != state.state {
+                            info!("Circuit breaker state changed: {:?} -> {:?}", old_state, state.state);
+                        }
+                    }
+                }
+                Err(_) => {
+                    // Record failure for error
+                    state.record_failure();
+                    debug!("Circuit breaker recorded error as failure, consecutive={}, total={}, percentage={}%", 
+                           state.failure_count, state.failure_count, state.calculate_failure_percentage());
+                }
+            }
+            
+            result
+        }.boxed()
     }
 }
 
 /// Future that tracks the results of requests for circuit breaker state
 #[pin_project]
-pub struct CircuitBreakerFuture<F, ResBody> {
+pub struct CircuitBreakerFuture<F> {
     #[pin]
-    inner: futures::future::BoxFuture<
-        'static,
-        Result<axum::response::Response<ResBody>, Box<dyn std::error::Error + Send + Sync>>,
-    >,
+    inner: F,
     state: Arc<Mutex<CircuitBreakerState>>,
 }
 
-impl<F, ResBody> Future for CircuitBreakerFuture<F, ResBody>
+impl<F, T, E> Future for CircuitBreakerFuture<F>
 where
-    ResBody: Send + 'static,
+    F: Future<Output = Result<T, E>>,
+    E: std::error::Error + Send + Sync + 'static,
 {
-    type Output =
-        Result<axum::response::Response<ResBody>, Box<dyn std::error::Error + Send + Sync>>;
+    type Output = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
-        let inner = this.inner;
-        let state = this.state;
-
-        match inner.poll(cx) {
+        match this.inner.poll(cx) {
             Poll::Ready(Ok(response)) => {
-                let status = response.status();
-                let mut state_guard = state.lock().unwrap();
-
-                // Check if this status code is considered a failure
-                if state_guard.is_failure_status(status) {
-                    state_guard.record_failure();
-                    warn!(
-                        "Circuit breaker recorded failure: status {} (circuit state: {})",
-                        status, state_guard.state
-                    );
-                } else {
-                    state_guard.record_success();
-                    debug!(
-                        "Circuit breaker recorded success (circuit state: {})",
-                        state_guard.state
-                    );
-                }
+                let mut state = this.state.lock().unwrap();
+                state.record_success();
                 Poll::Ready(Ok(response))
             }
-            Poll::Ready(Err(err)) => {
-                let mut state_guard = state.lock().unwrap();
-                state_guard.record_failure();
-                error!(
-                    "Circuit breaker recorded error: {:?} (circuit state: {})",
-                    err, state_guard.state
-                );
-                Poll::Ready(Err(err))
+            Poll::Ready(Err(error)) => {
+                let mut state = this.state.lock().unwrap();
+                state.record_failure();
+                Poll::Ready(Err(Box::new(error)))
             }
             Poll::Pending => Poll::Pending,
         }
