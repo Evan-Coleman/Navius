@@ -41,7 +41,7 @@ struct Jwk {
 
 /// JWKS cache entry
 #[derive(Debug, Clone)]
-struct JwksCacheEntry {
+pub struct JwksCacheEntry {
     jwks: JwksResponse,
     expires_at: SystemTime,
 }
