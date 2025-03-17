@@ -50,6 +50,9 @@ pub mod handlers;
 /// Data models and schemas
 pub mod models;
 
+/// Authentication and authorization
+pub mod auth;
+
 /// Generated API clients
 #[path = "generated_apis.rs"]
 pub mod generated_apis;

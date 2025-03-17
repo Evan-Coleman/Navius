@@ -1,6 +1,8 @@
 use axum::{Json, extract::State};
+use chrono::Utc;
+use http::StatusCode;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{debug, error, info};
 
 use crate::{
     app::AppState,
@@ -8,7 +10,7 @@ use crate::{
     models::Data,
 };
 
-/// Handler for the data endpoint
+/// Get data from a downstream API
 #[utoipa::path(
     get,
     path = "/data",
@@ -19,31 +21,41 @@ use crate::{
     tag = "data"
 )]
 pub async fn get_data(State(state): State<Arc<AppState>>) -> Result<Json<Data>> {
-    // Log request
-    info!("Fetching data from external API");
+    let fact_url = &state.config.api.cat_fact_url;
 
-    // Make request to external API
-    let response = state
-        .client
-        .get(&state.config.api.cat_fact_url)
-        .send()
-        .await
-        .map_err(|e| AppError::ExternalServiceError(format!("Failed to fetch data: {}", e)))?;
+    // Try using the token client for secure downstream API calls
+    if let Some(token_client) = &state.token_client {
+        info!("Using token client for authenticated requests");
 
-    // Check if response is successful
-    if !response.status().is_success() {
-        return Err(AppError::ExternalServiceError(format!(
-            "API returned error status: {}",
-            response.status()
-        )));
+        // This is an example of how you would use the token client
+        // with a real protected API (replace with your actual API)
+        let scope = std::env::var("DOWNSTREAM_API_SCOPE")
+            .unwrap_or_else(|_| "api://your-downstream-api/.default".to_string());
+
+        match token_client.get_token(&scope).await {
+            Ok(token) => {
+                debug!("Successfully acquired token for downstream API");
+                // Use token for downstream requests (this is just for demonstration)
+
+                // In a real scenario, you might do:
+                // let auth_client = token_client.create_client(&scope).await.map_err(...)?;
+                // let response = auth_client.get(downstream_url).send().await?;
+            }
+            Err(e) => {
+                error!("Failed to acquire token: {}", e);
+                // Fall back to unauthenticated request or return error
+            }
+        }
     }
 
-    // Parse response
-    let data = response
-        .json::<Data>()
-        .await
-        .map_err(|e| AppError::ExternalServiceError(format!("Failed to parse response: {}", e)))?;
+    // This is the original implementation (using unauthenticated request)
+    let response = state.client.get(fact_url).send().await?;
 
-    info!("Successfully fetched data");
-    Ok(Json(data))
+    if response.status().is_success() {
+        let mut data: Data = response.json().await?;
+        data.timestamp = Utc::now().to_string();
+        Ok(Json(data))
+    } else {
+        Err(StatusCode::INTERNAL_SERVER_ERROR.into())
+    }
 }

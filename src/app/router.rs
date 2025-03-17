@@ -16,6 +16,7 @@ use utoipa::{
 };
 
 use crate::{
+    auth::{EntraAuthLayer, EntraTokenClient},
     cache::PetCache,
     config::AppConfig,
     generated_apis::petstore_api::models::Upet,
@@ -30,6 +31,7 @@ pub struct AppState {
     pub start_time: SystemTime,
     pub pet_cache: Option<PetCache>,
     pub metrics_handle: PrometheusHandle,
+    pub token_client: Option<EntraTokenClient>,
 }
 
 /// API Security Scheme
@@ -83,18 +85,36 @@ pub struct ApiDoc;
 
 /// Create the application router
 pub fn create_router(state: Arc<AppState>) -> Router {
-    Router::new()
+    // Create base router with all routes
+    let api_router = Router::new()
         .route("/health", get(handlers::health::health_check))
         .route("/metrics", get(handlers::metrics::metrics))
         .route("/data", get(handlers::data::get_data))
-        .route("/pet/{id}", get(handlers::pet::get_pet_by_id))
+        .route("/pet/:id", get(handlers::pet::get_pet_by_id))
+        .with_state(state.clone());
+
+    // Add auth middleware if enabled
+    let auth_enabled = std::env::var("AUTH_ENABLED")
+        .unwrap_or_else(|_| "false".to_string())
+        .parse::<bool>()
+        .unwrap_or(false);
+
+    let router = if auth_enabled {
+        Router::new()
+            .nest("/", api_router.layer(EntraAuthLayer::default()))
+            .with_state(state)
+    } else {
+        Router::new().nest("/", api_router).with_state(state)
+    };
+
+    // Add common middleware (tracing, timeout, etc)
+    router
         // Add tracing
         .layer(TraceLayer::new_for_http())
         // Add timeout
         .layer(TimeoutLayer::new(std::time::Duration::from_secs(
             state.config.server.timeout_seconds,
         )))
-        .with_state(state)
         // Add socket address info to request extensions
         .layer(middleware::from_fn(
             |req: Request<Body>, next: Next| async move {
@@ -137,6 +157,17 @@ pub async fn init() -> (Router, SocketAddr) {
         None
     };
 
+    // Create the token client if auth is enabled
+    let token_client = if std::env::var("AUTH_ENABLED")
+        .unwrap_or_else(|_| "false".to_string())
+        .parse::<bool>()
+        .unwrap_or(false)
+    {
+        Some(EntraTokenClient::from_env())
+    } else {
+        None
+    };
+
     // Create application state
     let start_time = SystemTime::now();
     let state = Arc::new(AppState {
@@ -145,6 +176,7 @@ pub async fn init() -> (Router, SocketAddr) {
         start_time,
         pet_cache: pet_cache.clone(),
         metrics_handle,
+        token_client,
     });
 
     // Start metrics updater

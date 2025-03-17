@@ -44,6 +44,11 @@ tower-http = { version = "0.6.2", features = ["fs", "trace", "timeout", "add-ext
 uuid = { version = "1.7", features = ["v4"] }
 tracing-futures = "0.2"
 
+# Authentication
+jsonwebtoken = "8.3"
+oauth2 = { version = "4.4", features = ["reqwest"] }
+reqwest-middleware = "0.2"
+
 [features]
 production = []
 
