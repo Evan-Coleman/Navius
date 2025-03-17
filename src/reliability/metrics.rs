@@ -86,14 +86,14 @@ impl ReliabilityMetrics {
     /// Update Prometheus metrics
     pub fn update_prometheus_metrics(&self) {
         // Update counters
-        counter!("reliability.requests.total", "type" => "total");
-        counter!("reliability.requests.successful", "type" => "successful");
-        counter!("reliability.requests.client_errors", "type" => "client_errors");
-        counter!("reliability.requests.server_errors", "type" => "server_errors");
-        counter!("reliability.requests.timeouts", "type" => "timeouts");
-        counter!("reliability.requests.rate_limited", "type" => "rate_limited");
-        counter!("reliability.requests.circuit_broken", "type" => "circuit_broken");
-        counter!("reliability.requests.retry_attempts", "type" => "retry_attempts");
+        let _ = counter!("reliability.requests.total", "type" => "total");
+        let _ = counter!("reliability.requests.successful", "type" => "successful");
+        let _ = counter!("reliability.requests.client_errors", "type" => "client_errors");
+        let _ = counter!("reliability.requests.server_errors", "type" => "server_errors");
+        let _ = counter!("reliability.requests.timeouts", "type" => "timeouts");
+        let _ = counter!("reliability.requests.rate_limited", "type" => "rate_limited");
+        let _ = counter!("reliability.requests.circuit_broken", "type" => "circuit_broken");
+        let _ = counter!("reliability.requests.retry_attempts", "type" => "retry_attempts");
 
         // Calculate error rate
         let total_requests = self.total_requests.load(Ordering::Relaxed) as f64;
@@ -221,7 +221,7 @@ where
 
         // Increment request counter
         self.metrics.total_requests.fetch_add(1, Ordering::Relaxed);
-        counter!("reliability.requests.total");
+        let _ = counter!("reliability.requests.total");
 
         // Get a clone of the service to handle the request
         let clone_service = self.inner.clone();
@@ -244,13 +244,13 @@ where
 
             if status.is_success() {
                 metrics.successful_requests.fetch_add(1, Ordering::Relaxed);
-                counter!("reliability.requests.successful");
+                let _ = counter!("reliability.requests.successful");
             } else if status.is_client_error() {
                 metrics.client_errors.fetch_add(1, Ordering::Relaxed);
-                counter!("reliability.requests.client_errors");
+                let _ = counter!("reliability.requests.client_errors");
             } else if status.is_server_error() {
                 metrics.server_errors.fetch_add(1, Ordering::Relaxed);
-                counter!("reliability.requests.server_errors");
+                let _ = counter!("reliability.requests.server_errors");
             }
 
             // Record duration
