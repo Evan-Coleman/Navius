@@ -114,6 +114,30 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             ))
             .layer(EntraAuthLayer::from_app_config(&state.config));
 
+        // Read-only routes - require authentication with read-only access
+        let read_only_routes = Router::new()
+            .route("/api/readonly/pets", get(handlers::pets::get_pet))
+            .route("/api/readonly/pets/{id}", get(handlers::pets::get_pet))
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                handlers::logging::log_request,
+            ))
+            .layer(EntraAuthLayer::from_app_config_require_read_only_role(
+                &state.config,
+            ));
+
+        // Full access routes - require authentication with full access
+        let full_access_routes = Router::new()
+            .route("/api/fullaccess/pets", get(handlers::pets::get_pet))
+            .route("/api/fullaccess/pets/{id}", get(handlers::pets::get_pet))
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                handlers::logging::log_request,
+            ))
+            .layer(EntraAuthLayer::from_app_config_require_full_access_role(
+                &state.config,
+            ));
+
         // Admin routes - require specific roles
         let admin_routes = Router::new()
             .route("/api/admin/pets", post(handlers::pets::create_pet))
@@ -122,15 +146,16 @@ pub fn create_router(state: Arc<AppState>) -> Router {
                 state.clone(),
                 handlers::logging::log_request,
             ))
-            .layer(EntraAuthLayer::from_app_config_require_any_role(
+            .layer(EntraAuthLayer::from_app_config_require_admin_role(
                 &state.config,
-                vec!["admin".to_string(), "pet-manager".to_string()],
             ));
 
         // Combine all route groups
         Router::new()
             .merge(public_routes)
             .merge(protected_routes)
+            .merge(read_only_routes)
+            .merge(full_access_routes)
             .merge(admin_routes)
             .with_state(state.clone())
     } else {

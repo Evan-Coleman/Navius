@@ -1,11 +1,12 @@
 # Production environment configuration
 # Overrides settings from default.yaml for production environments
 # 
-# In production mode, security features are fully enabled
-# Performance settings are optimized for production loads
+# In production mode, security and performance features are prioritized
 # See default.yaml for all available settings and environment variable overrides
 
 server:
+  # Use 0.0.0.0 to listen on all interfaces
+  host: "0.0.0.0"
   # Longer timeout for production
   timeout_seconds: 30
   # Fewer retries in production to fail faster
@@ -17,13 +18,27 @@ app:
 
 cache:
   # Longer TTL for production for better performance
-  ttl_seconds: 3600
+  ttl_seconds: 600
   # Larger cache capacity for production
-  max_capacity: 10000
+  max_capacity: 5000
 
 # Environment-specific authentication settings
 auth:
   # Authentication is always enabled in production
   enabled: true
   # Debug authentication is disabled in production for security
-  debug: false 
+  debug: false
+  # Entra ID settings for production
+  entra:
+    # Admin roles for production - more restrictive than development
+    admin_roles:
+      - "admin"
+      - "pet-manager"
+    # Read-only roles for production
+    read_only_roles:
+      - "reader"
+      - "viewer"
+    # Full access roles for production
+    full_access_roles:
+      - "editor"
+      - "contributor" 

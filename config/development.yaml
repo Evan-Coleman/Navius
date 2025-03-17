@@ -23,3 +23,20 @@ auth:
   enabled: true
   # Debug mode enables simplified token validation for easier testing
   debug: false 
+  # Entra ID settings for development
+  entra:
+    # Admin roles for development - can include additional test roles
+    admin_roles:
+      - "admin"
+      - "pet-manager"
+      - "developer"
+    # Read-only roles for development
+    read_only_roles:
+      - "reader"
+      - "viewer"
+      - "tester"
+    # Full access roles for development
+    full_access_roles:
+      - "editor"
+      - "contributor"
+      - "developer" 

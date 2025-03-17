@@ -58,11 +58,38 @@ pub struct EntraConfig {
     /// Token URL (from environment variable)
     #[serde(default)]
     pub token_url: String,
+
+    /// Admin roles (users with these roles can access admin endpoints)
+    #[serde(default = "default_admin_roles")]
+    pub admin_roles: Vec<String>,
+
+    /// Read-only roles (users with these roles can access read-only endpoints)
+    #[serde(default = "default_read_only_roles")]
+    pub read_only_roles: Vec<String>,
+
+    /// Full access roles (users with these roles can access full access endpoints)
+    #[serde(default = "default_full_access_roles")]
+    pub full_access_roles: Vec<String>,
 }
 
 /// Default permission value
 fn default_permission() -> String {
     constants::auth::permissions::DEFAULT_PERMISSION.to_string()
+}
+
+/// Default admin roles
+fn default_admin_roles() -> Vec<String> {
+    vec!["admin".to_string(), "pet-manager".to_string()]
+}
+
+/// Default read-only roles
+fn default_read_only_roles() -> Vec<String> {
+    vec!["reader".to_string(), "viewer".to_string()]
+}
+
+/// Default full access roles
+fn default_full_access_roles() -> Vec<String> {
+    vec!["editor".to_string(), "contributor".to_string()]
 }
 
 /// Authentication configuration
@@ -87,6 +114,9 @@ impl Default for AuthConfig {
                 }),
                 scope: env::var(constants::auth::env_vars::SCOPE).unwrap_or_default(),
                 token_url: env::var(constants::auth::env_vars::TOKEN_URL).unwrap_or_default(),
+                admin_roles: default_admin_roles(),
+                read_only_roles: default_read_only_roles(),
+                full_access_roles: default_full_access_roles(),
             },
         }
     }

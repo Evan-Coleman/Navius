@@ -592,6 +592,27 @@ impl EntraAuthLayer {
     ) -> Self {
         Self::from_app_config_with_roles(config, RoleRequirement::All(roles))
     }
+
+    /// Create a new auth layer from app config requiring any of the admin roles
+    pub fn from_app_config_require_admin_role(
+        config: &crate::config::app_config::AppConfig,
+    ) -> Self {
+        Self::from_app_config_require_any_role(config, config.auth.entra.admin_roles.clone())
+    }
+
+    /// Create a new auth layer from app config requiring any of the read-only roles
+    pub fn from_app_config_require_read_only_role(
+        config: &crate::config::app_config::AppConfig,
+    ) -> Self {
+        Self::from_app_config_require_any_role(config, config.auth.entra.read_only_roles.clone())
+    }
+
+    /// Create a new auth layer from app config requiring any of the full access roles
+    pub fn from_app_config_require_full_access_role(
+        config: &crate::config::app_config::AppConfig,
+    ) -> Self {
+        Self::from_app_config_require_any_role(config, config.auth.entra.full_access_roles.clone())
+    }
 }
 
 impl<S> Layer<S> for EntraAuthLayer {

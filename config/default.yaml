@@ -40,6 +40,18 @@ auth:
   entra:
     # Default permission - can be overridden with RUST_BACKEND_PERMISSION
     permission: "default-rust-backend"
+    # Admin roles - users with these roles can access admin endpoints
+    admin_roles:
+      - "admin"
+      - "pet-manager"
+    # Read-only roles - users with these roles can access read-only endpoints
+    read_only_roles:
+      - "reader"
+      - "viewer"
+    # Full access roles - users with these roles can access full access endpoints
+    full_access_roles:
+      - "editor"
+      - "contributor"
 
 cache:
   enabled: true
