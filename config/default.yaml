@@ -1,3 +1,13 @@
+# Default configuration file
+# These settings can be overridden by environment-specific files or environment variables
+# 
+# Environment variable overrides follow these patterns:
+# - SERVER_* for server settings
+# - API_* for API settings
+# - APP_* for app settings
+# - AUTH_* for auth settings
+# - RUST_BACKEND_* for Entra ID specific settings
+
 server:
   host: "0.0.0.0"
   port: 3000
@@ -16,16 +26,20 @@ app:
 
 # Authentication settings
 auth:
+  # Enable/disable authentication (override with AUTH_ENABLED)
   enabled: true
+  # Enable/disable debug mode (override with AUTH_DEBUG or DEBUG_AUTH)
   debug: false
   # Entra ID (Azure AD) settings
+  # The following values must be set through environment variables:
+  # - RUST_BACKEND_TENANT_ID
+  # - RUST_BACKEND_CLIENT_ID
+  # - RUST_BACKEND_AUDIENCE
+  # - RUST_BACKEND_SCOPE
+  # - RUST_BACKEND_TOKEN_URL
   entra:
-    tenant_id: ""  # Set in .env
-    client_id: ""  # Set in .env
-    audience: ""   # Set in .env
+    # Default permission - can be overridden with RUST_BACKEND_PERMISSION
     permission: "default-rust-backend"
-    scope: ""      # Set in .env
-    token_url: ""  # Set in .env
 
 cache:
   enabled: true

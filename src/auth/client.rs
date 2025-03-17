@@ -6,7 +6,7 @@ use oauth2::{AuthUrl, ClientId, ClientSecret, Scope, TokenResponse, TokenUrl, ba
 use reqwest::Client;
 use tracing::{debug, error, info};
 
-use crate::config::app_config::AppConfig;
+use crate::config::{app_config::AppConfig, constants};
 
 /// Token cache entry
 struct TokenCacheEntry {
@@ -35,14 +35,8 @@ pub struct EntraTokenClient {
 impl EntraTokenClient {
     /// Create a new token client with the given credentials
     pub fn new(tenant_id: &str, client_id: &str, client_secret: &str) -> Self {
-        let auth_url_str = format!(
-            "https://login.microsoftonline.com/{}/oauth2/v2.0/authorize",
-            tenant_id
-        );
-        let token_url_str = format!(
-            "https://login.microsoftonline.com/{}/oauth2/v2.0/token",
-            tenant_id
-        );
+        let auth_url_str = format!(constants::auth::urls::ENTRA_AUTH_URL_FORMAT, tenant_id);
+        let token_url_str = format!(constants::auth::urls::ENTRA_TOKEN_URL_FORMAT, tenant_id);
 
         let client_id = ClientId::new(client_id.to_string());
         let client_secret = ClientSecret::new(client_secret.to_string());
@@ -63,16 +57,18 @@ impl EntraTokenClient {
     pub fn from_config(config: &AppConfig) -> Self {
         let tenant_id = &config.auth.entra.tenant_id;
         let client_id = &config.auth.entra.client_id;
-        let client_secret = std::env::var("RUST_BACKEND_SECRET").unwrap_or_default();
+        let client_secret =
+            std::env::var(constants::auth::env_vars::CLIENT_SECRET).unwrap_or_default();
 
         Self::new(tenant_id, client_id, &client_secret)
     }
 
     /// Create a new token client from environment variables
     pub fn from_env() -> Self {
-        let tenant_id = std::env::var("RUST_BACKEND_TENANT_ID").unwrap_or_default();
-        let client_id = std::env::var("RUST_BACKEND_CLIENT_ID").unwrap_or_default();
-        let client_secret = std::env::var("RUST_BACKEND_SECRET").unwrap_or_default();
+        let tenant_id = std::env::var(constants::auth::env_vars::TENANT_ID).unwrap_or_default();
+        let client_id = std::env::var(constants::auth::env_vars::CLIENT_ID).unwrap_or_default();
+        let client_secret =
+            std::env::var(constants::auth::env_vars::CLIENT_SECRET).unwrap_or_default();
 
         Self::new(&tenant_id, &client_id, &client_secret)
     }

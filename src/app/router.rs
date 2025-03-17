@@ -122,13 +122,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
                 state.clone(),
                 handlers::logging::log_request,
             ))
-            .layer({
-                // Create auth layer from config and add role requirements
-                let mut config = EntraAuthConfig::from_app_config(&state.config);
-                config.required_roles =
-                    RoleRequirement::Any(vec!["admin".to_string(), "pet-manager".to_string()]);
-                EntraAuthLayer::new(config)
-            });
+            .layer(EntraAuthLayer::from_app_config_require_any_role(
+                &state.config,
+                vec!["admin".to_string(), "pet-manager".to_string()],
+            ));
 
         // Combine all route groups
         Router::new()

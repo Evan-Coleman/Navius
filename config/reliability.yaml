@@ -1,20 +1,39 @@
+# Reliability configuration
+# This file contains settings related to reliability features
+# These are imported into the main configuration and can be overridden
+# with environment variables prefixed with RELIABILITY_*
+#
+# These settings control how the application handles failures and load
+
 reliability:
   # Retry settings
   retry:
+    # Enable/disable retry functionality
     enabled: true
+    # Maximum number of retry attempts
     max_attempts: 3
+    # Base delay between retries in milliseconds
     base_delay_ms: 100
+    # Maximum delay between retries in milliseconds 
     max_delay_ms: 1000
+    # Whether to use exponential backoff (increases delay on each retry)
     use_exponential_backoff: true
 
   # Circuit Breaker Settings (Rolling Window Mode)
   circuit_breaker:
+    # Enable/disable circuit breaker
     enabled: true
+    # Mode selection - false uses rolling window, true uses consecutive failures
     use_consecutive_failures: false
+    # Time window in seconds for tracking failure rate
     window_seconds: 60
+    # Percentage of requests that can fail before opening circuit (0-100)
     failure_percentage: 50
+    # HTTP status codes that should be considered failures
     failure_status_codes: [500, 502, 503, 504]
+    # Time in milliseconds the circuit stays open before trying again
     reset_timeout_ms: 30000
+    # Number of successful requests in half-open state to close circuit
     success_threshold: 2
     # Legacy Circuit Breaker Settings (Consecutive Failures Mode)
     # use_consecutive_failures: true
@@ -22,17 +41,25 @@ reliability:
 
   # Rate Limiting
   rate_limit:
+    # Enable/disable rate limiting
     enabled: true
+    # Maximum number of requests allowed in the time window
     requests_per_window: 100
+    # Time window in seconds
     window_seconds: 60
+    # Whether to apply rate limits per client (IP/token) or globally
     per_client: false
 
   # Timeout
   timeout:
+    # Enable/disable request timeouts
     enabled: true
+    # Timeout in seconds for all requests
     timeout_seconds: 30
 
   # Concurrency
   concurrency:
+    # Enable/disable concurrency limits
     enabled: false
+    # Maximum number of concurrent requests allowed
     max_concurrent_requests: 100 

@@ -1,3 +1,4 @@
+use crate::config::constants;
 use config::{Config, ConfigError, Environment, File};
 use dotenvy::dotenv;
 use serde::{Deserialize, Serialize};
@@ -34,12 +35,34 @@ pub struct ApiConfig {
 /// Entra ID (Azure AD) authentication configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EntraConfig {
+    /// Tenant ID (from environment variable)
+    #[serde(default)]
     pub tenant_id: String,
+
+    /// Client ID (from environment variable)
+    #[serde(default)]
     pub client_id: String,
+
+    /// Audience (from environment variable)
+    #[serde(default)]
     pub audience: String,
+
+    /// Permission (defaults to "default-rust-backend")
+    #[serde(default = "default_permission")]
     pub permission: String,
+
+    /// Scope (from environment variable)
+    #[serde(default)]
     pub scope: String,
+
+    /// Token URL (from environment variable)
+    #[serde(default)]
     pub token_url: String,
+}
+
+/// Default permission value
+fn default_permission() -> String {
+    constants::auth::permissions::DEFAULT_PERMISSION.to_string()
 }
 
 /// Authentication configuration
@@ -56,13 +79,14 @@ impl Default for AuthConfig {
             enabled: true,
             debug: false,
             entra: EntraConfig {
-                tenant_id: env::var("RUST_BACKEND_TENANT_ID").unwrap_or_default(),
-                client_id: env::var("RUST_BACKEND_CLIENT_ID").unwrap_or_default(),
-                audience: env::var("RUST_BACKEND_AUDIENCE").unwrap_or_default(),
-                permission: env::var("RUST_BACKEND_PERMISSION")
-                    .unwrap_or_else(|_| "default-rust-backend".to_string()),
-                scope: env::var("RUST_BACKEND_SCOPE").unwrap_or_default(),
-                token_url: env::var("RUST_BACKEND_TOKEN_URL").unwrap_or_default(),
+                tenant_id: env::var(constants::auth::env_vars::TENANT_ID).unwrap_or_default(),
+                client_id: env::var(constants::auth::env_vars::CLIENT_ID).unwrap_or_default(),
+                audience: env::var(constants::auth::env_vars::AUDIENCE).unwrap_or_default(),
+                permission: env::var(constants::auth::env_vars::PERMISSION).unwrap_or_else(|_| {
+                    constants::auth::permissions::DEFAULT_PERMISSION.to_string()
+                }),
+                scope: env::var(constants::auth::env_vars::SCOPE).unwrap_or_default(),
+                token_url: env::var(constants::auth::env_vars::TOKEN_URL).unwrap_or_default(),
             },
         }
     }

@@ -1,4 +1,10 @@
 # Production environment configuration
+# Overrides settings from default.yaml for production environments
+# 
+# In production mode, security features are fully enabled
+# Performance settings are optimized for production loads
+# See default.yaml for all available settings and environment variable overrides
+
 server:
   # Longer timeout for production
   timeout_seconds: 30
@@ -17,5 +23,7 @@ cache:
 
 # Environment-specific authentication settings
 auth:
+  # Authentication is always enabled in production
   enabled: true
+  # Debug authentication is disabled in production for security
   debug: false 

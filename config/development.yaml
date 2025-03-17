@@ -1,4 +1,9 @@
 # Development environment configuration
+# Overrides settings from default.yaml for development environments
+# 
+# In development mode, debug features are enabled by default
+# See default.yaml for all available settings and environment variable overrides
+
 server:
   # Use localhost for development
   host: "127.0.0.1"
@@ -16,4 +21,5 @@ cache:
 # Environment-specific authentication settings
 auth:
   enabled: true
+  # Debug mode enables simplified token validation for easier testing
   debug: true 

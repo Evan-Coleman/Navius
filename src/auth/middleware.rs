@@ -18,7 +18,7 @@ use tower::{Layer, Service};
 use tracing::{debug, error, info};
 
 use crate::app::AppState;
-use crate::config::app_config;
+use crate::config::{app_config, constants};
 
 /// JWKS (JSON Web Key Set) response
 #[derive(Debug, Clone, Deserialize)]
@@ -142,15 +142,14 @@ pub struct EntraAuthConfig {
 impl Default for EntraAuthConfig {
     fn default() -> Self {
         // Get configuration from environment variables
-        // This will be replaced with config-based approach in the future
-        let tenant_id = std::env::var("RUST_BACKEND_TENANT_ID").unwrap_or_default();
-        let client_id = std::env::var("RUST_BACKEND_CLIENT_ID").unwrap_or_default();
-        let debug_validation = std::env::var("DEBUG_AUTH")
+        let tenant_id = std::env::var(constants::auth::env_vars::TENANT_ID).unwrap_or_default();
+        let client_id = std::env::var(constants::auth::env_vars::CLIENT_ID).unwrap_or_default();
+        let debug_validation = std::env::var(constants::auth::env_vars::DEBUG_AUTH)
             .unwrap_or_else(|_| "false".to_string())
             .parse::<bool>()
             .unwrap_or(false);
-        let audience = std::env::var("RUST_BACKEND_AUDIENCE")
-            .unwrap_or_else(|_| format!("api://{}", client_id));
+        let audience = std::env::var(constants::auth::env_vars::AUDIENCE)
+            .unwrap_or_else(|_| format!(constants::auth::urls::DEFAULT_AUDIENCE_FORMAT, client_id));
 
         Self {
             tenant_id: tenant_id.clone(),
@@ -160,10 +159,7 @@ impl Default for EntraAuthConfig {
             required_roles: RoleRequirement::None,
             required_permissions: PermissionRequirement::None,
             client: Client::new(),
-            jwks_uri: format!(
-                "https://login.microsoftonline.com/{}/discovery/v2.0/keys",
-                tenant_id
-            ),
+            jwks_uri: format!(constants::auth::urls::ENTRA_JWKS_URI_FORMAT, tenant_id),
             jwks_cache: Arc::new(Mutex::new(None)),
             debug_validation,
         }
@@ -177,7 +173,7 @@ impl EntraAuthConfig {
         let client_id = config.auth.entra.client_id.clone();
         let debug_validation = config.auth.debug;
         let audience = if config.auth.entra.audience.is_empty() {
-            format!("api://{}", client_id)
+            format!(constants::auth::urls::DEFAULT_AUDIENCE_FORMAT, client_id)
         } else {
             config.auth.entra.audience.clone()
         };
@@ -190,13 +186,25 @@ impl EntraAuthConfig {
             required_roles: RoleRequirement::None,
             required_permissions: PermissionRequirement::None,
             client: Client::new(),
-            jwks_uri: format!(
-                "https://login.microsoftonline.com/{}/discovery/v2.0/keys",
-                tenant_id
-            ),
+            jwks_uri: format!(constants::auth::urls::ENTRA_JWKS_URI_FORMAT, tenant_id),
             jwks_cache: Arc::new(Mutex::new(None)),
             debug_validation,
         }
+    }
+
+    /// Build on existing config to modify specific fields
+    pub fn with_role_requirement(mut self, role_requirement: RoleRequirement) -> Self {
+        self.required_roles = role_requirement;
+        self
+    }
+
+    /// Build on existing config to add permission requirements
+    pub fn with_permission_requirement(
+        mut self,
+        permission_requirement: PermissionRequirement,
+    ) -> Self {
+        self.required_permissions = permission_requirement;
+        self
     }
 }
 
@@ -526,9 +534,7 @@ impl EntraAuthLayer {
 
     /// Create a new auth layer with role requirements
     pub fn with_roles(roles: RoleRequirement) -> Self {
-        let mut config = EntraAuthConfig::default();
-        config.required_roles = roles;
-        Self::new(config)
+        Self::new(EntraAuthConfig::default().with_role_requirement(roles))
     }
 
     /// Create a new EntraAuthLayer that requires any of the given roles
@@ -543,9 +549,7 @@ impl EntraAuthLayer {
 
     /// Create a new auth layer with permission requirements
     pub fn with_permissions(permissions: PermissionRequirement) -> Self {
-        let mut config = EntraAuthConfig::default();
-        config.required_permissions = permissions;
-        Self::new(config)
+        Self::new(EntraAuthConfig::default().with_permission_requirement(permissions))
     }
 
     /// Create a new auth layer that requires any of the given permissions
@@ -556,6 +560,30 @@ impl EntraAuthLayer {
     /// Create a new auth layer that requires all of the specified permissions
     pub fn require_all_permissions(permissions: Vec<String>) -> Self {
         Self::with_permissions(PermissionRequirement::All(permissions))
+    }
+
+    /// Create a new auth layer from app config with added role requirements
+    pub fn from_app_config_with_roles(
+        config: &crate::config::app_config::AppConfig,
+        roles: RoleRequirement,
+    ) -> Self {
+        Self::new(EntraAuthConfig::from_app_config(config).with_role_requirement(roles))
+    }
+
+    /// Create a new auth layer from app config requiring any of the given roles
+    pub fn from_app_config_require_any_role(
+        config: &crate::config::app_config::AppConfig,
+        roles: Vec<String>,
+    ) -> Self {
+        Self::from_app_config_with_roles(config, RoleRequirement::Any(roles))
+    }
+
+    /// Create a new auth layer from app config requiring all of the specified roles
+    pub fn from_app_config_require_all_roles(
+        config: &crate::config::app_config::AppConfig,
+        roles: Vec<String>,
+    ) -> Self {
+        Self::from_app_config_with_roles(config, RoleRequirement::All(roles))
     }
 }
 
@@ -647,15 +675,15 @@ async fn validate_token_wrapper(
         let mut req = req;
         let claims = EntraClaims {
             aud: config.audience.clone(),
-            exp: 4102444800, // Year 2100
+            exp: constants::timestamps::YEAR_2100, // Year 2100
             iss: "debug_issuer".to_string(),
             nbf: 0,
-            iat: 1609459200, // 2021-01-01
+            iat: constants::timestamps::JAN_1_2021, // 2021-01-01
             sub: "debug_subject".to_string(),
             roles: vec!["admin".to_string(), "pet-manager".to_string()],
             appid: Some("debug_app_id".to_string()),
             app_id_uri: Some("debug_app_id_uri".to_string()),
-            scp: Some("default-rust-backend".to_string()),
+            scp: Some(constants::auth::permissions::DEFAULT_PERMISSION.to_string()),
         };
 
         info!("✅ DEBUG MODE: Using dummy claims instead of token validation");
