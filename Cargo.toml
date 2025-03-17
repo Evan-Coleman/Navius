@@ -50,9 +50,11 @@ jsonwebtoken = "9.3.1"
 oauth2 = { version = "5.0.0", features = ["reqwest"] }
 reqwest-middleware = "0.4.1"
 futures = "0.3"
-futures-util = "0.3"
+futures-util = { version = "0.3", features = ["std"] }
 
 # Web framework and related
+pin-project = "1.1"
+rand = "0.9.0"
 
 [features]
 production = []
@@ -60,7 +62,3 @@ production = []
 [build-dependencies]
 # Don't need full regex crate, just simple string manipulation
 regex = "1.10.2"
-
-# Reliability features
-pin-project = "1.1"
-rand = "0.9.0"
