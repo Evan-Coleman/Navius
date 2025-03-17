@@ -85,15 +85,23 @@ impl ReliabilityMetrics {
 
     /// Update Prometheus metrics
     pub fn update_prometheus_metrics(&self) {
-        // Update counters
-        let _ = counter!("reliability.requests.total", "type" => "total");
-        let _ = counter!("reliability.requests.successful", "type" => "successful");
-        let _ = counter!("reliability.requests.client_errors", "type" => "client_errors");
-        let _ = counter!("reliability.requests.server_errors", "type" => "server_errors");
-        let _ = counter!("reliability.requests.timeouts", "type" => "timeouts");
-        let _ = counter!("reliability.requests.rate_limited", "type" => "rate_limited");
-        let _ = counter!("reliability.requests.circuit_broken", "type" => "circuit_broken");
-        let _ = counter!("reliability.requests.retry_attempts", "type" => "retry_attempts");
+        // Update counters with actual values
+        counter!("reliability.requests.total", "type" => "total")
+            .increment(self.total_requests.load(Ordering::Relaxed));
+        counter!("reliability.requests.successful", "type" => "successful")
+            .increment(self.successful_requests.load(Ordering::Relaxed));
+        counter!("reliability.requests.client_errors", "type" => "client_errors")
+            .increment(self.client_errors.load(Ordering::Relaxed));
+        counter!("reliability.requests.server_errors", "type" => "server_errors")
+            .increment(self.server_errors.load(Ordering::Relaxed));
+        counter!("reliability.requests.timeouts", "type" => "timeouts")
+            .increment(self.timeouts.load(Ordering::Relaxed));
+        counter!("reliability.requests.rate_limited", "type" => "rate_limited")
+            .increment(self.rate_limited.load(Ordering::Relaxed));
+        counter!("reliability.requests.circuit_broken", "type" => "circuit_broken")
+            .increment(self.circuit_broken.load(Ordering::Relaxed));
+        counter!("reliability.requests.retry_attempts", "type" => "retry_attempts")
+            .increment(self.retry_attempts.load(Ordering::Relaxed));
 
         // Calculate error rate
         let total_requests = self.total_requests.load(Ordering::Relaxed) as f64;
@@ -153,30 +161,51 @@ impl fmt::Display for ReliabilityMetrics {
 #[derive(Clone)]
 pub struct ReliabilityMetricsLayer {
     metrics: Arc<ReliabilityMetrics>,
+    update_interval: Duration,
 }
 
 impl ReliabilityMetricsLayer {
-    /// Create a new metrics layer
+    /// Create a new metrics layer with default settings
     pub fn new() -> Self {
+        Self::with_update_interval(Duration::from_secs(15))
+    }
+
+    /// Create a new metrics layer with a custom update interval
+    pub fn with_update_interval(update_interval: Duration) -> Self {
         let metrics = Arc::new(ReliabilityMetrics::new());
 
         // Schedule periodic updates to Prometheus metrics
         let metrics_clone = metrics.clone();
+        let interval = update_interval;
+
+        info!(
+            "Initializing reliability metrics with update interval of {:?}",
+            interval
+        );
+
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(15));
+            let mut interval_timer = tokio::time::interval(interval);
             loop {
-                interval.tick().await;
+                interval_timer.tick().await;
                 metrics_clone.update_prometheus_metrics();
-                debug!("Reliability metrics: {}", metrics_clone);
+                debug!("Updated reliability metrics: {}", metrics_clone);
             }
         });
 
-        Self { metrics }
+        Self {
+            metrics,
+            update_interval,
+        }
     }
 
     /// Get a reference to the metrics
     pub fn metrics(&self) -> Arc<ReliabilityMetrics> {
         self.metrics.clone()
+    }
+
+    /// Get the configured update interval
+    pub fn update_interval(&self) -> Duration {
+        self.update_interval
     }
 }
 
@@ -221,7 +250,7 @@ where
 
         // Increment request counter
         self.metrics.total_requests.fetch_add(1, Ordering::Relaxed);
-        let _ = counter!("reliability.requests.total");
+        counter!("reliability.requests.total").increment(1);
 
         // Get a clone of the service to handle the request
         let clone_service = self.inner.clone();
@@ -234,79 +263,73 @@ where
         let future = service.call(req);
 
         async move {
-            let response = future
-                .await
-                .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+            let result = future.await;
 
-            // Record metrics based on response status
-            let status = response.status();
-            let status_code = status.as_u16();
-
-            if status.is_success() {
-                metrics.successful_requests.fetch_add(1, Ordering::Relaxed);
-                let _ = counter!("reliability.requests.successful");
-            } else if status.is_client_error() {
-                metrics.client_errors.fetch_add(1, Ordering::Relaxed);
-                let _ = counter!("reliability.requests.client_errors");
-            } else if status.is_server_error() {
-                metrics.server_errors.fetch_add(1, Ordering::Relaxed);
-                let _ = counter!("reliability.requests.server_errors");
-            }
-
-            // Record duration
+            // Record request duration regardless of success/failure
             let duration = start.elapsed();
             let duration_ms = duration.as_millis() as f64;
             metrics::histogram!("reliability.request.duration").record(duration_ms);
 
-            // Calculate and update error rate
-            let total_requests = metrics.total_requests.load(Ordering::Relaxed) as f64;
-            let error_requests = (metrics.client_errors.load(Ordering::Relaxed)
-                + metrics.server_errors.load(Ordering::Relaxed))
-                as f64;
+            // Handle the result
+            match result {
+                Ok(response) => {
+                    // Record metrics based on response status
+                    let status = response.status();
+                    let status_code = status.as_u16();
 
-            if total_requests > 0.0 {
-                let error_rate = error_requests / total_requests;
-                metrics::gauge!("reliability.error_rate").set(error_rate);
+                    if status.is_success() {
+                        metrics.successful_requests.fetch_add(1, Ordering::Relaxed);
+                        counter!("reliability.requests.successful").increment(1);
+                    } else if status.is_client_error() {
+                        metrics.client_errors.fetch_add(1, Ordering::Relaxed);
+                        counter!("reliability.requests.client_errors").increment(1);
+
+                        // Special handling for rate limiting
+                        if status == StatusCode::TOO_MANY_REQUESTS {
+                            metrics.rate_limited.fetch_add(1, Ordering::Relaxed);
+                            counter!("reliability.requests.rate_limited").increment(1);
+                        }
+                    } else if status.is_server_error() {
+                        metrics.server_errors.fetch_add(1, Ordering::Relaxed);
+                        counter!("reliability.requests.server_errors").increment(1);
+
+                        // Special handling for circuit breaking
+                        if status == StatusCode::SERVICE_UNAVAILABLE {
+                            metrics.circuit_broken.fetch_add(1, Ordering::Relaxed);
+                            counter!("reliability.requests.circuit_broken").increment(1);
+                        }
+                    }
+
+                    // Calculate and update error rate
+                    let total_requests = metrics.total_requests.load(Ordering::Relaxed) as f64;
+                    let error_requests = (metrics.client_errors.load(Ordering::Relaxed)
+                        + metrics.server_errors.load(Ordering::Relaxed))
+                        as f64;
+
+                    if total_requests > 0.0 {
+                        let error_rate = error_requests / total_requests;
+                        metrics::gauge!("reliability.error_rate").set(error_rate);
+                    }
+
+                    debug!(
+                        "Request completed: path={}, status={}, duration={:?}",
+                        path, status_code, duration
+                    );
+
+                    Ok(response)
+                }
+                Err(e) => {
+                    // Record server error for any service errors
+                    metrics.server_errors.fetch_add(1, Ordering::Relaxed);
+                    counter!("reliability.requests.server_errors").increment(1);
+
+                    // Log the error with context
+                    tracing::error!("Service error for path {}: {}", path, e);
+
+                    Err(Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+                }
             }
-
-            debug!(
-                "Request completed: path={}, status={}, duration={:?}",
-                path, status_code, duration
-            );
-
-            Ok(response)
         }
         .boxed()
-    }
-}
-
-/// Future that tracks metrics for a request
-#[pin_project]
-pub struct ReliabilityMetricsFuture<F> {
-    #[pin]
-    inner: F,
-    start_time: Instant,
-    path: String,
-}
-
-impl<F, ResBody, E> Future for ReliabilityMetricsFuture<F>
-where
-    F: Future<Output = Result<Response<ResBody>, E>>,
-    E: std::error::Error + Send + Sync + 'static,
-{
-    type Output = Result<Response<ResBody>, Box<dyn std::error::Error + Send + Sync>>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.project();
-        match this.inner.poll(cx) {
-            Poll::Ready(Ok(response)) => {
-                let duration = this.start_time.elapsed();
-                let ms = duration.as_secs_f64() * 1000.0;
-                debug!("Request to {} completed in {:.2}ms", this.path, ms);
-                Poll::Ready(Ok(response))
-            }
-            Poll::Ready(Err(error)) => Poll::Ready(Err(Box::new(error))),
-            Poll::Pending => Poll::Pending,
-        }
     }
 }
