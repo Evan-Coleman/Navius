@@ -27,11 +27,7 @@ pub async fn health_check(State(state): State<Arc<AppState>>) -> Json<HealthChec
         .as_ref()
         .map(|cache| crate::cache::get_cache_stats(cache));
 
-    let auth_status = if std::env::var("AUTH_ENABLED")
-        .unwrap_or_else(|_| "false".to_string())
-        .parse::<bool>()
-        .unwrap_or(false)
-    {
+    let auth_status = if state.config.auth.enabled {
         "Authentication enabled"
     } else {
         "Authentication disabled"

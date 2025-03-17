@@ -4,11 +4,15 @@ use axum::{
     http::Request,
     middleware::{self, Next},
     response::Response,
-    routing::{Router, get},
+    routing::{Router, delete, get, post},
 };
 use metrics_exporter_prometheus::PrometheusHandle;
 use reqwest::Client;
-use std::{net::SocketAddr, sync::Arc, time::SystemTime};
+use std::{
+    net::SocketAddr,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 use tower_http::{timeout::TimeoutLayer, trace::TraceLayer};
 use utoipa::{
     Modify, OpenApi,
@@ -16,6 +20,7 @@ use utoipa::{
 };
 
 use crate::{
+    auth::middleware::{EntraAuthConfig, RoleRequirement},
     auth::{EntraAuthLayer, EntraTokenClient},
     cache::PetCache,
     config::AppConfig,
@@ -86,11 +91,8 @@ pub struct ApiDoc;
 
 /// Create the application router
 pub fn create_router(state: Arc<AppState>) -> Router {
-    // Check if auth is enabled
-    let auth_enabled = std::env::var("AUTH_ENABLED")
-        .unwrap_or_else(|_| "false".to_string())
-        .parse::<bool>()
-        .unwrap_or(false);
+    // Check if auth is enabled from config
+    let auth_enabled = state.config.auth.enabled;
 
     let router = if auth_enabled {
         // Create different route groups with different authorization requirements
@@ -98,32 +100,41 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // Public routes - no authentication required
         let public_routes = Router::new()
             .route("/health", get(handlers::health::health_check))
-            .route("/metrics", get(handlers::metrics::metrics));
-
-        // Protected routes - authentication required but no specific roles or permissions
-        let authenticated_routes = Router::new()
+            .route("/metrics", get(handlers::metrics::metrics))
             .route("/data", get(handlers::data::get_data))
-            .route("/pet/{id}", get(handlers::pet::get_pet_by_id))
-            .layer(EntraAuthLayer::default());
+            .route("/pet/{id}", get(handlers::pet::get_pet_by_id));
 
-        // Admin routes - require the "admin" role
+        // Protected routes - require authentication
+        let protected_routes = Router::new()
+            .route("/api/pets", get(handlers::pets::list_pets))
+            .route("/api/pets/{id}", get(handlers::pets::get_pet))
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                handlers::logging::log_request,
+            ))
+            .layer(EntraAuthLayer::from_app_config(&state.config));
+
+        // Admin routes - require specific roles
         let admin_routes = Router::new()
-            .route("/admin/pet/{id}", get(handlers::pet::get_pet_by_id))
-            .layer(EntraAuthLayer::require_any_role(vec!["admin".to_string()]));
-
-        // Service routes - require permission instead of role
-        let service_routes = Router::new()
-            .route("/service/pet/{id}", get(handlers::pet::get_pet_by_id))
-            .layer(EntraAuthLayer::require_any_permission(vec![
-                "service".to_string(),
-            ]));
+            .route("/api/admin/pets", post(handlers::pets::create_pet))
+            .route("/api/admin/pets/{id}", delete(handlers::pets::delete_pet))
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                handlers::logging::log_request,
+            ))
+            .layer({
+                // Create auth layer from config and add role requirements
+                let mut config = EntraAuthConfig::from_app_config(&state.config);
+                config.required_roles =
+                    RoleRequirement::Any(vec!["admin".to_string(), "pet-manager".to_string()]);
+                EntraAuthLayer::new(config)
+            });
 
         // Combine all route groups
         Router::new()
             .merge(public_routes)
-            .merge(authenticated_routes)
+            .merge(protected_routes)
             .merge(admin_routes)
-            .merge(service_routes)
             .with_state(state.clone())
     } else {
         // No authentication - use the default router
@@ -132,6 +143,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             .route("/metrics", get(handlers::metrics::metrics))
             .route("/data", get(handlers::data::get_data))
             .route("/pet/{id}", get(handlers::pet::get_pet_by_id))
+            .route("/api/pets", get(handlers::pets::list_pets))
+            .route("/api/pets/{id}", get(handlers::pets::get_pet))
+            .route("/api/admin/pets", post(handlers::pets::create_pet))
+            .route("/api/admin/pets/{id}", delete(handlers::pets::delete_pet))
             .with_state(state.clone())
     };
 
@@ -165,16 +180,14 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 /// Initialize the application
 pub async fn init() -> (Router, SocketAddr) {
     // Load configuration
-    let config = crate::config::load_config().expect("Failed to load configuration");
+    let config = crate::config::app_config::load_config().expect("Failed to load configuration");
 
     // Initialize metrics
     let metrics_handle = crate::metrics::init_metrics();
 
-    // Initialize HTTP client
+    // Create HTTP client with appropriate middleware
     let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(
-            config.server.timeout_seconds,
-        ))
+        .timeout(Duration::from_secs(config.server.timeout_seconds))
         .build()
         .expect("Failed to create HTTP client");
 
@@ -189,12 +202,8 @@ pub async fn init() -> (Router, SocketAddr) {
     };
 
     // Create the token client if auth is enabled
-    let token_client = if std::env::var("AUTH_ENABLED")
-        .unwrap_or_else(|_| "false".to_string())
-        .parse::<bool>()
-        .unwrap_or(false)
-    {
-        Some(EntraTokenClient::from_env())
+    let token_client = if config.auth.enabled {
+        Some(EntraTokenClient::from_config(&config))
     } else {
         None
     };

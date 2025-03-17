@@ -18,6 +18,7 @@ use tower::{Layer, Service};
 use tracing::{debug, error, info};
 
 use crate::app::AppState;
+use crate::config::app_config;
 
 /// JWKS (JSON Web Key Set) response
 #[derive(Debug, Clone, Deserialize)]
@@ -140,6 +141,8 @@ pub struct EntraAuthConfig {
 
 impl Default for EntraAuthConfig {
     fn default() -> Self {
+        // Get configuration from environment variables
+        // This will be replaced with config-based approach in the future
         let tenant_id = std::env::var("RUST_BACKEND_TENANT_ID").unwrap_or_default();
         let client_id = std::env::var("RUST_BACKEND_CLIENT_ID").unwrap_or_default();
         let debug_validation = std::env::var("DEBUG_AUTH")
@@ -152,6 +155,36 @@ impl Default for EntraAuthConfig {
         Self {
             tenant_id: tenant_id.clone(),
             client_id: client_id.clone(),
+            audience,
+            validate_token: true,
+            required_roles: RoleRequirement::None,
+            required_permissions: PermissionRequirement::None,
+            client: Client::new(),
+            jwks_uri: format!(
+                "https://login.microsoftonline.com/{}/discovery/v2.0/keys",
+                tenant_id
+            ),
+            jwks_cache: Arc::new(Mutex::new(None)),
+            debug_validation,
+        }
+    }
+}
+
+impl EntraAuthConfig {
+    /// Create a new EntraAuthConfig from AppConfig
+    pub fn from_app_config(config: &app_config::AppConfig) -> Self {
+        let tenant_id = config.auth.entra.tenant_id.clone();
+        let client_id = config.auth.entra.client_id.clone();
+        let debug_validation = config.auth.debug;
+        let audience = if config.auth.entra.audience.is_empty() {
+            format!("api://{}", client_id)
+        } else {
+            config.auth.entra.audience.clone()
+        };
+
+        Self {
+            tenant_id: tenant_id.clone(),
+            client_id,
             audience,
             validate_token: true,
             required_roles: RoleRequirement::None,
@@ -479,7 +512,14 @@ impl EntraAuthLayer {
         }
     }
 
-    /// Create a new EntraAuthLayer with the given configuration
+    /// Create a new EntraAuthLayer from AppConfig
+    pub fn from_app_config(config: &crate::config::app_config::AppConfig) -> Self {
+        Self {
+            config: EntraAuthConfig::from_app_config(config),
+        }
+    }
+
+    /// Create a new EntraAuthLayer with custom configuration
     pub fn new(config: EntraAuthConfig) -> Self {
         Self { config }
     }
@@ -593,15 +633,34 @@ async fn validate_token_wrapper(
         req.uri().path()
     );
     debug!(
-        "🔐 Token validation - Debug mode: {}, Audience: {}",
-        config.debug_validation, config.audience
+        "🔐 Token validation - Debug mode: {}, Audience: {}, Token: {}",
+        config.debug_validation, config.audience, token
     );
 
     if config.debug_validation {
         info!(
             "⚠️ DEBUG MODE ACTIVE: Using simplified token validation (no signature verification)"
         );
-        // ... rest of debug auth flow
+
+        // In debug mode, let's completely bypass JWT validation
+        // and just accept any token format
+        let mut req = req;
+        let claims = EntraClaims {
+            aud: config.audience.clone(),
+            exp: 4102444800, // Year 2100
+            iss: "debug_issuer".to_string(),
+            nbf: 0,
+            iat: 1609459200, // 2021-01-01
+            sub: "debug_subject".to_string(),
+            roles: vec!["admin".to_string(), "pet-manager".to_string()],
+            appid: Some("debug_app_id".to_string()),
+            app_id_uri: Some("debug_app_id_uri".to_string()),
+            scp: Some("default-rust-backend".to_string()),
+        };
+
+        info!("✅ DEBUG MODE: Using dummy claims instead of token validation");
+        req.extensions_mut().insert(claims);
+        return Ok(req);
     }
 
     // Skip validation if disabled (for debugging or development)

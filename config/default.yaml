@@ -18,6 +18,14 @@ app:
 auth:
   enabled: true
   debug: false
+  # Entra ID (Azure AD) settings
+  entra:
+    tenant_id: ""  # Set in .env
+    client_id: ""  # Set in .env
+    audience: ""   # Set in .env
+    permission: "default-rust-backend"
+    scope: ""      # Set in .env
+    token_url: ""  # Set in .env
 
 cache:
   enabled: true

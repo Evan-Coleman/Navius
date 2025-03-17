@@ -6,6 +6,8 @@ use oauth2::{AuthUrl, ClientId, ClientSecret, Scope, TokenResponse, TokenUrl, ba
 use reqwest::Client;
 use tracing::{debug, error, info};
 
+use crate::config::app_config::AppConfig;
+
 /// Token cache entry
 struct TokenCacheEntry {
     /// The access token
@@ -57,14 +59,20 @@ impl EntraTokenClient {
         }
     }
 
+    /// Create a new token client from the application configuration
+    pub fn from_config(config: &AppConfig) -> Self {
+        let tenant_id = &config.auth.entra.tenant_id;
+        let client_id = &config.auth.entra.client_id;
+        let client_secret = std::env::var("RUST_BACKEND_SECRET").unwrap_or_default();
+
+        Self::new(tenant_id, client_id, &client_secret)
+    }
+
     /// Create a new token client from environment variables
     pub fn from_env() -> Self {
-        let tenant_id =
-            std::env::var("RUST_BACKEND_TENANT_ID").expect("RUST_BACKEND_TENANT_ID not set");
-        let client_id =
-            std::env::var("RUST_BACKEND_CLIENT_ID").expect("RUST_BACKEND_CLIENT_ID not set");
-        let client_secret =
-            std::env::var("RUST_BACKEND_SECRET").expect("RUST_BACKEND_SECRET not set");
+        let tenant_id = std::env::var("RUST_BACKEND_TENANT_ID").unwrap_or_default();
+        let client_id = std::env::var("RUST_BACKEND_CLIENT_ID").unwrap_or_default();
+        let client_secret = std::env::var("RUST_BACKEND_SECRET").unwrap_or_default();
 
         Self::new(&tenant_id, &client_id, &client_secret)
     }

@@ -31,6 +31,43 @@ pub struct ApiConfig {
     pub api_key: Option<String>,
 }
 
+/// Entra ID (Azure AD) authentication configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EntraConfig {
+    pub tenant_id: String,
+    pub client_id: String,
+    pub audience: String,
+    pub permission: String,
+    pub scope: String,
+    pub token_url: String,
+}
+
+/// Authentication configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthConfig {
+    pub enabled: bool,
+    pub debug: bool,
+    pub entra: EntraConfig,
+}
+
+impl Default for AuthConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            debug: false,
+            entra: EntraConfig {
+                tenant_id: env::var("RUST_BACKEND_TENANT_ID").unwrap_or_default(),
+                client_id: env::var("RUST_BACKEND_CLIENT_ID").unwrap_or_default(),
+                audience: env::var("RUST_BACKEND_AUDIENCE").unwrap_or_default(),
+                permission: env::var("RUST_BACKEND_PERMISSION")
+                    .unwrap_or_else(|_| "default-rust-backend".to_string()),
+                scope: env::var("RUST_BACKEND_SCOPE").unwrap_or_default(),
+                token_url: env::var("RUST_BACKEND_TOKEN_URL").unwrap_or_default(),
+            },
+        }
+    }
+}
+
 /// Logging configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoggingConfig {
@@ -333,6 +370,8 @@ pub struct AppConfig {
     pub logging: LoggingConfig,
     #[serde(default)]
     pub reliability: ReliabilityConfig,
+    #[serde(default)]
+    pub auth: AuthConfig,
 }
 
 /// Application metadata configuration
@@ -398,18 +437,21 @@ pub fn load_config() -> Result<AppConfig, ConfigError> {
                 .required(false),
         )
         // 1. Add environment variables (highest priority, for secrets and CI/CD)
-        // Only use specific prefixes for environment variables to avoid conflicts
         .add_source(Environment::with_prefix("SERVER").separator("_"))
         .add_source(Environment::with_prefix("API").separator("_"))
         .add_source(Environment::with_prefix("APP").separator("_"))
         .add_source(Environment::with_prefix("CACHE").separator("_"))
+        .add_source(Environment::with_prefix("AUTH").separator("_"))
+        .add_source(Environment::with_prefix("RELIABILITY").separator("_"))
+        // Add specific environment variables for Entra ID auth
+        .add_source(Environment::with_prefix("RUST_BACKEND").separator("_"))
+        // Add legacy environment variables
+        .add_source(Environment::default().try_parsing(true))
         // Build the config
         .build()?;
 
-    // Deserialize the config into our settings struct
+    // Deserialize the config into our AppConfig struct
     let app_config: AppConfig = config.try_deserialize()?;
-
-    info!("Configuration loaded successfully");
 
     Ok(app_config)
 }
