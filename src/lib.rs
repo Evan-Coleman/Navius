@@ -24,6 +24,7 @@ pub mod cache {
 pub mod config {
     pub use crate::config::app_config::*;
     pub mod app_config;
+    pub mod constants;
 }
 
 /// Error handling

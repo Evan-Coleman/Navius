@@ -6,7 +6,8 @@ use oauth2::{AuthUrl, ClientId, ClientSecret, Scope, TokenResponse, TokenUrl, ba
 use reqwest::Client;
 use tracing::{debug, error, info};
 
-use crate::config::{app_config::AppConfig, constants};
+use crate::config::app_config::AppConfig;
+use crate::config::constants;
 
 /// Token cache entry
 struct TokenCacheEntry {
@@ -35,8 +36,14 @@ pub struct EntraTokenClient {
 impl EntraTokenClient {
     /// Create a new token client with the given credentials
     pub fn new(tenant_id: &str, client_id: &str, client_secret: &str) -> Self {
-        let auth_url_str = format!(constants::auth::urls::ENTRA_AUTH_URL_FORMAT, tenant_id);
-        let token_url_str = format!(constants::auth::urls::ENTRA_TOKEN_URL_FORMAT, tenant_id);
+        let auth_url_str = format!(
+            "{}",
+            constants::auth::urls::ENTRA_AUTH_URL_FORMAT.replace("{}", tenant_id)
+        );
+        let token_url_str = format!(
+            "{}",
+            constants::auth::urls::ENTRA_TOKEN_URL_FORMAT.replace("{}", tenant_id)
+        );
 
         let client_id = ClientId::new(client_id.to_string());
         let client_secret = ClientSecret::new(client_secret.to_string());

@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::config::{app_config, constants};
+    use super::app_config;
+    use super::constants;
     use std::env;
 
     #[test]

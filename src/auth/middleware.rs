@@ -18,7 +18,8 @@ use tower::{Layer, Service};
 use tracing::{debug, error, info};
 
 use crate::app::AppState;
-use crate::config::{app_config, constants};
+use crate::config::app_config;
+use crate::config::constants;
 
 /// JWKS (JSON Web Key Set) response
 #[derive(Debug, Clone, Deserialize)]
@@ -148,8 +149,12 @@ impl Default for EntraAuthConfig {
             .unwrap_or_else(|_| "false".to_string())
             .parse::<bool>()
             .unwrap_or(false);
-        let audience = std::env::var(constants::auth::env_vars::AUDIENCE)
-            .unwrap_or_else(|_| format!(constants::auth::urls::DEFAULT_AUDIENCE_FORMAT, client_id));
+        let audience = std::env::var(constants::auth::env_vars::AUDIENCE).unwrap_or_else(|_| {
+            format!(
+                "{}",
+                constants::auth::urls::DEFAULT_AUDIENCE_FORMAT.replace("{}", &client_id)
+            )
+        });
 
         Self {
             tenant_id: tenant_id.clone(),
@@ -159,7 +164,10 @@ impl Default for EntraAuthConfig {
             required_roles: RoleRequirement::None,
             required_permissions: PermissionRequirement::None,
             client: Client::new(),
-            jwks_uri: format!(constants::auth::urls::ENTRA_JWKS_URI_FORMAT, tenant_id),
+            jwks_uri: format!(
+                "{}",
+                constants::auth::urls::ENTRA_JWKS_URI_FORMAT.replace("{}", &tenant_id)
+            ),
             jwks_cache: Arc::new(Mutex::new(None)),
             debug_validation,
         }
@@ -173,7 +181,10 @@ impl EntraAuthConfig {
         let client_id = config.auth.entra.client_id.clone();
         let debug_validation = config.auth.debug;
         let audience = if config.auth.entra.audience.is_empty() {
-            format!(constants::auth::urls::DEFAULT_AUDIENCE_FORMAT, client_id)
+            format!(
+                "{}",
+                constants::auth::urls::DEFAULT_AUDIENCE_FORMAT.replace("{}", &client_id)
+            )
         } else {
             config.auth.entra.audience.clone()
         };
@@ -186,7 +197,10 @@ impl EntraAuthConfig {
             required_roles: RoleRequirement::None,
             required_permissions: PermissionRequirement::None,
             client: Client::new(),
-            jwks_uri: format!(constants::auth::urls::ENTRA_JWKS_URI_FORMAT, tenant_id),
+            jwks_uri: format!(
+                "{}",
+                constants::auth::urls::ENTRA_JWKS_URI_FORMAT.replace("{}", &tenant_id)
+            ),
             jwks_cache: Arc::new(Mutex::new(None)),
             debug_validation,
         }

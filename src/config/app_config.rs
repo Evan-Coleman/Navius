@@ -1,4 +1,4 @@
-use crate::config::constants;
+use super::constants;
 use config::{Config, ConfigError, Environment, File};
 use dotenvy::dotenv;
 use serde::{Deserialize, Serialize};
