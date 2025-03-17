@@ -1,4 +1,4 @@
-use axum::{Json, extract::State};
+use axum::{Extension, Json, extract::State};
 use chrono::Utc;
 use http::StatusCode;
 use std::sync::Arc;
@@ -20,30 +20,47 @@ use crate::{
     ),
     tag = "data"
 )]
-pub async fn get_data(State(state): State<Arc<AppState>>) -> Result<Json<Data>> {
+pub async fn get_data(
+    State(state): State<Arc<AppState>>,
+    claims: Option<Extension<crate::auth::middleware::EntraClaims>>,
+) -> Result<Json<Data>> {
     let fact_url = &state.config.api.cat_fact_url;
+
+    // Log the caller's identity if authenticated
+    if let Some(Extension(user)) = claims {
+        info!(
+            "Request from authenticated user: {} with roles: {:?}",
+            user.sub, user.roles
+        );
+    } else {
+        info!("Request from unauthenticated user");
+    }
 
     // Try using the token client for secure downstream API calls
     if let Some(token_client) = &state.token_client {
-        info!("Using token client for authenticated requests");
+        info!("Using token client for authenticated downstream API call");
 
-        // This is an example of how you would use the token client
-        // with a real protected API (replace with your actual API)
-        let scope = std::env::var("DOWNSTREAM_API_SCOPE")
+        // Example of calling a downstream API with client credentials
+        // In a real app, these would be from configuration
+        let downstream_api_scope = std::env::var("DOWNSTREAM_API_SCOPE")
             .unwrap_or_else(|_| "api://your-downstream-api/.default".to_string());
 
-        match token_client.get_token(&scope).await {
-            Ok(token) => {
-                debug!("Successfully acquired token for downstream API");
-                // Use token for downstream requests (this is just for demonstration)
+        // Get a dedicated client with auth headers
+        match token_client.create_client(&downstream_api_scope).await {
+            Ok(auth_client) => {
+                // Example of a protected API call - in real code, use the actual URL
+                let protected_api_url = "https://protected-api.example.com/data";
 
-                // In a real scenario, you might do:
-                // let auth_client = token_client.create_client(&scope).await.map_err(...)?;
-                // let response = auth_client.get(downstream_url).send().await?;
+                debug!("Making authenticated request to {}", protected_api_url);
+                // In a real implementation, you'd use this client instead of the basic one
+                // let response = auth_client.get(protected_api_url).send().await?;
+
+                info!("Successfully acquired authenticated client for downstream API");
+                // For demonstration, we'll continue with the normal API call
             }
             Err(e) => {
-                error!("Failed to acquire token: {}", e);
-                // Fall back to unauthenticated request or return error
+                error!("Failed to create authenticated client: {}", e);
+                // Fall back to unauthenticated request
             }
         }
     }

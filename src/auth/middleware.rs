@@ -1,5 +1,7 @@
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
+use std::time::{Duration, SystemTime};
 
 use axum::{
     body::Body,
@@ -10,11 +12,41 @@ use axum::{
 };
 use futures::future::BoxFuture;
 use jsonwebtoken::{Algorithm, DecodingKey, TokenData, Validation, decode, decode_header};
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tower::{Layer, Service};
 use tracing::{debug, error, info};
 
 use crate::app::AppState;
+
+/// JWKS (JSON Web Key Set) response
+#[derive(Debug, Deserialize)]
+struct JwksResponse {
+    keys: Vec<Jwk>,
+}
+
+/// JSON Web Key
+#[derive(Debug, Clone, Deserialize)]
+struct Jwk {
+    #[serde(rename = "kid")]
+    key_id: String,
+    #[serde(rename = "x5c")]
+    x509_chain: Option<Vec<String>>,
+    #[serde(rename = "n")]
+    modulus: Option<String>,
+    #[serde(rename = "e")]
+    exponent: Option<String>,
+    kty: String,
+}
+
+/// JWKS cache entry
+struct JwksCacheEntry {
+    /// The JWKS data
+    jwks: JwksResponse,
+    /// When the cache entry expires
+    expires_at: SystemTime,
+}
 
 /// Claims from the JWT token we validate
 #[derive(Debug, Serialize, Deserialize)]
@@ -43,6 +75,17 @@ pub struct EntraClaims {
     pub scp: Option<String>,
 }
 
+/// Role requirements for authorization
+#[derive(Debug, Clone)]
+pub enum RoleRequirement {
+    /// Any of the listed roles is sufficient
+    Any(Vec<String>),
+    /// All of the listed roles are required
+    All(Vec<String>),
+    /// No roles required (authentication only)
+    None,
+}
+
 /// Configuration for Entra authentication middleware
 #[derive(Debug, Clone)]
 pub struct EntraAuthConfig {
@@ -53,9 +96,15 @@ pub struct EntraAuthConfig {
     /// Expected audience value
     pub audience: String,
     /// JWKS URI for token validation
-    pub jwks_uri: Option<String>,
+    pub jwks_uri: String,
     /// Whether to validate the token (disable for debugging)
     pub validate_token: bool,
+    /// Required roles for authorization
+    pub required_roles: RoleRequirement,
+    /// Cache for JWKS
+    pub jwks_cache: Arc<Mutex<Option<JwksCacheEntry>>>,
+    /// HTTP client
+    pub client: Client,
 }
 
 impl Default for EntraAuthConfig {
@@ -67,11 +116,14 @@ impl Default for EntraAuthConfig {
             tenant_id: tenant_id.clone(),
             client_id: client_id.clone(),
             audience: format!("api://{}", client_id),
-            jwks_uri: Some(format!(
+            jwks_uri: format!(
                 "https://login.microsoftonline.com/{}/discovery/v2.0/keys",
                 tenant_id
-            )),
+            ),
             validate_token: true,
+            required_roles: RoleRequirement::None,
+            jwks_cache: Arc::new(Mutex::new(None)),
+            client: Client::new(),
         }
     }
 }
@@ -87,6 +139,8 @@ pub enum AuthError {
     ValidationFailed(String),
     /// Backend error
     InternalError(String),
+    /// Authorization failed
+    AccessDenied(String),
 }
 
 impl IntoResponse for AuthError {
@@ -96,6 +150,7 @@ impl IntoResponse for AuthError {
             AuthError::InvalidTokenFormat => (StatusCode::UNAUTHORIZED, "Invalid token format"),
             AuthError::ValidationFailed(msg) => (StatusCode::UNAUTHORIZED, msg.as_str()),
             AuthError::InternalError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.as_str()),
+            AuthError::AccessDenied(msg) => (StatusCode::FORBIDDEN, msg.as_str()),
         };
 
         (
@@ -125,6 +180,140 @@ fn extract_token(headers: &HeaderMap) -> Result<String, AuthError> {
     Ok(header_str[7..].to_string())
 }
 
+/// Fetch and cache JWKS from the JWKS URI
+async fn fetch_and_cache_jwks(config: &EntraAuthConfig) -> Result<JwksResponse, AuthError> {
+    // Check cache first
+    {
+        let cache = config.jwks_cache.lock().unwrap();
+        if let Some(entry) = &*cache {
+            // Check if cache is still valid (with 1 hour TTL)
+            let now = SystemTime::now();
+            if entry.expires_at > now {
+                debug!("Using cached JWKS");
+                return Ok(entry.jwks.clone());
+            }
+        }
+    }
+
+    // Cache is stale or doesn't exist, fetch new JWKS
+    info!("Fetching JWKS from {}", config.jwks_uri);
+    let response = config
+        .client
+        .get(&config.jwks_uri)
+        .send()
+        .await
+        .map_err(|e| AuthError::InternalError(format!("Failed to fetch JWKS: {}", e)))?;
+
+    if !response.status().is_success() {
+        return Err(AuthError::InternalError(format!(
+            "Failed to fetch JWKS, status: {}",
+            response.status()
+        )));
+    }
+
+    let jwks: JwksResponse = response
+        .json()
+        .await
+        .map_err(|e| AuthError::InternalError(format!("Failed to parse JWKS: {}", e)))?;
+
+    // Cache the JWKS with 1 hour TTL
+    let expires_at = SystemTime::now() + Duration::from_secs(3600);
+    {
+        let mut cache = config.jwks_cache.lock().unwrap();
+        *cache = Some(JwksCacheEntry {
+            jwks: jwks.clone(),
+            expires_at,
+        });
+    }
+
+    Ok(jwks)
+}
+
+/// Find a JWK by its key ID
+fn find_jwk_by_kid(jwks: &JwksResponse, kid: &str) -> Result<Jwk, AuthError> {
+    jwks.keys
+        .iter()
+        .find(|key| key.key_id == kid)
+        .cloned()
+        .ok_or_else(|| AuthError::ValidationFailed(format!("JWK with kid '{}' not found", kid)))
+}
+
+/// Create a decoding key from a JWK
+fn create_decoding_key(jwk: &Jwk) -> Result<DecodingKey, AuthError> {
+    // Try using x509 certificate chain first
+    if let Some(x509_chain) = &jwk.x509_chain {
+        if let Some(cert) = x509_chain.first() {
+            return DecodingKey::from_rsa_pem(
+                format!(
+                    "-----BEGIN CERTIFICATE-----\n{}\n-----END CERTIFICATE-----",
+                    cert
+                )
+                .as_bytes(),
+            )
+            .map_err(|e| {
+                AuthError::ValidationFailed(format!(
+                    "Failed to create decoding key from x509: {}",
+                    e
+                ))
+            });
+        }
+    }
+
+    // Fall back to modulus and exponent
+    if let (Some(n), Some(e)) = (&jwk.modulus, &jwk.exponent) {
+        return DecodingKey::from_rsa_components(n, e).map_err(|e| {
+            AuthError::ValidationFailed(format!(
+                "Failed to create decoding key from components: {}",
+                e
+            ))
+        });
+    }
+
+    Err(AuthError::ValidationFailed(
+        "JWK doesn't contain required key material".to_string(),
+    ))
+}
+
+/// Validate claims in the token
+fn validate_claims(claims: &EntraClaims, config: &EntraAuthConfig) -> Result<(), AuthError> {
+    // Authorization based on roles
+    match &config.required_roles {
+        RoleRequirement::Any(required_roles) => {
+            if required_roles.is_empty() {
+                return Ok(());
+            }
+
+            for role in required_roles {
+                if claims.roles.contains(role) {
+                    return Ok(());
+                }
+            }
+
+            Err(AuthError::AccessDenied(format!(
+                "Access denied: User does not have any of the required roles: {:?}",
+                required_roles
+            )))
+        }
+        RoleRequirement::All(required_roles) => {
+            if required_roles.is_empty() {
+                return Ok(());
+            }
+
+            for role in required_roles {
+                if !claims.roles.contains(role) {
+                    return Err(AuthError::AccessDenied(format!(
+                        "Access denied: User missing required role: {}",
+                        role
+                    )));
+                }
+            }
+
+            Ok(())
+        }
+        RoleRequirement::None => Ok(()),
+    }
+}
+
 /// Middleware function to validate the token
 pub async fn validate_token(
     req: Request,
@@ -145,33 +334,44 @@ pub async fn validate_token(
         AuthError::ValidationFailed(format!("Failed to decode token header: {}", e))
     })?;
 
-    // For a full implementation, we would fetch the JWK set and find the key with matching kid
-    // For simplicity in this example, we're using a fixed algorithm and issuer
+    // Get the kid from the header
+    let kid = header.kid.ok_or_else(|| {
+        AuthError::ValidationFailed("Token header does not contain a 'kid'".to_string())
+    })?;
+
+    // Fetch and cache JWKS
+    let jwks = fetch_and_cache_jwks(&config).await?;
+
+    // Find the JWK for this kid
+    let jwk = find_jwk_by_kid(&jwks, &kid)?;
+
+    // Create a decoding key from the JWK
+    let decoding_key = create_decoding_key(&jwk)?;
 
     // Set up validation parameters
     let mut validation = Validation::new(Algorithm::RS256);
-    validation.set_audience(&[config.audience]);
+    validation.set_audience(&[config.audience.clone()]);
     validation.set_issuer(&[format!(
         "https://login.microsoftonline.com/{}/v2.0",
         config.tenant_id
     )]);
 
-    // In a real implementation, we would:
-    // 1. Cache the JWKS (JSON Web Key Set)
-    // 2. Find the key with matching 'kid' from header
-    // 3. Create a DecodingKey from the JWK
-    // For this example, we'll log an error but allow the request to proceed
+    // Decode and validate the token
+    let token_data = decode::<EntraClaims>(&token, &decoding_key, &validation)
+        .map_err(|e| AuthError::ValidationFailed(format!("Token validation failed: {}", e)))?;
 
-    error!("For full implementation, JWKS validation should be implemented");
-    debug!("Token header: {:?}", header);
+    // Additional role-based validation
+    validate_claims(&token_data.claims, &config)?;
 
-    // In a production system, return this instead:
-    // let jwks = fetch_and_cache_jwks(&config.jwks_uri.unwrap_or_default()).await?;
-    // let key = find_key_by_kid(jwks, &header.kid.unwrap_or_default())?;
-    // let decoding_key = DecodingKey::from_rsa_components(&key.n, &key.e)?;
+    info!(
+        "Successfully validated token for subject: {}",
+        token_data.claims.sub
+    );
+    debug!("User roles: {:?}", token_data.claims.roles);
 
-    // Mock validation for now (requires actual implementation for production)
-    info!("Validated token with subject: <token-subject>");
+    // Store claims in request extensions for handlers to access
+    let mut req = req;
+    req.extensions_mut().insert(token_data.claims);
 
     // Process the request
     Ok(next.run(req).await)
@@ -192,6 +392,23 @@ impl EntraAuthLayer {
     /// Create a new auth layer with default configuration
     pub fn default() -> Self {
         Self::new(EntraAuthConfig::default())
+    }
+
+    /// Create a new auth layer with role requirements
+    pub fn with_roles(roles: RoleRequirement) -> Self {
+        let mut config = EntraAuthConfig::default();
+        config.required_roles = roles;
+        Self::new(config)
+    }
+
+    /// Create a new auth layer that requires any of the specified roles
+    pub fn require_any_role(roles: Vec<String>) -> Self {
+        Self::with_roles(RoleRequirement::Any(roles))
+    }
+
+    /// Create a new auth layer that requires all of the specified roles
+    pub fn require_all_roles(roles: Vec<String>) -> Self {
+        Self::with_roles(RoleRequirement::All(roles))
     }
 }
 

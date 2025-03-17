@@ -1,6 +1,7 @@
 use axum::{
     body::Body,
-    extract::ConnectInfo,
+    extract::{ConnectInfo, rejection::ExtensionRejection},
+    extract_rejection_layer,
     http::Request,
     middleware::{self, Next},
     response::Response,
@@ -100,10 +101,40 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .unwrap_or(false);
 
     let router = if auth_enabled {
+        // Create different route groups with different authorization requirements
+
+        // Public routes - no authentication required but can still access claims if present
+        let public_routes = Router::new()
+            .route("/health", get(handlers::health::health_check))
+            .route("/metrics", get(handlers::metrics::metrics))
+            .layer(extract_rejection_layer());
+
+        // Protected routes - authentication required but no specific roles
+        let authenticated_routes = Router::new()
+            .route("/data", get(handlers::data::get_data))
+            .layer(EntraAuthLayer::default());
+
+        // Admin routes - require the "admin" role
+        let admin_routes = Router::new()
+            .route("/admin/pet/:id", get(handlers::pet::get_pet_by_id))
+            .layer(EntraAuthLayer::require_any_role(vec!["admin".to_string()]));
+
+        // Service routes - require service role
+        let service_routes = Router::new()
+            .route("/service/pet/:id", get(handlers::pet::get_pet_by_id))
+            .layer(EntraAuthLayer::require_any_role(vec![
+                "service".to_string(),
+            ]));
+
+        // Combine all route groups
         Router::new()
-            .nest("/", api_router.layer(EntraAuthLayer::default()))
+            .merge(public_routes)
+            .merge(authenticated_routes)
+            .merge(admin_routes)
+            .merge(service_routes)
             .with_state(state)
     } else {
+        // No authentication
         Router::new().nest("/", api_router).with_state(state)
     };
 
