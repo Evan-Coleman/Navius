@@ -21,44 +21,46 @@ axum = "0.8.1"
 base64 = "0.22.1"
 reqwest = { version = "0.12.14", features = ["json"] }
 serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0"
+serde_json = "1.0.140"
 tokio = {version = "1.44.1", features = ["rt-multi-thread", "macros"] }
 utoipa = { version = "5.3.1", features = ["axum_extras", "yaml"] }
 utoipa-axum = "0.2.0"
 utoipa-swagger-ui = {version = "9.0.0", features = ["axum"]}
-tracing = "0.1"
-tracing-subscriber = "0.3"
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
 # Configuration dependencies
 config = { version = "0.15.11", features = ["yaml"] }
-dotenvy = "0.15"
+dotenvy = "0.15.7"
 thiserror = "2.0.12"
 # Caching dependencies
-moka = { version = "0.12", features = ["future"] }
+moka = { version = "0.12.10", features = ["future"] }
 # Metrics dependencies
 metrics = "0.24.1"
 metrics-exporter-prometheus = "0.16.2"
 # Time handling
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { version = "0.4.40", features = ["serde"] }
 # Middleware and error handling
 tower = { version = "0.5.2", features = ["full"] }
 tower-http = { version = "0.6.2", features = ["trace", "timeout", "catch-panic", "request-id", "cors"] }
-uuid = { version = "1.7", features = ["v4"] }
-tracing-futures = "0.2"
+uuid = { version = "1.16.0", features = ["v4"] }
+tracing-futures = "0.2.5"
 
 # Authentication
 jsonwebtoken = "9.3.1"
 oauth2 = { version = "5.0.0", features = ["reqwest"] }
 reqwest-middleware = "0.4.1"
-futures = "0.3"
-futures-util = { version = "0.3", features = ["std"] }
+futures = "0.3.31"
+futures-util = { version = "0.3.31", features = ["std"] }
 
 # Web framework and related
-pin-project = "1.1"
+pin-project = "1.1.10"
 rand = "0.9.0"
+rand_chacha = "0.9.0"
+lazy_static = "1.5"
 
 [features]
 production = []
 
 [build-dependencies]
 # Don't need full regex crate, just simple string manipulation
-regex = "1.10.2"
+regex = "1.11.1"
