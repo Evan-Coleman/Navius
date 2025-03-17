@@ -475,7 +475,51 @@ pub fn load_config() -> Result<AppConfig, ConfigError> {
         .build()?;
 
     // Deserialize the config into our AppConfig struct
-    let app_config: AppConfig = config.try_deserialize()?;
+    let mut app_config: AppConfig = config.try_deserialize()?;
+
+    // Manually set Entra ID configuration from environment variables if they exist
+    // This ensures the environment variables are properly mapped to the configuration
+    if let Ok(tenant_id) = env::var(constants::auth::env_vars::TENANT_ID) {
+        if !tenant_id.is_empty() {
+            app_config.auth.entra.tenant_id = tenant_id;
+        }
+    }
+
+    if let Ok(client_id) = env::var(constants::auth::env_vars::CLIENT_ID) {
+        if !client_id.is_empty() {
+            app_config.auth.entra.client_id = client_id;
+        }
+    }
+
+    if let Ok(audience) = env::var(constants::auth::env_vars::AUDIENCE) {
+        if !audience.is_empty() {
+            app_config.auth.entra.audience = audience;
+        }
+    }
+
+    if let Ok(permission) = env::var(constants::auth::env_vars::PERMISSION) {
+        if !permission.is_empty() {
+            app_config.auth.entra.permission = permission;
+        }
+    }
+
+    if let Ok(scope) = env::var(constants::auth::env_vars::SCOPE) {
+        if !scope.is_empty() {
+            app_config.auth.entra.scope = scope;
+        }
+    }
+
+    if let Ok(token_url) = env::var(constants::auth::env_vars::TOKEN_URL) {
+        if !token_url.is_empty() {
+            app_config.auth.entra.token_url = token_url;
+        }
+    }
+
+    if let Ok(debug_auth) = env::var(constants::auth::env_vars::DEBUG_AUTH) {
+        if !debug_auth.is_empty() {
+            app_config.auth.debug = debug_auth.parse().unwrap_or(false);
+        }
+    }
 
     Ok(app_config)
 }

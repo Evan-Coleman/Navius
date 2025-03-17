@@ -140,6 +140,15 @@ pub struct EntraAuthConfig {
     pub debug_validation: bool,
 }
 
+/// OpenID Connect configuration response
+#[derive(Debug, Clone, Deserialize)]
+struct OpenIdConfiguration {
+    #[serde(rename = "jwks_uri")]
+    jwks_uri: String,
+    #[serde(rename = "issuer")]
+    issuer: String,
+}
+
 impl Default for EntraAuthConfig {
     fn default() -> Self {
         // Get configuration from environment variables
@@ -156,6 +165,23 @@ impl Default for EntraAuthConfig {
             )
         });
 
+        // Ensure tenant_id is not empty
+        let tenant_id = if tenant_id.is_empty() {
+            error!(
+                "TENANT_ID is empty! Authentication will fail. Please set RUST_BACKEND_TENANT_ID environment variable."
+            );
+            // Use a placeholder to avoid URL formatting issues
+            "common".to_string()
+        } else {
+            tenant_id
+        };
+
+        // Use the well-known OpenID configuration endpoint format
+        let jwks_uri = format!(
+            "https://login.microsoftonline.com/{}/v2.0/.well-known/openid-configuration",
+            tenant_id
+        );
+
         Self {
             tenant_id: tenant_id.clone(),
             client_id: client_id.clone(),
@@ -164,10 +190,7 @@ impl Default for EntraAuthConfig {
             required_roles: RoleRequirement::None,
             required_permissions: PermissionRequirement::None,
             client: Client::new(),
-            jwks_uri: format!(
-                "{}",
-                constants::auth::urls::ENTRA_JWKS_URI_FORMAT.replace("{}", &tenant_id)
-            ),
+            jwks_uri,
             jwks_cache: Arc::new(Mutex::new(None)),
             debug_validation,
         }
@@ -189,6 +212,23 @@ impl EntraAuthConfig {
             config.auth.entra.audience.clone()
         };
 
+        // Ensure tenant_id is not empty
+        let tenant_id = if tenant_id.is_empty() {
+            error!(
+                "TENANT_ID is empty in config! Authentication will fail. Please set tenant_id in your configuration."
+            );
+            // Use a placeholder to avoid URL formatting issues
+            "common".to_string()
+        } else {
+            tenant_id
+        };
+
+        // Use the well-known OpenID configuration endpoint format
+        let jwks_uri = format!(
+            "https://login.microsoftonline.com/{}/v2.0/.well-known/openid-configuration",
+            tenant_id
+        );
+
         Self {
             tenant_id: tenant_id.clone(),
             client_id,
@@ -197,10 +237,7 @@ impl EntraAuthConfig {
             required_roles: RoleRequirement::None,
             required_permissions: PermissionRequirement::None,
             client: Client::new(),
-            jwks_uri: format!(
-                "{}",
-                constants::auth::urls::ENTRA_JWKS_URI_FORMAT.replace("{}", &tenant_id)
-            ),
+            jwks_uri,
             jwks_cache: Arc::new(Mutex::new(None)),
             debug_validation,
         }
@@ -334,25 +371,88 @@ async fn fetch_jwks(config: &EntraAuthConfig) -> Result<JwksResponse, AuthError>
         }
     }
 
-    // If not, fetch a new JWKS
-    let response = config
+    // First, fetch the OpenID configuration to get the actual JWKS URI
+    info!("Fetching OpenID configuration from: {}", config.jwks_uri);
+    info!("Using tenant ID: {}", config.tenant_id);
+
+    // Ensure the tenant ID is not empty
+    if config.tenant_id.is_empty() {
+        return Err(AuthError::InternalError(
+            "Tenant ID is empty. Please set RUST_BACKEND_TENANT_ID environment variable."
+                .to_string(),
+        ));
+    }
+
+    let oidc_response = config
         .client
         .get(&config.jwks_uri)
         .send()
         .await
-        .map_err(|e| AuthError::InternalError(format!("Failed to fetch JWKS: {}", e)))?;
+        .map_err(|e| {
+            AuthError::InternalError(format!("Failed to fetch OpenID configuration: {}", e))
+        })?;
 
-    if !response.status().is_success() {
+    let oidc_status = oidc_response.status();
+    info!("OpenID configuration response status: {}", oidc_status);
+
+    if !oidc_status.is_success() {
+        let error_text = oidc_response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Could not read error response".to_string());
+        error!(
+            "OpenID configuration fetch failed. Status: {}, Error: {}",
+            oidc_status, error_text
+        );
         return Err(AuthError::InternalError(format!(
-            "Failed to fetch JWKS, status: {}",
-            response.status()
+            "Failed to fetch OpenID configuration, status: {}",
+            oidc_status
         )));
     }
 
-    let jwks = response
+    let oidc_config = oidc_response
+        .json::<OpenIdConfiguration>()
+        .await
+        .map_err(|e| {
+            AuthError::InternalError(format!("Failed to parse OpenID configuration: {}", e))
+        })?;
+
+    info!("Successfully fetched OpenID configuration");
+    info!("Using JWKS URI from discovery: {}", oidc_config.jwks_uri);
+    info!("Issuer from discovery: {}", oidc_config.issuer);
+
+    // Now fetch the actual JWKS using the URI from the OpenID configuration
+    let jwks_response = config
+        .client
+        .get(&oidc_config.jwks_uri)
+        .send()
+        .await
+        .map_err(|e| AuthError::InternalError(format!("Failed to fetch JWKS: {}", e)))?;
+
+    let jwks_status = jwks_response.status();
+    info!("JWKS response status: {}", jwks_status);
+
+    if !jwks_status.is_success() {
+        let error_text = jwks_response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Could not read error response".to_string());
+        error!(
+            "JWKS fetch failed. Status: {}, Error: {}",
+            jwks_status, error_text
+        );
+        return Err(AuthError::InternalError(format!(
+            "Failed to fetch JWKS, status: {}",
+            jwks_status
+        )));
+    }
+
+    let jwks = jwks_response
         .json::<JwksResponse>()
         .await
         .map_err(|e| AuthError::InternalError(format!("Failed to parse JWKS: {}", e)))?;
+
+    info!("Successfully fetched JWKS with {} keys", jwks.keys.len());
 
     // Cache the JWKS for 1 hour
     let expires_at = SystemTime::now() + Duration::from_secs(3600);
@@ -536,8 +636,75 @@ impl EntraAuthLayer {
 
     /// Create a new EntraAuthLayer from AppConfig
     pub fn from_app_config(config: &crate::config::app_config::AppConfig) -> Self {
+        // Test the JWKS endpoint before creating the layer
+        let auth_config = EntraAuthConfig::from_app_config(config);
+
+        // Log the tenant ID being used
+        info!(
+            "Using tenant ID for authentication: '{}'",
+            auth_config.tenant_id
+        );
+
+        // Spawn a task to test the OpenID configuration endpoint, but don't block on it
+        let oidc_uri = auth_config.jwks_uri.clone();
+        tokio::spawn(async move {
+            info!("Testing OpenID configuration endpoint: {}", oidc_uri);
+            match reqwest::Client::new().get(&oidc_uri).send().await {
+                Ok(response) => {
+                    info!(
+                        "OpenID configuration endpoint test result: {}",
+                        response.status()
+                    );
+                    if !response.status().is_success() {
+                        error!(
+                            "OpenID configuration endpoint test failed with status: {}",
+                            response.status()
+                        );
+                        if let Ok(text) = response.text().await {
+                            error!("OpenID configuration endpoint error response: {}", text);
+                        }
+                    } else {
+                        // Try to parse the OpenID configuration
+                        match response.json::<OpenIdConfiguration>().await {
+                            Ok(config) => {
+                                info!("Successfully parsed OpenID configuration");
+                                info!("JWKS URI from discovery: {}", config.jwks_uri);
+                                info!("Issuer from discovery: {}", config.issuer);
+
+                                // Test the JWKS URI from the configuration
+                                info!("Testing JWKS URI from discovery: {}", config.jwks_uri);
+                                match reqwest::Client::new().get(&config.jwks_uri).send().await {
+                                    Ok(jwks_response) => {
+                                        info!(
+                                            "JWKS endpoint test result: {}",
+                                            jwks_response.status()
+                                        );
+                                        if !jwks_response.status().is_success() {
+                                            error!(
+                                                "JWKS endpoint test failed with status: {}",
+                                                jwks_response.status()
+                                            );
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!("JWKS endpoint test failed: {}", e);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to parse OpenID configuration: {}", e);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("OpenID configuration endpoint test failed: {}", e);
+                }
+            }
+        });
+
         Self {
-            config: EntraAuthConfig::from_app_config(config),
+            config: auth_config,
         }
     }
 
@@ -733,8 +900,9 @@ async fn validate_token_wrapper(
     validation.validate_nbf = true;
     validation.set_audience(&[config.audience.clone()]);
 
-    // Set valid issuers
+    // Set valid issuers - include both v1 and v2 formats to be safe
     validation.set_issuer(&[
+        // v2.0 endpoints
         format!(
             "https://login.microsoftonline.com/{}/v2.0",
             config.tenant_id
@@ -743,8 +911,12 @@ async fn validate_token_wrapper(
             "https://login.microsoftonline.com/{}/v2.0/",
             config.tenant_id
         ),
+        // v1.0 endpoints
         format!("https://sts.windows.net/{}", config.tenant_id),
         format!("https://sts.windows.net/{}/", config.tenant_id),
+        // Additional formats
+        format!("https://login.microsoftonline.com/{}", config.tenant_id),
+        format!("https://login.microsoftonline.com/{}/", config.tenant_id),
     ]);
 
     // Validate token with better error handling
