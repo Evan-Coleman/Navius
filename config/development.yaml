@@ -22,4 +22,4 @@ cache:
 auth:
   enabled: true
   # Debug mode enables simplified token validation for easier testing
-  debug: true 
+  debug: false 
