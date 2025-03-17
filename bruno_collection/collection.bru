@@ -7,7 +7,7 @@ auth:oauth2 {
   access_token_url: https://login.microsoftonline.com/{{rust_backend_tenantID}}/oauth2/v2.0/token
   client_id: {{rust_backend_clientID}}
   client_secret: {{rust_backend_secret}}
-  scope: api://{{rust_backend_clientID}}/.default
+  scope: api://{{rust_backend_audience}}/.default
 }
 
 script:post-response {
