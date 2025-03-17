@@ -93,8 +93,8 @@ fi
 
 if [ -f "$ENV_FILE" ]; then
     echo "Using environment file: $ENV_FILE"
-    # Load environment variables
-    export $(grep -v '^#' "$ENV_FILE" | xargs)
+    # Load environment variables, properly handling comments
+    export $(grep -v '^#' "$ENV_FILE" | sed 's/\s*#.*$//' | xargs)
 else
     echo "Warning: Environment file $ENV_FILE not found. Using defaults."
 fi
