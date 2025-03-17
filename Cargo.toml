@@ -45,8 +45,8 @@ uuid = { version = "1.7", features = ["v4"] }
 tracing-futures = "0.2"
 
 # Authentication
-jsonwebtoken = "8.3"
-oauth2 = { version = "4.4", features = ["reqwest"] }
+jsonwebtoken = "9.3.1"
+oauth2 = { version = "5.0.0", features = ["reqwest"] }
 reqwest-middleware = "0.4.1"
 futures = "0.3"
 

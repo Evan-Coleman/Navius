@@ -18,10 +18,14 @@ struct TokenCacheEntry {
 pub struct EntraTokenClient {
     /// HTTP client for making requests
     client: Client,
-    /// OAuth2 client
-    oauth_client: BasicClient,
-    /// Client secret for client credentials flow
+    /// OAuth2 client ID
+    client_id: ClientId,
+    /// OAuth2 client secret
     client_secret: ClientSecret,
+    /// Authorization URL
+    auth_url: AuthUrl,
+    /// Token URL
+    token_url: TokenUrl,
     /// Token cache to avoid unnecessary requests
     token_cache: Arc<Mutex<HashMap<String, TokenCacheEntry>>>,
 }
@@ -29,26 +33,26 @@ pub struct EntraTokenClient {
 impl EntraTokenClient {
     /// Create a new token client with the given credentials
     pub fn new(tenant_id: &str, client_id: &str, client_secret: &str) -> Self {
-        let auth_url = format!(
+        let auth_url_str = format!(
             "https://login.microsoftonline.com/{}/oauth2/v2.0/authorize",
             tenant_id
         );
-        let token_url = format!(
+        let token_url_str = format!(
             "https://login.microsoftonline.com/{}/oauth2/v2.0/token",
             tenant_id
         );
 
-        let oauth_client = BasicClient::new(
-            ClientId::new(client_id.to_string()),
-            Some(ClientSecret::new(client_secret.to_string())),
-            AuthUrl::new(auth_url).unwrap(),
-            Some(TokenUrl::new(token_url).unwrap()),
-        );
+        let client_id = ClientId::new(client_id.to_string());
+        let client_secret = ClientSecret::new(client_secret.to_string());
+        let auth_url = AuthUrl::new(auth_url_str).unwrap();
+        let token_url = TokenUrl::new(token_url_str).unwrap();
 
         Self {
             client: Client::new(),
-            oauth_client,
-            client_secret: ClientSecret::new(client_secret.to_string()),
+            client_id,
+            client_secret,
+            auth_url,
+            token_url,
             token_cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -82,12 +86,23 @@ impl EntraTokenClient {
 
         info!("Acquiring new token for scope: {}", scope);
 
-        // Token not in cache or expired, get a new one
-        let token_result = self
-            .oauth_client
+        // Configure HTTP client for oauth2
+        let http_client = reqwest::ClientBuilder::new()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+
+        // Create a new OAuth2 client for this request
+        let oauth_client = BasicClient::new(self.client_id.clone())
+            .set_client_secret(self.client_secret.clone())
+            .set_auth_uri(self.auth_url.clone())
+            .set_token_uri(self.token_url.clone());
+
+        // Token not in cache or expired, get a new one using client credentials flow
+        let token_result = oauth_client
             .exchange_client_credentials()
             .add_scope(Scope::new(scope.to_string()))
-            .request_async(oauth2::reqwest::async_http_client)
+            .request_async(&http_client)
             .await
             .map_err(|e| format!("Failed to get token: {}", e))?;
 
