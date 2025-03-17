@@ -1,9 +1,8 @@
-use axum::{Extension, Json, extract::State};
+use axum::{Json, extract::State};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crate::app::AppState;
-use crate::auth::middleware::EntraClaims;
 use crate::models::HealthCheckResponse;
 
 /// Handler for the health check endpoint
@@ -15,10 +14,7 @@ use crate::models::HealthCheckResponse;
     ),
     tag = "health"
 )]
-pub async fn health_check(
-    State(state): State<Arc<AppState>>,
-    claims: Option<Extension<EntraClaims>>,
-) -> Json<HealthCheckResponse> {
+pub async fn health_check(State(state): State<Arc<AppState>>) -> Json<HealthCheckResponse> {
     // Calculate uptime
     let uptime_seconds = SystemTime::now()
         .duration_since(state.start_time)
@@ -31,18 +27,18 @@ pub async fn health_check(
         .as_ref()
         .map(|cache| crate::cache::get_cache_stats(cache));
 
-    // Include authentication info in status string
-    let status = if let Some(Extension(user)) = claims {
-        format!(
-            "healthy - Authenticated as {} with roles: {:?}",
-            user.sub, user.roles
-        )
+    let auth_status = if std::env::var("AUTH_ENABLED")
+        .unwrap_or_else(|_| "false".to_string())
+        .parse::<bool>()
+        .unwrap_or(false)
+    {
+        "Authentication enabled"
     } else {
-        "healthy".to_string()
+        "Authentication disabled"
     };
 
     Json(HealthCheckResponse {
-        status,
+        status: format!("healthy - {}", auth_status),
         version: env!("CARGO_PKG_VERSION").to_string(),
         uptime_seconds,
         cache_enabled: state.config.cache.enabled,

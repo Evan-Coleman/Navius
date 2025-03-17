@@ -1,7 +1,6 @@
 use axum::{
     body::Body,
-    extract::{ConnectInfo, rejection::ExtensionRejection},
-    extract_rejection_layer,
+    extract::ConnectInfo,
     http::Request,
     middleware::{self, Next},
     response::Response,
@@ -91,7 +90,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/health", get(handlers::health::health_check))
         .route("/metrics", get(handlers::metrics::metrics))
         .route("/data", get(handlers::data::get_data))
-        .route("/pet/:id", get(handlers::pet::get_pet_by_id))
+        .route("/pet/{id}", get(handlers::pet::get_pet_by_id))
         .with_state(state.clone());
 
     // Add auth middleware if enabled
@@ -103,11 +102,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     let router = if auth_enabled {
         // Create different route groups with different authorization requirements
 
-        // Public routes - no authentication required but can still access claims if present
+        // Public routes - no authentication required
         let public_routes = Router::new()
             .route("/health", get(handlers::health::health_check))
-            .route("/metrics", get(handlers::metrics::metrics))
-            .layer(extract_rejection_layer());
+            .route("/metrics", get(handlers::metrics::metrics));
 
         // Protected routes - authentication required but no specific roles
         let authenticated_routes = Router::new()
@@ -116,12 +114,12 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 
         // Admin routes - require the "admin" role
         let admin_routes = Router::new()
-            .route("/admin/pet/:id", get(handlers::pet::get_pet_by_id))
+            .route("/admin/pet/{id}", get(handlers::pet::get_pet_by_id))
             .layer(EntraAuthLayer::require_any_role(vec!["admin".to_string()]));
 
         // Service routes - require service role
         let service_routes = Router::new()
-            .route("/service/pet/:id", get(handlers::pet::get_pet_by_id))
+            .route("/service/pet/{id}", get(handlers::pet::get_pet_by_id))
             .layer(EntraAuthLayer::require_any_role(vec![
                 "service".to_string(),
             ]));
@@ -132,10 +130,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             .merge(authenticated_routes)
             .merge(admin_routes)
             .merge(service_routes)
-            .with_state(state)
+            .with_state(state.clone())
     } else {
         // No authentication
-        Router::new().nest("/", api_router).with_state(state)
+        Router::new().merge(api_router).with_state(state.clone())
     };
 
     // Add common middleware (tracing, timeout, etc)

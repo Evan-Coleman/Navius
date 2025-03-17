@@ -21,7 +21,7 @@ use tracing::{debug, error, info};
 use crate::app::AppState;
 
 /// JWKS (JSON Web Key Set) response
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct JwksResponse {
     keys: Vec<Jwk>,
 }
@@ -41,6 +41,7 @@ struct Jwk {
 }
 
 /// JWKS cache entry
+#[derive(Debug, Clone)]
 struct JwksCacheEntry {
     /// The JWKS data
     jwks: JwksResponse,
@@ -49,7 +50,7 @@ struct JwksCacheEntry {
 }
 
 /// Claims from the JWT token we validate
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EntraClaims {
     /// Subject (user/client ID)
     pub sub: String,
@@ -145,12 +146,17 @@ pub enum AuthError {
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
-        let (status, message) = match self {
-            AuthError::MissingToken => (StatusCode::UNAUTHORIZED, "Missing authorization token"),
-            AuthError::InvalidTokenFormat => (StatusCode::UNAUTHORIZED, "Invalid token format"),
-            AuthError::ValidationFailed(msg) => (StatusCode::UNAUTHORIZED, msg.as_str()),
-            AuthError::InternalError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.as_str()),
-            AuthError::AccessDenied(msg) => (StatusCode::FORBIDDEN, msg.as_str()),
+        let (status, error_message) = match self {
+            AuthError::MissingToken => (
+                StatusCode::UNAUTHORIZED,
+                "Missing authorization token".to_string(),
+            ),
+            AuthError::InvalidTokenFormat => {
+                (StatusCode::UNAUTHORIZED, "Invalid token format".to_string())
+            }
+            AuthError::ValidationFailed(msg) => (StatusCode::UNAUTHORIZED, msg),
+            AuthError::InternalError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+            AuthError::AccessDenied(msg) => (StatusCode::FORBIDDEN, msg),
         };
 
         (
@@ -159,7 +165,7 @@ impl IntoResponse for AuthError {
                 axum::http::header::CONTENT_TYPE,
                 HeaderValue::from_static("text/plain"),
             )],
-            message,
+            error_message,
         )
             .into_response()
     }
@@ -314,16 +320,107 @@ fn validate_claims(claims: &EntraClaims, config: &EntraAuthConfig) -> Result<(),
     }
 }
 
-/// Middleware function to validate the token
-pub async fn validate_token(
-    req: Request,
-    next: Next,
+/// Middleware layer for Entra ID authentication
+#[derive(Clone, Debug)]
+pub struct EntraAuthLayer {
     config: EntraAuthConfig,
-) -> Result<Response, AuthError> {
+}
+
+impl EntraAuthLayer {
+    /// Create a new EntraAuthLayer with default configuration
+    pub fn default() -> Self {
+        Self {
+            config: EntraAuthConfig::default(),
+        }
+    }
+
+    /// Create a new EntraAuthLayer with the given configuration
+    pub fn new(config: EntraAuthConfig) -> Self {
+        Self { config }
+    }
+
+    /// Create a new auth layer with role requirements
+    pub fn with_roles(roles: RoleRequirement) -> Self {
+        let mut config = EntraAuthConfig::default();
+        config.required_roles = roles;
+        Self::new(config)
+    }
+
+    /// Create a new EntraAuthLayer that requires any of the given roles
+    pub fn require_any_role(roles: Vec<String>) -> Self {
+        Self::with_roles(RoleRequirement::Any(roles))
+    }
+
+    /// Create a new auth layer that requires all of the specified roles
+    pub fn require_all_roles(roles: Vec<String>) -> Self {
+        Self::with_roles(RoleRequirement::All(roles))
+    }
+}
+
+impl<S> Layer<S> for EntraAuthLayer {
+    type Service = EntraAuthMiddleware<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        EntraAuthMiddleware {
+            inner,
+            config: self.config.clone(),
+        }
+    }
+}
+
+/// Middleware for Entra ID authentication
+#[derive(Clone)]
+pub struct EntraAuthMiddleware<S> {
+    inner: S,
+    config: EntraAuthConfig,
+}
+
+impl<S> EntraAuthMiddleware<S> {
+    /// Create a new EntraAuthMiddleware with the given service and configuration
+    pub fn new(inner: S, config: EntraAuthConfig) -> Self {
+        Self { inner, config }
+    }
+}
+
+// Implement the middleware using axum's middleware approach
+impl<S> tower::Service<Request> for EntraAuthMiddleware<S>
+where
+    S: tower::Service<Request, Response = Response> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: Request) -> Self::Future {
+        let config = self.config.clone();
+        let inner = self.inner.clone();
+
+        Box::pin(async move {
+            let mut inner_svc = inner;
+
+            // Handle the auth validation
+            match validate_token_wrapper(req, &config).await {
+                Ok(req) => inner_svc.call(req).await,
+                Err(err) => Ok(err.into_response()),
+            }
+        })
+    }
+}
+
+/// Wrapper function to validate token without using Next
+async fn validate_token_wrapper(
+    mut req: Request,
+    config: &EntraAuthConfig,
+) -> Result<Request, AuthError> {
     // Skip validation if disabled (for debugging or development)
     if !config.validate_token {
         debug!("Token validation is disabled, skipping verification");
-        return Ok(next.run(req).await);
+        return Ok(req);
     }
 
     // Extract the token from the Authorization header
@@ -340,7 +437,7 @@ pub async fn validate_token(
     })?;
 
     // Fetch and cache JWKS
-    let jwks = fetch_and_cache_jwks(&config).await?;
+    let jwks = fetch_and_cache_jwks(config).await?;
 
     // Find the JWK for this kid
     let jwk = find_jwk_by_kid(&jwks, &kid)?;
@@ -361,7 +458,7 @@ pub async fn validate_token(
         .map_err(|e| AuthError::ValidationFailed(format!("Token validation failed: {}", e)))?;
 
     // Additional role-based validation
-    validate_claims(&token_data.claims, &config)?;
+    validate_claims(&token_data.claims, config)?;
 
     info!(
         "Successfully validated token for subject: {}",
@@ -370,88 +467,7 @@ pub async fn validate_token(
     debug!("User roles: {:?}", token_data.claims.roles);
 
     // Store claims in request extensions for handlers to access
-    let mut req = req;
     req.extensions_mut().insert(token_data.claims);
 
-    // Process the request
-    Ok(next.run(req).await)
-}
-
-/// Entra auth middleware layer
-#[derive(Clone)]
-pub struct EntraAuthLayer {
-    config: EntraAuthConfig,
-}
-
-impl EntraAuthLayer {
-    /// Create a new auth layer with the given configuration
-    pub fn new(config: EntraAuthConfig) -> Self {
-        Self { config }
-    }
-
-    /// Create a new auth layer with default configuration
-    pub fn default() -> Self {
-        Self::new(EntraAuthConfig::default())
-    }
-
-    /// Create a new auth layer with role requirements
-    pub fn with_roles(roles: RoleRequirement) -> Self {
-        let mut config = EntraAuthConfig::default();
-        config.required_roles = roles;
-        Self::new(config)
-    }
-
-    /// Create a new auth layer that requires any of the specified roles
-    pub fn require_any_role(roles: Vec<String>) -> Self {
-        Self::with_roles(RoleRequirement::Any(roles))
-    }
-
-    /// Create a new auth layer that requires all of the specified roles
-    pub fn require_all_roles(roles: Vec<String>) -> Self {
-        Self::with_roles(RoleRequirement::All(roles))
-    }
-}
-
-impl<S> Layer<S> for EntraAuthLayer {
-    type Service = EntraAuthService<S>;
-
-    fn layer(&self, service: S) -> Self::Service {
-        EntraAuthService {
-            inner: service,
-            config: self.config.clone(),
-        }
-    }
-}
-
-/// Entra auth middleware service
-#[derive(Clone)]
-pub struct EntraAuthService<S> {
-    inner: S,
-    config: EntraAuthConfig,
-}
-
-impl<S> Service<Request> for EntraAuthService<S>
-where
-    S: Service<Request, Response = Response> + Send + 'static,
-    S::Future: Send + 'static,
-{
-    type Response = Response;
-    type Error = S::Error;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, req: Request) -> Self::Future {
-        let config = self.config.clone();
-        let future = validate_token(req, Next::new(|r| self.inner.call(r)), config);
-
-        Box::pin(async move {
-            match future.await {
-                Ok(response) => Ok(response),
-                Err(err) => Ok(err.into_response()),
-            }
-        })
-    }
+    Ok(req)
 }

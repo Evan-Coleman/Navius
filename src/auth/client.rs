@@ -40,7 +40,7 @@ impl EntraTokenClient {
 
         let oauth_client = BasicClient::new(
             ClientId::new(client_id.to_string()),
-            None,
+            Some(ClientSecret::new(client_secret.to_string())),
             AuthUrl::new(auth_url).unwrap(),
             Some(TokenUrl::new(token_url).unwrap()),
         );
@@ -87,7 +87,6 @@ impl EntraTokenClient {
             .oauth_client
             .exchange_client_credentials()
             .add_scope(Scope::new(scope.to_string()))
-            .set_client_secret(self.client_secret.clone())
             .request_async(oauth2::reqwest::async_http_client)
             .await
             .map_err(|e| format!("Failed to get token: {}", e))?;

@@ -1,14 +1,11 @@
-use axum::{Extension, Json, extract::State};
-use chrono::Utc;
-use http::StatusCode;
+use crate::app::AppState;
+use crate::error::AppError;
+use crate::models::Data;
+use axum::{Json, extract::State};
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
-use crate::{
-    app::AppState,
-    error::{AppError, Result},
-    models::Data,
-};
+type Result<T> = std::result::Result<T, AppError>;
 
 /// Get data from a downstream API
 #[utoipa::path(
@@ -20,21 +17,11 @@ use crate::{
     ),
     tag = "data"
 )]
-pub async fn get_data(
-    State(state): State<Arc<AppState>>,
-    claims: Option<Extension<crate::auth::middleware::EntraClaims>>,
-) -> Result<Json<Data>> {
-    let fact_url = &state.config.api.cat_fact_url;
+pub async fn get_data(State(state): State<Arc<AppState>>) -> Result<Json<Data>> {
+    // Log request
+    info!("Fetching data from external API");
 
-    // Log the caller's identity if authenticated
-    if let Some(Extension(user)) = claims {
-        info!(
-            "Request from authenticated user: {} with roles: {:?}",
-            user.sub, user.roles
-        );
-    } else {
-        info!("Request from unauthenticated user");
-    }
+    let fact_url = &state.config.api.cat_fact_url;
 
     // Try using the token client for secure downstream API calls
     if let Some(token_client) = &state.token_client {
@@ -46,33 +33,37 @@ pub async fn get_data(
             .unwrap_or_else(|_| "api://your-downstream-api/.default".to_string());
 
         // Get a dedicated client with auth headers
-        match token_client.create_client(&downstream_api_scope).await {
-            Ok(auth_client) => {
-                // Example of a protected API call - in real code, use the actual URL
-                let protected_api_url = "https://protected-api.example.com/data";
-
-                debug!("Making authenticated request to {}", protected_api_url);
-                // In a real implementation, you'd use this client instead of the basic one
-                // let response = auth_client.get(protected_api_url).send().await?;
-
-                info!("Successfully acquired authenticated client for downstream API");
-                // For demonstration, we'll continue with the normal API call
-            }
-            Err(e) => {
-                error!("Failed to create authenticated client: {}", e);
-                // Fall back to unauthenticated request
-            }
+        if let Ok(_auth_client) = token_client.create_client(&downstream_api_scope).await {
+            debug!("Successfully acquired authenticated client for downstream API");
+            // In a real implementation, you'd use this client instead
+            // let response = _auth_client.get(downstream_url).send().await?;
+        } else {
+            error!("Failed to create authenticated client");
         }
     }
 
-    // This is the original implementation (using unauthenticated request)
-    let response = state.client.get(fact_url).send().await?;
+    // Make request to external API
+    let response = state
+        .client
+        .get(fact_url)
+        .send()
+        .await
+        .map_err(|e| AppError::ExternalServiceError(format!("Failed to fetch data: {}", e)))?;
 
-    if response.status().is_success() {
-        let mut data: Data = response.json().await?;
-        data.timestamp = Utc::now().to_string();
-        Ok(Json(data))
-    } else {
-        Err(StatusCode::INTERNAL_SERVER_ERROR.into())
+    // Check if response is successful
+    if !response.status().is_success() {
+        return Err(AppError::ExternalServiceError(format!(
+            "API returned error status: {}",
+            response.status()
+        )));
     }
+
+    // Parse response
+    let data = response
+        .json::<Data>()
+        .await
+        .map_err(|e| AppError::ExternalServiceError(format!("Failed to parse response: {}", e)))?;
+
+    info!("Successfully fetched data");
+    Ok(Json(data))
 }

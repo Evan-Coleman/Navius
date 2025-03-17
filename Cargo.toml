@@ -47,7 +47,8 @@ tracing-futures = "0.2"
 # Authentication
 jsonwebtoken = "8.3"
 oauth2 = { version = "4.4", features = ["reqwest"] }
-reqwest-middleware = "0.2"
+reqwest-middleware = "0.4.1"
+futures = "0.3"
 
 [features]
 production = []
