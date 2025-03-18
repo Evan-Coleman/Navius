@@ -17,7 +17,7 @@ type Result<T> = std::result::Result<T, AppError>;
     ),
     tag = "data"
 )]
-pub async fn get_data(State(state): State<Arc<AppState>>) -> Result<Json<Data>> {
+pub async fn get_catfact(State(state): State<Arc<AppState>>) -> Result<Json<Data>> {
     // Get fact URL from config
     let fact_url = &state.config.api.cat_fact_url;
 

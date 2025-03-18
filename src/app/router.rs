@@ -14,6 +14,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 use tower_http::{timeout::TimeoutLayer, trace::TraceLayer};
+use tracing::info;
 use utoipa::{
     Modify, OpenApi,
     openapi::security::{ApiKey, ApiKeyValue, SecurityScheme},
@@ -29,6 +30,11 @@ use crate::{
     models::{ApiResponse, Data, HealthCheckResponse, MetricsResponse},
     reliability,
 };
+
+use crate::handlers::examples::catfact::get_catfact;
+use crate::handlers::examples::pet::get_pet_by_id;
+use crate::handlers::examples::pets::{create_pet, delete_pet, get_pet, list_pets};
+use crate::handlers::metrics::metrics;
 
 /// Application state shared across all routes
 pub struct AppState {
@@ -64,8 +70,8 @@ impl Modify for SecurityAddon {
     paths(
         crate::handlers::health::health_check,
         crate::handlers::metrics::metrics,
-        crate::handlers::data::get_data,
-        crate::handlers::pet::get_pet_by_id,
+        crate::handlers::examples::catfact::get_catfact,
+        crate::handlers::examples::pet::get_pet_by_id,
     ),
     components(
         schemas(
@@ -100,14 +106,14 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // Public routes - no authentication required
         let public_routes = Router::new()
             .route("/health", get(handlers::health::health_check))
-            .route("/metrics", get(handlers::metrics::metrics))
-            .route("/data", get(handlers::data::get_data))
-            .route("/pet/{id}", get(handlers::pet::get_pet_by_id));
+            .route("/metrics", get(metrics))
+            .route("/catfact", get(get_catfact))
+            .route("/pet/{id}", get(get_pet_by_id));
 
         // Protected routes - require authentication
         let protected_routes = Router::new()
-            .route("/api/pets", get(handlers::pets::list_pets))
-            .route("/api/pets/{id}", get(handlers::pets::get_pet))
+            .route("/api/pets", get(list_pets))
+            .route("/api/pets/{id}", get(get_pet))
             .route_layer(middleware::from_fn_with_state(
                 state.clone(),
                 handlers::logging::log_request,
@@ -116,8 +122,11 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 
         // Read-only routes - require authentication with read-only access
         let read_only_routes = Router::new()
-            .route("/api/readonly/pets", get(handlers::pets::get_pet))
-            .route("/api/readonly/pets/{id}", get(handlers::pets::get_pet))
+            .route("/api/readonly/pets", get(handlers::examples::pets::get_pet))
+            .route(
+                "/api/readonly/pets/{id}",
+                get(handlers::examples::pets::get_pet),
+            )
             .route_layer(middleware::from_fn_with_state(
                 state.clone(),
                 handlers::logging::log_request,
@@ -128,8 +137,14 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 
         // Full access routes - require authentication with full access
         let full_access_routes = Router::new()
-            .route("/api/fullaccess/pets", get(handlers::pets::get_pet))
-            .route("/api/fullaccess/pets/{id}", get(handlers::pets::get_pet))
+            .route(
+                "/api/fullaccess/pets",
+                get(handlers::examples::pets::get_pet),
+            )
+            .route(
+                "/api/fullaccess/pets/{id}",
+                get(handlers::examples::pets::get_pet),
+            )
             .route_layer(middleware::from_fn_with_state(
                 state.clone(),
                 handlers::logging::log_request,
@@ -140,8 +155,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 
         // Admin routes - require specific roles
         let admin_routes = Router::new()
-            .route("/api/admin/pets", post(handlers::pets::create_pet))
-            .route("/api/admin/pets/{id}", delete(handlers::pets::delete_pet))
+            .route("/api/admin/pets", post(create_pet))
+            .route("/api/admin/pets/{id}", delete(delete_pet))
             .route_layer(middleware::from_fn_with_state(
                 state.clone(),
                 handlers::logging::log_request,
@@ -162,13 +177,13 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // No authentication - use the default router
         Router::new()
             .route("/health", get(handlers::health::health_check))
-            .route("/metrics", get(handlers::metrics::metrics))
-            .route("/data", get(handlers::data::get_data))
-            .route("/pet/{id}", get(handlers::pet::get_pet_by_id))
-            .route("/api/pets", get(handlers::pets::list_pets))
-            .route("/api/pets/{id}", get(handlers::pets::get_pet))
-            .route("/api/admin/pets", post(handlers::pets::create_pet))
-            .route("/api/admin/pets/{id}", delete(handlers::pets::delete_pet))
+            .route("/metrics", get(metrics))
+            .route("/catfact", get(get_catfact))
+            .route("/pet/{id}", get(get_pet_by_id))
+            .route("/api/pets", get(list_pets))
+            .route("/api/pets/{id}", get(get_pet))
+            .route("/api/admin/pets", post(create_pet))
+            .route("/api/admin/pets/{id}", delete(delete_pet))
             .with_state(state.clone())
     };
 
@@ -213,13 +228,21 @@ pub async fn init() -> (Router, SocketAddr) {
         .build()
         .expect("Failed to create HTTP client");
 
-    // Initialize cache if enabled
+    // Create application state
+    let start_time = SystemTime::now();
+
+    // Initialize pet cache if enabled
     let pet_cache = if config.cache.enabled {
+        info!(
+            "🔧 Initializing pet cache with capacity {} and TTL {} seconds",
+            config.cache.max_capacity, config.cache.ttl_seconds
+        );
         Some(crate::cache::init_cache(
             config.cache.max_capacity,
             config.cache.ttl_seconds,
         ))
     } else {
+        info!("🔧 Pet cache disabled");
         None
     };
 
@@ -230,8 +253,6 @@ pub async fn init() -> (Router, SocketAddr) {
         None
     };
 
-    // Create application state
-    let start_time = SystemTime::now();
     let state = Arc::new(AppState {
         client,
         config: config.clone(),
@@ -241,8 +262,10 @@ pub async fn init() -> (Router, SocketAddr) {
         token_client,
     });
 
-    // Start metrics updater
-    crate::cache::start_metrics_updater(start_time, pet_cache);
+    // Start metrics updater with the cloned cache
+    if let Some(cache) = pet_cache {
+        crate::cache::start_metrics_updater(start_time, Some(cache));
+    }
 
     // Create router
     let app = create_router(state);

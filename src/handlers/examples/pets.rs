@@ -3,16 +3,18 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
+use metrics::counter;
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
+use crate::error::AppError;
 use crate::{app::AppState, models::ApiResponse};
 
 // Import the models from the correct location
 use crate::generated_apis::petstore_api::models::{Category, Tag, Upet};
 
 /// Handler for listing pets
-pub async fn list_pets(State(_state): State<Arc<AppState>>) -> Result<Json<Vec<Upet>>, StatusCode> {
+pub async fn list_pets(State(state): State<Arc<AppState>>) -> Result<Json<Vec<Upet>>, StatusCode> {
     info!("Listing all pets");
 
     // This is a placeholder - in a real app, you would fetch from a database or API
@@ -44,6 +46,22 @@ pub async fn list_pets(State(_state): State<Arc<AppState>>) -> Result<Json<Vec<U
             status: Some("pending".to_string()),
         },
     ];
+
+    // For list_pets, we might not cache the whole list but update cache with individual pets
+    if let Some(cache) = &state.pet_cache {
+        for pet in &pets {
+            let id = pet.id;
+            if cache.contains_key(&id) {
+                info!("Pet {} already in cache", id);
+                counter!("pet_cache_hits").increment(1);
+            } else {
+                cache.insert(pet.id, pet.clone());
+                info!("Added pet {} to cache", id);
+                counter!("cache_entries_created").increment(1);
+            }
+        }
+        info!("💾 Updated cache with {} pets", pets.len());
+    }
 
     Ok(Json(pets))
 }

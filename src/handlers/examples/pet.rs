@@ -2,6 +2,7 @@ use axum::{
     Json,
     extract::{Path, State},
 };
+use metrics::counter;
 use reqwest::StatusCode;
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -27,42 +28,43 @@ use crate::{
     tag = "pets"
 )]
 pub async fn get_pet_by_id(
-    Path(id): Path<i64>,
     State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
 ) -> Result<Json<Upet>> {
-    // Log request
-    info!("Fetching pet with ID: {}", id);
+    // Log the request
+    info!("🔍 Getting pet by ID: {}", id);
 
-    // If cache is enabled, try to get from cache or fetch
+    // Parse the ID string to i64 for cache lookup
+    let id_i64 = id
+        .parse::<i64>()
+        .map_err(|_| AppError::BadRequest(format!("Invalid pet ID format: {}", id)))?;
+
+    // Check cache first if enabled
     if let Some(cache) = &state.pet_cache {
-        // We need to adapt the cache's Result<Upet, String> to our Result<Upet>
-        let pet_result = crate::cache::get_or_fetch(cache, id, || async {
-            // Temporarily convert our Result<Upet> to Result<Upet, String> for the cache
-            match fetch_pet_with_retry(&state, id).await {
-                Ok(pet) => Ok(pet),
-                Err(e) => Err(e.to_string()),
-            }
-        })
-        .await;
-
-        // Convert back from Result<Upet, String> to Result<Upet>
-        let pet = pet_result.map_err(|err| {
-            if err.contains("not found") {
-                AppError::NotFound(err)
-            } else {
-                AppError::InternalError(err)
-            }
-        })?;
-
-        info!("Returning pet with ID: {}", id);
-        Ok(Json(pet))
-    } else {
-        // No cache, fetch directly
-        let pet = fetch_pet_with_retry(&state, id).await?;
-
-        info!("Returning pet with ID: {}", id);
-        Ok(Json(pet))
+        // Use get_with_async_loading to handle cache misses properly
+        let pet_result = cache.get(&id_i64).await;
+        if let Some(pet) = pet_result {
+            // Fix: Update counter macro usage
+            counter!("pet_cache_hits").increment(1);
+            info!("🔄 Retrieved pet {} from cache", id);
+            return Ok(Json(pet));
+        } else {
+            // Fix: Update counter macro usage
+            counter!("pet_cache_misses").increment(1);
+            info!("❌ Cache miss for pet {}", id);
+        }
     }
+
+    // If not in cache, get from API
+    let pet = fetch_pet_with_retry(&state, id_i64).await?;
+
+    // Store in cache if enabled
+    if let Some(cache) = &state.pet_cache {
+        cache.insert(id_i64, pet.clone()); // Changed set() to insert()
+        info!("💾 Stored pet {} in cache", id);
+    }
+
+    Ok(Json(pet))
 }
 
 async fn fetch_pet_with_retry(state: &Arc<AppState>, id: i64) -> Result<Upet> {

@@ -1,23 +1,29 @@
 use axum::extract::State;
-use axum::http::header;
+use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use std::sync::Arc;
+use tracing::info;
 
 use crate::app::AppState;
 use crate::models::MetricsResponse;
 
-/// Handler for the metrics endpoint
+/// Get Prometheus metrics
+///
+/// Returns Prometheus metrics in text format
 #[utoipa::path(
     get,
     path = "/metrics",
     responses(
-        (status = 200, description = "Prometheus metrics in text format", content_type = "text/plain", body = MetricsResponse)
+        (status = 200, description = "Metrics retrieved successfully", body = String)
     ),
     tag = "metrics"
 )]
-pub async fn metrics(State(state): State<Arc<AppState>>) -> Response {
-    let metrics_text = crate::metrics::metrics_handler(&state.metrics_handle).await;
-
-    // Return with text/plain content type
-    ([(header::CONTENT_TYPE, "text/plain")], metrics_text).into_response()
+pub async fn metrics(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    info!("📊 Getting Prometheus metrics");
+    let metrics = state.metrics_handle.render();
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/plain")],
+        metrics,
+    )
 }

@@ -16,16 +16,22 @@ use crate::models::HealthCheckResponse;
 )]
 pub async fn health_check(State(state): State<Arc<AppState>>) -> Json<HealthCheckResponse> {
     // Calculate uptime
-    let uptime_seconds = SystemTime::now()
+    let uptime = SystemTime::now()
         .duration_since(state.start_time)
-        .unwrap_or_else(|_| Duration::from_secs(0))
-        .as_secs();
+        .unwrap_or_default();
 
-    // Get cache stats if enabled
-    let cache_stats = state
-        .pet_cache
-        .as_ref()
-        .map(|cache| crate::cache::get_cache_stats(cache));
+    // Get cache stats if available
+    let cache_stats = if let Some(cache) = &state.pet_cache {
+        // Fix: access cache stats properly
+        Some(CacheStats {
+            cache_hits: cache.stats().hit_count(),
+            cache_misses: cache.stats().miss_count(),
+            cache_size: cache.entry_count() as u64,
+            uptime_seconds: uptime.as_secs(),
+        })
+    } else {
+        None
+    };
 
     let auth_status = if state.config.auth.enabled {
         "Authentication enabled"
@@ -36,7 +42,8 @@ pub async fn health_check(State(state): State<Arc<AppState>>) -> Json<HealthChec
     Json(HealthCheckResponse {
         status: format!("healthy - {}", auth_status),
         version: env!("CARGO_PKG_VERSION").to_string(),
-        uptime_seconds,
+        // Fix: use uptime_seconds field instead of uptime
+        uptime_seconds: uptime.as_secs(),
         cache_enabled: state.config.cache.enabled,
         cache_stats,
     })
