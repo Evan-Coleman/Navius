@@ -10,14 +10,6 @@ use crate::models::MetricsResponse;
 /// Get Prometheus metrics
 ///
 /// Returns Prometheus metrics in text format
-#[utoipa::path(
-    get,
-    path = "/metrics",
-    responses(
-        (status = 200, description = "Metrics retrieved successfully", body = String)
-    ),
-    tag = "metrics"
-)]
 pub async fn metrics(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     info!("📊 Getting Prometheus metrics");
     let metrics = state.metrics_handle.render();

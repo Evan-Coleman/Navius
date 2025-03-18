@@ -5,7 +5,6 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::time::interval;
 use tracing::{debug, info};
-use utoipa::ToSchema;
 
 use crate::generated_apis::petstore_api::models::Upet;
 
@@ -13,7 +12,7 @@ use crate::generated_apis::petstore_api::models::Upet;
 pub type PetCache = Arc<Cache<i64, Upet>>;
 
 /// Cache statistics
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheStats {
     pub hits: u64,
     pub misses: u64,

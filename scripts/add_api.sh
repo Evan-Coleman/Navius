@@ -264,6 +264,8 @@ additionalProperties:
   structPrefix: true
   dateLibrary: chrono
   useSingleRequestParameter: true
+  # Disable ToSchema derives since we're not using OpenAPI documentation for generated APIs
+  deriveToSchema: false
 EOF
 
 # Add model filtering if specified

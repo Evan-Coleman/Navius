@@ -7,14 +7,6 @@ use crate::cache::cache_manager::{CacheStats, get_cache_stats, get_cache_stats_w
 use crate::models::HealthCheckResponse;
 
 /// Handler for the health check endpoint
-#[utoipa::path(
-    get,
-    path = "/health",
-    responses(
-        (status = 200, description = "Server is healthy", body = HealthCheckResponse)
-    ),
-    tag = "health"
-)]
 pub async fn health_check(State(state): State<Arc<AppState>>) -> Json<HealthCheckResponse> {
     // Calculate uptime
     let uptime = SystemTime::now()

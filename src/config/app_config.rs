@@ -458,6 +458,40 @@ pub fn default_issuer_url_formats() -> Vec<String> {
     ]
 }
 
+/// OpenAPI configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenApiConfig {
+    /// Path to the user-provided OpenAPI spec file (YAML or JSON)
+    #[serde(default = "default_openapi_spec_path")]
+    pub spec_file_path: String,
+
+    /// Directory where OpenAPI spec files are stored
+    #[serde(default = "default_openapi_dir")]
+    pub spec_directory: String,
+}
+
+impl Default for OpenApiConfig {
+    fn default() -> Self {
+        Self {
+            spec_file_path: default_openapi_spec_path(),
+            spec_directory: default_openapi_dir(),
+        }
+    }
+}
+
+fn default_openapi_dir() -> String {
+    "config/swagger".to_string()
+}
+
+/// Generates the default OpenAPI spec path based on the application name
+/// Format: config/swagger/{app_name}.yaml
+fn default_openapi_spec_path() -> String {
+    // Default app name for when we can't access the app config yet
+    let default_app_name = "rust-backend";
+
+    format!("{}/{}.yaml", default_openapi_dir(), default_app_name)
+}
+
 /// Application configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -471,6 +505,8 @@ pub struct AppConfig {
     pub reliability: ReliabilityConfig,
     #[serde(default)]
     pub auth: AuthConfig,
+    #[serde(default)]
+    pub openapi: OpenApiConfig,
 }
 
 /// Application metadata configuration
@@ -498,6 +534,28 @@ impl AppConfig {
     /// Get the full Petstore API URL
     pub fn petstore_api_url(&self) -> String {
         self.api.petstore_url.trim_end_matches('/').to_string()
+    }
+
+    /// Get the OpenAPI spec file path based on application name
+    pub fn openapi_spec_path(&self) -> String {
+        // If a custom path is already set in config, use that
+        if !self.openapi.spec_file_path.is_empty()
+            && self.openapi.spec_file_path != default_openapi_spec_path()
+        {
+            return self.openapi.spec_file_path.clone();
+        }
+
+        // Otherwise, construct the path based on app name
+        let extension = if self.openapi.spec_file_path.ends_with(".json") {
+            "json"
+        } else {
+            "yaml"
+        };
+
+        format!(
+            "{}/{}.{}",
+            self.openapi.spec_directory, self.app.name, extension
+        )
     }
 }
 

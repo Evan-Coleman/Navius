@@ -9,12 +9,11 @@ use serde::{Deserialize, Serialize};
 use std::{fmt, result};
 use thiserror::Error;
 use tracing::{error, warn};
-use utoipa::ToSchema;
 
 pub type Result<T> = result::Result<T, AppError>;
 
 // The struct to be returned from the API in case of an error
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ErrorResponse {
     pub code: u16,
     pub message: String,

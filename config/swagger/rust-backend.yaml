@@ -1,0 +1,272 @@
+openapi: 3.0.3
+info:
+  title: Rust Backend API
+  description: |
+    API documentation for the Rust Backend service.
+    This is a template - replace with your own API documentation.
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns the current health status of the API
+      tags:
+        - health
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheckResponse'
+  
+  /catfact:
+    get:
+      summary: Random cat fact
+      description: Returns a random fact about cats
+      tags:
+        - data
+      responses:
+        '200':
+          description: Random cat fact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Data'
+        '500':
+          description: Internal server error
+          content:
+            text/plain:
+              schema:
+                type: string
+  
+  /pet/{id}:
+    get:
+      summary: Get pet by ID
+      description: Returns a pet by ID
+      tags:
+        - pets
+      parameters:
+        - name: id
+          in: path
+          description: ID of the pet to retrieve
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Pet found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+        '404':
+          description: Pet not found
+          content:
+            text/plain:
+              schema:
+                type: string
+        '500':
+          description: Internal server error
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /api/pets/{id}:
+    get:
+      summary: Get pet by ID (authenticated endpoint)
+      description: Returns a pet by ID, requiring authentication
+      tags:
+        - pets
+      parameters:
+        - name: id
+          in: path
+          description: ID of the pet to retrieve
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Pet found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+        '401':
+          description: Unauthorized
+          content:
+            text/plain:
+              schema:
+                type: string
+        '403':
+          description: Forbidden
+          content:
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: Pet not found
+          content:
+            text/plain:
+              schema:
+                type: string
+        '500':
+          description: Internal server error
+          content:
+            text/plain:
+              schema:
+                type: string
+  
+  /api/admin/openapi:
+    post:
+      summary: Upload OpenAPI specification
+      description: Upload a custom OpenAPI specification file
+      tags:
+        - admin
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: OpenAPI specification file (YAML or JSON)
+      responses:
+        '200':
+          description: File uploaded successfully
+          content:
+            text/plain:
+              schema:
+                type: string
+        '400':
+          description: Invalid request or invalid OpenAPI spec
+          content:
+            text/plain:
+              schema:
+                type: string
+        '500':
+          description: Server error
+          content:
+            text/plain:
+              schema:
+                type: string
+
+components:
+  schemas:
+    HealthCheckResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          description: The status of the service
+          example: "healthy - Authentication disabled"
+        version:
+          type: string
+          description: The version of the service
+          example: "1.0.0"
+        uptime_seconds:
+          type: integer
+          description: The uptime of the service in seconds
+          example: 3600
+        cache_enabled:
+          type: boolean
+          description: Whether the cache is enabled
+          example: true
+        cache_stats:
+          $ref: '#/components/schemas/CacheStats'
+    
+    CacheStats:
+      type: object
+      properties:
+        size:
+          type: integer
+          description: The current size of the cache
+          example: 10
+        hits:
+          type: integer
+          description: The number of cache hits
+          example: 100
+        misses:
+          type: integer
+          description: The number of cache misses
+          example: 25
+        ttl_seconds:
+          type: integer
+          description: The TTL in seconds for cache entries
+          example: 3600
+    
+    Data:
+      type: object
+      properties:
+        fact:
+          type: string
+          description: A random cat fact
+          example: "A domestic cat can run at speeds of 30 mph."
+        length:
+          type: integer
+          description: The length of the fact in characters
+          example: 43
+    
+    Pet:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: The pet ID
+          example: 10
+        name:
+          type: string
+          description: The pet name
+          example: "doggie"
+        status:
+          type: string
+          description: Pet status in the store
+          example: "available"
+          enum:
+            - available
+            - pending
+            - sold
+        category:
+          $ref: '#/components/schemas/Category'
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+    
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Category ID
+          example: 1
+        name:
+          type: string
+          description: Category name
+          example: "Dogs"
+    
+    Tag:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Tag ID
+          example: 1
+        name:
+          type: string
+          description: Tag name
+          example: "friendly" 

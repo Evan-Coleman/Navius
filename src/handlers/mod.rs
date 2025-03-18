@@ -6,7 +6,7 @@ pub mod metrics;
 
 // Re-export handlers for easier imports
 pub use cache_admin::cache_debug;
-pub use examples::catfact::get_catfact;
-pub use examples::pet::get_pet_by_id;
+pub use examples::catfact::fetch_catfact_handler;
+pub use examples::pet::fetch_pet_handler;
 pub use health::health_check;
 pub use metrics::metrics;

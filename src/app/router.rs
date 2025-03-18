@@ -15,10 +15,6 @@ use std::{
 };
 use tower_http::{timeout::TimeoutLayer, trace::TraceLayer};
 use tracing::info;
-use utoipa::{
-    Modify, OpenApi,
-    openapi::security::{ApiKey, ApiKeyValue, SecurityScheme},
-};
 
 use crate::{
     auth::middleware::{EntraAuthConfig, RoleRequirement},
@@ -31,8 +27,8 @@ use crate::{
     reliability,
 };
 
-use crate::handlers::examples::catfact::get_catfact;
-use crate::handlers::examples::pet::get_pet_by_id;
+use crate::handlers::examples::catfact::fetch_catfact_handler;
+use crate::handlers::examples::pet::fetch_pet_handler;
 use crate::handlers::examples::pets::{create_pet, delete_pet, get_pet, list_pets};
 use crate::handlers::metrics::metrics;
 
@@ -46,55 +42,6 @@ pub struct AppState {
     pub token_client: Option<EntraTokenClient>,
 }
 
-/// API Security Scheme
-struct SecurityAddon;
-
-impl Modify for SecurityAddon {
-    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-        let components = openapi.components.as_mut().unwrap();
-        components.add_security_scheme(
-            "api_key",
-            SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("api_key"))),
-        );
-    }
-}
-
-/// OpenAPI documentation
-#[derive(OpenApi)]
-#[openapi(
-    info(
-        title = "Pet Store API",
-        version = "1.0.0",
-        description = "A sample Pet Store server with OpenAPI model integration"
-    ),
-    paths(
-        crate::handlers::health::health_check,
-        crate::handlers::metrics::metrics,
-        crate::handlers::examples::catfact::get_catfact,
-        crate::handlers::examples::pet::get_pet_by_id,
-    ),
-    components(
-        schemas(
-            HealthCheckResponse,
-            MetricsResponse,
-            Data,
-            ApiResponse,
-            Upet,
-            crate::generated_apis::petstore_api::models::Category,
-            crate::generated_apis::petstore_api::models::Tag,
-            crate::cache::cache_manager::CacheStats,
-        )
-    ),
-    tags(
-        (name = "health", description = "Health check endpoints"),
-        (name = "metrics", description = "Prometheus metrics endpoints"),
-        (name = "data", description = "Data endpoints"),
-        (name = "pets", description = "Pet endpoints"),
-    ),
-    modifiers(&SecurityAddon)
-)]
-pub struct ApiDoc;
-
 /// Create the application router
 pub fn create_router(state: Arc<AppState>) -> Router {
     // Check if auth is enabled from config
@@ -107,8 +54,11 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         let public_routes = Router::new()
             .route("/health", get(handlers::health::health_check))
             .route("/metrics", get(metrics))
-            .route("/catfact", get(get_catfact))
-            .route("/pet/{id}", get(get_pet_by_id()));
+            .route(
+                "/catfact",
+                get(handlers::examples::catfact::fetch_catfact_handler),
+            )
+            .route("/pet/{id}", get(handlers::examples::pet::fetch_pet_handler));
 
         // Protected routes - require authentication
         let protected_routes = Router::new()
@@ -158,6 +108,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             .route("/api/admin/pets", post(create_pet))
             .route("/api/admin/pets/{id}", delete(delete_pet))
             .route("/api/admin/cache", get(handlers::cache_debug))
+            .route(
+                "/api/admin/openapi",
+                post(crate::utils::openapi::upload_openapi_spec),
+            )
             .route_layer(middleware::from_fn_with_state(
                 state.clone(),
                 handlers::logging::log_request,
@@ -179,13 +133,20 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         Router::new()
             .route("/health", get(handlers::health::health_check))
             .route("/metrics", get(metrics))
-            .route("/catfact", get(get_catfact))
-            .route("/pet/{id}", get(get_pet_by_id()))
+            .route(
+                "/catfact",
+                get(handlers::examples::catfact::fetch_catfact_handler),
+            )
+            .route("/pet/{id}", get(handlers::examples::pet::fetch_pet_handler))
             .route("/api/pets", get(list_pets))
             .route("/api/pets/{id}", get(get_pet))
             .route("/api/admin/pets", post(create_pet))
             .route("/api/admin/pets/{id}", delete(delete_pet))
             .route("/api/admin/cache", get(handlers::cache_debug))
+            .route(
+                "/api/admin/openapi",
+                post(crate::utils::openapi::upload_openapi_spec),
+            )
             .with_state(state.clone())
     };
 
