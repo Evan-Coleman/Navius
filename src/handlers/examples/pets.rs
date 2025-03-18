@@ -8,6 +8,7 @@ use std::sync::Arc;
 use tracing::{debug, error, info};
 
 use crate::error::AppError;
+use crate::utils::api_logger;
 use crate::{app::AppState, models::ApiResponse};
 
 // Import the models from the correct location
@@ -68,12 +69,34 @@ pub async fn list_pets(State(state): State<Arc<AppState>>) -> Result<Json<Vec<Up
 
 /// Handler for getting a pet by ID
 pub async fn get_pet(
-    State(_state): State<Arc<AppState>>,
+    State(state): State<Arc<AppState>>,
     Path(id): Path<i64>,
 ) -> Result<Json<Upet>, StatusCode> {
     info!("Getting pet with ID: {}", id);
 
-    // This is a placeholder - in a real app, you would fetch from a database or API
+    // Check cache first if enabled
+    if let Some(cache) = &state.pet_cache {
+        info!("🔍 Checking cache for pet ID: {}", id);
+        info!("🔧 Current cache size: {}", cache.entry_count());
+
+        let pet_result = cache.get(&id).await;
+        if let Some(pet) = pet_result {
+            // Increment cache hit counter
+            counter!("pet_cache_hits_total").increment(1);
+            info!("✅ Cache hit for pet ID: {}", id);
+            api_logger::log_cache_hit("pet", &id.to_string());
+            return Ok(Json(pet));
+        } else {
+            // Increment cache miss counter
+            counter!("pet_cache_misses_total").increment(1);
+            info!("❌ Cache miss for pet ID: {}", id);
+            api_logger::log_cache_miss("pet", &id.to_string());
+        }
+    } else {
+        info!("❌ Cache is disabled");
+    }
+
+    // If not in cache, create a placeholder pet (would be an API call in production)
     let pet = Upet {
         id,
         name: format!("Pet {}", id),
@@ -84,6 +107,16 @@ pub async fn get_pet(
         tags: vec![],
         status: Some("available".to_string()),
     };
+
+    // Store in cache if enabled
+    if let Some(cache) = &state.pet_cache {
+        // Make sure to await the cache insert operation
+        info!("💾 Storing pet ID: {} in cache", id);
+        cache.insert(id, pet.clone()).await;
+        info!("🔧 Cache size after insert: {}", cache.entry_count());
+        counter!("cache_entries_created").increment(1);
+        api_logger::log_cache_store("pet", &id.to_string());
+    }
 
     Ok(Json(pet))
 }

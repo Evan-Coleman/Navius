@@ -49,6 +49,16 @@ pub async fn cache_debug(State(state): State<Arc<AppState>>) -> Json<CacheDebugR
         // For debugging, we can add a custom method or use metrics
         entries.insert("total_count".to_string(), entry_count.to_string());
 
+        // Add cache configuration info
+        entries.insert(
+            "ttl_seconds".to_string(),
+            state.config.cache.ttl_seconds.to_string(),
+        );
+        entries.insert(
+            "max_capacity".to_string(),
+            state.config.cache.max_capacity.to_string(),
+        );
+
         // Calculate uptime
         let uptime = std::time::SystemTime::now()
             .duration_since(state.start_time)

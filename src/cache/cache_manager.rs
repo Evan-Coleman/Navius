@@ -28,10 +28,17 @@ pub fn init_cache(max_capacity: u64, ttl_seconds: u64) -> PetCache {
         ttl_seconds, max_capacity
     );
 
+    let ttl = Duration::from_secs(ttl_seconds);
+
+    info!("🔧 Setting cache TTL to {:?}", ttl);
+
     Arc::new(
         Cache::builder()
             .max_capacity(max_capacity)
-            .time_to_live(Duration::from_secs(ttl_seconds))
+            .time_to_live(ttl)
+            // Add additional configuration to make the cache more resilient
+            .time_to_idle(ttl.mul_f32(1.5)) // Set idle time to 1.5x the TTL
+            .initial_capacity(100) // Pre-allocate some capacity
             .build(),
     )
 }
