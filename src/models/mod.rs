@@ -7,6 +7,9 @@ use utoipa::ToSchema;
 pub mod loggable;
 pub use loggable::LoggableResponse;
 
+// Extensions for generated models
+pub mod extensions;
+
 /// Data structure for the data endpoint
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct Data {

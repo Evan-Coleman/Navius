@@ -11,6 +11,7 @@ use crate::{
     app::AppState,
     error::{AppError, Result},
     generated_apis::petstore_api::models::Upet,
+    utils::api_logger,
 };
 
 /// Handler for the pet endpoint
@@ -46,12 +47,12 @@ pub async fn get_pet_by_id(
         if let Some(pet) = pet_result {
             // Increment cache hit counter
             counter!("pet_cache_hits_total").increment(1);
-            info!("🔄 Retrieved pet {} from cache", id);
+            api_logger::log_cache_hit("pet", &id);
             return Ok(Json(pet));
         } else {
             // Increment cache miss counter
             counter!("pet_cache_misses_total").increment(1);
-            info!("❌ Cache miss for pet {}", id);
+            api_logger::log_cache_miss("pet", &id);
         }
     }
 
@@ -63,7 +64,7 @@ pub async fn get_pet_by_id(
         // Make sure to await the cache insert operation
         cache.insert(id_i64, pet.clone()).await;
         counter!("cache_entries_created").increment(1);
-        info!("💾 Stored pet {} in cache", id);
+        api_logger::log_cache_store("pet", &id);
     }
 
     Ok(Json(pet))
@@ -83,7 +84,7 @@ async fn fetch_pet_with_retry(state: &Arc<AppState>, id: i64) -> Result<Upet> {
             Err(err) => {
                 // Don't log attempt number or retry on 404 Not Found errors
                 if err.to_string().contains("not found (HTTP 404)") {
-                    warn!("Pet not found: {}", err);
+                    warn!("❓ Pet not found: {}", err);
                     return Err(AppError::NotFound(format!("Pet with ID {} not found", id)));
                 }
 
@@ -108,30 +109,13 @@ async fn fetch_pet_with_retry(state: &Arc<AppState>, id: i64) -> Result<Upet> {
 async fn fetch_pet(state: &Arc<AppState>, id: i64) -> Result<Upet> {
     let url = format!("{}/pet/{}", state.config.petstore_api_url(), id);
 
-    let response =
-        state.client.get(&url).send().await.map_err(|e| {
-            AppError::ExternalServiceError(format!("Failed to send request: {}", e))
-        })?;
+    // Use the logging utility to handle the API call with consistent logging
+    let api_name = "Petstore";
+    let entity_type = "Pet";
+    let log_fields = &["id".to_string(), "name".to_string(), "status".to_string()];
 
-    let status = response.status();
+    // Create a closure that returns the actual request future
+    let fetch_fn = || async { state.client.get(&url).send().await };
 
-    if status == StatusCode::NOT_FOUND {
-        return Err(AppError::NotFound(format!(
-            "Pet with ID {} not found (HTTP {})",
-            id,
-            status.as_u16()
-        )));
-    }
-
-    if !status.is_success() {
-        return Err(AppError::ExternalServiceError(format!(
-            "API returned error status: HTTP {}",
-            status.as_u16()
-        )));
-    }
-
-    response
-        .json::<Upet>()
-        .await
-        .map_err(|e| AppError::ExternalServiceError(format!("Failed to parse response: {}", e)))
+    api_logger::fetch_and_log_api_call(api_name, &url, fetch_fn, entity_type, id, log_fields).await
 }

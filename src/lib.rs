@@ -60,3 +60,6 @@ pub mod generated_apis;
 
 /// Reliability features for improved resilience
 pub mod reliability;
+
+/// Utility functions and helpers
+pub mod utils;
