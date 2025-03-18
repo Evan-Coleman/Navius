@@ -82,7 +82,7 @@ impl Modify for SecurityAddon {
             Upet,
             crate::generated_apis::petstore_api::models::Category,
             crate::generated_apis::petstore_api::models::Tag,
-            crate::cache::CacheStats,
+            crate::cache::cache_manager::CacheStats,
         )
     ),
     tags(
@@ -157,6 +157,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         let admin_routes = Router::new()
             .route("/api/admin/pets", post(create_pet))
             .route("/api/admin/pets/{id}", delete(delete_pet))
+            .route("/api/admin/cache", get(handlers::cache_debug))
             .route_layer(middleware::from_fn_with_state(
                 state.clone(),
                 handlers::logging::log_request,
@@ -184,6 +185,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             .route("/api/pets/{id}", get(get_pet))
             .route("/api/admin/pets", post(create_pet))
             .route("/api/admin/pets/{id}", delete(delete_pet))
+            .route("/api/admin/cache", get(handlers::cache_debug))
             .with_state(state.clone())
     };
 
@@ -220,7 +222,7 @@ pub async fn init() -> (Router, SocketAddr) {
     let config = crate::config::app_config::load_config().expect("Failed to load configuration");
 
     // Initialize metrics
-    let metrics_handle = crate::metrics::init_metrics();
+    let metrics_handle = crate::metrics::metrics_service::init_metrics();
 
     // Create HTTP client with appropriate middleware
     let client = Client::builder()
@@ -264,7 +266,10 @@ pub async fn init() -> (Router, SocketAddr) {
 
     // Start metrics updater with the cloned cache
     if let Some(cache) = pet_cache {
-        crate::cache::start_metrics_updater(start_time, Some(cache));
+        info!("🔧 Starting metrics updater for cache");
+        crate::cache::cache_manager::start_metrics_updater(start_time, Some(cache));
+    } else {
+        info!("🔧 Metrics updater not started - cache is disabled");
     }
 
     // Create router

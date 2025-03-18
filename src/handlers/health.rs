@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crate::app::AppState;
+use crate::cache::cache_manager::{CacheStats, get_cache_stats, get_cache_stats_with_metrics};
 use crate::models::HealthCheckResponse;
 
 /// Handler for the health check endpoint
@@ -22,13 +23,15 @@ pub async fn health_check(State(state): State<Arc<AppState>>) -> Json<HealthChec
 
     // Get cache stats if available
     let cache_stats = if let Some(cache) = &state.pet_cache {
-        // Fix: access cache stats properly
-        Some(CacheStats {
-            cache_hits: cache.stats().hit_count(),
-            cache_misses: cache.stats().miss_count(),
-            cache_size: cache.entry_count() as u64,
-            uptime_seconds: uptime.as_secs(),
-        })
+        // Get metrics for more accurate reporting
+        let metrics_text = state.metrics_handle.render();
+
+        // Use the enhanced stats function that includes metrics data
+        Some(get_cache_stats_with_metrics(
+            cache,
+            uptime.as_secs(),
+            &metrics_text,
+        ))
     } else {
         None
     };
@@ -42,7 +45,6 @@ pub async fn health_check(State(state): State<Arc<AppState>>) -> Json<HealthChec
     Json(HealthCheckResponse {
         status: format!("healthy - {}", auth_status),
         version: env!("CARGO_PKG_VERSION").to_string(),
-        // Fix: use uptime_seconds field instead of uptime
         uptime_seconds: uptime.as_secs(),
         cache_enabled: state.config.cache.enabled,
         cache_stats,

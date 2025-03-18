@@ -22,7 +22,7 @@ cache:
 
 # Environment-specific authentication settings
 auth:
-  enabled: true
+  enabled: false
   # Debug mode enables simplified token validation for easier testing
   debug: true 
   # Entra ID settings for development

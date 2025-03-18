@@ -11,7 +11,10 @@ pub fn init_metrics() -> PrometheusHandle {
         .install_recorder()
         .expect("Failed to set global metrics recorder");
 
-    info!("Metrics system initialized");
+    // No need to pre-register metrics with this metrics crate version
+    // They are automatically created when first used
+
+    info!("📊 Metrics system initialized");
     handle
 }
 

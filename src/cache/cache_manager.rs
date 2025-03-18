@@ -1,7 +1,9 @@
+use metrics::{counter, gauge};
 use moka::future::Cache;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
+use tokio::time::interval;
 use tracing::{debug, info};
 use utoipa::ToSchema;
 
@@ -16,12 +18,13 @@ pub struct CacheStats {
     pub hits: u64,
     pub misses: u64,
     pub size: u64,
+    pub uptime_seconds: u64,
 }
 
 /// Initialize the pet cache
 pub fn init_cache(max_capacity: u64, ttl_seconds: u64) -> PetCache {
     info!(
-        "Initializing cache with TTL: {}s, capacity: {} items",
+        "🔧 Initializing cache with TTL: {}s, capacity: {} items",
         ttl_seconds, max_capacity
     );
 
@@ -33,13 +36,51 @@ pub fn init_cache(max_capacity: u64, ttl_seconds: u64) -> PetCache {
     )
 }
 
-/// Get cache statistics
-pub fn get_cache_stats(cache: &PetCache) -> CacheStats {
-    let cache_ref = &**cache;
+/// Get cache statistics with metrics data
+pub fn get_cache_stats_with_metrics(
+    cache: &PetCache,
+    uptime_seconds: u64,
+    metrics_text: &str,
+) -> CacheStats {
+    let cached_entries = cache.entry_count();
+
+    // Parse metrics text to extract hit and miss counts
+    let mut hits = 0;
+    let mut misses = 0;
+
+    for line in metrics_text.lines() {
+        if line.contains("pet_cache_hits_total") && !line.starts_with('#') {
+            if let Some(value) = line.split_whitespace().nth(1) {
+                if let Ok(count) = value.parse::<u64>() {
+                    hits = count;
+                }
+            }
+        } else if line.contains("pet_cache_misses_total") && !line.starts_with('#') {
+            if let Some(value) = line.split_whitespace().nth(1) {
+                if let Ok(count) = value.parse::<u64>() {
+                    misses = count;
+                }
+            }
+        }
+    }
+
     CacheStats {
-        hits: 0,   // We don't have direct access to hits/misses
-        misses: 0, // We track these with our own counters
-        size: cache_ref.entry_count(),
+        hits,
+        misses,
+        size: cached_entries,
+        uptime_seconds,
+    }
+}
+
+/// Get basic cache statistics (without metrics data)
+pub fn get_cache_stats(cache: &PetCache, uptime_seconds: u64) -> CacheStats {
+    let cached_entries = cache.entry_count();
+
+    CacheStats {
+        hits: 0,   // We track hits using metrics
+        misses: 0, // We track misses using metrics
+        size: cached_entries,
+        uptime_seconds,
     }
 }
 
@@ -51,11 +92,13 @@ where
 {
     // Try to get from cache first
     if let Some(pet) = cache.get(&id).await {
+        counter!("pet_cache_hits_total").increment(1);
         debug!("Cache hit for pet ID: {}", id);
         return Ok(pet);
     }
 
     // Cache miss, fetch from source
+    counter!("pet_cache_misses_total").increment(1);
     debug!("Cache miss for pet ID: {}", id);
 
     // Fetch the pet
@@ -63,37 +106,36 @@ where
 
     // Store in cache
     cache.insert(id, pet.clone()).await;
+    counter!("cache_entries_created").increment(1);
     debug!("Added pet ID: {} to cache", id);
 
     Ok(pet)
 }
 
 /// Start metrics updater to track cache stats
-pub fn start_metrics_updater(start_time: std::time::SystemTime, cache_opt: Option<PetCache>) {
-    if let Some(cache) = cache_opt {
-        let cache = cache.clone();
+pub fn start_metrics_updater(start_time: SystemTime, pet_cache: Option<PetCache>) {
+    if let Some(cache) = pet_cache {
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(15));
-            loop {
-                interval.tick().await;
+            let mut tick_interval = interval(Duration::from_secs(15));
 
-                // Just log uptime and cache size
-                if let Ok(uptime) = start_time.elapsed() {
-                    debug!("App uptime: {} seconds", uptime.as_secs());
-                    debug!("Cache size: {} items", cache.entry_count());
-                }
-            }
-        });
-    } else {
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(15));
-            loop {
-                interval.tick().await;
+            info!("🔄 Metrics updater started for cache");
 
-                // Just log uptime
-                if let Ok(uptime) = start_time.elapsed() {
-                    debug!("App uptime: {} seconds", uptime.as_secs());
+            loop {
+                tick_interval.tick().await;
+
+                // Update cache metrics
+                let entry_count = cache.entry_count() as f64;
+
+                // Update Prometheus metrics - no labels
+                gauge!("pet_cache_size").set(entry_count);
+
+                // Calculate uptime
+                if let Ok(duration) = SystemTime::now().duration_since(start_time) {
+                    let uptime_secs = duration.as_secs() as f64;
+                    gauge!("app_uptime_seconds").set(uptime_secs);
                 }
+
+                info!("📊 Cache stats: size={}", entry_count as u64);
             }
         });
     }

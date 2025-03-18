@@ -53,9 +53,9 @@ pub async fn list_pets(State(state): State<Arc<AppState>>) -> Result<Json<Vec<Up
             let id = pet.id;
             if cache.contains_key(&id) {
                 info!("Pet {} already in cache", id);
-                counter!("pet_cache_hits").increment(1);
+                counter!("pet_cache_hits_total").increment(1);
             } else {
-                cache.insert(pet.id, pet.clone());
+                cache.insert(pet.id, pet.clone()).await;
                 info!("Added pet {} to cache", id);
                 counter!("cache_entries_created").increment(1);
             }

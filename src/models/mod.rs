@@ -1,4 +1,4 @@
-use crate::cache::CacheStats;
+use crate::cache::cache_manager::CacheStats;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utoipa::ToSchema;

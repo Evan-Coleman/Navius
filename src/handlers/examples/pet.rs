@@ -44,13 +44,13 @@ pub async fn get_pet_by_id(
         // Use get_with_async_loading to handle cache misses properly
         let pet_result = cache.get(&id_i64).await;
         if let Some(pet) = pet_result {
-            // Fix: Update counter macro usage
-            counter!("pet_cache_hits").increment(1);
+            // Increment cache hit counter
+            counter!("pet_cache_hits_total").increment(1);
             info!("🔄 Retrieved pet {} from cache", id);
             return Ok(Json(pet));
         } else {
-            // Fix: Update counter macro usage
-            counter!("pet_cache_misses").increment(1);
+            // Increment cache miss counter
+            counter!("pet_cache_misses_total").increment(1);
             info!("❌ Cache miss for pet {}", id);
         }
     }
@@ -60,7 +60,9 @@ pub async fn get_pet_by_id(
 
     // Store in cache if enabled
     if let Some(cache) = &state.pet_cache {
-        cache.insert(id_i64, pet.clone()); // Changed set() to insert()
+        // Make sure to await the cache insert operation
+        cache.insert(id_i64, pet.clone()).await;
+        counter!("cache_entries_created").increment(1);
         info!("💾 Stored pet {} in cache", id);
     }
 
