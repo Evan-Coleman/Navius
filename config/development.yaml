@@ -24,7 +24,7 @@ cache:
 auth:
   enabled: true
   # Debug mode enables simplified token validation for easier testing
-  debug: false 
+  debug: true 
   # Entra ID settings for development
   entra:
     # Admin roles for development - can include additional test roles
