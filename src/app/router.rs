@@ -108,7 +108,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             .route("/health", get(handlers::health::health_check))
             .route("/metrics", get(metrics))
             .route("/catfact", get(get_catfact))
-            .route("/pet/{id}", get(get_pet_by_id));
+            .route("/pet/{id}", get(get_pet_by_id()));
 
         // Protected routes - require authentication
         let protected_routes = Router::new()
@@ -180,7 +180,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             .route("/health", get(handlers::health::health_check))
             .route("/metrics", get(metrics))
             .route("/catfact", get(get_catfact))
-            .route("/pet/{id}", get(get_pet_by_id))
+            .route("/pet/{id}", get(get_pet_by_id()))
             .route("/api/pets", get(list_pets))
             .route("/api/pets/{id}", get(get_pet))
             .route("/api/admin/pets", post(create_pet))
