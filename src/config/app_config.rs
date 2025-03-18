@@ -135,27 +135,27 @@ impl Default for AuthConfig {
 /// Logging configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoggingConfig {
-    pub response_fields: ResponseLoggingConfig,
-}
-
-/// Response logging configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResponseLoggingConfig {
-    pub cat_fact_fields: Vec<String>,
-    pub health_fields: Vec<String>,
-    pub api_response_fields: Vec<String>,
+    #[serde(default = "default_log_level")]
+    pub level: String,
+    #[serde(default = "default_log_format")]
+    pub format: String,
 }
 
 impl Default for LoggingConfig {
     fn default() -> Self {
         Self {
-            response_fields: ResponseLoggingConfig {
-                cat_fact_fields: vec!["fact".to_string(), "length".to_string()],
-                health_fields: vec!["status".to_string(), "uptime_seconds".to_string()],
-                api_response_fields: vec!["code".to_string(), "message".to_string()],
-            },
+            level: default_log_level(),
+            format: default_log_format(),
         }
     }
+}
+
+fn default_log_level() -> String {
+    "info".to_string()
+}
+
+fn default_log_format() -> String {
+    "json".to_string()
 }
 
 /// Reliability configuration

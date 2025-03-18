@@ -1,9 +1,9 @@
-use reqwest::{Response, StatusCode, Url};
+use reqwest::{Response, StatusCode};
+use serde::Serialize;
 use std::fmt::Debug;
 use tracing::{debug, error, info, warn};
 
 use crate::error::AppError;
-use crate::models::LoggableResponse;
 
 /// Log the start of an API request
 pub fn log_request_start(api_name: &str, url: &str) {
@@ -11,16 +11,46 @@ pub fn log_request_start(api_name: &str, url: &str) {
 }
 
 /// Log a successful API response with formatted data
-pub fn log_response_success<T>(api_name: &str, url: &str, data: &T, fields: &[String])
+pub fn log_response_simple<T>(api_name: &str, url: &str, data: &T)
 where
-    T: LoggableResponse + Debug,
+    T: Serialize + Debug,
 {
-    // Log success with relevant fields
-    info!(
-        "✅ Successfully fetched data from {}: {}",
-        url,
-        data.preview_with_fields(fields)
-    );
+    // Convert to JSON value for easy field access
+    let json_value = serde_json::to_value(data).unwrap_or(serde_json::Value::Null);
+
+    // Extract fields for simple preview
+    let mut preview = String::new();
+
+    if let serde_json::Value::Object(map) = &json_value {
+        // Get up to 3 fields for preview
+        let fields: Vec<_> = map.iter().take(3).collect();
+
+        for (i, (key, value)) in fields.iter().enumerate() {
+            let display_value = match value {
+                serde_json::Value::String(s) => {
+                    // Truncate long strings
+                    if s.len() > 40 {
+                        format!("\"{}...\"", &s[..37])
+                    } else {
+                        format!("\"{}\"", s)
+                    }
+                }
+                _ => value.to_string(),
+            };
+
+            preview.push_str(&format!("{}=\"{}\"", key, display_value));
+
+            // Add separator unless it's the last field
+            if i < fields.len() - 1 {
+                preview.push_str(", ");
+            }
+        }
+    } else {
+        preview = format!("{:?}", json_value);
+    }
+
+    // Log success with basic fields
+    info!("✅ Successfully fetched data from {}: {}", url, preview);
 
     // Full data at debug level
     debug!("📊 Complete response from {}: {:?}", api_name, data);
@@ -89,17 +119,16 @@ pub fn check_response_status(
     Ok(())
 }
 
-/// Comprehensive function to handle API calls with logging and error handling
-pub async fn fetch_and_log_api_call<T, F, Fut>(
+/// API call with logging
+pub async fn api_call<T, F, Fut>(
     api_name: &str,
     url: &str,
     fetch_fn: F,
     entity_type: &str,
     id: impl ToString,
-    log_fields: &[String],
 ) -> Result<T, AppError>
 where
-    T: LoggableResponse + Debug + for<'de> serde::Deserialize<'de>,
+    T: Serialize + Debug + for<'de> serde::Deserialize<'de>,
     F: FnOnce() -> Fut,
     Fut: std::future::Future<Output = Result<Response, reqwest::Error>>,
 {
@@ -122,7 +151,7 @@ where
     })?;
 
     // Log success
-    log_response_success(api_name, url, &data, log_fields);
+    log_response_simple(api_name, url, &data);
 
     Ok(data)
 }

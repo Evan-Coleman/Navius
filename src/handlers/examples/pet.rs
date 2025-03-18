@@ -109,13 +109,13 @@ async fn fetch_pet_with_retry(state: &Arc<AppState>, id: i64) -> Result<Upet> {
 async fn fetch_pet(state: &Arc<AppState>, id: i64) -> Result<Upet> {
     let url = format!("{}/pet/{}", state.config.petstore_api_url(), id);
 
-    // Use the logging utility to handle the API call with consistent logging
+    // Use the simplified logging utility
     let api_name = "Petstore";
     let entity_type = "Pet";
-    let log_fields = &["id".to_string(), "name".to_string(), "status".to_string()];
 
     // Create a closure that returns the actual request future
     let fetch_fn = || async { state.client.get(&url).send().await };
 
-    api_logger::fetch_and_log_api_call(api_name, &url, fetch_fn, entity_type, id, log_fields).await
+    // Make the API call
+    api_logger::api_call(api_name, &url, fetch_fn, entity_type, id).await
 }
