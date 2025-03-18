@@ -148,6 +148,62 @@ This project supports easy integration with downstream APIs. To add a new API en
 2. **Manual Method**:
    See the detailed guide in [API Integration Guide](docs/API_INTEGRATION.md).
 
+## API Resource Abstraction
+
+This project includes a powerful API resource abstraction pattern for building reliable API handlers. The pattern provides:
+
+- **Automatic caching** of API responses to reduce latency and external API calls
+- **Retry mechanism** with exponential backoff for handling transient failures
+- **Consistent error handling** across all API endpoints
+- **Standardized logging** for API interactions
+- **Type safety** through Rust's type system
+
+### Using the API Resource Abstraction
+
+To use the abstraction in your handlers:
+
+1. **Implement the `ApiResource` trait for your model**:
+   ```rust
+   impl ApiResource for MyModel {
+       type Id = i64;  // The type of your ID field
+       
+       fn resource_type() -> &'static str {
+           "myresource"  // Used for cache keys and logging
+       }
+       
+       fn api_name() -> &'static str {
+           "MyService"  // Used for logging
+       }
+   }
+   ```
+
+2. **Create a handler function using the abstraction**:
+   ```rust
+   pub async fn get_my_resource_handler(
+       State(state): State<Arc<AppState>>,
+       Path(id): Path<String>,
+   ) -> Result<Json<MyModel>> {
+       // Create an API handler with reliability features
+       let handler = create_api_handler(
+           |state, id| async move {
+               // Your actual API call logic here
+               // ...
+           },
+           ApiHandlerOptions {
+               use_cache: true,
+               use_retries: true,
+               max_retry_attempts: 3,
+               cache_ttl_seconds: 300,
+               detailed_logging: true,
+           },
+       );
+       
+       handler(State(state), Path(id)).await
+   }
+   ```
+
+For detailed documentation, see [API Resource Documentation](docs/api_resource.md).
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details. 
