@@ -13,6 +13,7 @@ server:
   port: 3000
   timeout_seconds: 10
   max_retries: 3
+  protocol: "http"
 
 api:
   cat_fact_url: "https://catfact.ninja/fact"
@@ -38,6 +39,18 @@ auth:
   # - RUST_BACKEND_SCOPE
   # - RUST_BACKEND_TOKEN_URL
   entra:
+    # URL formats for Entra ID (Microsoft Azure AD)
+    jwks_uri_format: "https://login.microsoftonline.com/{}/discovery/v2.0/keys"
+    authorize_url_format: "https://login.microsoftonline.com/{}/oauth2/v2.0/authorize"
+    token_url_format: "https://login.microsoftonline.com/{}/oauth2/v2.0/token"
+    # Issuer URL formats (used for validation)
+    issuer_url_formats:
+      - "https://login.microsoftonline.com/{}/v2.0"
+      - "https://login.microsoftonline.com/{}/v2.0/"
+      - "https://sts.windows.net/{}"
+      - "https://sts.windows.net/{}/"
+      - "https://login.microsoftonline.com/{}"
+      - "https://login.microsoftonline.com/{}/"
     # Admin roles - users with these roles can access admin endpoints
     admin_roles:
       - "admin"

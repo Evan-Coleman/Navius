@@ -9,6 +9,8 @@ server:
   host: "127.0.0.1"
   # More frequent retries in development
   max_retries: 5
+  # Use HTTP protocol for development
+  protocol: "http"
 
 app:
   # More verbose logging in development

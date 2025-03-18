@@ -138,6 +138,8 @@ pub struct EntraAuthConfig {
     pub jwks_cache: Arc<Mutex<Option<JwksCacheEntry>>>,
     /// Debug mode - skips signature validation
     pub debug_validation: bool,
+    /// Default issuer URL formats
+    pub issuer_url_formats: Vec<String>,
 }
 
 /// OpenID Connect configuration response
@@ -175,9 +177,12 @@ impl Default for EntraAuthConfig {
 
         // Use the direct JWKS endpoint
         let jwks_uri = format!(
-            "https://login.microsoftonline.com/{}/discovery/v2.0/keys",
-            tenant_id
+            "{}",
+            app_config::default_jwks_uri_format().replace("{}", &tenant_id)
         );
+
+        // Get default issuer URL formats
+        let issuer_url_formats = app_config::default_issuer_url_formats();
 
         Self {
             tenant_id: tenant_id.clone(),
@@ -190,11 +195,49 @@ impl Default for EntraAuthConfig {
             jwks_uri,
             jwks_cache: Arc::new(Mutex::new(None)),
             debug_validation,
+            issuer_url_formats,
         }
     }
 }
 
 impl EntraAuthConfig {
+    /// Create a new EntraAuthConfig
+    pub fn new(
+        tenant_id: String,
+        client_id: String,
+        audience: String,
+        debug_validation: bool,
+    ) -> Self {
+        // Ensure tenant_id is not empty
+        let tenant_id = if tenant_id.is_empty() {
+            // Use a placeholder to avoid URL formatting issues
+            "common".to_string()
+        } else {
+            tenant_id
+        };
+
+        // Use the direct JWKS endpoint - use app_config defaults
+        let jwks_uri_format = app_config::default_jwks_uri_format();
+        let jwks_uri = format!("{}", jwks_uri_format.replace("{}", &tenant_id));
+
+        // Get default issuer URL formats
+        let issuer_url_formats = app_config::default_issuer_url_formats();
+
+        Self {
+            tenant_id: tenant_id.clone(),
+            client_id: client_id.clone(),
+            audience,
+            validate_token: true,
+            required_roles: RoleRequirement::None,
+            required_permissions: PermissionRequirement::None,
+            client: Client::new(),
+            jwks_uri,
+            jwks_cache: Arc::new(Mutex::new(None)),
+            debug_validation,
+            issuer_url_formats,
+        }
+    }
+
     /// Create a new EntraAuthConfig from AppConfig
     pub fn from_app_config(config: &app_config::AppConfig) -> Self {
         let tenant_id = config.auth.entra.tenant_id.clone();
@@ -219,9 +262,12 @@ impl EntraAuthConfig {
 
         // Use the direct JWKS endpoint
         let jwks_uri = format!(
-            "https://login.microsoftonline.com/{}/discovery/v2.0/keys",
-            tenant_id
+            "{}",
+            config.auth.entra.jwks_uri_format.replace("{}", &tenant_id)
         );
+
+        // Get issuer URL formats from config
+        let issuer_url_formats = config.auth.entra.issuer_url_formats.clone();
 
         Self {
             tenant_id: tenant_id.clone(),
@@ -234,6 +280,7 @@ impl EntraAuthConfig {
             jwks_uri,
             jwks_cache: Arc::new(Mutex::new(None)),
             debug_validation,
+            issuer_url_formats,
         }
     }
 
@@ -725,30 +772,18 @@ async fn validate_token_wrapper(
     // Create a decoding key
     let decoding_key = create_decoding_key(jwk)?;
 
-    // Set up validation parameters
+    // Set up validation
     let mut validation = Validation::new(Algorithm::RS256);
     validation.validate_exp = true;
-    validation.validate_nbf = true;
-    validation.set_audience(&[config.audience.clone()]);
+    validation.set_audience(&[&config.audience]);
+    validation.set_required_spec_claims(&["exp", "iss", "sub", "aud"]);
 
-    // Set valid issuers - include both v1 and v2 formats to be safe
-    validation.set_issuer(&[
-        // v2.0 endpoints
-        format!(
-            "https://login.microsoftonline.com/{}/v2.0",
-            config.tenant_id
-        ),
-        format!(
-            "https://login.microsoftonline.com/{}/v2.0/",
-            config.tenant_id
-        ),
-        // v1.0 endpoints
-        format!("https://sts.windows.net/{}", config.tenant_id),
-        format!("https://sts.windows.net/{}/", config.tenant_id),
-        // Additional formats
-        format!("https://login.microsoftonline.com/{}", config.tenant_id),
-        format!("https://login.microsoftonline.com/{}/", config.tenant_id),
-    ]);
+    // Set up issuer validation with multiple accepted issuers
+    let mut issuers = Vec::new();
+    for format in &config.issuer_url_formats {
+        issuers.push(format.replace("{}", &config.tenant_id));
+    }
+    validation.set_issuer(&issuers);
 
     // Validate token with better error handling
     let token_data = match decode::<EntraClaims>(&token, &decoding_key, &validation) {

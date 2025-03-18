@@ -5,18 +5,6 @@
 pub mod auth {
     /// URL formats
     pub mod urls {
-        /// Format for JWKS URI (Microsoft Entra ID)
-        pub const ENTRA_JWKS_URI_FORMAT: &str =
-            "https://login.microsoftonline.com/{}/discovery/v2.0/keys";
-
-        /// Format for Microsoft Entra ID authorize endpoint
-        pub const ENTRA_AUTH_URL_FORMAT: &str =
-            "https://login.microsoftonline.com/{}/oauth2/v2.0/authorize";
-
-        /// Format for Microsoft Entra ID token endpoint
-        pub const ENTRA_TOKEN_URL_FORMAT: &str =
-            "https://login.microsoftonline.com/{}/oauth2/v2.0/token";
-
         /// Format for default audience (when not specified)
         pub const DEFAULT_AUDIENCE_FORMAT: &str = "api://{}";
     }

@@ -11,6 +11,8 @@ server:
   timeout_seconds: 30
   # Fewer retries in production to fail faster
   max_retries: 2
+  # Use HTTPS protocol for production
+  protocol: "https"
 
 app:
   # Less verbose logging in production

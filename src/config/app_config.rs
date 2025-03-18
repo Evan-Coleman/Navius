@@ -14,6 +14,8 @@ pub struct ServerConfig {
     pub port: u16,
     pub timeout_seconds: u64,
     pub max_retries: u32,
+    #[serde(default = "default_protocol")]
+    pub protocol: String,
 }
 
 /// Cache configuration
@@ -54,6 +56,22 @@ pub struct EntraConfig {
     /// Token URL (from environment variable)
     #[serde(default)]
     pub token_url: String,
+
+    /// JWKS URI format (for key discovery)
+    #[serde(default = "default_jwks_uri_format")]
+    pub jwks_uri_format: String,
+
+    /// Authorize URL format
+    #[serde(default = "default_authorize_url_format")]
+    pub authorize_url_format: String,
+
+    /// Token URL format
+    #[serde(default = "default_token_url_format")]
+    pub token_url_format: String,
+
+    /// Issuer URL formats
+    #[serde(default = "default_issuer_url_formats")]
+    pub issuer_url_formats: Vec<String>,
 
     /// Admin roles (users with these roles can access admin endpoints)
     #[serde(default = "default_admin_roles")]
@@ -102,6 +120,10 @@ impl Default for AuthConfig {
                 audience: env::var(constants::auth::env_vars::AUDIENCE).unwrap_or_default(),
                 scope: env::var(constants::auth::env_vars::SCOPE).unwrap_or_default(),
                 token_url: env::var(constants::auth::env_vars::TOKEN_URL).unwrap_or_default(),
+                jwks_uri_format: default_jwks_uri_format(),
+                authorize_url_format: default_authorize_url_format(),
+                token_url_format: default_token_url_format(),
+                issuer_url_formats: default_issuer_url_formats(),
                 admin_roles: default_admin_roles(),
                 read_only_roles: default_read_only_roles(),
                 full_access_roles: default_full_access_roles(),
@@ -399,6 +421,41 @@ fn default_failure_percentage() -> u8 {
 
 fn default_failure_status_codes() -> Vec<u16> {
     vec![500, 502, 503, 504]
+}
+
+/// Default protocol value (http/https)
+fn default_protocol() -> String {
+    "http".to_string()
+}
+
+/// Default JWKS URI format for Microsoft Entra ID
+pub fn default_jwks_uri_format() -> String {
+    "https://login.microsoftonline.com/{}/discovery/v2.0/keys".to_string()
+}
+
+/// Default authorize URL format for Microsoft Entra ID
+pub fn default_authorize_url_format() -> String {
+    "https://login.microsoftonline.com/{}/oauth2/v2.0/authorize".to_string()
+}
+
+/// Default token URL format for Microsoft Entra ID
+pub fn default_token_url_format() -> String {
+    "https://login.microsoftonline.com/{}/oauth2/v2.0/token".to_string()
+}
+
+/// Default issuer URL formats for Microsoft Entra ID
+pub fn default_issuer_url_formats() -> Vec<String> {
+    vec![
+        // v2.0 endpoints
+        "https://login.microsoftonline.com/{}/v2.0".to_string(),
+        "https://login.microsoftonline.com/{}/v2.0/".to_string(),
+        // v1.0 endpoints
+        "https://sts.windows.net/{}".to_string(),
+        "https://sts.windows.net/{}/".to_string(),
+        // Additional formats
+        "https://login.microsoftonline.com/{}".to_string(),
+        "https://login.microsoftonline.com/{}/".to_string(),
+    ]
 }
 
 /// Application configuration

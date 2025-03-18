@@ -1,4 +1,5 @@
 use rust_backend::app;
+use rust_backend::config;
 use rust_backend::error::error_types::AppError;
 
 use std::process;
@@ -52,9 +53,16 @@ async fn run_app() -> Result<(), AppError> {
     // Add Swagger UI
     app = app.merge(SwaggerUi::new("/docs").url("/api-docs/openapi.json", app::ApiDoc::openapi()));
 
+    // Get the protocol from config
+    let config = config::app_config::load_config()?;
+    let protocol = &config.server.protocol;
+
     // Start the server
-    info!("Starting server on http://{}", addr);
-    info!("API documentation available at http://{}/docs", addr);
+    info!("Starting server on {}://{}", protocol, addr);
+    info!(
+        "API documentation available at {}://{}/docs",
+        protocol, addr
+    );
 
     axum::serve(tokio::net::TcpListener::bind(addr).await?, app)
         .await

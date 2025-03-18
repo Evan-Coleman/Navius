@@ -36,14 +36,12 @@ pub struct EntraTokenClient {
 impl EntraTokenClient {
     /// Create a new token client with the given credentials
     pub fn new(tenant_id: &str, client_id: &str, client_secret: &str) -> Self {
-        let auth_url_str = format!(
-            "{}",
-            constants::auth::urls::ENTRA_AUTH_URL_FORMAT.replace("{}", tenant_id)
-        );
-        let token_url_str = format!(
-            "{}",
-            constants::auth::urls::ENTRA_TOKEN_URL_FORMAT.replace("{}", tenant_id)
-        );
+        // Use default URL formats from app_config for consistency
+        let auth_url_format = crate::config::app_config::default_authorize_url_format();
+        let token_url_format = crate::config::app_config::default_token_url_format();
+
+        let auth_url_str = auth_url_format.replace("{}", tenant_id);
+        let token_url_str = token_url_format.replace("{}", tenant_id);
 
         let client_id = ClientId::new(client_id.to_string());
         let client_secret = ClientSecret::new(client_secret.to_string());
@@ -67,7 +65,26 @@ impl EntraTokenClient {
         let client_secret =
             std::env::var(constants::auth::env_vars::CLIENT_SECRET).unwrap_or_default();
 
-        Self::new(tenant_id, client_id, &client_secret)
+        // Use URL formats from config
+        let auth_url_format = &config.auth.entra.authorize_url_format;
+        let token_url_format = &config.auth.entra.token_url_format;
+
+        let auth_url_str = auth_url_format.replace("{}", tenant_id);
+        let token_url_str = token_url_format.replace("{}", tenant_id);
+
+        let client_id_obj = ClientId::new(client_id.to_string());
+        let client_secret_obj = ClientSecret::new(client_secret.to_string());
+        let auth_url = AuthUrl::new(auth_url_str).unwrap();
+        let token_url = TokenUrl::new(token_url_str).unwrap();
+
+        Self {
+            client: Client::new(),
+            client_id: client_id_obj,
+            client_secret: client_secret_obj,
+            auth_url,
+            token_url,
+            token_cache: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     /// Create a new token client from environment variables
@@ -77,7 +94,26 @@ impl EntraTokenClient {
         let client_secret =
             std::env::var(constants::auth::env_vars::CLIENT_SECRET).unwrap_or_default();
 
-        Self::new(&tenant_id, &client_id, &client_secret)
+        // Use default URL formats from app_config for consistency
+        let auth_url_format = crate::config::app_config::default_authorize_url_format();
+        let token_url_format = crate::config::app_config::default_token_url_format();
+
+        let auth_url_str = auth_url_format.replace("{}", &tenant_id);
+        let token_url_str = token_url_format.replace("{}", &tenant_id);
+
+        let client_id_obj = ClientId::new(client_id.to_string());
+        let client_secret_obj = ClientSecret::new(client_secret.to_string());
+        let auth_url = AuthUrl::new(auth_url_str).unwrap();
+        let token_url = TokenUrl::new(token_url_str).unwrap();
+
+        Self {
+            client: Client::new(),
+            client_id: client_id_obj,
+            client_secret: client_secret_obj,
+            auth_url,
+            token_url,
+            token_cache: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     /// Acquire a token for the specified resource/scope
