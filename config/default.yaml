@@ -38,8 +38,6 @@ auth:
   # - RUST_BACKEND_SCOPE
   # - RUST_BACKEND_TOKEN_URL
   entra:
-    # Default permission - can be overridden with RUST_BACKEND_PERMISSION
-    permission: "default-rust-backend"
     # Admin roles - users with these roles can access admin endpoints
     admin_roles:
       - "admin"

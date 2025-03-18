@@ -47,10 +47,6 @@ pub struct EntraConfig {
     #[serde(default)]
     pub audience: String,
 
-    /// Permission (defaults to "default-rust-backend")
-    #[serde(default = "default_permission")]
-    pub permission: String,
-
     /// Scope (from environment variable)
     #[serde(default)]
     pub scope: String,
@@ -70,11 +66,6 @@ pub struct EntraConfig {
     /// Full access roles (users with these roles can access full access endpoints)
     #[serde(default = "default_full_access_roles")]
     pub full_access_roles: Vec<String>,
-}
-
-/// Default permission value
-fn default_permission() -> String {
-    constants::auth::permissions::DEFAULT_PERMISSION.to_string()
 }
 
 /// Default admin roles
@@ -109,9 +100,6 @@ impl Default for AuthConfig {
                 tenant_id: env::var(constants::auth::env_vars::TENANT_ID).unwrap_or_default(),
                 client_id: env::var(constants::auth::env_vars::CLIENT_ID).unwrap_or_default(),
                 audience: env::var(constants::auth::env_vars::AUDIENCE).unwrap_or_default(),
-                permission: env::var(constants::auth::env_vars::PERMISSION).unwrap_or_else(|_| {
-                    constants::auth::permissions::DEFAULT_PERMISSION.to_string()
-                }),
                 scope: env::var(constants::auth::env_vars::SCOPE).unwrap_or_default(),
                 token_url: env::var(constants::auth::env_vars::TOKEN_URL).unwrap_or_default(),
                 admin_roles: default_admin_roles(),
@@ -524,12 +512,6 @@ pub fn load_config() -> Result<AppConfig, ConfigError> {
     if let Ok(audience) = env::var(constants::auth::env_vars::AUDIENCE) {
         if !audience.is_empty() {
             app_config.auth.entra.audience = audience;
-        }
-    }
-
-    if let Ok(permission) = env::var(constants::auth::env_vars::PERMISSION) {
-        if !permission.is_empty() {
-            app_config.auth.entra.permission = permission;
         }
     }
 

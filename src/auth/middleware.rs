@@ -697,7 +697,7 @@ async fn validate_token_wrapper(
             roles: vec!["admin".to_string(), "pet-manager".to_string()],
             appid: Some("debug_app_id".to_string()),
             app_id_uri: Some("debug_app_id_uri".to_string()),
-            scp: Some(constants::auth::permissions::DEFAULT_PERMISSION.to_string()),
+            scp: Some("api-access".to_string()),
         };
 
         req.extensions_mut().insert(claims);

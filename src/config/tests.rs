@@ -29,11 +29,8 @@ mod tests {
             assert_eq!(config.auth.entra.scope, "test-scope");
             assert_eq!(config.auth.entra.token_url, "test-token-url");
 
-            // Verify default permission when env var is not set
-            assert_eq!(
-                config.auth.entra.permission,
-                constants::auth::permissions::DEFAULT_PERMISSION
-            );
+            // Verify token URL value
+            assert_eq!(config.auth.entra.token_url, "test-token-url");
         }
 
         // Clean up test environment variables

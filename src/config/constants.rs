@@ -21,12 +21,6 @@ pub mod auth {
         pub const DEFAULT_AUDIENCE_FORMAT: &str = "api://{}";
     }
 
-    /// Default permission values
-    pub mod permissions {
-        /// Default permission name
-        pub const DEFAULT_PERMISSION: &str = "default-rust-backend";
-    }
-
     /// Environment variable names
     pub mod env_vars {
         /// Tenant ID environment variable
@@ -40,9 +34,6 @@ pub mod auth {
 
         /// Audience environment variable
         pub const AUDIENCE: &str = "RUST_BACKEND_AUDIENCE";
-
-        /// Permission environment variable
-        pub const PERMISSION: &str = "RUST_BACKEND_PERMISSION";
 
         /// Scope environment variable
         pub const SCOPE: &str = "RUST_BACKEND_SCOPE";
