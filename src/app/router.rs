@@ -55,7 +55,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     // Create auth middleware for different access levels
     let readonly_auth = EntraAuthLayer::from_app_config_require_read_only_role(&state.config);
     let fullaccess_auth = EntraAuthLayer::from_app_config_require_full_access_role(&state.config);
-    let actuator_routes = EntraAuthLayer::from_app_config_require_admin_role(&state.config);
+    let admin_auth = EntraAuthLayer::from_app_config_require_admin_role(&state.config);
 
     // 1. PUBLIC ROUTES - available without authentication
     let public_routes = Router::new()
@@ -84,7 +84,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     let actuator_routes = if auth_enabled {
         actuator_routes
             .route_layer(logging.clone())
-            .route_layer(fullaccess_auth)
+            .route_layer(admin_auth)
     } else {
         actuator_routes
     };

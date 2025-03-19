@@ -53,4 +53,4 @@ config.*.yaml
 /generated/
 
 # Bruno environment files
-bruno_collection/environments/Test.bru
+/test/resources/API TESTING/*/environments/*.bru

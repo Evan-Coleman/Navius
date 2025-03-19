@@ -73,31 +73,13 @@ pub struct EntraConfig {
     pub issuer_url_formats: Vec<String>,
 
     /// Admin roles (users with these roles can access admin endpoints)
-    #[serde(default = "default_admin_roles")]
     pub admin_roles: Vec<String>,
 
     /// Read-only roles (users with these roles can access read-only endpoints)
-    #[serde(default = "default_read_only_roles")]
     pub read_only_roles: Vec<String>,
 
     /// Full access roles (users with these roles can access full access endpoints)
-    #[serde(default = "default_full_access_roles")]
     pub full_access_roles: Vec<String>,
-}
-
-/// Default admin roles
-fn default_admin_roles() -> Vec<String> {
-    vec!["admin".to_string(), "pet-manager".to_string()]
-}
-
-/// Default read-only roles
-fn default_read_only_roles() -> Vec<String> {
-    vec!["reader".to_string(), "viewer".to_string()]
-}
-
-/// Default full access roles
-fn default_full_access_roles() -> Vec<String> {
-    vec!["editor".to_string(), "contributor".to_string()]
 }
 
 /// Authentication configuration
@@ -123,9 +105,9 @@ impl Default for AuthConfig {
                 authorize_url_format: default_authorize_url_format(),
                 token_url_format: default_token_url_format(),
                 issuer_url_formats: default_issuer_url_formats(),
-                admin_roles: default_admin_roles(),
-                read_only_roles: default_read_only_roles(),
-                full_access_roles: default_full_access_roles(),
+                admin_roles: Vec::new(),
+                read_only_roles: Vec::new(),
+                full_access_roles: Vec::new(),
             },
         }
     }
@@ -736,6 +718,26 @@ pub fn load_config() -> Result<AppConfig, ConfigError> {
 
     // Deserialize the config into our AppConfig struct
     let mut app_config: AppConfig = config.try_deserialize()?;
+
+    // Validate critical configuration values
+    if app_config.auth.enabled {
+        // Check roles configuration - panic if no roles are configured
+        if app_config.auth.entra.admin_roles.is_empty() {
+            panic!("No admin roles configured. Please specify admin_roles in configuration.");
+        }
+
+        if app_config.auth.entra.read_only_roles.is_empty() {
+            panic!(
+                "No read-only roles configured. Please specify read_only_roles in configuration."
+            );
+        }
+
+        if app_config.auth.entra.full_access_roles.is_empty() {
+            panic!(
+                "No full access roles configured. Please specify full_access_roles in configuration."
+            );
+        }
+    }
 
     // Manually set Entra ID configuration from environment variables if they exist
     // This ensures the environment variables are properly mapped to the configuration

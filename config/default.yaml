@@ -53,15 +53,15 @@ auth:
     # Admin roles - users with these roles can access admin endpoints
     admin_roles:
       - "admin"
-      - "pet-manager"
     # Read-only roles - users with these roles can access read-only endpoints
     read_only_roles:
-      - "reader"
-      - "viewer"
+      - "read"
+      - "full"
+      - "admin"
     # Full access roles - users with these roles can access full access endpoints
     full_access_roles:
-      - "editor"
-      - "contributor"
+      - "full"
+      - "admin"
 
 cache:
   enabled: true

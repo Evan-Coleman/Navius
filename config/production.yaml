@@ -31,16 +31,16 @@ auth:
   # Debug authentication is disabled in production for security
   debug: false
   # Entra ID settings for production
-  entra:
-    # Admin roles for production - more restrictive than development
-    admin_roles:
-      - "admin"
-      - "pet-manager"
-    # Read-only roles for production
-    read_only_roles:
-      - "reader"
-      - "viewer"
-    # Full access roles for production
-    full_access_roles:
-      - "editor"
-      - "contributor" 
+  # entra:
+  #   # Admin roles for production - more restrictive than development
+  #   admin_roles:
+  #     - "admin"
+  #     - "pet-manager"
+  #   # Read-only roles for production
+  #   read_only_roles:
+  #     - "reader"
+  #     - "viewer"
+  #   # Full access roles for production
+  #   full_access_roles:
+  #     - "editor"
+  #     - "contributor" 
