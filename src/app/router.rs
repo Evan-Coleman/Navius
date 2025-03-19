@@ -1,9 +1,10 @@
 use axum::{
+    Json,
     body::Body,
     extract::{ConnectInfo, State},
     http::Request,
     middleware::{self, Next},
-    response::Response,
+    response::{IntoResponse, Response},
     routing::{Router, delete, get, post},
 };
 use metrics_exporter_prometheus::PrometheusHandle;
@@ -25,26 +26,30 @@ use crate::{
         EntraAuthLayer, EntraTokenClient,
         middleware::{EntraAuthConfig, RoleRequirement},
     },
-    cache::{CacheWithTTL, PetCache},
     config::AppConfig,
-    generated_apis::petstore_api::models::Upet,
-    handlers::{self},
-    models::{ApiResponse, Data, HealthCheckResponse, MetricsResponse},
+    handlers::{self, actuator, cache_admin, health, metrics as metrics_handlers},
+    models::{ApiResponse, Data, DetailedHealthResponse, HealthCheckResponse, MetricsResponse},
     reliability,
 };
 
-use crate::handlers::examples::pet::fetch_pet_handler;
-use crate::handlers::health::detailed_health_check;
-use crate::handlers::metrics::metrics;
+// Import the specific modules to avoid confusion
+use crate::handlers::examples::pet;
 
 /// Application state shared across all routes
 pub struct AppState {
     pub client: Client,
     pub config: AppConfig,
     pub start_time: SystemTime,
-    pub pet_cache: Option<CacheWithTTL>,
+    pub cache_registry: Option<crate::cache::CacheRegistry>,
     pub metrics_handle: PrometheusHandle,
     pub token_client: Option<EntraTokenClient>,
+    pub resource_registry: crate::utils::api_resource::ApiResourceRegistry,
+}
+
+/// Simple health check handler that returns a static string
+/// This is used for basic health monitoring
+async fn simple_health_check() -> &'static str {
+    "OK"
 }
 
 /// Create the application router with standardized route groups
@@ -62,34 +67,40 @@ pub fn create_router(state: Arc<AppState>) -> Router {
 
     // 1. PUBLIC ROUTES - available without authentication
     let public_routes = Router::new()
-        .route("/health", get(handlers::health::health_check))
-        .route("/pet/{id}", get(fetch_pet_handler.clone()));
+        .route("/health", get(health::health_check))
+        .route("/pet/{id}", get(pet::fetch_pet_handler));
 
     // 2. READ-ONLY ROUTES - requires basic authentication
-    let readonly_routes = Router::new()
-        .route("/pet/{id}", get(fetch_pet_handler.clone()))
-        .route_layer(logging.clone())
-        .route_layer(readonly_auth.clone());
+    let readonly_routes = Router::new().route("/pet/{id}", get(pet::fetch_pet_handler));
 
     // 3. FULL ACCESS ROUTES - requires admin role
-    let fullaccess_routes = Router::new()
-        .route("/pet/{id}", get(fetch_pet_handler.clone()))
-        .route_layer(logging.clone())
-        .route_layer(fullaccess_auth.clone());
+    let fullaccess_routes = Router::new().route("/pet/{id}", get(pet::fetch_pet_handler));
 
     // 4. ACTUATOR ROUTES - for metrics, health checks, and admin functions
     let actuator_routes = Router::new()
-        .route("/health", get(detailed_health_check))
-        .route("/metrics", get(metrics))
-        .route("/cache", get(handlers::cache_admin::cache_debug));
+        // Use the actuator health handlers that are specifically designed for the router
+        .route("/health", get(health::detailed_health_check))
+        // Use the metrics handler
+        .route("/metrics", get(metrics_handlers::metrics))
+        // Use the cache debug handler
+        .route("/cache", get(cache_admin::show_cache_info))
+        // Use the info handler
+        .route("/info", get(actuator::info));
 
-    // Apply authentication to actuator routes if enabled
-    let actuator_routes = if auth_enabled {
-        actuator_routes
-            .route_layer(logging.clone())
-            .route_layer(admin_auth)
+    // Apply authentication layers if enabled
+    let (readonly_routes, fullaccess_routes, actuator_routes) = if auth_enabled {
+        let readonly_with_auth = readonly_routes.layer(logging.clone()).layer(readonly_auth);
+
+        let fullaccess_with_auth = fullaccess_routes
+            .layer(logging.clone())
+            .layer(fullaccess_auth);
+
+        let actuator_with_auth = actuator_routes.layer(logging.clone()).layer(admin_auth);
+
+        (readonly_with_auth, fullaccess_with_auth, actuator_with_auth)
     } else {
-        actuator_routes
+        // No auth enabled, return routes as-is
+        (readonly_routes, fullaccess_routes, actuator_routes)
     };
 
     // Combine all route groups
@@ -156,38 +167,43 @@ pub async fn init() -> (Router, SocketAddr) {
     // Create application state
     let start_time = SystemTime::now();
 
-    // Initialize pet cache if enabled
-    let pet_cache = if config.cache.enabled {
-        Some(crate::cache::init_cache(
+    // Only set up the cache if enabled
+    let cache_registry = if config.cache.enabled {
+        let registry = crate::cache::init_cache_registry(
+            true,
             config.cache.max_capacity,
             config.cache.ttl_seconds,
-        ))
+        );
+
+        Some(registry)
     } else {
-        info!("🔧 Pet cache disabled");
+        info!("🔧 Cache disabled");
         None
     };
 
-    // Create the token client if auth is enabled
-    let token_client = if config.auth.enabled {
-        Some(EntraTokenClient::from_config(&config))
-    } else {
-        None
-    };
+    // Create API resource registry
+    let resource_registry = crate::utils::api_resource::ApiResourceRegistry::new();
 
+    // Create the app state
     let state = Arc::new(AppState {
         client,
         config: config.clone(),
         start_time,
-        pet_cache: pet_cache.clone(),
+        cache_registry: cache_registry.clone(),
         metrics_handle,
-        token_client,
+        token_client: if config.auth.enabled {
+            Some(EntraTokenClient::from_config(&config))
+        } else {
+            None
+        },
+        resource_registry,
     });
 
-    // Start metrics updater with the cloned cache
-    if let Some(cache) = pet_cache {
-        crate::cache::cache_manager::start_metrics_updater(Some(cache));
+    // Start metrics updater for the new cache registry
+    if let Some(registry) = &cache_registry {
+        crate::cache::start_metrics_updater(registry).await;
     } else {
-        info!("🔧 Pet cache disabled, metrics updater not started");
+        info!("🔧 Cache registry disabled, metrics updater not started");
     }
 
     // Create router

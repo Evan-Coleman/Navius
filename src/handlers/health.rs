@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crate::app::AppState;
-use crate::cache::cache_manager::{CacheStats, get_cache_stats, get_cache_stats_with_metrics};
+use crate::cache::cache_manager::{CacheRegistry, CacheStats, get_cache_stats_with_metrics};
 use crate::models::{DependencyStatus, DetailedHealthResponse, HealthCheckResponse};
 
 /// Handler for the simple health check endpoint
@@ -101,12 +101,41 @@ pub async fn detailed_health_check(
         .unwrap_or_default();
 
     // Get cache stats if available
-    let cache_stats = if let Some(cache) = &state.pet_cache {
+    let cache_stats = if let Some(registry) = &state.cache_registry {
         // Get metrics for more accurate reporting
         let metrics_text = state.metrics_handle.render();
 
-        // Use the enhanced stats function that includes metrics data
-        Some(get_cache_stats_with_metrics(cache, &metrics_text))
+        // Extract cache stats from metrics directly
+        let mut stats_vec = Vec::new();
+
+        // Extract resource types from metrics
+        let mut resource_types = Vec::new();
+        for line in metrics_text.lines() {
+            if line.contains("cache_current_size{resource_type=\"") {
+                let start = line.find("resource_type=\"").unwrap() + "resource_type=\"".len();
+                let end = line[start..].find('"').unwrap() + start;
+                let resource_type = &line[start..end];
+
+                if !resource_types.contains(&resource_type) {
+                    resource_types.push(resource_type);
+                }
+            }
+        }
+
+        // Get stats for each resource type
+        for resource_type in resource_types {
+            if let Some(stats) =
+                get_cache_stats_with_metrics(registry, resource_type, &metrics_text)
+            {
+                stats_vec.push(stats);
+            }
+        }
+
+        if stats_vec.is_empty() {
+            None
+        } else {
+            Some(stats_vec)
+        }
     } else {
         None
     };

@@ -17,7 +17,7 @@ dead_code = "allow"
 unused_imports = "allow"
 
 [dependencies]
-axum = { version = "0.8.1", features = [] }
+axum = { version = "0.8.1", features = ["macros"] }
 base64 = "0.22.1"
 reqwest = { version = "0.12.15", features = ["json"] }
 serde = { version = "1.0.219", features = ["derive"] }

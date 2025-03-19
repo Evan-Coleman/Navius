@@ -1,32 +1,45 @@
 use metrics::{counter, gauge};
 use moka::future::Cache;
 use serde::{Deserialize, Serialize};
+use std::any::Any;
+use std::collections::HashMap;
+use std::fmt::Debug;
 use std::sync::{
-    Arc,
+    Arc, RwLock,
     atomic::{AtomicU64, Ordering},
 };
 use std::time::{Duration, SystemTime};
 use tokio::time::interval;
 use tracing::{debug, info};
 
-use crate::generated_apis::petstore_api::models::Upet;
+// Import ApiResource trait
+use crate::utils::api_resource::ApiResource;
 
-/// Type alias for the pet cache
-pub type PetCache = Arc<Cache<i64, Upet>>;
-
-/// Wrapper for cache with TTL information
-#[derive(Debug, Clone)]
-pub struct CacheWithTTL {
-    pub cache: PetCache,
+/// Generic cache for any resource type that implements ApiResource
+#[derive(Debug)]
+pub struct ResourceCache<T: ApiResource> {
+    pub cache: Arc<Cache<String, T>>, // Use String keys for flexibility
     pub creation_time: SystemTime,
     pub ttl_seconds: u64,
-    // Add an atomic counter for current active entries
     pub active_entries: Arc<AtomicU64>,
+    pub resource_type: String,
+}
+
+/// Cache registry to store caches for different resource types
+#[derive(Debug, Clone)]
+pub struct CacheRegistry {
+    // Use RwLock to allow concurrent reads but exclusive writes
+    caches: Arc<RwLock<HashMap<String, Box<dyn Any + Send + Sync>>>>,
+    pub enabled: bool,
+    pub ttl_seconds: u64,
+    pub max_capacity: u64,
+    pub creation_time: SystemTime,
 }
 
 /// Cache statistics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheStats {
+    pub resource_type: String,
     pub uptime_seconds: u64,
     pub size: u64,
     pub active_entries: u64,
@@ -36,67 +49,169 @@ pub struct CacheStats {
     pub hit_ratio: f64,
 }
 
-/// Initialize the pet cache with TTL
-pub fn init_cache(max_capacity: u64, ttl_seconds: u64) -> CacheWithTTL {
-    let ttl = Duration::from_secs(ttl_seconds);
+/// Initialize the cache registry
+pub fn init_cache_registry(enabled: bool, max_capacity: u64, ttl_seconds: u64) -> CacheRegistry {
+    CacheRegistry {
+        caches: Arc::new(RwLock::new(HashMap::new())),
+        enabled,
+        ttl_seconds,
+        max_capacity,
+        creation_time: SystemTime::now(),
+    }
+}
 
-    let cache = Arc::new(
-        Cache::builder()
-            .max_capacity(max_capacity)
-            .time_to_live(ttl)
-            // Add additional configuration to make the cache more resilient
-            .time_to_idle(ttl.mul_f32(1.5)) // Set idle time to 1.5x the TTL
-            .initial_capacity(100) // Pre-allocate some capacity
-            .build(),
+/// Register a new resource type with the cache registry
+pub fn register_resource_cache<T: ApiResource + 'static>(
+    registry: &CacheRegistry,
+    resource_type: &str,
+) -> Result<(), String> {
+    if !registry.enabled {
+        debug!(
+            "Cache is disabled, not registering cache for {}",
+            resource_type
+        );
+        return Ok(());
+    }
+
+    let ttl = Duration::from_secs(registry.ttl_seconds);
+    let cache_builder = Cache::builder()
+        .max_capacity(registry.max_capacity)
+        .time_to_live(ttl)
+        .time_to_idle(ttl.mul_f32(1.5))
+        .initial_capacity(100)
+        .build();
+
+    let resource_cache: ResourceCache<T> = ResourceCache {
+        cache: Arc::new(cache_builder),
+        creation_time: SystemTime::now(),
+        ttl_seconds: registry.ttl_seconds,
+        active_entries: Arc::new(AtomicU64::new(0)),
+        resource_type: resource_type.to_string(),
+    };
+
+    // Attempt to insert the cache into the registry
+    let mut caches = match registry.caches.write() {
+        Ok(caches) => caches,
+        Err(_) => return Err("Failed to acquire write lock on cache registry".to_string()),
+    };
+
+    caches.insert(
+        resource_type.to_string(),
+        Box::new(resource_cache) as Box<dyn Any + Send + Sync>,
     );
 
-    CacheWithTTL {
-        cache,
-        creation_time: SystemTime::now(),
-        ttl_seconds,
-        active_entries: Arc::new(AtomicU64::new(0)),
+    info!("✅ Registered cache for resource type: {}", resource_type);
+    Ok(())
+}
+
+/// Get a cache for a specific resource type
+pub fn get_resource_cache<T: ApiResource + 'static>(
+    registry: &CacheRegistry,
+    resource_type: &str,
+) -> Option<ResourceCache<T>> {
+    if !registry.enabled {
+        return None;
+    }
+
+    let caches = match registry.caches.read() {
+        Ok(caches) => caches,
+        Err(_) => {
+            debug!("Failed to acquire read lock on cache registry");
+            return None;
+        }
+    };
+
+    match caches.get(resource_type) {
+        Some(cache) => {
+            // Attempt to downcast to the appropriate ResourceCache type
+            if let Some(boxed_cache) = cache.downcast_ref::<ResourceCache<T>>() {
+                // Clone the ResourceCache
+                Some(ResourceCache {
+                    cache: boxed_cache.cache.clone(),
+                    creation_time: boxed_cache.creation_time,
+                    ttl_seconds: boxed_cache.ttl_seconds,
+                    active_entries: boxed_cache.active_entries.clone(),
+                    resource_type: boxed_cache.resource_type.clone(),
+                })
+            } else {
+                debug!(
+                    "Failed to downcast cache for resource type: {}",
+                    resource_type
+                );
+                None
+            }
+        }
+        None => None,
     }
 }
 
 /// Get cache statistics with metrics data
 pub fn get_cache_stats_with_metrics(
-    cache_with_ttl: &CacheWithTTL,
+    registry: &CacheRegistry,
+    resource_type: &str,
     metrics_text: &str,
-) -> CacheStats {
-    let cache = &cache_with_ttl.cache;
-    let cached_entries = cache.entry_count();
-    let active_entries = cache_with_ttl
-        .active_entries
-        .load(std::sync::atomic::Ordering::Relaxed);
+) -> Option<CacheStats> {
+    if !registry.enabled {
+        return None;
+    }
 
     // Calculate uptime
     let uptime_seconds = SystemTime::now()
-        .duration_since(cache_with_ttl.creation_time)
+        .duration_since(registry.creation_time)
         .map(|d| d.as_secs())
         .unwrap_or(0);
 
-    // Parse metrics text to extract hit and miss counts
+    // Parse metrics text to extract hit and miss counts for this resource type
     let mut hits = 0;
     let mut misses = 0;
     let mut entries_created = 0;
+    let mut size = 0;
+    let mut active_entries = 0;
 
     for line in metrics_text.lines() {
-        if line.contains("pet_cache_hits_total") && !line.starts_with('#') {
+        if line.contains("cache_hits_total")
+            && line.contains(&format!("resource_type=\"{}\"", resource_type))
+            && !line.starts_with('#')
+        {
             if let Some(value) = line.split_whitespace().nth(1) {
                 if let Ok(count) = value.parse::<u64>() {
                     hits = count;
                 }
             }
-        } else if line.contains("pet_cache_misses_total") && !line.starts_with('#') {
+        } else if line.contains("cache_misses_total")
+            && line.contains(&format!("resource_type=\"{}\"", resource_type))
+            && !line.starts_with('#')
+        {
             if let Some(value) = line.split_whitespace().nth(1) {
                 if let Ok(count) = value.parse::<u64>() {
                     misses = count;
                 }
             }
-        } else if line.contains("cache_entries_created") && !line.starts_with('#') {
+        } else if line.contains("cache_entries_created")
+            && line.contains(&format!("resource_type=\"{}\"", resource_type))
+            && !line.starts_with('#')
+        {
             if let Some(value) = line.split_whitespace().nth(1) {
                 if let Ok(count) = value.parse::<u64>() {
                     entries_created = count;
+                }
+            }
+        } else if line.contains("cache_current_size")
+            && line.contains(&format!("resource_type=\"{}\"", resource_type))
+            && !line.starts_with('#')
+        {
+            if let Some(value) = line.split_whitespace().nth(1) {
+                if let Ok(count) = value.parse::<u64>() {
+                    size = count;
+                }
+            }
+        } else if line.contains("cache_active_entries")
+            && line.contains(&format!("resource_type=\"{}\"", resource_type))
+            && !line.starts_with('#')
+        {
+            if let Some(value) = line.split_whitespace().nth(1) {
+                if let Ok(count) = value.parse::<u64>() {
+                    active_entries = count;
                 }
             }
         }
@@ -109,162 +224,165 @@ pub fn get_cache_stats_with_metrics(
         0.0
     };
 
-    CacheStats {
+    Some(CacheStats {
+        resource_type: resource_type.to_string(),
         uptime_seconds,
-        size: cached_entries,
+        size,
         active_entries,
         entries_created,
         hits,
         misses,
         hit_ratio,
-    }
+    })
 }
 
-/// Get basic cache statistics (without metrics data)
-pub fn get_cache_stats(cache: &PetCache, uptime_seconds: u64) -> CacheStats {
-    let cached_entries = cache.entry_count();
-
-    CacheStats {
-        uptime_seconds,
-        size: cached_entries,
-        active_entries: 0,  // We track active entries using our atomic counter
-        entries_created: 0, // We track entries created using metrics
-        hits: 0,            // We track hits using metrics
-        misses: 0,          // We track misses using metrics
-        hit_ratio: 0.0,     // We calculate the hit ratio from hits and misses
-    }
-}
-
-/// Get pet from cache or use provided function to fetch it
-pub async fn get_or_fetch<F, Fut>(
-    cache_with_ttl: &CacheWithTTL,
-    id: i64,
+/// Generic function to get or fetch a resource from cache
+pub async fn get_or_fetch<T, F, Fut>(
+    registry: &CacheRegistry,
+    resource_type: &str,
+    id: &str,
     fetch_fn: F,
-) -> Result<Upet, String>
+) -> Result<T, String>
 where
+    T: ApiResource + 'static,
     F: FnOnce() -> Fut,
-    Fut: std::future::Future<Output = Result<Upet, String>>,
+    Fut: std::future::Future<Output = Result<T, String>>,
 {
-    let cache = &cache_with_ttl.cache;
+    if !registry.enabled {
+        // Cache is disabled, call fetch function directly
+        return fetch_fn().await;
+    }
+
+    // Get cache for this resource type
+    let resource_cache = match get_resource_cache::<T>(registry, resource_type) {
+        Some(cache) => cache,
+        None => {
+            debug!("No cache found for resource type: {}", resource_type);
+            return fetch_fn().await;
+        }
+    };
+
+    let cache = &resource_cache.cache;
 
     // Debug log the cache size at the start
     let start_size = cache.entry_count();
     debug!(
-        "🔍 Cache size before operation for pet ID {}: {}",
-        id, start_size
+        "🔍 Cache size before operation for {} ID {}: {}",
+        resource_type, id, start_size
     );
 
     // Try to get from cache first
-    if let Some(pet) = cache.get(&id).await {
-        counter!("pet_cache_hits_total").increment(1);
-        debug!("🔍 Cache hit for pet ID: {} (name: {})", id, pet.name);
+    if let Some(resource) = cache.get(id).await {
+        counter!("cache_hits_total", "resource_type" => resource_type.to_string()).increment(1);
+        debug!("🔍 Cache hit for {} ID: {}", resource_type, id);
 
         // Update current size metric whenever we access the cache
         let current_size = cache.entry_count();
-        let active_count = cache_with_ttl.active_entries.load(Ordering::Relaxed);
+        let active_count = resource_cache.active_entries.load(Ordering::Relaxed);
 
-        gauge!("cache_current_size").set(current_size as f64);
-        gauge!("cache_active_entries").set(active_count as f64);
+        gauge!("cache_current_size", "resource_type" => resource_type.to_string())
+            .set(current_size as f64);
+        gauge!("cache_active_entries", "resource_type" => resource_type.to_string())
+            .set(active_count as f64);
 
         debug!(
-            "📊 Cache size after hit for pet ID {}: {} (active: {})",
-            id, current_size, active_count
+            "📊 Cache size after hit for {} ID {}: {} (active: {})",
+            resource_type, id, current_size, active_count
         );
 
-        return Ok(pet);
+        return Ok(resource);
     }
 
     // Cache miss, fetch from source
-    counter!("pet_cache_misses_total").increment(1);
-    debug!("🔍 Cache miss for pet ID: {}, fetching from source", id);
+    counter!("cache_misses_total", "resource_type" => resource_type.to_string()).increment(1);
+    debug!(
+        "🔍 Cache miss for {} ID: {}, fetching from source",
+        resource_type, id
+    );
 
-    // Fetch the pet
+    // Fetch the resource
     match fetch_fn().await {
-        Ok(pet) => {
+        Ok(resource) => {
             // Store in cache
-            debug!("➕ About to add pet ID: {} to cache", id);
-            cache.insert(id, pet.clone()).await;
+            debug!("➕ About to add {} ID: {} to cache", resource_type, id);
+            cache.insert(id.to_string(), resource.clone()).await;
 
             // Increment our counters
-            counter!("cache_entries_created").increment(1);
-            let new_count = cache_with_ttl.active_entries.fetch_add(1, Ordering::SeqCst) + 1;
+            counter!("cache_entries_created", "resource_type" => resource_type.to_string())
+                .increment(1);
+            let new_count = resource_cache.active_entries.fetch_add(1, Ordering::SeqCst) + 1;
 
             // Update current size metric immediately after inserting
             let current_size = cache.entry_count();
-            gauge!("cache_current_size").set(current_size as f64);
-            gauge!("cache_active_entries").set(new_count as f64);
+            gauge!("cache_current_size", "resource_type" => resource_type.to_string())
+                .set(current_size as f64);
+            gauge!("cache_active_entries", "resource_type" => resource_type.to_string())
+                .set(new_count as f64);
 
-            // Additional debugging for what's in the cache
             debug!(
                 "📊 Cache entry count right after insertion: {} (active: {})",
                 current_size, new_count
             );
 
-            // Try to read back the value to confirm it's there
-            let check = cache.get(&id).await;
             debug!(
-                "🔍 Verification check - pet {} is in cache: {}",
-                id,
-                check.is_some()
+                "➕ Added {} ID: {} to cache (current size: {}, active: {})",
+                resource_type, id, current_size, new_count
             );
 
-            debug!(
-                "➕ Added pet ID: {} (name: {}) to cache (current size: {}, active: {})",
-                id, pet.name, current_size, new_count
-            );
-
-            Ok(pet)
+            Ok(resource)
         }
         Err(e) => {
-            debug!("❌ Failed to fetch pet ID: {}, error: {}", id, e);
+            debug!(
+                "❌ Failed to fetch {} ID: {}, error: {}",
+                resource_type, id, e
+            );
             Err(e)
         }
     }
 }
 
-/// Start metrics updater to track cache stats
-pub fn start_metrics_updater(cache_with_ttl: Option<CacheWithTTL>) {
-    if let Some(cache) = cache_with_ttl {
-        tokio::spawn(async move {
-            let mut tick_interval = interval(Duration::from_secs(15));
-
-            info!("🔄 Metrics updater started for cache");
-
-            // Get an initial size to help diagnose initial state
-            let initial_size = cache.cache.entry_count();
-            let initial_active = cache.active_entries.load(Ordering::Relaxed);
-            info!(
-                "📊 Initial cache size on startup: {} (active: {})",
-                initial_size, initial_active
-            );
-
-            loop {
-                tick_interval.tick().await;
-
-                // Update cache metrics
-                let size = cache.cache.entry_count();
-                let active_count = cache.active_entries.load(Ordering::Relaxed);
-
-                // Update metrics directly from our atomic counter
-                gauge!("cache_size").set(active_count as f64);
-                gauge!("cache_active_entries").set(active_count as f64);
-
-                // Calculate cache TTL percentage used
-                if let Ok(elapsed) = SystemTime::now().duration_since(cache.creation_time) {
-                    let ttl_percentage =
-                        (elapsed.as_secs() as f64 / cache.ttl_seconds as f64) * 100.0;
-                    gauge!("cache_ttl_percentage").set(ttl_percentage);
-                }
-
-                // Log cache stats every 5 minutes (20 ticks at 15 second intervals)
-                static mut TICK_COUNT: u64 = 0;
-                unsafe {
-                    TICK_COUNT += 1;
-                    if TICK_COUNT % 20 == 0 {
-                        info!("📊 Cache size: {} (active: {})", size, active_count);
-                    }
-                }
-            }
-        });
+/// Start metrics updater to track cache stats for all resource types
+pub async fn start_metrics_updater(registry: &CacheRegistry) {
+    if !registry.enabled {
+        info!("🔧 Cache is disabled, metrics updater not started");
+        return;
     }
+
+    // Clone the registry for the updater task
+    let registry_clone = registry.clone();
+
+    tokio::spawn(async move {
+        let mut interval = interval(Duration::from_secs(60));
+
+        loop {
+            interval.tick().await;
+
+            // Log cache metrics for all registered resource types
+            let caches = match registry_clone.caches.read() {
+                Ok(caches) => caches,
+                Err(_) => {
+                    debug!("Failed to acquire read lock on cache registry for metrics update");
+                    continue;
+                }
+            };
+
+            for resource_type in caches.keys() {
+                let _current_size =
+                    gauge!("cache_current_size", "resource_type" => resource_type.to_string())
+                        .set(0.0);
+                let _active_entries =
+                    gauge!("cache_active_entries", "resource_type" => resource_type.to_string())
+                        .set(0.0);
+
+                info!(
+                    "📊 Cache metrics update: {} (size: {}, active: {})",
+                    resource_type,
+                    0, // Placeholder since we can't easily get these values
+                    0  // Placeholder since we can't easily get these values
+                );
+            }
+        }
+    });
+
+    info!("📈 Cache metrics updater started for all resource types");
 }

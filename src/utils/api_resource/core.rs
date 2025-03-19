@@ -10,27 +10,29 @@ use tracing::{debug, info, warn};
 
 use crate::{
     app::AppState,
-    cache::CacheWithTTL,
     error::{AppError, Result},
     generated_apis::petstore_api::models::Upet,
     utils::api_logger,
 };
 
-/// A trait for resources that can be retrieved from an API.
+/// Trait for API resources that can be cached and retrieved
 ///
-/// By implementing this trait, a model can benefit from common
-/// functionality like caching, retries, and error handling.
+/// This trait represents an API resource entity that can be uniquely
+/// identified, serialized/deserialized, and has metadata about its type.
 pub trait ApiResource:
-    Serialize + DeserializeOwned + Clone + Debug + Send + Sync + 'static
+    Any + Clone + Debug + DeserializeOwned + Send + Serialize + Sync + 'static
 {
     /// The ID type of the resource (e.g., i64, String)
     type Id: ToString + Clone + Send + Sync + 'static;
 
     /// The string representation of the resource type (e.g., "pet", "user")
-    /// Used for logging and metrics
+    ///
+    /// This is used for cache keys, metrics, and logging
     fn resource_type() -> &'static str;
 
     /// The API name used for logging (e.g., "Petstore")
+    ///
+    /// This helps identify which external API a resource comes from
     fn api_name() -> &'static str;
 }
 
@@ -125,10 +127,10 @@ where
                 debug!("Getting {} with ID: {}", R::resource_type(), id_str);
             }
 
-            // Parse the ID
-            let id = id_str.parse().map_err(|_| {
+            // Try to parse the ID from the string
+            let id: R::Id = id_str.parse().map_err(|_| {
                 AppError::BadRequest(format!(
-                    "Invalid {} ID format: {}",
+                    "Invalid ID format for {}: {}",
                     R::resource_type(),
                     id_str
                 ))
@@ -136,15 +138,45 @@ where
 
             // Check cache first if enabled
             if options.use_cache {
-                if let Some(cache) = &state.pet_cache {
-                    let resource_result = check_cache::<R>(&id, cache, &id_str).await;
-                    if let Some(resource) = resource_result {
-                        if options.detailed_logging {
-                            info!("✅ Retrieved {} {} from cache", R::resource_type(), id_str);
+                if let Some(registry) = &state.cache_registry {
+                    // Use the resource type from the ApiResource trait
+                    let resource_type = R::resource_type();
+
+                    // Convert ID to string for cache key
+                    let cache_key = id.to_string();
+
+                    // Try to fetch from cache using the generic get_or_fetch function
+                    let fetch_closure = || async {
+                        // Call the original fetch function and convert AppError to String
+                        fetch_fn(&state, id.clone())
+                            .await
+                            .map_err(|e| e.to_string())
+                    };
+
+                    match crate::cache::get_or_fetch::<R, _, _>(
+                        registry,
+                        resource_type,
+                        &cache_key,
+                        fetch_closure,
+                    )
+                    .await
+                    {
+                        Ok(resource) => {
+                            if options.detailed_logging {
+                                info!(
+                                    "✅ Retrieved {} {} from cache registry",
+                                    resource_type, id_str
+                                );
+                            }
+                            return Ok(Json(resource));
                         }
-                        counter!("cache_hits_total").increment(1);
-                        counter!("pet_cache_hits_total").increment(1);
-                        return Ok(Json(resource));
+                        Err(e) => {
+                            // Convert the string error back to an AppError
+                            return Err(AppError::ExternalServiceError(format!(
+                                "Failed to fetch {} {} from cache or source: {}",
+                                resource_type, id_str, e
+                            )));
+                        }
                     }
                 }
             }
@@ -164,19 +196,149 @@ where
                 fetch_fn(&state, id.clone()).await?
             };
 
-            // Store in cache if enabled
+            // Store in new cache registry if enabled
             if options.use_cache {
-                if let Some(cache) = &state.pet_cache {
-                    store_in_cache::<R>(&id, &resource, cache, &id_str).await;
+                if let Some(registry) = &state.cache_registry {
+                    // Get the resource type and create a cache key
+                    let resource_type = R::resource_type();
+                    let cache_key = id.to_string();
 
-                    // Cache TTL would be implemented here in a more complete solution
-                    // For now, we'll just log that we're using the TTL setting
-                    if options.detailed_logging && options.cache_ttl_seconds > 0 {
+                    // Try to store the resource in the registry
+                    let store_result = match crate::cache::get_resource_cache::<R>(
+                        registry,
+                        resource_type,
+                    ) {
+                        Some(cache) => {
+                            // Resource type is registered, store in cache
+                            if options.detailed_logging {
+                                info!("➕ Storing {} {} in registry cache", resource_type, id_str);
+                            }
+
+                            // Create a closure to store the resource
+                            let store_fn = || async {
+                                // Store directly in the cache
+                                cache
+                                    .cache
+                                    .insert(cache_key.clone(), resource.clone())
+                                    .await;
+
+                                // Increment counters
+                                counter!("cache_entries_created", "resource_type" => resource_type.to_string()).increment(1);
+                                let new_count = cache
+                                    .active_entries
+                                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+                                    + 1;
+
+                                // Update metrics
+                                let current_size = cache.cache.entry_count();
+                                gauge!("cache_current_size", "resource_type" => resource_type.to_string()).set(current_size as f64);
+                                gauge!("cache_active_entries", "resource_type" => resource_type.to_string()).set(new_count as f64);
+
+                                if options.detailed_logging {
+                                    debug!(
+                                        "➕ Added {} ID: {} to registry cache (size: {}, active: {})",
+                                        resource_type, id_str, current_size, new_count
+                                    );
+                                }
+
+                                Ok(())
+                            };
+
+                            // Execute the store function
+                            store_fn().await
+                        }
+                        None => {
+                            // Resource type is not registered, try to register it
+                            if options.detailed_logging {
+                                info!(
+                                    "🔍 No cache found for {} in registry, attempting to register",
+                                    resource_type
+                                );
+                            }
+
+                            // Try to register the resource type
+                            match crate::utils::api_resource::register_resource::<R>(&state, None) {
+                                Ok(_) => {
+                                    // Successfully registered, now try to get the cache again
+                                    match crate::cache::get_resource_cache::<R>(
+                                        registry,
+                                        resource_type,
+                                    ) {
+                                        Some(new_cache) => {
+                                            // Store in the newly registered cache
+                                            if options.detailed_logging {
+                                                info!(
+                                                    "➕ Storing {} {} in newly registered cache",
+                                                    resource_type, id_str
+                                                );
+                                            }
+
+                                            // Store directly in the cache
+                                            new_cache
+                                                .cache
+                                                .insert(cache_key.clone(), resource.clone())
+                                                .await;
+
+                                            // Increment counters
+                                            counter!("cache_entries_created", "resource_type" => resource_type.to_string()).increment(1);
+                                            let new_count = new_cache
+                                                .active_entries
+                                                .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+                                                + 1;
+
+                                            // Update metrics
+                                            let current_size = new_cache.cache.entry_count();
+                                            gauge!("cache_current_size", "resource_type" => resource_type.to_string()).set(current_size as f64);
+                                            gauge!("cache_active_entries", "resource_type" => resource_type.to_string()).set(new_count as f64);
+
+                                            if options.detailed_logging {
+                                                debug!(
+                                                    "➕ Added {} ID: {} to newly registered cache (size: {}, active: {})",
+                                                    resource_type, id_str, current_size, new_count
+                                                );
+                                            }
+
+                                            Ok(())
+                                        }
+                                        None => {
+                                            // Still can't get the cache, log the error
+                                            if options.detailed_logging {
+                                                warn!(
+                                                    "❌ Failed to get cache for {} after registration",
+                                                    resource_type
+                                                );
+                                            }
+                                            Err("Failed to get cache after registration"
+                                                .to_string())
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    // Failed to register the resource type
+                                    if options.detailed_logging {
+                                        warn!(
+                                            "❌ Failed to register {} in cache registry: {}",
+                                            resource_type, e
+                                        );
+                                    }
+                                    Err(e)
+                                }
+                            }
+                        }
+                    };
+
+                    // Log any errors but continue - we don't want to fail the request if caching fails
+                    if let Err(e) = store_result {
+                        debug!(
+                            "❌ Failed to store {} {} in registry cache: {}",
+                            resource_type, id_str, e
+                        );
+                    }
+
+                    if options.detailed_logging {
                         info!(
-                            "📅 Cache TTL for {} {} set to {} seconds",
-                            R::resource_type(),
-                            id_str,
-                            options.cache_ttl_seconds
+                            "📅 Cache TTL for {} {} set to {} seconds (in registry)",
+                            resource_type, id_str, options.cache_ttl_seconds
                         );
                     }
                 }
@@ -202,186 +364,6 @@ fn cache_hit_ratio() -> f64 {
     } else {
         0.0
     }
-}
-
-/// Check if a resource is in the cache
-///
-/// # Type Parameters
-///
-/// - `R`: The resource type that implements ApiResource
-///
-/// # Arguments
-///
-/// - `id`: The resource ID
-/// - `cache`: The cache to check
-/// - `id_str`: String representation of the ID (for logging)
-///
-/// # Returns
-///
-/// Some(resource) if found in cache, None otherwise
-async fn check_cache<R: ApiResource>(
-    id: &R::Id,
-    cache: &crate::cache::CacheWithTTL,
-    id_str: &str,
-) -> Option<R> {
-    // Debug log the cache size before checking
-    let start_size = cache.cache.entry_count();
-    let active_entries = cache
-        .active_entries
-        .load(std::sync::atomic::Ordering::Relaxed);
-    debug!(
-        "🔍 [API] Cache stats before checking for {}: size={}, active={}",
-        id_str, start_size, active_entries
-    );
-
-    let cache_key = match to_cache_key::<R>(id) {
-        Some(key) => key,
-        None => {
-            debug!(
-                "Unable to convert {} ID {} to cache key for lookup",
-                R::resource_type(),
-                id_str
-            );
-            return None;
-        }
-    };
-
-    let cache_value = cache.cache.get(&cache_key).await;
-    let resource = cache_value
-        .as_ref()
-        .and_then(|value| convert_cached_resource::<R>(value.clone()));
-
-    match resource {
-        Some(ref r) => {
-            // Cache hit
-            counter!("cache_hits").increment(1);
-            CACHE_HITS.fetch_add(1, Ordering::SeqCst);
-            gauge!("cache_hit_ratio").set(cache_hit_ratio());
-            debug!(
-                "✅ [API] Cache hit for {} {} (key: {})",
-                R::resource_type(),
-                id_str,
-                cache_key
-            );
-            Some(r.clone())
-        }
-        None => {
-            // Cache miss
-            if cache_value.is_some() {
-                // We had a value but couldn't convert it
-                debug!(
-                    "❌ [API] Cache value found for {} {} but conversion failed",
-                    R::resource_type(),
-                    id_str
-                );
-            } else {
-                // No value found in cache
-                debug!(
-                    "❌ [API] Cache miss for {} {} (key: {})",
-                    R::resource_type(),
-                    id_str,
-                    cache_key
-                );
-            }
-            counter!("cache_misses").increment(1);
-            CACHE_MISSES.fetch_add(1, Ordering::SeqCst);
-            gauge!("cache_hit_ratio").set(cache_hit_ratio());
-            None
-        }
-    }
-}
-
-/// Store a resource in the cache
-///
-/// # Type Parameters
-///
-/// - `R`: The resource type that implements ApiResource
-///
-/// # Arguments
-///
-/// - `id`: The resource ID
-/// - `resource`: The resource to store
-/// - `cache`: The cache to store in
-/// - `id_str`: String representation of the ID (for logging)
-async fn store_in_cache<R: ApiResource>(
-    id: &R::Id,
-    resource: &R,
-    cache: &crate::cache::CacheWithTTL,
-    id_str: &str,
-) {
-    // Debug log the cache size at the start
-    let start_size = cache.cache.entry_count();
-    let start_active = cache
-        .active_entries
-        .load(std::sync::atomic::Ordering::Relaxed);
-    debug!(
-        "🔍 [API] Cache size before storing {}: {} (active: {})",
-        id_str, start_size, start_active
-    );
-
-    let cache_key = match to_cache_key::<R>(id) {
-        Some(key) => key,
-        None => {
-            debug!(
-                "Unable to convert {} ID {} to cache key for storage",
-                R::resource_type(),
-                id_str
-            );
-            return;
-        }
-    };
-
-    // Convert the resource to a cacheable format
-    let cache_value = match convert_to_cache_value::<R>(resource) {
-        Some(value) => value,
-        None => {
-            debug!(
-                "Failed to convert {} {} to cache format",
-                R::resource_type(),
-                id_str
-            );
-            return;
-        }
-    };
-
-    // Store in cache
-    debug!(
-        "➕ [API] About to add {} {} to cache (key: {})",
-        R::resource_type(),
-        id_str,
-        cache_key
-    );
-    cache.cache.insert(cache_key, cache_value).await;
-
-    // Increment the counters
-    counter!("cache_entries_created").increment(1);
-    let new_count = cache
-        .active_entries
-        .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
-        + 1;
-
-    // Update current size metric immediately after inserting
-    let current_size = cache.cache.entry_count();
-    gauge!("cache_current_size").set(current_size as f64);
-    gauge!("cache_size").set(new_count as f64);
-    gauge!("cache_active_entries").set(new_count as f64);
-
-    // Try to read back the value to confirm it's there
-    let check = cache.cache.get(&cache_key).await;
-    debug!(
-        "🔍 [API] Verification check - {} {} is in cache: {}",
-        R::resource_type(),
-        id_str,
-        check.is_some()
-    );
-
-    debug!(
-        "➕ [API] Stored {} {} in cache (current size: {}, active: {})",
-        R::resource_type(),
-        id_str,
-        current_size,
-        new_count
-    );
 }
 
 /// Fetch a resource with retries on failure
@@ -474,12 +456,6 @@ where
 
 // Specialized implementations for our specific cache
 
-/// Convert a resource ID to a cache key (i64)
-fn to_cache_key<R: ApiResource>(id: &R::Id) -> Option<i64> {
-    // For now, we assume all IDs can be converted to i64
-    id.to_string().parse::<i64>().ok()
-}
-
 /// Convert a cached Upet to the specific resource type
 fn convert_cached_resource<R: ApiResource>(cached: Upet) -> Option<R> {
     // For pet resources, we can just clone the cached item
@@ -516,4 +492,9 @@ fn convert_to_cache_value<R: ApiResource>(resource: &R) -> Option<Upet> {
         // This is a placeholder for future resource types
         None
     }
+}
+
+/// Convert an ID to a cache key (for backward compatibility)
+fn to_cache_key<R: ApiResource>(id: &R::Id) -> Option<i64> {
+    id.to_string().parse::<i64>().ok()
 }

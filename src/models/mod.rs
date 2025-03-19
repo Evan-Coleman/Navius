@@ -40,7 +40,7 @@ pub struct DetailedHealthResponse {
     pub environment: String,
     pub dependencies: Vec<DependencyStatus>,
     pub cache_enabled: bool,
-    pub cache_stats: Option<CacheStats>,
+    pub cache_stats: Option<Vec<CacheStats>>,
 }
 
 /// Actuator entry for key-value responses
