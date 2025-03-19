@@ -11,7 +11,6 @@ use crate::models::MetricsResponse;
 ///
 /// Returns Prometheus metrics in text format
 pub async fn metrics(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    info!("📊 Getting Prometheus metrics");
     let metrics = state.metrics_handle.render();
     (
         StatusCode::OK,

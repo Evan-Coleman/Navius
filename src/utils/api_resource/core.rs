@@ -2,8 +2,9 @@ use axum::{
     Json,
     extract::{Path, State},
 };
-use metrics::counter;
+use metrics::{counter, gauge};
 use serde::{Serialize, de::DeserializeOwned};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::{any::Any, fmt::Debug, sync::Arc};
 use tracing::{debug, info, warn};
 
@@ -142,6 +143,7 @@ where
                             info!("✅ Retrieved {} {} from cache", R::resource_type(), id_str);
                         }
                         counter!("cache_hits_total").increment(1);
+                        counter!("pet_cache_hits_total").increment(1);
                         return Ok(Json(resource));
                     }
                 }
@@ -185,6 +187,23 @@ where
     }
 }
 
+// Static counters for cache hits and misses
+static CACHE_HITS: AtomicU64 = AtomicU64::new(0);
+static CACHE_MISSES: AtomicU64 = AtomicU64::new(0);
+
+/// Calculate cache hit ratio as a percentage
+fn cache_hit_ratio() -> f64 {
+    let hits = CACHE_HITS.load(Ordering::Relaxed);
+    let misses = CACHE_MISSES.load(Ordering::Relaxed);
+
+    let total = hits + misses;
+    if total > 0 {
+        (hits as f64 / total as f64) * 100.0
+    } else {
+        0.0
+    }
+}
+
 /// Check if a resource is in the cache
 ///
 /// # Type Parameters
@@ -205,11 +224,21 @@ async fn check_cache<R: ApiResource>(
     cache: &crate::cache::CacheWithTTL,
     id_str: &str,
 ) -> Option<R> {
+    // Debug log the cache size before checking
+    let start_size = cache.cache.entry_count();
+    let active_entries = cache
+        .active_entries
+        .load(std::sync::atomic::Ordering::Relaxed);
+    debug!(
+        "🔍 [API] Cache stats before checking for {}: size={}, active={}",
+        id_str, start_size, active_entries
+    );
+
     let cache_key = match to_cache_key::<R>(id) {
         Some(key) => key,
         None => {
             debug!(
-                "Unable to convert {} ID {} to cache key",
+                "Unable to convert {} ID {} to cache key for lookup",
                 R::resource_type(),
                 id_str
             );
@@ -217,21 +246,49 @@ async fn check_cache<R: ApiResource>(
         }
     };
 
-    // Try to get from cache
-    if let Some(cached_resource) = cache.cache.get(&cache_key).await {
-        debug!("Cache hit for {} {}", R::resource_type(), id_str);
-        if let Some(converted) = convert_cached_resource::<R>(cached_resource) {
-            return Some(converted);
-        } else {
+    let cache_value = cache.cache.get(&cache_key).await;
+    let resource = cache_value
+        .as_ref()
+        .and_then(|value| convert_cached_resource::<R>(value.clone()));
+
+    match resource {
+        Some(ref r) => {
+            // Cache hit
+            counter!("cache_hits").increment(1);
+            CACHE_HITS.fetch_add(1, Ordering::SeqCst);
+            gauge!("cache_hit_ratio").set(cache_hit_ratio());
             debug!(
-                "Failed to convert cached {} {} to API resource",
+                "✅ [API] Cache hit for {} {} (key: {})",
                 R::resource_type(),
-                id_str
+                id_str,
+                cache_key
             );
+            Some(r.clone())
+        }
+        None => {
+            // Cache miss
+            if cache_value.is_some() {
+                // We had a value but couldn't convert it
+                debug!(
+                    "❌ [API] Cache value found for {} {} but conversion failed",
+                    R::resource_type(),
+                    id_str
+                );
+            } else {
+                // No value found in cache
+                debug!(
+                    "❌ [API] Cache miss for {} {} (key: {})",
+                    R::resource_type(),
+                    id_str,
+                    cache_key
+                );
+            }
+            counter!("cache_misses").increment(1);
+            CACHE_MISSES.fetch_add(1, Ordering::SeqCst);
+            gauge!("cache_hit_ratio").set(cache_hit_ratio());
+            None
         }
     }
-
-    None
 }
 
 /// Store a resource in the cache
@@ -252,6 +309,16 @@ async fn store_in_cache<R: ApiResource>(
     cache: &crate::cache::CacheWithTTL,
     id_str: &str,
 ) {
+    // Debug log the cache size at the start
+    let start_size = cache.cache.entry_count();
+    let start_active = cache
+        .active_entries
+        .load(std::sync::atomic::Ordering::Relaxed);
+    debug!(
+        "🔍 [API] Cache size before storing {}: {} (active: {})",
+        id_str, start_size, start_active
+    );
+
     let cache_key = match to_cache_key::<R>(id) {
         Some(key) => key,
         None => {
@@ -278,8 +345,43 @@ async fn store_in_cache<R: ApiResource>(
     };
 
     // Store in cache
+    debug!(
+        "➕ [API] About to add {} {} to cache (key: {})",
+        R::resource_type(),
+        id_str,
+        cache_key
+    );
     cache.cache.insert(cache_key, cache_value).await;
-    debug!("Stored {} {} in cache", R::resource_type(), id_str);
+
+    // Increment the counters
+    counter!("cache_entries_created").increment(1);
+    let new_count = cache
+        .active_entries
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        + 1;
+
+    // Update current size metric immediately after inserting
+    let current_size = cache.cache.entry_count();
+    gauge!("cache_current_size").set(current_size as f64);
+    gauge!("cache_size").set(new_count as f64);
+    gauge!("cache_active_entries").set(new_count as f64);
+
+    // Try to read back the value to confirm it's there
+    let check = cache.cache.get(&cache_key).await;
+    debug!(
+        "🔍 [API] Verification check - {} {} is in cache: {}",
+        R::resource_type(),
+        id_str,
+        check.is_some()
+    );
+
+    debug!(
+        "➕ [API] Stored {} {} in cache (current size: {}, active: {})",
+        R::resource_type(),
+        id_str,
+        current_size,
+        new_count
+    );
 }
 
 /// Fetch a resource with retries on failure

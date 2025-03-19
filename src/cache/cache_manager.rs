@@ -1,7 +1,10 @@
 use metrics::{counter, gauge};
 use moka::future::Cache;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
 use std::time::{Duration, SystemTime};
 use tokio::time::interval;
 use tracing::{debug, info};
@@ -17,15 +20,20 @@ pub struct CacheWithTTL {
     pub cache: PetCache,
     pub creation_time: SystemTime,
     pub ttl_seconds: u64,
+    // Add an atomic counter for current active entries
+    pub active_entries: Arc<AtomicU64>,
 }
 
 /// Cache statistics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheStats {
+    pub uptime_seconds: u64,
+    pub size: u64,
+    pub active_entries: u64,
+    pub entries_created: u64,
     pub hits: u64,
     pub misses: u64,
-    pub size: u64,
-    pub uptime_seconds: u64,
+    pub hit_ratio: f64,
 }
 
 /// Initialize the pet cache with TTL
@@ -46,6 +54,7 @@ pub fn init_cache(max_capacity: u64, ttl_seconds: u64) -> CacheWithTTL {
         cache,
         creation_time: SystemTime::now(),
         ttl_seconds,
+        active_entries: Arc::new(AtomicU64::new(0)),
     }
 }
 
@@ -56,6 +65,9 @@ pub fn get_cache_stats_with_metrics(
 ) -> CacheStats {
     let cache = &cache_with_ttl.cache;
     let cached_entries = cache.entry_count();
+    let active_entries = cache_with_ttl
+        .active_entries
+        .load(std::sync::atomic::Ordering::Relaxed);
 
     // Calculate uptime
     let uptime_seconds = SystemTime::now()
@@ -66,6 +78,7 @@ pub fn get_cache_stats_with_metrics(
     // Parse metrics text to extract hit and miss counts
     let mut hits = 0;
     let mut misses = 0;
+    let mut entries_created = 0;
 
     for line in metrics_text.lines() {
         if line.contains("pet_cache_hits_total") && !line.starts_with('#') {
@@ -80,14 +93,30 @@ pub fn get_cache_stats_with_metrics(
                     misses = count;
                 }
             }
+        } else if line.contains("cache_entries_created") && !line.starts_with('#') {
+            if let Some(value) = line.split_whitespace().nth(1) {
+                if let Ok(count) = value.parse::<u64>() {
+                    entries_created = count;
+                }
+            }
         }
     }
 
+    // Calculate hit ratio
+    let hit_ratio = if hits + misses > 0 {
+        (hits as f64 / (hits + misses) as f64) * 100.0
+    } else {
+        0.0
+    };
+
     CacheStats {
+        uptime_seconds,
+        size: cached_entries,
+        active_entries,
+        entries_created,
         hits,
         misses,
-        size: cached_entries,
-        uptime_seconds,
+        hit_ratio,
     }
 }
 
@@ -96,10 +125,13 @@ pub fn get_cache_stats(cache: &PetCache, uptime_seconds: u64) -> CacheStats {
     let cached_entries = cache.entry_count();
 
     CacheStats {
-        hits: 0,   // We track hits using metrics
-        misses: 0, // We track misses using metrics
-        size: cached_entries,
         uptime_seconds,
+        size: cached_entries,
+        active_entries: 0,  // We track active entries using our atomic counter
+        entries_created: 0, // We track entries created using metrics
+        hits: 0,            // We track hits using metrics
+        misses: 0,          // We track misses using metrics
+        hit_ratio: 0.0,     // We calculate the hit ratio from hits and misses
     }
 }
 
@@ -115,10 +147,30 @@ where
 {
     let cache = &cache_with_ttl.cache;
 
+    // Debug log the cache size at the start
+    let start_size = cache.entry_count();
+    debug!(
+        "🔍 Cache size before operation for pet ID {}: {}",
+        id, start_size
+    );
+
     // Try to get from cache first
     if let Some(pet) = cache.get(&id).await {
         counter!("pet_cache_hits_total").increment(1);
         debug!("🔍 Cache hit for pet ID: {} (name: {})", id, pet.name);
+
+        // Update current size metric whenever we access the cache
+        let current_size = cache.entry_count();
+        let active_count = cache_with_ttl.active_entries.load(Ordering::Relaxed);
+
+        gauge!("cache_current_size").set(current_size as f64);
+        gauge!("cache_active_entries").set(active_count as f64);
+
+        debug!(
+            "📊 Cache size after hit for pet ID {}: {} (active: {})",
+            id, current_size, active_count
+        );
+
         return Ok(pet);
     }
 
@@ -130,9 +182,37 @@ where
     match fetch_fn().await {
         Ok(pet) => {
             // Store in cache
+            debug!("➕ About to add pet ID: {} to cache", id);
             cache.insert(id, pet.clone()).await;
+
+            // Increment our counters
             counter!("cache_entries_created").increment(1);
-            debug!("➕ Added pet ID: {} (name: {}) to cache", id, pet.name);
+            let new_count = cache_with_ttl.active_entries.fetch_add(1, Ordering::SeqCst) + 1;
+
+            // Update current size metric immediately after inserting
+            let current_size = cache.entry_count();
+            gauge!("cache_current_size").set(current_size as f64);
+            gauge!("cache_active_entries").set(new_count as f64);
+
+            // Additional debugging for what's in the cache
+            debug!(
+                "📊 Cache entry count right after insertion: {} (active: {})",
+                current_size, new_count
+            );
+
+            // Try to read back the value to confirm it's there
+            let check = cache.get(&id).await;
+            debug!(
+                "🔍 Verification check - pet {} is in cache: {}",
+                id,
+                check.is_some()
+            );
+
+            debug!(
+                "➕ Added pet ID: {} (name: {}) to cache (current size: {}, active: {})",
+                id, pet.name, current_size, new_count
+            );
+
             Ok(pet)
         }
         Err(e) => {
@@ -150,12 +230,24 @@ pub fn start_metrics_updater(cache_with_ttl: Option<CacheWithTTL>) {
 
             info!("🔄 Metrics updater started for cache");
 
+            // Get an initial size to help diagnose initial state
+            let initial_size = cache.cache.entry_count();
+            let initial_active = cache.active_entries.load(Ordering::Relaxed);
+            info!(
+                "📊 Initial cache size on startup: {} (active: {})",
+                initial_size, initial_active
+            );
+
             loop {
                 tick_interval.tick().await;
 
                 // Update cache metrics
                 let size = cache.cache.entry_count();
-                gauge!("cache_size").set(size as f64);
+                let active_count = cache.active_entries.load(Ordering::Relaxed);
+
+                // Update metrics directly from our atomic counter
+                gauge!("cache_size").set(active_count as f64);
+                gauge!("cache_active_entries").set(active_count as f64);
 
                 // Calculate cache TTL percentage used
                 if let Ok(elapsed) = SystemTime::now().duration_since(cache.creation_time) {
@@ -169,7 +261,7 @@ pub fn start_metrics_updater(cache_with_ttl: Option<CacheWithTTL>) {
                 unsafe {
                     TICK_COUNT += 1;
                     if TICK_COUNT % 20 == 0 {
-                        info!("📊 Cache size: {}", size);
+                        info!("📊 Cache size: {} (active: {})", size, active_count);
                     }
                 }
             }
