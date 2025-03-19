@@ -492,6 +492,128 @@ fn default_openapi_spec_path() -> String {
     format!("{}/{}.yaml", default_openapi_dir(), default_app_name)
 }
 
+/// Environment type
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum EnvironmentType {
+    Development,
+    Testing,
+    Staging,
+    Production,
+}
+
+impl Default for EnvironmentType {
+    fn default() -> Self {
+        // Default to development for safety
+        EnvironmentType::Development
+    }
+}
+
+impl std::fmt::Display for EnvironmentType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EnvironmentType::Development => write!(f, "development"),
+            EnvironmentType::Testing => write!(f, "testing"),
+            EnvironmentType::Staging => write!(f, "staging"),
+            EnvironmentType::Production => write!(f, "production"),
+        }
+    }
+}
+
+impl From<String> for EnvironmentType {
+    fn from(s: String) -> Self {
+        match s.to_lowercase().as_str() {
+            "development" | "dev" => EnvironmentType::Development,
+            "testing" | "test" => EnvironmentType::Testing,
+            "staging" => EnvironmentType::Staging,
+            "production" | "prod" => EnvironmentType::Production,
+            _ => EnvironmentType::Development, // Default to development for safety
+        }
+    }
+}
+
+/// Management endpoint security configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EndpointSecurityConfig {
+    /// Whether basic health check is public (no auth)
+    #[serde(default = "default_true")]
+    pub public_health: bool,
+
+    /// Whether detailed health info is available
+    #[serde(default = "default_health_details")]
+    pub expose_health_details: bool,
+
+    /// Whether detailed health check is public (no auth) - usually false in production
+    #[serde(default = "default_false")]
+    pub public_detailed_health: bool,
+
+    /// Whether metrics endpoint is public (no auth) - usually false in production
+    #[serde(default = "default_false")]
+    pub public_metrics: bool,
+
+    /// Whether to show sensitive info in health checks - usually false in production
+    #[serde(default = "default_false")]
+    pub expose_sensitive_info: bool,
+}
+
+impl Default for EndpointSecurityConfig {
+    fn default() -> Self {
+        Self {
+            public_health: true,
+            expose_health_details: true,
+            public_detailed_health: false,
+            public_metrics: false,
+            expose_sensitive_info: false,
+        }
+    }
+}
+
+/// Get appropriate endpoint security based on environment
+pub fn get_endpoint_security_for_env(
+    env_type: &EnvironmentType,
+    config: Option<EndpointSecurityConfig>,
+) -> EndpointSecurityConfig {
+    // If explicit config is provided, use it
+    if let Some(config) = config {
+        return config;
+    }
+
+    // Otherwise use environment-based defaults
+    match env_type {
+        EnvironmentType::Development => EndpointSecurityConfig {
+            public_health: true,
+            expose_health_details: true,
+            public_detailed_health: true,
+            public_metrics: true,
+            expose_sensitive_info: true,
+        },
+        EnvironmentType::Testing => EndpointSecurityConfig {
+            public_health: true,
+            expose_health_details: true,
+            public_detailed_health: true,
+            public_metrics: true,
+            expose_sensitive_info: false,
+        },
+        EnvironmentType::Staging => EndpointSecurityConfig {
+            public_health: true,
+            expose_health_details: true,
+            public_detailed_health: false,
+            public_metrics: false,
+            expose_sensitive_info: false,
+        },
+        EnvironmentType::Production => EndpointSecurityConfig {
+            public_health: true,
+            expose_health_details: true,
+            public_detailed_health: false,
+            public_metrics: false,
+            expose_sensitive_info: false,
+        },
+    }
+}
+
+fn default_health_details() -> bool {
+    true
+}
+
 /// Application configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -507,6 +629,12 @@ pub struct AppConfig {
     pub auth: AuthConfig,
     #[serde(default)]
     pub openapi: OpenApiConfig,
+    /// Current environment (dev, test, staging, prod)
+    #[serde(default)]
+    pub environment: EnvironmentType,
+    /// Endpoint security configuration
+    #[serde(default)]
+    pub endpoint_security: EndpointSecurityConfig,
 }
 
 /// Application metadata configuration

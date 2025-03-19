@@ -17,12 +17,11 @@ use tower_http::{timeout::TimeoutLayer, trace::TraceLayer};
 use tracing::info;
 
 use crate::{
-    auth::middleware::{EntraAuthConfig, RoleRequirement},
-    auth::{EntraAuthLayer, EntraTokenClient},
+    auth::{middleware::{EntraAuthConfig, RoleRequirement}, EntraAuthLayer, EntraTokenClient},
     cache::PetCache,
     config::AppConfig,
     generated_apis::petstore_api::models::Upet,
-    handlers,
+    handlers::{self, detailed_health_check},
     models::{ApiResponse, Data, HealthCheckResponse, MetricsResponse},
     reliability,
 };
@@ -94,37 +93,36 @@ fn with_auth_if_enabled(
 pub fn create_router(state: Arc<AppState>) -> Router {
     // Create route groups with appropriate auth requirements
     let public_routes = Router::new()
-        .route("/health", get(handlers::health::health_check))
-        .route("/metrics", get(metrics))
-        .route(
-            "/catfact",
-            get(handlers::examples::catfact::fetch_catfact_handler),
+        .route("/health",
+        get(handlers::health::health_check))
+        .route("/catfact",
+        get(handlers::examples::catfact::fetch_catfact_handler),
         )
-        .route("/pet/{id}", get(handlers::examples::pet::fetch_pet_handler))
-        .route("/api/pets", get(list_pets))
-        .route("/api/pets/{id}", get(get_pet));
+        .route("/pet/{id}",
+        get(handlers::examples::pet::fetch_pet_handler))
 
     let readonly_routes = Router::new()
-        .route("/api/readonly/pets", get(handlers::examples::pets::get_pet))
-        .route(
-            "/api/readonly/pets/{id}",
-            get(handlers::examples::pets::get_pet),
+        .route("/api/readonly/pets",
+        get(handlers::examples::pets::get_pet))
+        .route("/api/readonly/pets/{id}",
+        get(handlers::examples::pets::get_pet),
         );
 
     let fullaccess_routes = Router::new()
-        .route(
-            "/api/fullaccess/pets",
+        .route("/api/fullaccess/pets",
             get(handlers::examples::pets::get_pet),
         )
-        .route(
-            "/api/fullaccess/pets/{id}",
+        .route("/api/fullaccess/pets/{id}",
             get(handlers::examples::pets::get_pet),
         );
 
     let admin_routes = Router::new()
-        .route("/api/admin/pets", post(create_pet))
-        .route("/api/admin/pets/{id}", delete(delete_pet))
-        .route("/api/admin/cache", get(handlers::cache_debug));
+        .route("/metrics",
+        get(metrics))
+        .route("/health/detailed",
+        get(detailed_health_check(state.clone())))
+        .route("/api/admin/cache",
+        get(handlers::cache_debug));
 
     // Apply authentication conditionally to each route group
     let public_routes = with_auth_if_enabled(public_routes, AuthRequirement::None, &state);

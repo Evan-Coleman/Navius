@@ -41,7 +41,10 @@ use crate::{
 use std::time::Duration;
 
 /// Apply reliability middleware to the router based on configuration
-pub fn apply_reliability(router: Router, config: &crate::config::ReliabilityConfig) -> Router {
+pub fn apply_reliability(
+    router: Router<Arc<AppState>>,
+    config: &crate::config::ReliabilityConfig,
+) -> Router<Arc<AppState>> {
     // Add timeout layer if configured
     if let Some(timeout_layer) = build_timeout_layer(&config.timeout) {
         return router.layer(timeout_layer);

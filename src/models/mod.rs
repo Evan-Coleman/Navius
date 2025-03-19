@@ -8,14 +8,50 @@ pub struct Data {
     pub length: i32,
 }
 
-/// Health check response structure
+/// Basic health check response structure
+///
+/// For simple Kubernetes/Load Balancer health checks
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HealthCheckResponse {
     pub status: String,
     pub version: String,
     pub uptime_seconds: u64,
+}
+
+/// Dependency status for detailed health checks
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DependencyStatus {
+    pub name: String,
+    pub status: String,
+    pub details: Option<String>,
+}
+
+/// Detailed health check response structure
+///
+/// For administrators and detailed monitoring
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DetailedHealthResponse {
+    pub status: String,
+    pub version: String,
+    pub uptime_seconds: u64,
+    pub environment: String,
+    pub dependencies: Vec<DependencyStatus>,
     pub cache_enabled: bool,
     pub cache_stats: Option<CacheStats>,
+}
+
+/// Actuator entry for key-value responses
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ActuatorEntry {
+    pub name: String,
+    pub value: String,
+}
+
+/// Info endpoint response structure
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InfoResponse {
+    pub status: String,
+    pub entries: Vec<ActuatorEntry>,
 }
 
 /// Metrics response structure (for documentation purposes)
