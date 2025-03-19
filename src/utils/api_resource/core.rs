@@ -9,7 +9,7 @@ use tracing::{debug, info, warn};
 
 use crate::{
     app::AppState,
-    cache::cache_manager::PetCache,
+    cache::CacheWithTTL,
     error::{AppError, Result},
     generated_apis::petstore_api::models::Upet,
     utils::api_logger,
@@ -200,28 +200,37 @@ where
 /// # Returns
 ///
 /// Some(resource) if found in cache, None otherwise
-async fn check_cache<R: ApiResource>(id: &R::Id, cache: &PetCache, id_str: &str) -> Option<R> {
-    debug!(
-        "🔍 Checking cache for {} ID: {}",
-        R::resource_type(),
-        id_str
-    );
+async fn check_cache<R: ApiResource>(
+    id: &R::Id,
+    cache: &crate::cache::CacheWithTTL,
+    id_str: &str,
+) -> Option<R> {
+    let cache_key = match to_cache_key::<R>(id) {
+        Some(key) => key,
+        None => {
+            debug!(
+                "Unable to convert {} ID {} to cache key",
+                R::resource_type(),
+                id_str
+            );
+            return None;
+        }
+    };
 
-    // Convert the ID to a cache key
-    if let Some(cache_id) = to_cache_key::<R>(id) {
-        let resource_result = cache.get(&cache_id).await;
-        if let Some(resource) = resource_result {
-            // Convert the cached resource to the appropriate type
-            if let Some(typed_resource) = convert_cached_resource::<R>(resource) {
-                counter!("pet_cache_hits_total").increment(1);
-                api_logger::log_cache_hit(R::resource_type(), id_str);
-                return Some(typed_resource);
-            }
+    // Try to get from cache
+    if let Some(cached_resource) = cache.cache.get(&cache_key).await {
+        debug!("Cache hit for {} {}", R::resource_type(), id_str);
+        if let Some(converted) = convert_cached_resource::<R>(cached_resource) {
+            return Some(converted);
+        } else {
+            debug!(
+                "Failed to convert cached {} {} to API resource",
+                R::resource_type(),
+                id_str
+            );
         }
     }
 
-    counter!("pet_cache_misses_total").increment(1);
-    api_logger::log_cache_miss(R::resource_type(), id_str);
     None
 }
 
@@ -237,17 +246,40 @@ async fn check_cache<R: ApiResource>(id: &R::Id, cache: &PetCache, id_str: &str)
 /// - `resource`: The resource to store
 /// - `cache`: The cache to store in
 /// - `id_str`: String representation of the ID (for logging)
-async fn store_in_cache<R: ApiResource>(id: &R::Id, resource: &R, cache: &PetCache, id_str: &str) {
-    debug!("💾 Storing {} ID: {} in cache", R::resource_type(), id_str);
-
-    // Convert the ID to a cache key
-    if let Some(cache_id) = to_cache_key::<R>(id) {
-        if let Some(cache_value) = convert_to_cache_value::<R>(resource) {
-            cache.insert(cache_id, cache_value).await;
-            counter!("cache_entries_created").increment(1);
-            api_logger::log_cache_store(R::resource_type(), id_str);
+async fn store_in_cache<R: ApiResource>(
+    id: &R::Id,
+    resource: &R,
+    cache: &crate::cache::CacheWithTTL,
+    id_str: &str,
+) {
+    let cache_key = match to_cache_key::<R>(id) {
+        Some(key) => key,
+        None => {
+            debug!(
+                "Unable to convert {} ID {} to cache key for storage",
+                R::resource_type(),
+                id_str
+            );
+            return;
         }
-    }
+    };
+
+    // Convert the resource to a cacheable format
+    let cache_value = match convert_to_cache_value::<R>(resource) {
+        Some(value) => value,
+        None => {
+            debug!(
+                "Failed to convert {} {} to cache format",
+                R::resource_type(),
+                id_str
+            );
+            return;
+        }
+    };
+
+    // Store in cache
+    cache.cache.insert(cache_key, cache_value).await;
+    debug!("Stored {} {} in cache", R::resource_type(), id_str);
 }
 
 /// Fetch a resource with retries on failure

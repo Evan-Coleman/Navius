@@ -43,11 +43,7 @@ pub async fn detailed_health_check(
         let metrics_text = state.metrics_handle.render();
 
         // Use the enhanced stats function that includes metrics data
-        Some(get_cache_stats_with_metrics(
-            cache,
-            uptime.as_secs(),
-            &metrics_text,
-        ))
+        Some(get_cache_stats_with_metrics(cache, &metrics_text))
     } else {
         None
     };

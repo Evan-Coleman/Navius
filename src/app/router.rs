@@ -22,7 +22,7 @@ use crate::{
         EntraAuthLayer, EntraTokenClient,
         middleware::{EntraAuthConfig, RoleRequirement},
     },
-    cache::PetCache,
+    cache::{CacheWithTTL, PetCache},
     config::AppConfig,
     generated_apis::petstore_api::models::Upet,
     handlers::{self},
@@ -39,7 +39,7 @@ pub struct AppState {
     pub client: Client,
     pub config: AppConfig,
     pub start_time: SystemTime,
-    pub pet_cache: Option<PetCache>,
+    pub pet_cache: Option<CacheWithTTL>,
     pub metrics_handle: PrometheusHandle,
     pub token_client: Option<EntraTokenClient>,
 }
@@ -168,10 +168,9 @@ pub async fn init() -> (Router, SocketAddr) {
 
     // Start metrics updater with the cloned cache
     if let Some(cache) = pet_cache {
-        info!("🔧 Starting metrics updater for cache");
-        crate::cache::cache_manager::start_metrics_updater(start_time, Some(cache));
+        crate::cache::cache_manager::start_metrics_updater(Some(cache));
     } else {
-        info!("🔧 Metrics updater not started - cache is disabled");
+        info!("🔧 Pet cache disabled, metrics updater not started");
     }
 
     // Create router

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tracing::info;
 
 use crate::app::AppState;
-use crate::cache::cache_manager::CacheStats;
+use crate::cache::cache_manager::{CacheStats, CacheWithTTL};
 
 /// Response for the cache debug endpoint
 #[derive(Serialize, Deserialize)]
@@ -43,31 +43,15 @@ pub async fn cache_debug(State(state): State<Arc<AppState>>) -> Json<CacheDebugR
         // Try to extract the actual entries from the cache
         // This will help us debug if items are actually in the cache
         // Attempt to inspect the cache - this is a best effort
-        let cache_ref = cache.as_ref();
-        let entry_count = cache_ref.entry_count();
+        let entry_count = cache.cache.entry_count();
 
         // For debugging, we can add a custom method or use metrics
         entries.insert("total_count".to_string(), entry_count.to_string());
+        entries.insert("ttl_seconds".to_string(), cache.ttl_seconds.to_string());
 
-        // Add cache configuration info
-        entries.insert(
-            "ttl_seconds".to_string(),
-            state.config.cache.ttl_seconds.to_string(),
-        );
-        entries.insert(
-            "max_capacity".to_string(),
-            state.config.cache.max_capacity.to_string(),
-        );
-
-        // Calculate uptime
-        let uptime = std::time::SystemTime::now()
-            .duration_since(state.start_time)
-            .unwrap_or_default();
-
-        // Get cache stats
-        Some(crate::cache::cache_manager::get_cache_stats(
+        Some(crate::cache::cache_manager::get_cache_stats_with_metrics(
             cache,
-            uptime.as_secs(),
+            &metrics_text,
         ))
     } else {
         None
