@@ -59,7 +59,7 @@ pub async fn fetch_pet_handler(
             use_cache: true,
             use_retries: true,
             max_retry_attempts: 3,
-            cache_ttl_seconds: 600, // 10 minutes for pets
+            cache_ttl_seconds: state.config.cache.ttl_seconds, // Use configured TTL instead of hardcoded value
             detailed_logging: true,
         },
     );

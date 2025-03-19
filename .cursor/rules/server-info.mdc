@@ -6,3 +6,4 @@ alwaysApply: false
 - This is a new project greenfield with no users, so when we change or remove something it's okay to not have deprecation warnings, or legacy toggles etc.
 - The only route groups we ever want are as follows: public, readonly, fullaccess, actuator
 - public will be "/", readonly will be at "/read", fullaccess will be at "/full", and actuator will be at "/actuator"
+- For example use we will have the /pet/{id} route in all of the route groups

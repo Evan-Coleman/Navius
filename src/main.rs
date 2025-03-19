@@ -11,20 +11,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load environment variables from .env file
     dotenvy::dotenv().ok();
 
-    // Print environment variables for debugging
-    println!(
-        "RUST_BACKEND_TENANT_ID: {}",
-        std::env::var("RUST_BACKEND_TENANT_ID").unwrap_or_else(|_| "NOT SET".to_string())
-    );
-    println!(
-        "RUST_BACKEND_CLIENT_ID: {}",
-        std::env::var("RUST_BACKEND_CLIENT_ID").unwrap_or_else(|_| "NOT SET".to_string())
-    );
-    println!(
-        "RUST_BACKEND_AUDIENCE: {}",
-        std::env::var("RUST_BACKEND_AUDIENCE").unwrap_or_else(|_| "NOT SET".to_string())
-    );
-
     // Initialize tracing
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::INFO)

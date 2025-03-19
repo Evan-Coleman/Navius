@@ -44,62 +44,62 @@ pub struct AppState {
     pub token_client: Option<EntraTokenClient>,
 }
 
-/// Create the application router
+/// Create the application router with standardized route groups
 pub fn create_router(state: Arc<AppState>) -> Router {
-    // Build a regular Router without state
-    let mut api_router = Router::new();
+    // Define whether auth is enabled
+    let auth_enabled = state.config.auth.enabled;
 
-    // Add public routes
-    api_router = api_router
+    // Create logging middleware
+    let logging = middleware::from_fn_with_state(state.clone(), handlers::logging::log_request);
+
+    // Create auth middleware for different access levels
+    let readonly_auth = EntraAuthLayer::from_app_config(&state.config);
+    let fullaccess_auth = EntraAuthLayer::from_app_config_require_admin_role(&state.config);
+
+    // 1. PUBLIC ROUTES - available without authentication
+    let public_routes = Router::new()
         .route("/health", get(handlers::health::health_check))
-        .route("/pet/{id}", get(fetch_pet_handler));
+        .route("/pet/{id}", get(fetch_pet_handler.clone()));
 
-    // Conditionally add authenticated routes
-    if state.config.auth.enabled {
-        // Add logging middleware to auth routes
-        let logging = middleware::from_fn_with_state(state.clone(), handlers::logging::log_request);
+    // 2. READ-ONLY ROUTES - requires basic authentication
+    let readonly_routes = Router::new()
+        .route("/pet/{id}", get(fetch_pet_handler.clone()))
+        .route_layer(logging.clone())
+        .route_layer(readonly_auth.clone());
 
-        // Add authenticated routes
-        api_router = api_router.route(
-            "/metrics",
-            get(metrics)
-                .route_layer(logging.clone())
-                .route_layer(EntraAuthLayer::from_app_config(&state.config)),
-        );
+    // 3. FULL ACCESS ROUTES - requires admin role
+    let fullaccess_routes = Router::new()
+        .route("/pet/{id}", get(fetch_pet_handler.clone()))
+        .route_layer(logging.clone())
+        .route_layer(fullaccess_auth.clone());
 
-        // Add admin routes
-        api_router = api_router
-            .route(
-                "/health/detailed",
-                get(detailed_health_check)
-                    .route_layer(logging.clone())
-                    .route_layer(EntraAuthLayer::from_app_config_require_admin_role(
-                        &state.config,
-                    )),
-            )
-            .route(
-                "/api/admin/cache",
-                get(handlers::cache_debug)
-                    .route_layer(logging.clone())
-                    .route_layer(EntraAuthLayer::from_app_config_require_admin_role(
-                        &state.config,
-                    )),
-            );
+    // 4. ACTUATOR ROUTES - for metrics, health checks, and admin functions
+    let actuator_routes = Router::new()
+        .route("/health", get(detailed_health_check))
+        .route("/metrics", get(metrics))
+        .route("/cache", get(handlers::cache_admin::cache_debug));
+
+    // Apply authentication to actuator routes if enabled
+    let actuator_routes = if auth_enabled {
+        actuator_routes
+            .route_layer(logging.clone())
+            .route_layer(fullaccess_auth)
     } else {
-        // Add non-authenticated versions of the routes
-        api_router = api_router
-            .route("/metrics", get(metrics))
-            .route("/health/detailed", get(detailed_health_check))
-            .route("/api/admin/cache", get(handlers::cache_debug));
-    }
+        actuator_routes
+    };
 
-    // Add state to router (this is what would make it Router<Arc<AppState>>)
-    let api_router = api_router.with_state(state.clone());
+    // Combine all route groups
+    let app = Router::new()
+        .merge(public_routes)
+        .nest("/read", readonly_routes)
+        .nest("/full", fullaccess_routes)
+        .nest("/actuator", actuator_routes)
+        .with_state(state.clone());
 
     // Create a plain Router with common middleware
     Router::new()
-        // Use fallback_service instead of nest_service at root
-        .fallback_service(api_router)
+        // Use fallback_service for the main app
+        .fallback_service(app)
         // Add tracing
         .layer(TraceLayer::new_for_http())
         // Add timeout
