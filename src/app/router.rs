@@ -141,10 +141,6 @@ pub async fn init() -> (Router, SocketAddr) {
 
     // Initialize pet cache if enabled
     let pet_cache = if config.cache.enabled {
-        info!(
-            "🔧 Initializing pet cache with capacity {} and TTL {} seconds",
-            config.cache.max_capacity, config.cache.ttl_seconds
-        );
         Some(crate::cache::init_cache(
             config.cache.max_capacity,
             config.cache.ttl_seconds,

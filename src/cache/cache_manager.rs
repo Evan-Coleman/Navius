@@ -23,13 +23,11 @@ pub struct CacheStats {
 /// Initialize the pet cache
 pub fn init_cache(max_capacity: u64, ttl_seconds: u64) -> PetCache {
     info!(
-        "🔧 Initializing cache with TTL: {}s, capacity: {} items",
-        ttl_seconds, max_capacity
+        "🔧 Initializing cache with capacity {} and TTL {} seconds",
+        max_capacity, ttl_seconds
     );
 
     let ttl = Duration::from_secs(ttl_seconds);
-
-    info!("🔧 Setting cache TTL to {:?}", ttl);
 
     Arc::new(
         Cache::builder()
