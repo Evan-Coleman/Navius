@@ -18,7 +18,7 @@ app:
 
 cache:
   # Shorter TTL for development to see changes faster
-  ttl_seconds: 10
+  ttl_seconds: 60
 
 # Environment-specific authentication settings
 auth:

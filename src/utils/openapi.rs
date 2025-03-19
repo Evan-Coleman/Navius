@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Multipart, State},
+    extract::State,
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
@@ -44,79 +44,6 @@ pub async fn serve_user_openapi_spec(State(state): State<Arc<AppState>>) -> impl
             )
         }
     }
-}
-
-/// Handler to upload a new OpenAPI spec file
-pub async fn upload_openapi_spec(
-    State(state): State<Arc<AppState>>,
-    mut multipart: Multipart,
-) -> Result<impl IntoResponse> {
-    info!("Handling OpenAPI spec file upload");
-
-    // Get the directory path and ensure it exists
-    let dir_path = &state.config.openapi.spec_directory;
-    ensure_directory_exists(dir_path).map_err(|e| {
-        AppError::InternalError(format!("Failed to create OpenAPI directory: {}", e))
-    })?;
-
-    // Get the application name for the filename
-    let app_name = &state.config.app.name;
-
-    // Process the multipart form data
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(|e| AppError::BadRequest(format!("Failed to process upload: {}", e)))?
-    {
-        // For custom file uploads, use the provided file name
-        // Otherwise use app name with appropriate extension
-        let file_name = field.file_name().map(|s| s.to_string()).unwrap_or_else(|| {
-            // Use YAML as the default extension, unless JSON is explicitly set
-            let extension = if state.config.openapi.spec_file_path.ends_with(".json") {
-                "json"
-            } else {
-                "yaml"
-            };
-            format!("{}.{}", app_name, extension)
-        });
-
-        let content_type = field.content_type().unwrap_or("text/yaml");
-        info!("Received file: {} ({})", file_name, content_type);
-
-        // Read the file data
-        let data = field
-            .bytes()
-            .await
-            .map_err(|e| AppError::BadRequest(format!("Failed to read uploaded file: {}", e)))?;
-
-        // Validate the file is a valid OpenAPI spec
-        if !is_valid_openapi(&data) {
-            return Err(AppError::BadRequest(
-                "The uploaded file is not a valid OpenAPI specification".to_string(),
-            ));
-        }
-
-        // Construct the full target path
-        let target_path = format!("{}/{}", dir_path, file_name);
-
-        // Write the file to the target location
-        let mut file = File::create(&target_path)
-            .map_err(|e| AppError::InternalError(format!("Failed to create output file: {}", e)))?;
-
-        file.write_all(&data).map_err(|e| {
-            AppError::InternalError(format!("Failed to write to output file: {}", e))
-        })?;
-
-        info!("OpenAPI spec file saved to {}", target_path);
-
-        return Ok((
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, "text/plain")],
-            format!("Successfully uploaded OpenAPI spec file to {}", target_path),
-        ));
-    }
-
-    Err(AppError::BadRequest("No file was uploaded".to_string()))
 }
 
 /// Helper function to ensure a directory exists

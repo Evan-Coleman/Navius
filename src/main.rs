@@ -1,13 +1,10 @@
 use rust_backend::app;
 use rust_backend::config;
 use rust_backend::error::error_types::AppError;
-use rust_backend::utils::openapi;
 
-use axum::routing::get;
 use std::{fs, path::Path, process};
 use tracing::{Level, error, info};
 use tracing_subscriber::FmtSubscriber;
-use utoipa_swagger_ui::SwaggerUi;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -49,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn run_app() -> Result<(), AppError> {
     // Initialize the application
-    let (mut app, addr) = app::init().await;
+    let (app, addr) = app::init().await;
 
     // Load configuration
     let config = config::app_config::load_config()?;
@@ -64,33 +61,8 @@ async fn run_app() -> Result<(), AppError> {
         })?;
     }
 
-    // Get the application-specific OpenAPI spec path
-    let spec_path = config.openapi_spec_path();
-    let spec_exists = Path::new(&spec_path).exists();
-
-    if spec_exists {
-        info!("Using existing OpenAPI spec from: {}", spec_path);
-    } else {
-        info!("OpenAPI spec file not found at: {}", spec_path);
-        info!("Upload a spec file via the /api/admin/openapi endpoint");
-        info!("Default spec filename will be: {}.yaml", config.app.name);
-    }
-
-    // Add route to serve the user's OpenAPI spec
-    app = app.route("/api-docs/openapi", get(openapi::serve_user_openapi_spec));
-
-    // Add Swagger UI pointing to the user's spec
-    app = app.merge(SwaggerUi::new("/docs").url(
-        "/api-docs/openapi",
-        format!("{} API Documentation", config.app.name),
-    ));
-
     // Start the server
     info!("Starting server on {}://{}", protocol, addr);
-    info!(
-        "API documentation available at {}://{}/docs",
-        protocol, addr
-    );
 
     axum::serve(tokio::net::TcpListener::bind(addr).await?, app)
         .await

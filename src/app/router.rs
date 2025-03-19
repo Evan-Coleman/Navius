@@ -108,10 +108,6 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             .route("/api/admin/pets", post(create_pet))
             .route("/api/admin/pets/{id}", delete(delete_pet))
             .route("/api/admin/cache", get(handlers::cache_debug))
-            .route(
-                "/api/admin/openapi",
-                post(crate::utils::openapi::upload_openapi_spec),
-            )
             .route_layer(middleware::from_fn_with_state(
                 state.clone(),
                 handlers::logging::log_request,
@@ -143,10 +139,6 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             .route("/api/admin/pets", post(create_pet))
             .route("/api/admin/pets/{id}", delete(delete_pet))
             .route("/api/admin/cache", get(handlers::cache_debug))
-            .route(
-                "/api/admin/openapi",
-                post(crate::utils::openapi::upload_openapi_spec),
-            )
             .with_state(state.clone())
     };
 

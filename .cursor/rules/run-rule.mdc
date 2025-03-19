@@ -3,9 +3,4 @@ description: basic info about the server and running it
 globs: 
 alwaysApply: false
 ---
-
-# Your rule content
-
-- This is a new project greenfield with no users, so when we change or remove something it's okay to not have deprecation warnings, or legacy toggles etc.
-
 - To run the project you can use ./run_server.sh

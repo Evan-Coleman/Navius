@@ -58,7 +58,7 @@ done
 
 # Header
 echo "==================================================="
-echo "  Petstore API Server with Utoipa Integration"
+echo "  Petstore API Server"
 echo "==================================================="
 
 # Check for required tools
@@ -174,7 +174,7 @@ else
 fi
 
 # Build the project
-echo "Building the project (this will run the build script to add Utoipa annotations)..."
+echo "Building the project..."
 if [ "$RELEASE_MODE" = true ]; then
     echo "Building in release mode..."
     cargo build --release

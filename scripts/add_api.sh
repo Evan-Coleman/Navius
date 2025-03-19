@@ -264,8 +264,6 @@ additionalProperties:
   structPrefix: true
   dateLibrary: chrono
   useSingleRequestParameter: true
-  # Disable ToSchema derives since we're not using OpenAPI documentation for generated APIs
-  deriveToSchema: false
 EOF
 
 # Add model filtering if specified
@@ -308,10 +306,9 @@ if [ "$GENERATE_MODELS" = true ] && [ ! -f "generated/${API_NAME}_api/src/models
     cat > "generated/${API_NAME}_api/src/models/mod.rs" << EOF
 // Generated models for the ${API_NAME} API
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 /// ${ENTITY_NAME_CAMEL} model
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ${ENTITY_NAME_CAMEL} {
     /// ID of the ${ENTITY_NAME}
     pub id: i64,
@@ -331,7 +328,7 @@ pub struct ${ENTITY_NAME_CAMEL} {
 }
 
 /// Tag model
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Tag {
     /// ID of the tag
     pub id: i64,
@@ -341,7 +338,7 @@ pub struct Tag {
 }
 
 /// Category model
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Category {
     /// ID of the category
     pub id: i64,
