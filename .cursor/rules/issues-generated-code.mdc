@@ -1,0 +1,9 @@
+---
+description: If there's issues with generated code these instructions will be useful
+globs: 
+alwaysApply: false
+---
+
+# Your rule content
+
+If there are issues with the generated code we should not directly try to modify them but rather find out why they are broken. If we find a fix we should delete the generated folder and regenerate them using the ./run_server.sh script and see if the issue persists.
