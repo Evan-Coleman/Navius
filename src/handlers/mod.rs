@@ -1,7 +1,6 @@
 // Use public handler functions
 pub use actuator::info;
 pub use cache_admin::cache_debug;
-pub use examples::catfact::fetch_catfact_handler;
 pub use examples::pet::fetch_pet_handler;
 pub use health::detailed_health_check;
 pub use health::health_check;

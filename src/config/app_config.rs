@@ -29,7 +29,6 @@ pub struct CacheConfig {
 /// API configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiConfig {
-    pub cat_fact_url: String,
     pub petstore_url: String,
     pub api_key: Option<String>,
 }
