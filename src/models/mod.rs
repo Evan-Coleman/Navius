@@ -17,6 +17,7 @@ pub struct HealthCheckResponse {
     pub status: String,
     pub version: String,
     pub uptime_seconds: u64,
+    pub dependencies: Option<Vec<DependencyStatus>>,
 }
 
 /// Dependency status for detailed health checks

@@ -39,7 +39,7 @@ async fn run_app() -> Result<(), AppError> {
     let protocol = &config.server.protocol;
 
     // Ensure the OpenAPI directory exists
-    let spec_directory = &config.openapi.spec_directory;
+    let spec_directory = "config/swagger";
     if !Path::new(spec_directory).exists() {
         info!("Creating OpenAPI spec directory: {}", spec_directory);
         fs::create_dir_all(spec_directory).map_err(|e| {

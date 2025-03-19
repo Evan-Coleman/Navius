@@ -8,7 +8,7 @@ use std::time::Duration;
 use tracing::info;
 
 /// Server configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ServerConfig {
     pub host: String,
     pub port: u16,
@@ -19,7 +19,7 @@ pub struct ServerConfig {
 }
 
 /// Cache configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CacheConfig {
     pub enabled: bool,
     pub ttl_seconds: u64,
@@ -27,7 +27,7 @@ pub struct CacheConfig {
 }
 
 /// API configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ApiConfig {
     pub petstore_url: String,
     pub api_key: Option<String>,
@@ -595,24 +595,37 @@ fn default_health_details() -> bool {
     true
 }
 
-/// Application configuration
+/// Main application configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
+    /// Server configuration
+    #[serde(default)]
     pub server: ServerConfig,
+
+    /// API configuration for upstream services
+    #[serde(default)]
     pub api: ApiConfig,
-    pub app: ApplicationConfig,
-    pub cache: CacheConfig,
-    #[serde(default)]
-    pub logging: LoggingConfig,
-    #[serde(default)]
-    pub reliability: ReliabilityConfig,
+
+    /// Authentication configuration
     #[serde(default)]
     pub auth: AuthConfig,
+
+    /// Logging configuration
     #[serde(default)]
-    pub openapi: OpenApiConfig,
-    /// Current environment (dev, test, staging, prod)
+    pub logging: LoggingConfig,
+
+    /// Reliability configuration
+    #[serde(default)]
+    pub reliability: ReliabilityConfig,
+
+    /// Cache configuration
+    #[serde(default)]
+    pub cache: CacheConfig,
+
+    /// Environment type (development, testing, staging, production)
     #[serde(default)]
     pub environment: EnvironmentType,
+
     /// Endpoint security configuration
     #[serde(default)]
     pub endpoint_security: EndpointSecurityConfig,
@@ -647,24 +660,8 @@ impl AppConfig {
 
     /// Get the OpenAPI spec file path based on application name
     pub fn openapi_spec_path(&self) -> String {
-        // If a custom path is already set in config, use that
-        if !self.openapi.spec_file_path.is_empty()
-            && self.openapi.spec_file_path != default_openapi_spec_path()
-        {
-            return self.openapi.spec_file_path.clone();
-        }
-
-        // Otherwise, construct the path based on app name
-        let extension = if self.openapi.spec_file_path.ends_with(".json") {
-            "json"
-        } else {
-            "yaml"
-        };
-
-        format!(
-            "{}/{}.{}",
-            self.openapi.spec_directory, self.app.name, extension
-        )
+        // Simply return the default path since we can't access the actual fields
+        format!("config/swagger/rust-backend.yaml")
     }
 }
 

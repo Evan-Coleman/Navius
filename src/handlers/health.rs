@@ -1,4 +1,5 @@
 use axum::{Json, extract::State};
+use chrono;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -11,18 +12,79 @@ use crate::models::{DependencyStatus, DetailedHealthResponse, HealthCheckRespons
 ///
 /// This endpoint is designed for load balancers and monitoring systems.
 /// It returns minimal information, usually just whether the service is running.
+/// It also includes a basic check of the Petstore API's availability.
 pub async fn health_check(State(state): State<Arc<AppState>>) -> Json<HealthCheckResponse> {
     // Calculate uptime
     let uptime = SystemTime::now()
         .duration_since(state.start_time)
         .unwrap_or_default();
 
-    // Simple health check only returns basic status
+    // Check Petstore API connectivity
+    let mut deps = Vec::new();
+
+    // Add a quick check of the Petstore API
+    if !state.config.api.petstore_url.is_empty() {
+        let petstore_status = check_petstore_connectivity(&state).await;
+        deps.push(petstore_status);
+    }
+
+    // Simple health check with dependency info
     Json(HealthCheckResponse {
         status: "healthy".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         uptime_seconds: uptime.as_secs(),
+        dependencies: Some(deps),
     })
+}
+
+/// Check if the Petstore API is available
+///
+/// Performs a lightweight health check to the Petstore API
+async fn check_petstore_connectivity(state: &Arc<AppState>) -> DependencyStatus {
+    let url = format!("{}/store/inventory", state.config.api.petstore_url);
+
+    // Set a short timeout for health checks (2 seconds)
+    let timeout = std::time::Duration::from_secs(2);
+
+    let client = &state.client;
+    let mut builder = client.get(&url).timeout(timeout);
+
+    // Add API key if configured
+    if let Some(api_key) = &state.config.api.api_key {
+        builder = builder.header("api_key", api_key);
+    }
+
+    // Perform the request
+    let status = match builder.send().await {
+        Ok(response) => {
+            if response.status().is_success() {
+                "up".to_string()
+            } else {
+                format!("degraded (status {})", response.status())
+            }
+        }
+        Err(e) => {
+            let error_message = e.to_string();
+            let truncated_message = if error_message.len() > 100 {
+                format!("{}...", &error_message[..100])
+            } else {
+                error_message
+            };
+            format!("down ({})", truncated_message)
+        }
+    };
+
+    // Add details with timestamp of the health check
+    let mut details = BTreeMap::new();
+    details.insert("checked_at".to_string(), chrono::Utc::now().to_rfc3339());
+
+    details.insert("endpoint".to_string(), "/store/inventory".to_string());
+
+    DependencyStatus {
+        name: "petstore_api".to_string(),
+        status,
+        details: Some(details),
+    }
 }
 
 /// Handler for the detailed health check endpoint
