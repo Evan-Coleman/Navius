@@ -27,7 +27,7 @@ app:
 # Authentication settings
 auth:
   # Enable/disable authentication (override with AUTH_ENABLED)
-  enabled: false
+  enabled: true
   # Enable/disable debug mode (override with AUTH_DEBUG or DEBUG_AUTH)
   debug: false
   # Entra ID (Azure AD) settings
@@ -61,7 +61,6 @@ auth:
     # Full access roles - users with these roles can access full access endpoints
     full_access_roles:
       - "full"
-      - "admin"
 
 cache:
   enabled: true

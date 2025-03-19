@@ -14,8 +14,11 @@ use std::{
     time::{Duration, SystemTime},
 };
 use tower::ServiceBuilder;
-use tower_http::{timeout::TimeoutLayer, trace::TraceLayer};
-use tracing::info;
+use tower_http::{
+    timeout::TimeoutLayer,
+    trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
+};
+use tracing::{Level, info};
 
 use crate::{
     auth::{
@@ -101,8 +104,21 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
         // Use fallback_service for the main app
         .fallback_service(app)
-        // Add tracing
-        .layer(TraceLayer::new_for_http())
+        // Add tracing with custom configuration that doesn't duplicate our logging
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(
+                    DefaultMakeSpan::new()
+                        .include_headers(false)
+                        .level(Level::DEBUG),
+                )
+                // Set level to TRACE to avoid duplicating our INFO logs
+                .on_response(
+                    DefaultOnResponse::new()
+                        .include_headers(false)
+                        .level(Level::TRACE),
+                ),
+        )
         // Add timeout
         .layer(TimeoutLayer::new(std::time::Duration::from_secs(
             state.config.server.timeout_seconds,

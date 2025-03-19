@@ -1,0 +1,15 @@
+meta {
+  name: actuator metrics
+  type: http
+  seq: 6
+}
+
+get {
+  url: http://localhost:3000/actuator/metrics
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token_set_by_collection_script}}
+}

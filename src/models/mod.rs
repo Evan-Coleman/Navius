@@ -1,5 +1,6 @@
 use crate::cache::cache_manager::CacheStats;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// Data structure for the data endpoint
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -23,7 +24,8 @@ pub struct HealthCheckResponse {
 pub struct DependencyStatus {
     pub name: String,
     pub status: String,
-    pub details: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<BTreeMap<String, String>>,
 }
 
 /// Detailed health check response structure
