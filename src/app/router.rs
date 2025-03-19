@@ -42,105 +42,104 @@ pub struct AppState {
     pub token_client: Option<EntraTokenClient>,
 }
 
+/// Auth requirement for a route
+pub enum AuthRequirement {
+    /// No authentication required
+    None,
+    /// Basic authentication (no specific role required)
+    Authenticated,
+    /// Read-only role required
+    ReadOnly,
+    /// Full access role required
+    FullAccess,
+    /// Admin role required
+    Admin,
+}
+
+/// Helper function to conditionally apply authentication
+fn with_auth_if_enabled(
+    router: Router<Arc<AppState>>,
+    auth_requirement: AuthRequirement,
+    state: &Arc<AppState>,
+) -> Router<Arc<AppState>> {
+    if !state.config.auth.enabled || matches!(auth_requirement, AuthRequirement::None) {
+        return router;
+    }
+
+    // Add logging middleware
+    let router = router.route_layer(middleware::from_fn_with_state(
+        state.clone(),
+        handlers::logging::log_request,
+    ));
+
+    // Apply appropriate auth layer based on the requirement
+    match auth_requirement {
+        AuthRequirement::None => router,
+        AuthRequirement::Authenticated => {
+            router.layer(EntraAuthLayer::from_app_config(&state.config))
+        }
+        AuthRequirement::ReadOnly => router.layer(
+            EntraAuthLayer::from_app_config_require_read_only_role(&state.config),
+        ),
+        AuthRequirement::FullAccess => router.layer(
+            EntraAuthLayer::from_app_config_require_full_access_role(&state.config),
+        ),
+        AuthRequirement::Admin => router.layer(EntraAuthLayer::from_app_config_require_admin_role(
+            &state.config,
+        )),
+    }
+}
+
 /// Create the application router
 pub fn create_router(state: Arc<AppState>) -> Router {
-    // Check if auth is enabled from config
-    let auth_enabled = state.config.auth.enabled;
+    // Create route groups with appropriate auth requirements
+    let public_routes = Router::new()
+        .route("/health", get(handlers::health::health_check))
+        .route("/metrics", get(metrics))
+        .route(
+            "/catfact",
+            get(handlers::examples::catfact::fetch_catfact_handler),
+        )
+        .route("/pet/{id}", get(handlers::examples::pet::fetch_pet_handler))
+        .route("/api/pets", get(list_pets))
+        .route("/api/pets/{id}", get(get_pet));
 
-    let router = if auth_enabled {
-        // Create different route groups with different authorization requirements
+    let readonly_routes = Router::new()
+        .route("/api/readonly/pets", get(handlers::examples::pets::get_pet))
+        .route(
+            "/api/readonly/pets/{id}",
+            get(handlers::examples::pets::get_pet),
+        );
 
-        // Public routes - no authentication required
-        let public_routes = Router::new()
-            .route("/health", get(handlers::health::health_check))
-            .route("/metrics", get(metrics))
-            .route(
-                "/catfact",
-                get(handlers::examples::catfact::fetch_catfact_handler),
-            )
-            .route("/pet/{id}", get(handlers::examples::pet::fetch_pet_handler));
+    let fullaccess_routes = Router::new()
+        .route(
+            "/api/fullaccess/pets",
+            get(handlers::examples::pets::get_pet),
+        )
+        .route(
+            "/api/fullaccess/pets/{id}",
+            get(handlers::examples::pets::get_pet),
+        );
 
-        // Protected routes - require authentication
-        let protected_routes = Router::new()
-            .route("/api/pets", get(list_pets))
-            .route("/api/pets/{id}", get(get_pet))
-            .route_layer(middleware::from_fn_with_state(
-                state.clone(),
-                handlers::logging::log_request,
-            ))
-            .layer(EntraAuthLayer::from_app_config(&state.config));
+    let admin_routes = Router::new()
+        .route("/api/admin/pets", post(create_pet))
+        .route("/api/admin/pets/{id}", delete(delete_pet))
+        .route("/api/admin/cache", get(handlers::cache_debug));
 
-        // Read-only routes - require authentication with read-only access
-        let read_only_routes = Router::new()
-            .route("/api/readonly/pets", get(handlers::examples::pets::get_pet))
-            .route(
-                "/api/readonly/pets/{id}",
-                get(handlers::examples::pets::get_pet),
-            )
-            .route_layer(middleware::from_fn_with_state(
-                state.clone(),
-                handlers::logging::log_request,
-            ))
-            .layer(EntraAuthLayer::from_app_config_require_read_only_role(
-                &state.config,
-            ));
+    // Apply authentication conditionally to each route group
+    let public_routes = with_auth_if_enabled(public_routes, AuthRequirement::None, &state);
+    let readonly_routes = with_auth_if_enabled(readonly_routes, AuthRequirement::ReadOnly, &state);
+    let fullaccess_routes =
+        with_auth_if_enabled(fullaccess_routes, AuthRequirement::FullAccess, &state);
+    let admin_routes = with_auth_if_enabled(admin_routes, AuthRequirement::Admin, &state);
 
-        // Full access routes - require authentication with full access
-        let full_access_routes = Router::new()
-            .route(
-                "/api/fullaccess/pets",
-                get(handlers::examples::pets::get_pet),
-            )
-            .route(
-                "/api/fullaccess/pets/{id}",
-                get(handlers::examples::pets::get_pet),
-            )
-            .route_layer(middleware::from_fn_with_state(
-                state.clone(),
-                handlers::logging::log_request,
-            ))
-            .layer(EntraAuthLayer::from_app_config_require_full_access_role(
-                &state.config,
-            ));
-
-        // Admin routes - require specific roles
-        let admin_routes = Router::new()
-            .route("/api/admin/pets", post(create_pet))
-            .route("/api/admin/pets/{id}", delete(delete_pet))
-            .route("/api/admin/cache", get(handlers::cache_debug))
-            .route_layer(middleware::from_fn_with_state(
-                state.clone(),
-                handlers::logging::log_request,
-            ))
-            .layer(EntraAuthLayer::from_app_config_require_admin_role(
-                &state.config,
-            ));
-
-        // Combine all route groups
-        Router::new()
-            .merge(public_routes)
-            .merge(protected_routes)
-            .merge(read_only_routes)
-            .merge(full_access_routes)
-            .merge(admin_routes)
-            .with_state(state.clone())
-    } else {
-        // No authentication - use the default router
-        Router::new()
-            .route("/health", get(handlers::health::health_check))
-            .route("/metrics", get(metrics))
-            .route(
-                "/catfact",
-                get(handlers::examples::catfact::fetch_catfact_handler),
-            )
-            .route("/pet/{id}", get(handlers::examples::pet::fetch_pet_handler))
-            .route("/api/pets", get(list_pets))
-            .route("/api/pets/{id}", get(get_pet))
-            .route("/api/admin/pets", post(create_pet))
-            .route("/api/admin/pets/{id}", delete(delete_pet))
-            .route("/api/admin/cache", get(handlers::cache_debug))
-            .with_state(state.clone())
-    };
+    // Combine all route groups
+    let router = Router::new()
+        .merge(public_routes)
+        .merge(readonly_routes)
+        .merge(fullaccess_routes)
+        .merge(admin_routes)
+        .with_state(state.clone());
 
     // Add common middleware (tracing, timeout, etc)
     let router = router
