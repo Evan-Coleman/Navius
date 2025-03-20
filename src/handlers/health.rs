@@ -203,6 +203,5 @@ pub async fn detailed_health_check(
         uptime_seconds: uptime.as_secs(),
         environment: state.config.environment.to_string(),
         dependencies,
-        cache_enabled: state.config.cache.enabled,
     })
 }

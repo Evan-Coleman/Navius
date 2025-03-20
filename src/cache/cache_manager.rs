@@ -11,6 +11,8 @@ use std::sync::{
 use std::time::{Duration, SystemTime};
 use tokio::time::interval;
 use tracing::{debug, info};
+use std::cell::RefCell;
+use std::thread_local;
 
 // Import ApiResource trait
 use crate::utils::api_resource::ApiResource;
@@ -337,6 +339,20 @@ pub fn get_cache_stats_with_metrics(
     })
 }
 
+// Thread-local variable to track if the last access was from cache
+thread_local! {
+    static LAST_FETCH_FROM_CACHE: RefCell<bool> = RefCell::new(false);
+}
+
+/// Get whether the last fetch operation was from cache
+pub fn last_fetch_from_cache() -> bool {
+    let mut result = false;
+    LAST_FETCH_FROM_CACHE.with(|cell| {
+        result = *cell.borrow();
+    });
+    result
+}
+
 /// Generic function to get or fetch a resource from cache
 pub async fn get_or_fetch<T, F, Fut>(
     registry: &CacheRegistry,
@@ -349,6 +365,11 @@ where
     F: FnOnce() -> Fut,
     Fut: std::future::Future<Output = Result<T, String>>,
 {
+    // Reset the thread-local at the start of each fetch operation
+    LAST_FETCH_FROM_CACHE.with(|cell| {
+        *cell.borrow_mut() = false;
+    });
+
     if !registry.enabled {
         // Cache is disabled, call fetch function directly
         return fetch_fn().await;
@@ -376,6 +397,11 @@ where
     if let Some(resource) = cache.get(id).await {
         counter!("cache_hits_total", "resource_type" => resource_type.to_string()).increment(1);
         debug!("🔍 Cache hit for {} ID: {}", resource_type, id);
+
+        // Set the thread-local to indicate this was a cache hit
+        LAST_FETCH_FROM_CACHE.with(|cell| {
+            *cell.borrow_mut() = true;
+        });
 
         // Update current size metric whenever we access the cache
         let current_size = cache.entry_count();

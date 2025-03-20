@@ -159,32 +159,15 @@ components:
           type: integer
           description: The uptime of the service in seconds
           example: 3600
-        cache_enabled:
-          type: boolean
-          description: Whether the cache is enabled
-          example: true
-        cache_stats:
-          $ref: '#/components/schemas/CacheStats'
-    
-    CacheStats:
-      type: object
-      properties:
-        size:
-          type: integer
-          description: The current size of the cache
-          example: 10
-        hits:
-          type: integer
-          description: The number of cache hits
-          example: 100
-        misses:
-          type: integer
-          description: The number of cache misses
-          example: 25
-        ttl_seconds:
-          type: integer
-          description: The TTL in seconds for cache entries
-          example: 3600
+        environment:
+          type: string
+          description: The current environment of the service
+          example: "development"
+        dependencies:
+          type: array
+          description: List of dependencies and their status
+          items:
+            $ref: '#/components/schemas/DependencyStatus'
     
     Data:
       type: object
@@ -249,4 +232,22 @@ components:
         name:
           type: string
           description: Tag name
-          example: "friendly" 
+          example: "friendly"
+    
+    DependencyStatus:
+      type: object
+      properties:
+        name:
+          type: string
+          description: The name of the dependency
+          example: "cache"
+        status:
+          type: string
+          description: The status of the dependency
+          example: "up"
+        details:
+          type: object
+          additionalProperties:
+            type: string
+          description: Additional details about the dependency
+          example: {"enabled": "true"} 

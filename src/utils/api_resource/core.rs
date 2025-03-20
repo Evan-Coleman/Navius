@@ -162,19 +162,22 @@ where
                     .await
                     {
                         Ok(resource) => {
-                            if options.detailed_logging {
-                                info!(
-                                    "✅ Retrieved {} {} from cache registry",
-                                    resource_type, id_str
-                                );
-                            }
+                            // Remove the generic logging here as it's redundant with pet_handler
+                            // The fetch_pet_handler will log with more specific info
                             return Ok(Json(resource));
                         }
                         Err(e) => {
                             // Convert the string error back to an AppError
                             return Err(AppError::ExternalServiceError(format!(
-                                "Failed to fetch {} {} from cache or source: {}",
-                                resource_type, id_str, e
+                                "Failed to fetch {} {} from {}: {}",
+                                resource_type,
+                                id_str,
+                                if crate::cache::last_fetch_from_cache() {
+                                    "cache"
+                                } else {
+                                    "API"
+                                },
+                                e
                             )));
                         }
                     }

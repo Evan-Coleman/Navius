@@ -74,12 +74,14 @@ pub async fn fetch_pet_handler(
     // Execute the handler with proper path extraction
     let result = handler(State(state), Path(id_str)).await;
 
-    // Log the result of the operation
+    // Log the result of the operation with specific source information
     match &result {
-        Ok(_) => info!(
-            "✅ Successfully retrieved pet ID: {} (cached or direct)",
-            id
-        ),
+        Ok(_) => {
+            // Check if it was retrieved from cache using our thread-local
+            let from_cache = crate::cache::last_fetch_from_cache();
+            let source = if from_cache { "from cache" } else { "from API" };
+            info!("✅ Successfully retrieved pet ID: {} ({})", id, source)
+        }
         Err(e) => info!("❌ Failed to retrieve pet ID: {}, error: {}", id, e),
     }
 

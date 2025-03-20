@@ -38,7 +38,6 @@ pub struct DetailedHealthResponse {
     pub uptime_seconds: u64,
     pub environment: String,
     pub dependencies: Vec<DependencyStatus>,
-    pub cache_enabled: bool,
 }
 
 /// Actuator entry for key-value responses
