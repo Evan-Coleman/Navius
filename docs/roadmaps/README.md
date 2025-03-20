@@ -10,11 +10,11 @@ This directory contains roadmaps for enhancing our Rust backend framework to mat
 4. [Testing Framework](04-testing-framework.md) - Developing comprehensive testing utilities for all testing levels
 5. [Async Processing](05-async-processing.md) - Implementing event-driven architecture and background processing
 6. [Data Validation](06-data-validation.md) - Building a validation system for robust input validation
-7. [Enhanced Caching](07-enhanced-caching.md) - Creating a sophisticated multi-level caching system with AWS ElastiCache
+7. [Enhanced Caching](07-enhanced-caching.md) - Creating a sophisticated multi-level caching system with Redis
 8. [Resilience Patterns](08-resilience-patterns.md) - Implementing circuit breakers, retries, and other resilience features
 9. [API Versioning](09-api-versioning.md) - Building a comprehensive API versioning system
-10. [Developer Experience](10-developer-experience.md) - Enhancing the developer workflow with tools and utilities
-11. [AWS Integration](11-aws-integration.md) - Making the framework AWS-first with seamless integration into the AWS ecosystem
+10. [Developer Experience](10-developer-experience.md) - Enhancing the local developer workflow with tools and utilities
+11. [AWS Integration](11-aws-integration.md) - Making the framework AWS-ready with Microsoft Entra authentication, observability, deployment pipelines, and AWS service integration
 
 ## Progress Tracking
 
@@ -48,14 +48,24 @@ While the roadmaps can be implemented in any order based on project needs, we re
 1. Dependency Injection - Provides the foundation for many other features
 2. Database Integration - Critical for most enterprise applications
 3. Testing Framework - Enables reliable development of subsequent features
-4. AWS Integration - Establishes cloud-native foundation on AWS
+4. AWS Integration - Establishes cloud-native foundation on AWS with authentication
 5. Resilience Patterns - Improves system reliability
-6. Enhanced Caching (AWS ElastiCache) - Improves performance with AWS services
+6. Enhanced Caching - Improves performance with Redis
 7. Data Validation - Enhances API robustness
 8. Declarative Features - Enhances developer productivity
 9. Async Processing - Enables advanced processing patterns
 10. API Versioning - Supports API evolution
-11. Developer Experience - Polishes the overall developer workflow
+11. Developer Experience - Polishes the local developer workflow
+
+## Implementation Strategy
+
+The roadmaps have been organized to minimize duplication and maintain clear separation of concerns:
+
+- **AWS Integration** roadmap centralizes all AWS-specific functionality, Microsoft Entra authentication, CloudWatch observability, and deployment pipelines
+- **Core feature roadmaps** focus on their respective patterns and implementations, independent of specific cloud providers
+- **Developer Experience** focuses on local development workflows, while production deployment is covered in the AWS Integration roadmap
+
+This approach ensures that each roadmap is focused and maintainable, while still providing a complete implementation of all required features.
 
 ## Contributing
 

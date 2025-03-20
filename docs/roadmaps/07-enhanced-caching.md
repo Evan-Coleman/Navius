@@ -1,14 +1,14 @@
-# Practical Caching with AWS ElastiCache (Redis)
+# Practical Caching Roadmap
 
 ## Overview
-A lightweight, security-focused approach to caching for our Rust Axum backend that leverages AWS ElastiCache (Redis) to improve application performance without unnecessary complexity.
+A lightweight, security-focused approach to caching for our Rust Axum backend that improves application performance without unnecessary complexity.
 
 ## Current State
 Our application needs a structured caching approach to improve response times and reduce database load for frequently accessed data.
 
 ## Target State
 A practical caching system that:
-- Uses AWS ElastiCache (Redis) as the primary caching layer
+- Uses Redis as the primary caching layer
 - Secures cache access with proper authentication and key strategies
 - Provides straightforward integration with Axum handlers
 - Implements sensible cache invalidation strategies
@@ -17,9 +17,9 @@ A practical caching system that:
 ## Implementation Progress Tracking
 
 ### Phase 1: Core Redis Caching
-1. **Secure Redis Connection**
-   - [ ] Implement AWS ElastiCache connection with proper authentication
-   - [ ] Create secure key generation strategies
+1. **Redis Connection**
+   - [ ] Implement Redis connection with proper error handling
+   - [ ] Create secure key generation strategies 
    - [ ] Add connection pooling with retry handling
    
    *Updated at: Not started*
@@ -41,7 +41,7 @@ A practical caching system that:
 ### Phase 2: Security and Performance
 1. **Cache Security Enhancements**
    - [ ] Implement tenant isolation in cache keys
-   - [ ] Add Entra identity context in caching decisions
+   - [ ] Add identity context in caching decisions
    - [ ] Create secure cache key generation to prevent enumeration
    
    *Updated at: Not started*
@@ -60,25 +60,25 @@ A practical caching system that:
    
    *Updated at: Not started*
 
-### Phase 3: Monitoring and Reliability
-1. **Observability**
-   - [ ] Add basic CloudWatch metrics integration
-   - [ ] Implement cache hit/miss logging
-   - [ ] Create simple dashboard for cache performance
-   
-   *Updated at: Not started*
-
-2. **Fallback Strategies**
+### Phase 3: Reliability
+1. **Fallback Strategies**
    - [ ] Implement degraded mode for Redis outages
    - [ ] Add circuit breaker for cache operations
    - [ ] Create graceful performance degradation
    
    *Updated at: Not started*
 
+2. **Monitoring**
+   - [ ] Add basic cache hit/miss metrics collection
+   - [ ] Implement cache hit/miss logging
+   - [ ] Create simple local dashboard for cache performance
+   
+   *Updated at: Not started*
+
 ## Implementation Status
 - **Overall Progress**: 0% complete
 - **Last Updated**: March 20, 2024
-- **Next Milestone**: Secure Redis Connection
+- **Next Milestone**: Redis Connection
 
 ## Success Criteria
 - Cache operations are secure and respect tenant boundaries
@@ -89,6 +89,8 @@ A practical caching system that:
 
 ## Implementation Notes
 This approach focuses on practical caching mechanisms that provide immediate performance benefits without unnecessary complexity. We'll leverage Redis for its speed and capabilities while ensuring security and simplicity are maintained.
+
+Note: AWS-specific ElastiCache configuration, CloudWatch metrics integration, and AWS VPC security are managed in the AWS Integration roadmap.
 
 ### Example Implementation
 
@@ -114,7 +116,7 @@ pub struct CacheService {
 
 impl CacheService {
     pub fn new(redis_url: String, prefix: String) -> Result<Self, redis::RedisError> {
-        // Connect to Redis with proper AWS ElastiCache configuration
+        // Connect to Redis
         let client = Client::open(redis_url)?;
         
         Ok(Self {
@@ -204,60 +206,75 @@ pub async fn cache_response<B>(
 where
     B: Send,
 {
-    // Extract cache key from request
-    let path = request.uri().path();
-    let query = request.uri().query().unwrap_or("");
-    let cache_key = format!("response:{}?{}", path, query);
+    // Only cache GET requests
+    if request.method() != axum::http::Method::GET {
+        return Ok(next.run(request).await);
+    }
     
-    // Extract tenant ID from request extensions (set by auth middleware)
+    let path = request.uri().path().to_string();
+    
+    // Get tenant from request extensions (if available)
     let tenant_id = request
         .extensions()
-        .get::<EntraIdentity>()
+        .get::<UserIdentity>()
         .map(|identity| identity.tenant_id.as_str());
     
-    // Try to get from cache first
-    match cache.get::<String>(&cache_key, tenant_id).await {
-        Ok(Some(cached_response)) => {
+    // Try to get from cache
+    match cache.get::<Vec<u8>>(&path, tenant_id).await {
+        Ok(Some(cached_bytes)) => {
             // Return cached response
-            Ok(cached_response.into_response())
+            let response = axum::response::Response::builder()
+                .status(StatusCode::OK)
+                .header("X-Cache", "HIT")
+                .body(axum::body::Body::from(cached_bytes))
+                .unwrap();
+            
+            Ok(response)
         }
         _ => {
-            // Cache miss, get fresh response
-            let response = next.run(request).await;
+            // Cache miss, get response and cache it
+            let mut response = next.run(request).await;
             
-            // Only cache successful responses
             if response.status().is_success() {
-                // Convert response to bytes
+                // Extract response body to cache it
                 let (parts, body) = response.into_parts();
-                let bytes = hyper::body::to_bytes(body)
-                    .await
-                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                let bytes = match hyper::body::to_bytes(body).await {
+                    Ok(bytes) => bytes,
+                    Err(_) => {
+                        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+                    }
+                };
                 
-                // Recreate response for caching and returning
-                let response = Response::from_parts(parts, bytes.clone().into());
-                
-                // Cache in background (don't block response)
-                let body_str = String::from_utf8_lossy(&bytes);
+                // Cache response asynchronously (don't block the response)
                 let cache_service = cache.clone();
+                let path_clone = path.clone();
+                let tenant_clone = tenant_id.map(|s| s.to_string());
+                let bytes_clone = bytes.clone();
                 tokio::spawn(async move {
                     if let Err(e) = cache_service
-                        .set(&cache_key, &body_str, 300, tenant_id)
+                        .set(&path_clone, &bytes_clone.to_vec(), 300, tenant_clone.as_deref())
                         .await
                     {
-                        tracing::error!("Failed to cache response: {}", e);
+                        eprintln!("Failed to cache response: {}", e);
                     }
                 });
                 
+                // Rebuild the response
+                let response = axum::response::Response::from_parts(
+                    parts,
+                    axum::body::Body::from(bytes),
+                );
+                
                 Ok(response)
             } else {
-                // Don't cache error responses
+                // Don't cache non-success responses
                 Ok(response)
             }
         }
     }
 }
 
-// Add cache middleware to Axum router
+// Configure the application with caching middleware
 pub fn configure_cache(app: Router, cache_service: CacheService) -> Router {
     app.layer(axum::middleware::from_fn_with_state(
         cache_service.clone(),
@@ -268,11 +285,11 @@ pub fn configure_cache(app: Router, cache_service: CacheService) -> Router {
 
 // Usage in application setup
 async fn create_cache_service() -> CacheService {
-    // Get AWS ElastiCache configuration from parameters
+    // Get Redis configuration
     let redis_url = format!(
         "redis://{}:{}",
-        std::env::var("ELASTICACHE_HOST").unwrap_or("localhost".to_string()),
-        std::env::var("ELASTICACHE_PORT").unwrap_or("6379".to_string())
+        std::env::var("REDIS_HOST").unwrap_or("localhost".to_string()),
+        std::env::var("REDIS_PORT").unwrap_or("6379".to_string())
     );
 
     CacheService::new(redis_url, "app".to_string())
@@ -284,7 +301,7 @@ async fn get_user_details(
     State(cache): State<CacheService>,
     State(db): State<DbPool>,
     Path(user_id): Path<Uuid>,
-    Extension(identity): Extension<EntraIdentity>,
+    Extension(identity): Extension<UserIdentity>,
 ) -> impl IntoResponse {
     let tenant_id = identity.tenant_id.as_str();
     let cache_key = format!("user:{}", user_id);
@@ -318,7 +335,7 @@ async fn get_user_details(
 ```
 
 ## References
-- [AWS ElastiCache for Redis](https://docs.aws.amazon.com/elasticache/latest/red-ug/WhatIs.html)
 - [redis-rs](https://docs.rs/redis/latest/redis/)
 - [Axum middleware](https://docs.rs/axum/latest/axum/middleware/index.html)
-- [AWS ElastiCache Best Practices](https://docs.aws.amazon.com/elasticache/latest/red-ug/BestPractices.html) 
+- [Caching Best Practices](https://docs.microsoft.com/en-us/azure/architecture/best-practices/caching)
+- [Redis Documentation](https://redis.io/documentation) 

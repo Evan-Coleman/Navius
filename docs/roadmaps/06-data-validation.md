@@ -11,8 +11,8 @@ A lightweight but effective validation system that:
 - Ensures all inputs are properly validated for security
 - Integrates seamlessly with Axum's extractors
 - Provides consistent error responses
-- Supports Microsoft Entra authentication validation
 - Balances security with developer productivity
+- Is independent of specific authentication providers
 
 ## Implementation Progress Tracking
 
@@ -24,17 +24,10 @@ A lightweight but effective validation system that:
    
    *Updated at: Not started*
 
-2. **Authentication Validation**
-   - [ ] Build validation for Entra access tokens
-   - [ ] Implement role and permission validation extractors
-   - [ ] Add audit logging for validation failures
-   
-   *Updated at: Not started*
-
-3. **Database Input Sanitization**
-   - [ ] Create helpers for safe database parameter handling
-   - [ ] Implement SQL injection prevention validation
-   - [ ] Add validation for Postgres-specific data types
+2. **Input Sanitization**
+   - [ ] Create helpers for safe parameter handling
+   - [ ] Implement injection prevention validation
+   - [ ] Add validation for specific data types
    
    *Updated at: Not started*
 
@@ -48,8 +41,8 @@ A lightweight but effective validation system that:
 
 2. **Common Validation Patterns**
    - [ ] Build reusable validation functions for common use cases
-   - [ ] Create validation helpers for AWS resource identifiers
    - [ ] Implement validators for business domain objects
+   - [ ] Create validation test helpers
    
    *Updated at: Not started*
 
@@ -67,6 +60,8 @@ A lightweight but effective validation system that:
 
 ## Implementation Notes
 This approach focuses on practical validation that leverages existing tools like the validator crate and Axum's extractor system rather than building a complex custom validation framework. We'll prioritize security-critical validations while maintaining simplicity and developer productivity.
+
+Authentication-specific validation (Entra tokens, AWS resource validation) has been consolidated in the AWS Integration roadmap to avoid duplication.
 
 ### Example Implementation
 
@@ -93,8 +88,8 @@ pub struct CreateUserRequest {
     #[validate(length(min = 8), custom = "validate_password_strength")]
     pub password: String,
 
-    #[validate(custom = "validate_tenant_access")]
-    pub tenant_id: Option<String>,
+    #[validate(custom = "validate_organization_id")]
+    pub organization_id: Option<String>,
 }
 
 // Custom validator for password strength
@@ -114,10 +109,16 @@ fn validate_password_strength(password: &str) -> Result<(), validator::Validatio
     Ok(())
 }
 
-// Custom validator that checks tenant access against Entra permissions
-fn validate_tenant_access(tenant_id: &str) -> Result<(), validator::ValidationError> {
+// Custom validator that checks organization access
+fn validate_organization_id(org_id: &str) -> Result<(), validator::ValidationError> {
     // This would typically check against the current user's permissions
-    // Implementation would be specific to your Entra integration
+    // Implementation would be authentication-agnostic
+    if org_id.len() != 36 {  // UUID validation
+        let mut error = validator::ValidationError::new("invalid_format");
+        error.message = Some("Organization ID must be a valid UUID".into());
+        return Err(error);
+    }
+    
     Ok(())
 }
 
@@ -207,38 +208,56 @@ async fn create_user(
     }
 }
 
-// Security-focused validation middleware for Entra tokens
-async fn validate_entra_token<B>(
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
-    State(auth_config): State<EntraConfig>,
+// Context-aware validation middleware
+async fn validate_context<B>(
     request: Request<B>,
     next: Next<B>,
 ) -> Result<Response, StatusCode> {
-    // Validate the token
-    let token_data = auth_config
-        .validate_token(auth.token())
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    // This middleware validates request context in a way that's
+    // independent of specific authentication providers
     
-    // Check for token expiration
-    if token_data.is_expired() {
-        return Err(StatusCode::UNAUTHORIZED);
+    // Get user identity from request extensions (set by auth middleware)
+    let user_identity = request.extensions()
+        .get::<UserIdentity>()
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    
+    // Extract the target resource ID from the request
+    let resource_id = extract_resource_id(&request)
+        .ok_or(StatusCode::BAD_REQUEST)?;
+    
+    // Validate access based on identity and resource
+    if !validate_access(user_identity, resource_id).await {
+        return Err(StatusCode::FORBIDDEN);
     }
-    
-    // Add validated identity to request extensions
-    request.extensions_mut().insert(EntraIdentity {
-        user_id: token_data.claims.sub.clone(),
-        roles: token_data.claims.roles.clone(),
-        tenant_id: token_data.claims.tid.clone(),
-    });
     
     // Continue with the request
     Ok(next.run(request).await)
+}
+
+// Helper function to extract resource ID from request
+fn extract_resource_id<B>(request: &Request<B>) -> Option<String> {
+    // Extract from path parameters, query params, or body
+    // Implementation depends on your routing structure
+    None  // Placeholder
+}
+
+// Helper function to validate access
+async fn validate_access(identity: &UserIdentity, resource_id: &str) -> bool {
+    // Check if the user has access to the resource
+    // This could call a permission service or check against a database
+    true  // Placeholder
+}
+
+// Generic user identity that's not tied to specific auth providers
+#[derive(Debug, Clone)]
+struct UserIdentity {
+    pub user_id: String,
+    pub roles: Vec<String>,
+    pub org_id: String,
 }
 ```
 
 ## References
 - [validator crate](https://docs.rs/validator/latest/validator/)
 - [Axum extractors](https://docs.rs/axum/latest/axum/extract/index.html)
-- [OWASP Input Validation Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html)
-- [Microsoft Entra Token Validation](https://docs.microsoft.com/en-us/azure/active-directory/develop/access-tokens) 
+- [OWASP Input Validation Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html) 

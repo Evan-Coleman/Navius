@@ -1,17 +1,16 @@
 # Developer Experience Roadmap
 
 ## Overview
-A pragmatic approach to developer experience for our Rust Axum backend, focusing on the essential capabilities needed for efficient development, debugging, and deployment in an AWS environment with Redis, Postgres, and Microsoft Entra integration.
+A pragmatic approach to developer experience for our Rust Axum backend, focusing on the essential capabilities needed for efficient development, debugging, and testing in a local environment that mirrors our production stack.
 
 ## Current State
-Our application needs fundamental developer experience improvements to accelerate development cycles, streamline testing, and ensure consistent deployment across environments.
+Our application needs fundamental developer experience improvements to accelerate development cycles, streamline testing, and ensure consistent development across environments.
 
 ## Target State
 A practical developer experience featuring:
 - Efficient local development workflow that mirrors production
-- Essential debugging and observability capabilities
+- Essential debugging and observability capabilities 
 - Security-focused testing tools
-- Streamlined deployment process for AWS
 - Just enough documentation to onboard developers quickly
 
 ## Implementation Progress Tracking
@@ -19,9 +18,9 @@ A practical developer experience featuring:
 ### Phase 1: Development Environment
 1. **Local Development Setup**
    - [ ] Create Docker Compose configuration for local Redis, Postgres services
-   - [ ] Implement environment-based configuration loading with Entra development credentials
-   - [ ] Add local development security bypass options (when appropriate)
-   - [ ] Build AWS service mocks/emulators for local development
+   - [ ] Implement environment-based configuration loading 
+   - [ ] Build service mocks/emulators for local development
+   - [ ] Implement unified startup script for one-command setup
    
    *Updated at: Not started*
 
@@ -33,8 +32,8 @@ A practical developer experience featuring:
    
    *Updated at: Not started*
 
-3. **Development Security Tools**
-   - [ ] Create mock Entra authentication for local development
+3. **Development Testing Tools**
+   - [ ] Create testing utilities for API endpoints
    - [ ] Implement security headers validation in development mode
    - [ ] Add permission testing utilities
    - [ ] Create data sanitization verification tools
@@ -43,7 +42,7 @@ A practical developer experience featuring:
 
 ### Phase 2: Debugging and Observability
 1. **Request Debugging**
-   - [ ] Implement structured request/response logging compatible with AWS CloudWatch
+   - [ ] Implement structured request/response logging
    - [ ] Create request tracing with context propagation
    - [ ] Add performance timing annotations
    - [ ] Implement correlation ID tracking
@@ -66,28 +65,20 @@ A practical developer experience featuring:
    
    *Updated at: Not started*
 
-### Phase 3: Deployment and Documentation
-1. **AWS Deployment Pipeline**
-   - [ ] Create CloudFormation/Terraform templates for infrastructure
-   - [ ] Implement containerization with optimized Docker setup
-   - [ ] Add CI/CD workflow configurations
-   - [ ] Create deployment validation tests
-   
-   *Updated at: Not started*
-
-2. **Documentation**
+### Phase 3: Documentation and Examples
+1. **Documentation**
    - [ ] Build essential API documentation with OpenAPI
    - [ ] Create getting started guide for new developers
    - [ ] Document security practices and requirements
-   - [ ] Add deployment process documentation
+   - [ ] Add development environment setup guide
    
    *Updated at: Not started*
 
-3. **Patterns and Examples**
+2. **Patterns and Examples**
    - [ ] Document recommended Axum implementation patterns
    - [ ] Create example handlers for common use cases
    - [ ] Add reference implementations for Redis and Postgres interaction
-   - [ ] Document Microsoft Entra integration approach
+   - [ ] Document service patterns and best practices
    
    *Updated at: Not started*
 
@@ -100,7 +91,7 @@ A practical developer experience featuring:
 - Developers can run the complete system locally with one command
 - Code changes are reflected quickly during development
 - Error messages provide actionable guidance
-- Production issues can be diagnosed efficiently
+- Development issues can be diagnosed efficiently
 - Security testing can be performed effectively in development
 - New developers can be onboarded in less than one day
 
@@ -125,13 +116,12 @@ use serde::Deserialize;
 #[derive(Deserialize, Clone)]
 pub struct DevConfig {
     // Local development overrides
-    pub use_mock_authentication: bool,
-    pub local_entra_user: Option<String>,
+    pub development_mode: bool,
     pub enhanced_logging: bool,
     pub reload_templates: bool,
     pub postgres_connection: String,
     pub redis_connection: String,
-    pub mock_aws_services: Vec<String>,
+    pub mock_services: Vec<String>,
 }
 
 impl DevConfig {
@@ -140,11 +130,10 @@ impl DevConfig {
         dotenv::from_filename("dev.env").ok();
         
         Self {
-            use_mock_authentication: env::var("DEV_USE_MOCK_AUTH")
+            development_mode: env::var("DEV_MODE")
                 .unwrap_or_else(|_| "true".to_string())
                 .parse()
                 .unwrap_or(true),
-            local_entra_user: env::var("DEV_ENTRA_USER").ok(),
             enhanced_logging: env::var("DEV_ENHANCED_LOGGING")
                 .unwrap_or_else(|_| "true".to_string())
                 .parse()
@@ -157,8 +146,8 @@ impl DevConfig {
                 .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/app_dev".to_string()),
             redis_connection: env::var("DEV_REDIS_URL")
                 .unwrap_or_else(|_| "redis://localhost:6379".to_string()),
-            mock_aws_services: env::var("DEV_MOCK_AWS_SERVICES")
-                .unwrap_or_else(|_| "s3,sqs".to_string())
+            mock_services: env::var("DEV_MOCK_SERVICES")
+                .unwrap_or_else(|_| "external_api,payment_service".to_string())
                 .split(',')
                 .map(|s| s.trim().to_string())
                 .collect(),
@@ -185,26 +174,6 @@ async fn dev_middleware(
     response
 }
 
-// Mock Entra authentication for local development
-async fn mock_auth_middleware(
-    State(dev_config): State<DevConfig>,
-    mut request: axum::http::Request<axum::body::Body>,
-    next: Next,
-) -> Response {
-    if dev_config.use_mock_authentication {
-        if let Some(user) = &dev_config.local_entra_user {
-            // Add a mock security context
-            let extensions = request.extensions_mut();
-            extensions.insert(MockSecurityContext {
-                user_id: user.clone(),
-                roles: vec!["Admin".to_string(), "User".to_string()],
-            });
-        }
-    }
-    
-    next.run(request).await
-}
-
 // Main development server setup
 pub async fn setup_development_server() -> Router {
     // Load development configuration
@@ -228,11 +197,11 @@ pub async fn setup_development_server() -> Router {
     // Set up Redis connection
     let redis_client = setup_redis(&dev_config.redis_connection).await;
     
-    // Set up AWS mock services if configured
-    let aws_config = if !dev_config.mock_aws_services.is_empty() {
-        setup_aws_local_stack(&dev_config.mock_aws_services).await
+    // Set up mock services if configured
+    let mock_services = if !dev_config.mock_services.is_empty() {
+        setup_mock_services(&dev_config.mock_services).await
     } else {
-        setup_aws_production().await
+        setup_real_services().await
     };
     
     // Configure the application with development-specific middleware
@@ -244,17 +213,13 @@ pub async fn setup_development_server() -> Router {
             build_api_router()
                 .layer(middleware::from_fn_with_state(
                     dev_config.clone(),
-                    mock_auth_middleware,
-                ))
-                .layer(middleware::from_fn_with_state(
-                    dev_config.clone(),
                     dev_middleware,
                 ))
         )
         .with_state(dev_config)
         .with_state(db_pool)
         .with_state(redis_client)
-        .with_state(aws_config)
+        .with_state(mock_services)
 }
 
 // Development status handler
@@ -263,10 +228,8 @@ async fn dev_status_handler(
 ) -> axum::Json<serde_json::Value> {
     axum::Json(serde_json::json!({
         "dev_mode": true,
-        "mock_auth": dev_config.use_mock_authentication,
-        "mock_user": dev_config.local_entra_user,
         "enhanced_logging": dev_config.enhanced_logging,
-        "mock_aws_services": dev_config.mock_aws_services,
+        "mock_services": dev_config.mock_services,
         "connections": {
             "postgres": dev_config.postgres_connection,
             "redis": dev_config.redis_connection,
@@ -280,13 +243,6 @@ async fn seed_test_data() -> &'static str {
     "Database seeded with test data"
 }
 
-// Mock Entra security context
-#[derive(Clone, Debug)]
-struct MockSecurityContext {
-    user_id: String,
-    roles: Vec<String>,
-}
-
 // Database reset utility
 async fn reset_database() -> &'static str {
     // Reset database to clean state
@@ -298,20 +254,16 @@ This roadmap prioritizes a pragmatic developer experience that:
 
 1. **Supports rapid development**: Fast feedback loops with file watching and hot reloading for configuration changes
 
-2. **Mirrors production**: Local environment closely matches AWS deployment with Redis and Postgres
+2. **Mirrors production**: Local environment closely matches production deployment with Redis and Postgres
 
-3. **Prioritizes security**: Built-in tools for testing Entra authentication and security configurations
+3. **Prioritizes security**: Built-in tools for testing security features and configurations
 
 4. **Enables debugging**: Enhanced logging, request tracing, and database tools make debugging straightforward
 
-5. **Streamlines deployment**: AWS-specific deployment pipelines with proper security configurations
-
-The implementation focuses on the specific tech stack (AWS, Redis, Postgres, Entra) rather than generic features, ensuring that developer experience improvements directly align with the production stack.
+The implementation focuses on making the developer experience smooth and efficient, independent of the specific deployment environment.
 
 ## References
 - [Axum Documentation](https://docs.rs/axum/latest/axum/)
 - [cargo-watch](https://crates.io/crates/cargo-watch)
 - [Docker Compose](https://docs.docker.com/compose/)
-- [AWS LocalStack](https://localstack.cloud/)
-- [OpenAPI Documentation with Axum](https://github.com/juhaku/utoipa)
-- [Microsoft Entra Development](https://learn.microsoft.com/en-us/entra/identity-platform/) 
+- [OpenAPI Documentation with Axum](https://github.com/juhaku/utoipa) 

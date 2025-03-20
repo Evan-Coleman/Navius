@@ -12,6 +12,7 @@ A focused AWS integration featuring:
 - Axum-optimized container deployment to ECS/Fargate
 - Postgres RDS integration with security best practices
 - Redis ElastiCache integration for performance
+- Centralized Microsoft Entra authentication
 - Observability with CloudWatch
 - Automated deployment pipeline with GitLab CI/CD
 - Secrets management for secure configuration
@@ -27,11 +28,13 @@ A focused AWS integration featuring:
    
    *Updated at: Not started*
 
-2. **Entra Authentication Integration**
+2. **Entra Authentication Integration** 
    - [ ] Configure Microsoft Entra as identity provider for application
    - [ ] Implement JWT validation with AWS-compatible settings
    - [ ] Set up proper CORS for Entra authentication flow
    - [ ] Create secure token handling with appropriate caching
+   - [ ] Implement role-based access control with Entra roles
+   - [ ] Build testing utilities for Entra authentication
    
    *Updated at: Not started*
 
@@ -49,6 +52,7 @@ A focused AWS integration featuring:
    - [ ] Implement secure connection pooling with IAM authentication
    - [ ] Create high-availability configuration
    - [ ] Set up monitoring and alerting for database health
+   - [ ] Implement secure schema migrations for AWS environment
    
    *Updated at: Not started*
 
@@ -57,6 +61,7 @@ A focused AWS integration featuring:
    - [ ] Implement fault-tolerant Redis client with connection pooling
    - [ ] Set up Redis key management and expiration policies
    - [ ] Create monitoring and alerting for Redis performance
+   - [ ] Implement AWS-specific security for cache access
    
    *Updated at: Not started*
 
@@ -69,7 +74,16 @@ A focused AWS integration featuring:
    *Updated at: Not started*
 
 ### Phase 3: Deployment & Observability
-1. **ECS/Fargate Deployment**
+1. **GitLab CI/CD Pipeline**
+   - [ ] Create build pipeline optimized for Rust compilation
+   - [ ] Implement security scanning for dependencies and code
+   - [ ] Set up automated testing with integration tests
+   - [ ] Create deployment pipeline with proper environment promotion
+   - [ ] Integrate with AWS deployment targets (ECS/Fargate)
+   
+   *Updated at: Not started*
+
+2. **ECS/Fargate Deployment**
    - [ ] Create optimized Docker container for Rust Axum application
    - [ ] Implement ECS task definitions with security configurations
    - [ ] Set up auto-scaling with appropriate metrics
@@ -77,19 +91,12 @@ A focused AWS integration featuring:
    
    *Updated at: Not started*
 
-2. **CloudWatch Observability**
+3. **CloudWatch Observability**
    - [ ] Implement structured logging compatible with CloudWatch
    - [ ] Create custom metrics for application health
    - [ ] Set up appropriate alarms and dashboards
    - [ ] Implement distributed tracing with X-Ray
-   
-   *Updated at: Not started*
-
-3. **GitLab CI/CD Pipeline**
-   - [ ] Create build pipeline optimized for Rust compilation
-   - [ ] Implement security scanning for dependencies and code
-   - [ ] Set up automated testing stage
-   - [ ] Create deployment pipeline with proper environment promotion
+   - [ ] Create monitoring for service resilience patterns
    
    *Updated at: Not started*
 
@@ -108,6 +115,13 @@ A focused AWS integration featuring:
 - Deployment process is automated and reliable
 
 ## Implementation Notes
+This roadmap centralizes all AWS-specific functionality, Microsoft Entra authentication, CloudWatch observability, and deployment pipeline that were previously spread across different roadmaps. This approach ensures a consistent implementation and reduces duplication.
+
+Other roadmaps will focus on their core concerns while deferring AWS-specific integrations to this roadmap:
+- **Database Integration**: Focuses on core database patterns while AWS RDS features are here
+- **Caching**: Focuses on caching patterns while AWS ElastiCache features are here
+- **Resilience Patterns**: Focuses on core patterns while AWS-specific monitoring is here
+- **Developer Experience**: Focuses on local development while production deployment is here
 
 ### Example Implementation: AWS-Ready Axum Application
 
@@ -305,7 +319,7 @@ async fn setup_redis(config: &RedisConfig) -> redis::Client {
         .expect("Failed to create Redis client")
 }
 
-// Entra authentication middleware
+// Microsoft Entra authentication middleware
 async fn entra_auth_middleware(
     State(entra_config): State<EntraConfig>,
     mut request: axum::http::Request<axum::body::Body>,
@@ -352,6 +366,71 @@ async fn entra_auth_middleware(
     }
 }
 
+// CloudWatch logging middleware
+async fn logging_middleware<B>(
+    request: Request<B>,
+    next: Next<B>,
+) -> Response {
+    let start = std::time::Instant::now();
+    let method = request.method().clone();
+    let uri = request.uri().clone();
+    
+    // Extract correlation ID or generate one
+    let correlation_id = request
+        .headers()
+        .get("x-correlation-id")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or_else(|| {
+            uuid::Uuid::new_v4().to_string().as_str()
+        })
+        .to_string();
+    
+    // Get tenant ID if available
+    let tenant_id = request
+        .extensions()
+        .get::<UserIdentity>()
+        .map(|identity| identity.tenant_id.clone());
+    
+    // Execute the request
+    let response = next.run(request).await;
+    
+    // Log request details to CloudWatch
+    let duration = start.elapsed();
+    let status = response.status().as_u16();
+    
+    // Create structured log entry
+    let log_entry = serde_json::json!({
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "correlation_id": correlation_id,
+        "tenant_id": tenant_id,
+        "method": method.to_string(),
+        "path": uri.to_string(),
+        "status": status,
+        "duration_ms": duration.as_millis(),
+    });
+    
+    // Log to console in development or send to CloudWatch in production
+    if cfg!(debug_assertions) {
+        println!("{}", serde_json::to_string_pretty(&log_entry).unwrap());
+    } else {
+        // Async send to CloudWatch
+        tokio::spawn(async move {
+            // CloudWatch logging implementation
+            // This would use the AWS SDK to send logs to CloudWatch
+        });
+    }
+    
+    response
+}
+
+// User identity from Microsoft Entra token
+#[derive(Clone, Debug)]
+struct UserIdentity {
+    user_id: String,
+    roles: Vec<String>,
+    tenant_id: String,
+}
+
 // Main application setup
 pub async fn create_app() -> Router {
     // Initialize AWS services
@@ -395,17 +474,17 @@ async fn health_handler() -> &'static str {
 
 This roadmap prioritizes a practical AWS integration that:
 
-1. **Puts security first**: IAM roles with least privilege, secure VPC configuration, and proper authentication integration with Microsoft Entra
+1. **Centralizes authentication**: Microsoft Entra authentication is fully implemented here, including JWT validation, security context, and integration with AWS services.
 
-2. **Focuses on essential AWS services**: The implementation centers around RDS (PostgreSQL), ElastiCache (Redis), and container deployment to ECS/Fargate
+2. **Centralizes observability**: CloudWatch integration for logs, metrics, and distributed tracing is implemented here, providing a unified observability solution.
 
-3. **Optimizes for Axum**: The implementation pattern leverages Axum's middleware and state management for AWS service integration
+3. **Centralizes deployment**: GitLab CI/CD pipeline configuration for building, testing, and deploying to AWS is managed here.
 
-4. **Streamlines deployments**: GitLab CI/CD integration provides automated build, test, and deployment pipelines
+4. **Focuses on AWS services**: The implementation centers around RDS (PostgreSQL), ElastiCache (Redis), Secrets Manager, CloudWatch, and container deployment to ECS/Fargate.
 
-5. **Ensures proper observability**: CloudWatch integration enables comprehensive logging, metrics, and alerting
+5. **Optimizes for Axum**: The implementation leverages Axum's middleware and state management for clean AWS service integration.
 
-This approach provides the fastest path to a secure, production-ready AWS deployment while avoiding unnecessary complexity and focusing on the specific technologies in your stack.
+This approach provides the fastest path to a secure, production-ready AWS deployment while avoiding unnecessary complexity and duplication across roadmaps.
 
 ## References
 - [AWS SDK for Rust](https://github.com/awslabs/aws-sdk-rust)

@@ -1,7 +1,7 @@
 # Database Integration Roadmap
 
 ## Overview
-A straightforward approach to database integration using PostgreSQL with Microsoft Entra authentication.
+A straightforward approach to database integration using PostgreSQL with a focus on core functionality and type safety.
 
 ## Current State
 Basic database functionality is needed with proper connection management and type-safe queries.
@@ -9,7 +9,6 @@ Basic database functionality is needed with proper connection management and typ
 ## Target State
 A simple, reliable database layer with:
 - PostgreSQL connection with proper pooling
-- Basic Microsoft Entra authentication integration
 - Type-safe SQL queries with SQLx
 - Simple migrations
 - Minimal but effective error handling
@@ -38,18 +37,18 @@ A simple, reliable database layer with:
    
    *Updated at: Not started*
 
-### Phase 2: Authentication & Migrations
-1. **Entra Integration**
-   - [ ] Add user context from Entra tokens
-   - [ ] Implement basic permission checking based on roles
-   - [ ] Create simple audit logging
-   
-   *Updated at: Not started*
-
-2. **Migration Management**
+### Phase 2: Migration Management
+1. **Migration System**
    - [ ] Set up SQLx migrations
    - [ ] Create basic migration command tooling
    - [ ] Implement version tracking
+   
+   *Updated at: Not started*
+
+2. **Schema Management**
+   - [ ] Create initial schema definition
+   - [ ] Implement type-safe model mapping
+   - [ ] Add database documentation generation
    
    *Updated at: Not started*
 
@@ -61,12 +60,13 @@ A simple, reliable database layer with:
 ## Success Criteria
 - Database connections work reliably
 - Queries are type-safe with SQLx
-- Basic permissions work with Entra identities
 - Simple migrations can be run manually and on startup
 - Errors are handled gracefully
 
 ## Implementation Notes
-This approach focuses on simplicity and reliability. Rather than implementing complex features upfront, we'll start with a minimal viable implementation and add functionality as needed.
+This approach focuses on simplicity and reliability. Rather than implementing complex features upfront, we'll start with a minimal viable implementation and add functionality as needed. 
+
+AWS-specific features (like IAM authentication and RDS configuration) and security features (like Entra identity integration) are handled in the AWS Integration roadmap.
 
 ### Example Implementation
 
@@ -106,20 +106,21 @@ impl PostgresDb {
     }
 }
 
-// Simple database implementation
 impl DbService for PostgresDb {
     async fn query_one<T>(&self, query: &str, params: &[&(dyn ToSql + Sync)]) -> Result<T, DbError>
     where
         T: for<'a> FromRow<'a> + Send + Unpin,
     {
         let client = self.pool.get().await?;
-        let row = client.query_one(query, params).await?;
+        let stmt = client.prepare(query).await?;
+        let row = client.query_one(&stmt, params).await?;
         Ok(T::from_row(&row)?)
     }
     
     async fn execute(&self, query: &str, params: &[&(dyn ToSql + Sync)]) -> Result<u64, DbError> {
         let client = self.pool.get().await?;
-        let result = client.execute(query, params).await?;
+        let stmt = client.prepare(query).await?;
+        let result = client.execute(&stmt, params).await?;
         Ok(result)
     }
     
@@ -139,27 +140,18 @@ impl DbService for PostgresDb {
                 Ok(value)
             }
             Err(e) => {
-                let _ = tx.rollback().await;
+                // Auto-rollback happens when tx is dropped
                 Err(e)
             }
         }
     }
 }
 
-// Simple handler example
+// Simple API handler example
 async fn create_user(
     State(db): State<Arc<dyn DbService>>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
     Json(payload): Json<CreateUserRequest>,
 ) -> impl IntoResponse {
-    // Simple Entra token validation (would be middleware in real app)
-    let token_data = validate_token(auth.token())?;
-    
-    // Simple permission check
-    if !token_data.roles.contains(&"users.write".to_string()) {
-        return StatusCode::FORBIDDEN.into_response();
-    }
-    
     // Execute database operation in transaction
     let result = db.transaction(|tx| Box::pin(async move {
         let user_id = sqlx::query_scalar!(
@@ -185,4 +177,6 @@ async fn create_user(
 
 ## References
 - [SQLx Documentation](https://github.com/launchbadge/sqlx)
-- [Microsoft Entra ID Documentation](https://docs.microsoft.com/en-us/azure/active-directory/) 
+- [Postgres Rust Driver](https://docs.rs/postgres/latest/postgres/)
+- [Tokio Postgres](https://docs.rs/tokio-postgres/latest/tokio_postgres/)
+- [Deadpool Postgres](https://docs.rs/deadpool-postgres/latest/deadpool_postgres/) 
