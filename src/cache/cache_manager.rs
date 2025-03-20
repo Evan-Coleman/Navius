@@ -74,18 +74,92 @@ pub fn register_resource_cache<T: ApiResource + 'static>(
     }
 
     let ttl = Duration::from_secs(registry.ttl_seconds);
+    let resource_type_clone = resource_type.to_string();
+
+    // Create a ResourceCache that we'll box and store
+    // This allows us to access it directly later for the eviction listener
+    let active_entries = Arc::new(AtomicU64::new(0));
+    let active_entries_clone = active_entries.clone();
+    
+    // Create the cache with eviction listener
     let cache_builder = Cache::builder()
         .max_capacity(registry.max_capacity)
         .time_to_live(ttl)
         .time_to_idle(ttl.mul_f32(1.5))
         .initial_capacity(100)
+        .eviction_listener(move |_key, _value, cause| {
+            // Track cache evictions in metrics and update counter
+            match cause {
+                moka::notification::RemovalCause::Expired => {
+                    debug!("🔄 Cache entry expired for {}", resource_type_clone);
+                    // Decrement active entries counter - don't go below 0
+                    let current = active_entries_clone.load(Ordering::Relaxed);
+                    if current > 0 {
+                        active_entries_clone.fetch_sub(1, Ordering::SeqCst);
+                        // Update the gauge directly - this requires metrics library support
+                        gauge!("cache_active_entries", "resource_type" => resource_type_clone.to_string())
+                            .set((current - 1) as f64);
+                        gauge!("cache_current_size", "resource_type" => resource_type_clone.to_string())
+                            .decrement(1.0);
+                    }
+                }
+                moka::notification::RemovalCause::Explicit => {
+                    debug!(
+                        "❌ Cache entry explicitly removed for {}",
+                        resource_type_clone
+                    );
+                    // Decrement active entries counter - don't go below 0
+                    let current = active_entries_clone.load(Ordering::Relaxed);
+                    if current > 0 {
+                        active_entries_clone.fetch_sub(1, Ordering::SeqCst);
+                        // Update the gauge directly
+                        gauge!("cache_active_entries", "resource_type" => resource_type_clone.to_string())
+                            .set((current - 1) as f64);
+                        gauge!("cache_current_size", "resource_type" => resource_type_clone.to_string())
+                            .decrement(1.0);
+                    }
+                }
+                moka::notification::RemovalCause::Size => {
+                    debug!(
+                        "📊 Cache entry evicted due to size for {}",
+                        resource_type_clone
+                    );
+                    // Decrement active entries counter - don't go below 0
+                    let current = active_entries_clone.load(Ordering::Relaxed);
+                    if current > 0 {
+                        active_entries_clone.fetch_sub(1, Ordering::SeqCst);
+                        // Update the gauge directly
+                        gauge!("cache_active_entries", "resource_type" => resource_type_clone.to_string())
+                            .set((current - 1) as f64);
+                        gauge!("cache_current_size", "resource_type" => resource_type_clone.to_string())
+                            .decrement(1.0);
+                    }
+                }
+                _ => {
+                    debug!(
+                        "🔄 Cache entry removed for {}: {:?}",
+                        resource_type_clone, cause
+                    );
+                    // Decrement active entries counter - don't go below 0
+                    let current = active_entries_clone.load(Ordering::Relaxed);
+                    if current > 0 {
+                        active_entries_clone.fetch_sub(1, Ordering::SeqCst);
+                        // Update the gauge directly
+                        gauge!("cache_active_entries", "resource_type" => resource_type_clone.to_string())
+                            .set((current - 1) as f64);
+                        gauge!("cache_current_size", "resource_type" => resource_type_clone.to_string())
+                            .decrement(1.0);
+                    }
+                }
+            }
+        })
         .build();
 
     let resource_cache: ResourceCache<T> = ResourceCache {
         cache: Arc::new(cache_builder),
         creation_time: SystemTime::now(),
         ttl_seconds: registry.ttl_seconds,
-        active_entries: Arc::new(AtomicU64::new(0)),
+        active_entries,
         resource_type: resource_type.to_string(),
     };
 
@@ -161,6 +235,34 @@ pub fn get_cache_stats_with_metrics(
         .map(|d| d.as_secs())
         .unwrap_or(0);
 
+    // Try to get the actual cache size directly from the cache
+    let mut actual_size = 0;
+    let caches = match registry.caches.read() {
+        Ok(caches) => caches,
+        Err(_) => {
+            debug!("Failed to acquire read lock on cache registry for stats");
+            return None;
+        }
+    };
+
+    // Look for the cache by resource type
+    if let Some(cache_box) = caches.get(resource_type) {
+        // Try some common resource types by using downcast_ref
+        // This is a bit of a hack, but it's the most direct way to get the entry count
+        // without an abstraction layer that covers all potential cache types
+        if let Some(pet_cache) = cache_box
+            .downcast_ref::<ResourceCache<crate::generated_apis::petstore_api::models::Upet>>()
+        {
+            actual_size = pet_cache.cache.entry_count();
+            debug!(
+                "Found pet cache size for {}: {}",
+                resource_type, actual_size
+            );
+        }
+        // Add other resource types as needed
+        // if let Some(...) = cache_box.downcast_ref::<ResourceCache<OtherType>>() { ... }
+    }
+
     // Parse metrics text to extract hit and miss counts for this resource type
     let mut hits = 0;
     let mut misses = 0;
@@ -201,10 +303,18 @@ pub fn get_cache_stats_with_metrics(
         } else if line.contains("cache_entries_created") {
             entries_created = value;
         } else if line.contains("cache_current_size") {
-            size = value;
+            // We'll use the actual size from the cache instead
+            if actual_size == 0 {
+                size = value; // Fallback to metrics if actual size not available
+            }
         } else if line.contains("cache_active_entries") {
             active_entries = value;
         }
+    }
+
+    // Use the direct cache size if available, otherwise use metrics
+    if actual_size > 0 {
+        size = actual_size;
     }
 
     // Calculate hit ratio
@@ -357,26 +467,64 @@ pub async fn start_metrics_updater(registry: &CacheRegistry) {
                 }
             };
 
-            for (resource_type, _cache_box) in caches.iter() {
-                // We don't have a direct way to access the cache entry count from the boxed cache
-                // So we'll at least ensure the resource type is registered in the metrics
-
-                // These are placeholder values that will be properly updated by the cache operations
-                // Simply setting a non-zero value (1.0) ensures the metrics exist for the health endpoints
-                gauge!("cache_current_size", "resource_type" => resource_type.to_string()).set(1.0);
-                gauge!("cache_active_entries", "resource_type" => resource_type.to_string())
-                    .set(1.0);
-                counter!("cache_hits_total", "resource_type" => resource_type.to_string())
-                    .increment(0);
-                counter!("cache_misses_total", "resource_type" => resource_type.to_string())
-                    .increment(0);
-                counter!("cache_entries_created", "resource_type" => resource_type.to_string())
-                    .increment(0);
-
-                info!("📊 Cache metrics registered for {}", resource_type);
+            for (resource_type, cache_box) in caches.iter() {
+                // Try to get the actual entry count from the cache
+                
+                // This is a bit of a hack, but it gets the actual cache size
+                // Try to downcast to a known resource type
+                if let Some(pet_cache) = cache_box.downcast_ref::<ResourceCache<crate::generated_apis::petstore_api::models::Upet>>() {
+                    let current_size = pet_cache.cache.entry_count();
+                    
+                    // Update the metrics with the real cache size
+                    gauge!("cache_current_size", "resource_type" => resource_type.to_string())
+                        .set(current_size as f64);
+                    
+                    // Get active entries from the atomic counter
+                    let active_entries = pet_cache.active_entries.load(Ordering::Relaxed);
+                    gauge!("cache_active_entries", "resource_type" => resource_type.to_string())
+                        .set(active_entries as f64);
+                    
+                    debug!(
+                        "📊 Cache metrics updated for {} - size: {}, active: {}",
+                        resource_type, current_size, active_entries
+                    );
+                } else {
+                    // If we can't get the actual size, set to 0 to avoid showing incorrect data
+                    gauge!("cache_current_size", "resource_type" => resource_type.to_string()).set(0.0);
+                    debug!(
+                        "📊 Cache metrics reset to 0 for {} (couldn't get actual size)",
+                        resource_type
+                    );
+                }
             }
         }
     });
+
+    // Set initial metrics to 0
+    let caches = match registry.caches.read() {
+        Ok(caches) => caches,
+        Err(_) => {
+            debug!("Failed to acquire read lock on cache registry for initial metrics");
+            return;
+        }
+    };
+
+    // Initialize all metrics for registered resource types with zeros
+    for (resource_type, _) in caches.iter() {
+        gauge!("cache_current_size", "resource_type" => resource_type.to_string()).set(0.0);
+        gauge!("cache_active_entries", "resource_type" => resource_type.to_string()).set(0.0);
+
+        // Register counters with initial 0 values
+        counter!("cache_hits_total", "resource_type" => resource_type.to_string()).increment(0);
+        counter!("cache_misses_total", "resource_type" => resource_type.to_string()).increment(0);
+        counter!("cache_entries_created", "resource_type" => resource_type.to_string())
+            .increment(0);
+
+        debug!(
+            "📊 Cache metrics initialized with zeros for {}",
+            resource_type
+        );
+    }
 
     info!("📈 Cache metrics updater started for all resource types");
 }

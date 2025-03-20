@@ -5,7 +5,6 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crate::app::AppState;
-use crate::cache::cache_manager::{CacheRegistry, CacheStats, get_cache_stats_with_metrics};
 use crate::models::{DependencyStatus, DetailedHealthResponse, HealthCheckResponse};
 
 /// Handler for the simple health check endpoint
@@ -100,77 +99,17 @@ pub async fn detailed_health_check(
         .duration_since(state.start_time)
         .unwrap_or_default();
 
-    // Get cache stats if available
-    let cache_stats = if let Some(registry) = &state.cache_registry {
-        // Get metrics for more accurate reporting
-        let metrics_text = state.metrics_handle.render();
-
-        // Extract resource types from metrics by looking for "pet" or other registered types
-        let mut stats_vec = Vec::new();
-
-        // Look for known resource types
-        let resource_types = vec!["pet"]; // Add other resource types as needed
-
-        for resource_type in resource_types {
-            if let Some(stats) =
-                get_cache_stats_with_metrics(registry, resource_type, &metrics_text)
-            {
-                stats_vec.push(stats);
-            }
-        }
-
-        // If we didn't find any stats with known types, try to extract from metrics
-        if stats_vec.is_empty() {
-            let resource_type_pattern = "resource_type=\"";
-            // Extract resource types from metrics
-            let mut extracted_types = Vec::new();
-            for line in metrics_text.lines() {
-                if line.contains(resource_type_pattern) {
-                    let start =
-                        line.find(resource_type_pattern).unwrap() + resource_type_pattern.len();
-                    let end = line[start..].find('"').unwrap() + start;
-                    let resource_type = &line[start..end];
-
-                    if !extracted_types.contains(&resource_type) {
-                        extracted_types.push(resource_type);
-                    }
-                }
-            }
-
-            // Get stats for each extracted resource type
-            for resource_type in extracted_types {
-                if let Some(stats) =
-                    get_cache_stats_with_metrics(registry, resource_type, &metrics_text)
-                {
-                    stats_vec.push(stats);
-                }
-            }
-        }
-
-        if stats_vec.is_empty() {
-            None
-        } else {
-            Some(stats_vec)
-        }
-    } else {
-        None
-    };
-
     // Gather status of dependencies
     let mut dependencies = Vec::new();
 
     // Database status (future expansion)
     // let db_status = ...
 
-    // Cache status with structured details
+    // Cache status with only enabled flag
     let mut cache_details = BTreeMap::new();
     cache_details.insert(
-        "ttl_seconds".to_string(),
-        state.config.cache.ttl_seconds.to_string(),
-    );
-    cache_details.insert(
-        "max_capacity".to_string(),
-        state.config.cache.max_capacity.to_string(),
+        "enabled".to_string(),
+        state.config.cache.enabled.to_string(),
     );
 
     dependencies.push(DependencyStatus {
@@ -265,6 +204,5 @@ pub async fn detailed_health_check(
         environment: state.config.environment.to_string(),
         dependencies,
         cache_enabled: state.config.cache.enabled,
-        cache_stats,
     })
 }

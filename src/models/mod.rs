@@ -1,4 +1,3 @@
-use crate::cache::cache_manager::CacheStats;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -40,7 +39,6 @@ pub struct DetailedHealthResponse {
     pub environment: String,
     pub dependencies: Vec<DependencyStatus>,
     pub cache_enabled: bool,
-    pub cache_stats: Option<Vec<CacheStats>>,
 }
 
 /// Actuator entry for key-value responses
@@ -55,12 +53,6 @@ pub struct ActuatorEntry {
 pub struct InfoResponse {
     pub status: String,
     pub entries: Vec<ActuatorEntry>,
-}
-
-/// Metrics response structure (for documentation purposes)
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MetricsResponse {
-    pub metrics: String,
 }
 
 /// API response schema

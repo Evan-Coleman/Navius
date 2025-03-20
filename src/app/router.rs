@@ -27,8 +27,8 @@ use crate::{
         middleware::{EntraAuthConfig, RoleRequirement},
     },
     config::AppConfig,
-    handlers::{self, actuator, cache_admin, health, metrics as metrics_handlers},
-    models::{ApiResponse, Data, DetailedHealthResponse, HealthCheckResponse, MetricsResponse},
+    handlers::{self, actuator, health},
+    models::{ApiResponse, Data, DetailedHealthResponse, HealthCheckResponse},
     reliability,
 };
 
@@ -80,10 +80,6 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     let actuator_routes = Router::new()
         // Use the actuator health handlers that are specifically designed for the router
         .route("/health", get(health::detailed_health_check))
-        // Use the metrics handler
-        .route("/metrics", get(metrics_handlers::metrics))
-        // Use the cache debug handler
-        .route("/cache", get(cache_admin::show_cache_info))
         // Use the info handler
         .route("/info", get(actuator::info));
 

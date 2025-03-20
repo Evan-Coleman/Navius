@@ -1,15 +1,14 @@
-// Use public handler functions
-pub use actuator::info;
-pub use cache_admin::cache_debug;
-pub use examples::pet::fetch_pet_handler;
-pub use health::detailed_health_check;
-pub use health::health_check;
-pub use logging::log_request;
-pub use metrics::metrics;
+// Common handlers for routes
+// These are organized by functional area
 
-pub mod actuator;
-pub mod cache_admin;
+// Examples of basic endpoint handlers
 pub mod examples;
+
+// Health check handlers
 pub mod health;
+
+// Debug and management actuator endpoints
+pub mod actuator;
+
+// Logging middleware
 pub mod logging;
-pub mod metrics;
