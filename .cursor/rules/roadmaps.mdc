@@ -1,7 +1,7 @@
 ---
 description: For help when asked to work with roadmaps
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 ## When being asked to implement something in a roadmap follow these instructions. Also, always add the ##PROMPT_ENHANCER to requests.
 
