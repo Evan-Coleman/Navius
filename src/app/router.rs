@@ -27,13 +27,14 @@ use crate::{
         middleware::{EntraAuthConfig, RoleRequirement},
     },
     config::AppConfig,
-    handlers::{self, actuator, health},
+    core::CoreRouter,
+    handlers::logging,
     models::{ApiResponse, Data, DetailedHealthResponse, HealthCheckResponse},
     reliability,
 };
 
-// Import the specific modules to avoid confusion
-use crate::handlers::examples::pet;
+// Import user router from the crate root
+use crate::app::UserRouter;
 
 /// Application state shared across all routes
 pub struct AppState {
@@ -54,60 +55,20 @@ async fn simple_health_check() -> &'static str {
 
 /// Create the application router with standardized route groups
 pub fn create_router(state: Arc<AppState>) -> Router {
-    // Define whether auth is enabled
-    let auth_enabled = state.config.auth.enabled;
-
     // Create logging middleware
-    let logging = middleware::from_fn_with_state(state.clone(), handlers::logging::log_request);
+    let logging = middleware::from_fn_with_state(state.clone(), logging::log_request);
 
-    // Create auth middleware for different access levels
-    let readonly_auth = EntraAuthLayer::from_app_config_require_read_only_role(&state.config);
-    let fullaccess_auth = EntraAuthLayer::from_app_config_require_full_access_role(&state.config);
-    let admin_auth = EntraAuthLayer::from_app_config_require_admin_role(&state.config);
+    // First, get the core routes that should not be modified by users
+    let core_routes = CoreRouter::create_core_routes(state.clone());
 
-    // 1. PUBLIC ROUTES - available without authentication
-    let public_routes = Router::new()
-        .route("/health", get(health::health_check))
-        .route("/pet/{id}", get(pet::fetch_pet_handler));
+    // Now get the user-defined routes
+    let user_routes = UserRouter::create_user_routes(state.clone());
 
-    // 2. READ-ONLY ROUTES - requires basic authentication
-    let readonly_routes = Router::new().route("/pet/{id}", get(pet::fetch_pet_handler));
-
-    // 3. FULL ACCESS ROUTES - requires admin role
-    let fullaccess_routes = Router::new().route("/pet/{id}", get(pet::fetch_pet_handler));
-
-    // 4. ACTUATOR ROUTES - for metrics, health checks, and admin functions
-    let actuator_routes = Router::new()
-        // Use the actuator health handlers that are specifically designed for the router
-        .route("/health", get(health::detailed_health_check))
-        // Use the info handler
-        .route("/info", get(actuator::info))
-        .route("/docs", get(handlers::docs::swagger_ui_handler))
-        .route("/docs/{*file}", get(handlers::docs::openapi_spec_handler));
-
-    // Apply authentication layers if enabled
-    let (readonly_routes, fullaccess_routes, actuator_routes) = if auth_enabled {
-        let readonly_with_auth = readonly_routes.layer(logging.clone()).layer(readonly_auth);
-
-        let fullaccess_with_auth = fullaccess_routes
-            .layer(logging.clone())
-            .layer(fullaccess_auth);
-
-        let actuator_with_auth = actuator_routes.layer(logging.clone()).layer(admin_auth);
-
-        (readonly_with_auth, fullaccess_with_auth, actuator_with_auth)
-    } else {
-        // No auth enabled, return routes as-is
-        (readonly_routes, fullaccess_routes, actuator_routes)
-    };
-
-    // Combine all route groups
+    // Combine core routes with user-defined routes
     let app = Router::new()
-        .merge(public_routes)
-        .nest("/read", readonly_routes)
-        .nest("/full", fullaccess_routes)
-        .nest("/actuator", actuator_routes)
-        .with_state(state.clone());
+        .merge(core_routes)
+        .merge(user_routes)
+        .layer(logging);
 
     // Create a plain Router with common middleware
     Router::new()
