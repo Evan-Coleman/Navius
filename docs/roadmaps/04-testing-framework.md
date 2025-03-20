@@ -1,150 +1,198 @@
 # Testing Framework Roadmap
 
 ## Overview
-Spring Boot provides an extensive testing framework with features like test slices, auto-configured mocks, test containers, and context caching. This roadmap outlines how to build a similarly robust testing infrastructure for our Rust backend.
+A focused, security-oriented testing framework for our Rust Axum backend that prioritizes essential test coverage with minimal dependencies. Rather than recreating Spring Boot's extensive testing ecosystem, we'll implement a pragmatic set of testing utilities that leverage Rust's built-in testing capabilities while providing the necessary tools for thorough API testing.
 
 ## Current State
-Currently, our application may lack a comprehensive testing framework with standardized approaches for unit, integration, and end-to-end testing.
+The application needs a structured testing approach that ensures security, correctness, and reliability without excessive complexity.
 
 ## Target State
-A complete testing ecosystem that includes:
-- Standard patterns for different test types
-- Mock implementations for services and dependencies
-- Integration test utilities
-- Performance testing tools
-- Test helpers for common scenarios
+A lightweight but comprehensive testing framework that:
+- Prioritizes security-critical component testing
+- Makes writing tests straightforward for developers
+- Leverages Rust's built-in testing capabilities
+- Provides specialized utilities for Axum handlers and routes
+- Enables reliable integration testing with minimal setup
 
 ## Implementation Progress Tracking
 
-### Phase 1: Unit Testing Framework
-1. **Service Mocking Infrastructure**
-   - [ ] Create trait-based mock implementations
-   - [ ] Implement builder patterns for mock configuration
-   - [ ] Add verification capabilities for mock interactions
+### Phase 1: Security and Unit Testing Essentials
+1. **Security Testing Infrastructure**
+   - [ ] Create authentication/authorization test helpers
+   - [ ] Implement security assertion utilities
+   - [ ] Add request validation test tools
    
    *Updated at: Not started*
 
-2. **Test Fixtures**
-   - [ ] Build fixture factories for common domain objects
-   - [ ] Implement random data generators
-   - [ ] Create test data builders with fluent interfaces
+2. **Mocking Fundamentals**
+   - [ ] Implement lightweight trait-based mocks for critical services
+   - [ ] Create configurable mock responses for security components
+   - [ ] Add simple verification capabilities for test assertions
    
    *Updated at: Not started*
 
-3. **Handler Testing Utilities**
-   - [ ] Develop utilities for testing Axum handlers
-   - [ ] Create standardized request builders
-   - [ ] Implement response assertions
+3. **Handler Unit Testing**
+   - [ ] Build Axum-specific handler test utilities
+   - [ ] Create reusable test fixtures for common scenarios
+   - [ ] Implement response validation helpers
    
    *Updated at: Not started*
 
-### Phase 2: Integration Testing
-1. **Test Application Setup**
-   - [ ] Create utilities for spinning up test applications
-   - [ ] Implement configuration overrides for tests
-   - [ ] Add support for test-specific middleware
+### Phase 2: Integration Testing Essentials
+1. **API Testing Framework**
+   - [ ] Create test application builder with minimal configuration
+   - [ ] Implement type-safe route testing
+   - [ ] Add JSON response validation utilities
    
    *Updated at: Not started*
 
 2. **Database Testing**
-   - [ ] Build transaction-based test isolation
-   - [ ] Implement database migrations for tests
-   - [ ] Create test data seeding utilities
+   - [ ] Implement transaction-based test isolation
+   - [ ] Create simple test data factories
+   - [ ] Add database state assertions
    
    *Updated at: Not started*
 
-3. **API Testing**
-   - [ ] Develop end-to-end API testing utilities
-   - [ ] Implement request/response logging for tests
-   - [ ] Add automated API spec validation
+3. **Error Scenario Testing**
+   - [ ] Build tools for testing error responses
+   - [ ] Implement failure injection for resilience testing
+   - [ ] Add security failure scenario testing
    
    *Updated at: Not started*
 
-### Phase 3: Test Containers and External Services
-1. **Test Container Support**
-   - [ ] Integrate with test containers for database testing
-   - [ ] Add support for other containerized services
-   - [ ] Implement container lifecycle management
+### Phase 3: CI and Developer Experience
+1. **CI Integration**
+   - [ ] Create optimized test suite organization
+   - [ ] Implement security-focused test tagging
+   - [ ] Add code coverage reporting
    
    *Updated at: Not started*
 
-2. **External Service Mocks**
-   - [ ] Create mock implementations of external APIs
-   - [ ] Build configurable response patterns
-   - [ ] Implement network failure simulation
-   
-   *Updated at: Not started*
-
-3. **Service Virtualization**
-   - [ ] Develop simplified versions of complex dependencies
-   - [ ] Build record/replay capabilities for external services
-   - [ ] Implement contract testing patterns
-   
-   *Updated at: Not started*
-
-### Phase 4: Performance and Load Testing
-1. **Benchmarking Tools**
-   - [ ] Create a benchmarking framework for key operations
-   - [ ] Implement performance regression detection
-   - [ ] Add reporting for performance metrics
-   
-   *Updated at: Not started*
-
-2. **Load Testing Infrastructure**
-   - [ ] Build load test scenarios
-   - [ ] Implement test clients with controllable load patterns
-   - [ ] Create resource usage monitoring for tests
-   
-   *Updated at: Not started*
-
-3. **Stress Testing**
-   - [ ] Develop stress test patterns
-   - [ ] Implement chaos testing capabilities
-   - [ ] Add recovery testing
-   
-   *Updated at: Not started*
-
-### Phase 5: Test Reporting and Automation
-1. **Test Result Analysis**
-   - [ ] Build comprehensive test reporting
-   - [ ] Implement test failure analysis
-   - [ ] Add historical test performance tracking
-   
-   *Updated at: Not started*
-
-2. **Continuous Integration**
-   - [ ] Create CI pipeline integration
-   - [ ] Implement parallel test execution
-   - [ ] Add test categorization and selective execution
-   
-   *Updated at: Not started*
-
-3. **Developer Tooling**
-   - [ ] Build IDE integrations for tests
-   - [ ] Create test generators for new code
-   - [ ] Implement interactive test debugging
+2. **Developer Utilities**
+   - [ ] Build test helpers for common scenarios
+   - [ ] Create concise test builders with sensible defaults
+   - [ ] Implement debug utilities for test failures
    
    *Updated at: Not started*
 
 ## Implementation Status
 - **Overall Progress**: 0% complete
 - **Last Updated**: March 20, 2024
-- **Next Milestone**: Service Mocking Infrastructure
+- **Next Milestone**: Security Testing Infrastructure
 
 ## Success Criteria
-- Developers can write tests with minimal boilerplate
-- Tests are reliable and deterministic
-- Integration tests properly isolate test cases
-- Test coverage is comprehensive
-- Test performance is acceptable
-- CI integration is seamless
+- Security-critical paths have thorough test coverage
+- Writing new tests requires minimal boilerplate
+- Tests run quickly enough for developer feedback loops
+- Integration tests reliably test API behavior
+- Database tests don't require complex setup
 
 ## Implementation Notes
-While Spring Boot's testing framework relies heavily on reflection, our Rust implementation will need to leverage trait-based polymorphism and compile-time abstractions. The focus should be on providing a great developer experience while maintaining type safety.
+This approach focuses on practical testing capabilities that provide the most value for ensuring security and correctness. We'll leverage Rust's built-in testing capabilities and Axum's design to create a lightweight yet effective testing framework.
+
+### Example Implementation
+
+```rust
+// Example of a handler unit test
+#[tokio::test]
+async fn test_create_user_handler_validates_input() {
+    // Arrange
+    let mock_db = MockDbService::new();
+    mock_db.expect_create_user().times(0); // Expect no calls since validation should fail
+    
+    let app = test_app()
+        .with_service(mock_db)
+        .build();
+    
+    // Act
+    let response = app
+        .call(
+            Request::builder()
+                .method("POST")
+                .uri("/api/users")
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer test-token")
+                .body(json!({"name": "", "email": "not-an-email"}).to_string())
+                .unwrap()
+        )
+        .await;
+    
+    // Assert
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    
+    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let error: ValidationErrorResponse = serde_json::from_slice(&body).unwrap();
+    
+    assert!(error.fields.contains_key("name"));
+    assert!(error.fields.contains_key("email"));
+}
+
+// Example of an integration test with security focus
+#[tokio::test]
+async fn test_protected_endpoint_requires_authentication() {
+    // Arrange
+    let app = test_app().build();
+    
+    // Act - Call without auth token
+    let response = app
+        .call(
+            Request::builder()
+                .method("GET")
+                .uri("/api/protected-resource")
+                .body(Body::empty())
+                .unwrap()
+        )
+        .await;
+    
+    // Assert
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+// Example of a database integration test
+#[tokio::test]
+async fn test_user_creation_persists_to_database() {
+    // Arrange
+    let db_pool = test_db_pool().await;
+    
+    let app = test_app()
+        .with_db_pool(db_pool.clone())
+        .build();
+    
+    // Use transaction to ensure test isolation
+    let test_tx = db_pool.begin().await.unwrap();
+    
+    // Act
+    let response = app
+        .call(
+            Request::builder()
+                .method("POST")
+                .uri("/api/users")
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer valid-test-token")
+                .body(json!({"name": "Test User", "email": "test@example.com"}).to_string())
+                .unwrap()
+        )
+        .await;
+    
+    // Assert
+    assert_eq!(response.status(), StatusCode::CREATED);
+    
+    // Verify database state
+    let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE email = $1")
+        .bind("test@example.com")
+        .fetch_one(&test_tx)
+        .await
+        .unwrap();
+    
+    assert_eq!(user.name, "Test User");
+    
+    // Rollback transaction to clean up
+    test_tx.rollback().await.unwrap();
+}
+```
 
 ## References
-- [Spring Boot Testing Documentation](https://docs.spring.io/spring-boot/docs/current/reference/html/features.html#features.testing)
-- [Testcontainers](https://www.testcontainers.org/)
-- [Mockito](https://site.mockito.org/)
 - [Rust Testing Documentation](https://doc.rust-lang.org/book/ch11-00-testing.html)
+- [Axum Testing](https://docs.rs/axum/latest/axum/middleware/index.html)
+- [SQLx Testing](https://github.com/launchbadge/sqlx/blob/main/FAQ.md#how-do-i-mock-sqlx-in-my-tests)
 - [mockall](https://docs.rs/mockall/latest/mockall/) 

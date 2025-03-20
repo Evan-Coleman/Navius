@@ -1,144 +1,188 @@
 # Database Integration Roadmap
 
 ## Overview
-Spring Boot excels at database integration with features like JPA, transaction management, and automated migrations. This roadmap outlines how to build a similarly robust database infrastructure for our Rust backend.
+A straightforward approach to database integration using PostgreSQL with Microsoft Entra authentication.
 
 ## Current State
-Currently, our application lacks a comprehensive database integration layer with standardized connection management, migrations, and transaction handling.
+Basic database functionality is needed with proper connection management and type-safe queries.
 
 ## Target State
-A complete database subsystem featuring:
-- Connection pooling
-- Declarative transaction management
-- Database migrations
-- Multiple database support (PostgreSQL, MySQL, SQLite)
-- Entity modeling with compile-time validation
-- Query building with type safety
+A simple, reliable database layer with:
+- PostgreSQL connection with proper pooling
+- Basic Microsoft Entra authentication integration
+- Type-safe SQL queries with SQLx
+- Simple migrations
+- Minimal but effective error handling
 
 ## Implementation Progress Tracking
 
-### Phase 1: Connection Management
-1. **Database Configuration**
-   - [ ] Create configuration structures for different database types
-   - [ ] Support for connection pooling parameters
-   - [ ] Environment-specific database settings
+### Phase 1: Core Database Setup
+1. **Basic Connection**
+   - [ ] Set up PostgreSQL connection configuration
+   - [ ] Implement simple service account access
+   - [ ] Create connection pooling with deadpool-postgres
    
    *Updated at: Not started*
 
-2. **Connection Pool Setup**
-   - [ ] Implement connection pool using a library like deadpool or r2d2
-   - [ ] Configure connection lifetime, pool size, and timeouts
-   - [ ] Add health checking for database connections
+2. **Type-Safe Queries**
+   - [ ] Integrate SQLx for compile-time SQL validation
+   - [ ] Create basic repository pattern for database access
+   - [ ] Implement simple error handling
    
    *Updated at: Not started*
 
-3. **Database Provider Service**
-   - [ ] Create a service that provides database connections
-   - [ ] Handle connection errors gracefully
-   - [ ] Integrate with metrics for connection monitoring
+3. **Transaction Support**
+   - [ ] Create basic transaction wrapper
+   - [ ] Implement automatic rollback on error
+   - [ ] Add simple logging for database operations
    
    *Updated at: Not started*
 
-### Phase 2: Migration System
-1. **Migration Engine**
-   - [ ] Select a migration approach (Diesel migrations, SQLx-based migrations, etc.)
-   - [ ] Support for both SQL and code-based migrations
-   - [ ] Ensure migration safety and atomicity
+### Phase 2: Authentication & Migrations
+1. **Entra Integration**
+   - [ ] Add user context from Entra tokens
+   - [ ] Implement basic permission checking based on roles
+   - [ ] Create simple audit logging
    
    *Updated at: Not started*
 
-2. **CLI Integration**
-   - [ ] Add commands to run migrations
-   - [ ] Create utilities to generate migration templates
-   - [ ] Implement rollback functionality
-   
-   *Updated at: Not started*
-
-3. **Runtime Validation**
-   - [ ] Validate database schema matches expected state on startup
-   - [ ] Warn about missing migrations
-   - [ ] Provide option for automatic migrations in development
-   
-   *Updated at: Not started*
-
-### Phase 3: Transaction Management
-1. **Transaction Manager**
-   - [ ] Create a transaction manager for ACID operations
-   - [ ] Support for nested transactions (savepoints)
-   - [ ] Implement transaction propagation modes similar to Spring
-   
-   *Updated at: Not started*
-
-2. **Declarative Transactions**
-   - [ ] Create a macro for transaction demarcation (`#[transactional]`)
-   - [ ] Support transaction isolation levels
-   - [ ] Add automatic rollback on error with customizable behavior
-   
-   *Updated at: Not started*
-
-3. **Transaction Context**
-   - [ ] Implement per-request transaction context
-   - [ ] Ensure proper cleanup of transaction resources
-   - [ ] Add transaction IDs for tracing
-   
-   *Updated at: Not started*
-
-### Phase 4: Entity Framework
-1. **Entity Modeling**
-   - [ ] Create traits for database entities
-   - [ ] Implement validation on entity fields
-   - [ ] Support for entity relationships
-   
-   *Updated at: Not started*
-
-2. **Repository Pattern**
-   - [ ] Build repository traits for common database operations
-   - [ ] Create type-safe query building
-   - [ ] Implement pagination and sorting support
-   
-   *Updated at: Not started*
-
-3. **Query DSL**
-   - [ ] Develop a type-safe query DSL
-   - [ ] Support for common query patterns
-   - [ ] Add compile-time query validation where possible
-   
-   *Updated at: Not started*
-
-### Phase 5: Caching Integration
-1. **Query Caching**
-   - [ ] Implement result caching for queries
-   - [ ] Support for cache invalidation on updates
-   - [ ] Add cache statistics
-   
-   *Updated at: Not started*
-
-2. **Entity Caching**
-   - [ ] Create a second-level cache for entities
-   - [ ] Support for entity relationship caching
-   - [ ] Implement cache concurrency strategies
+2. **Migration Management**
+   - [ ] Set up SQLx migrations
+   - [ ] Create basic migration command tooling
+   - [ ] Implement version tracking
    
    *Updated at: Not started*
 
 ## Implementation Status
 - **Overall Progress**: 0% complete
 - **Last Updated**: March 20, 2024
-- **Next Milestone**: Database Configuration
+- **Next Milestone**: Basic PostgreSQL Connection
 
 ## Success Criteria
-- Connections are pooled efficiently with proper metrics
-- Migrations are reliable and maintainable
-- Transactions work correctly with proper isolation
-- Query performance is optimized
-- Developer experience is streamlined
-- Type safety is maintained throughout the database layer
+- Database connections work reliably
+- Queries are type-safe with SQLx
+- Basic permissions work with Entra identities
+- Simple migrations can be run manually and on startup
+- Errors are handled gracefully
 
 ## Implementation Notes
-While Spring's JPA offers extensive ORM capabilities, in Rust we may prefer more direct and explicit database access with type safety. Libraries like Diesel or SQLx provide compile-time SQL checking which aligns well with Rust's safety focus.
+This approach focuses on simplicity and reliability. Rather than implementing complex features upfront, we'll start with a minimal viable implementation and add functionality as needed.
+
+### Example Implementation
+
+```rust
+// Very simple database service
+trait DbService: Send + Sync {
+    async fn query_one<T>(&self, query: &str, params: &[&(dyn ToSql + Sync)]) -> Result<T, DbError>
+    where
+        T: for<'a> FromRow<'a> + Send + Unpin;
+        
+    async fn execute(&self, query: &str, params: &[&(dyn ToSql + Sync)]) -> Result<u64, DbError>;
+    
+    async fn transaction<F, R>(&self, f: F) -> Result<R, DbError>
+    where
+        F: FnOnce(&mut Transaction<'_, Postgres>) -> BoxFuture<'_, Result<R, DbError>> + Send,
+        R: Send;
+}
+
+// Simple database implementation
+struct PostgresDb {
+    pool: Pool<PostgresConnectionManager<MakeTlsConnector>>,
+}
+
+impl PostgresDb {
+    async fn new(config: &str) -> Result<Self, DbError> {
+        let manager = PostgresConnectionManager::new_from_stringlike(
+            config,
+            MakeTlsConnector::new(TlsConnector::new()?),
+        )?;
+        
+        let pool = Pool::builder()
+            .max_size(15) // Reasonable default
+            .build(manager)
+            .await?;
+        
+        Ok(Self { pool })
+    }
+}
+
+// Simple database implementation
+impl DbService for PostgresDb {
+    async fn query_one<T>(&self, query: &str, params: &[&(dyn ToSql + Sync)]) -> Result<T, DbError>
+    where
+        T: for<'a> FromRow<'a> + Send + Unpin,
+    {
+        let client = self.pool.get().await?;
+        let row = client.query_one(query, params).await?;
+        Ok(T::from_row(&row)?)
+    }
+    
+    async fn execute(&self, query: &str, params: &[&(dyn ToSql + Sync)]) -> Result<u64, DbError> {
+        let client = self.pool.get().await?;
+        let result = client.execute(query, params).await?;
+        Ok(result)
+    }
+    
+    async fn transaction<F, R>(&self, f: F) -> Result<R, DbError>
+    where
+        F: FnOnce(&mut Transaction<'_, Postgres>) -> BoxFuture<'_, Result<R, DbError>> + Send,
+        R: Send,
+    {
+        let mut client = self.pool.get().await?;
+        let tx = client.transaction().await?;
+        
+        let result = f(&mut tx).await;
+        
+        match result {
+            Ok(value) => {
+                tx.commit().await?;
+                Ok(value)
+            }
+            Err(e) => {
+                let _ = tx.rollback().await;
+                Err(e)
+            }
+        }
+    }
+}
+
+// Simple handler example
+async fn create_user(
+    State(db): State<Arc<dyn DbService>>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Json(payload): Json<CreateUserRequest>,
+) -> impl IntoResponse {
+    // Simple Entra token validation (would be middleware in real app)
+    let token_data = validate_token(auth.token())?;
+    
+    // Simple permission check
+    if !token_data.roles.contains(&"users.write".to_string()) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    
+    // Execute database operation in transaction
+    let result = db.transaction(|tx| Box::pin(async move {
+        let user_id = sqlx::query_scalar!(
+            "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id",
+            payload.name,
+            payload.email
+        )
+        .fetch_one(tx)
+        .await?;
+        
+        Ok(user_id)
+    })).await;
+    
+    match result {
+        Ok(user_id) => (StatusCode::CREATED, Json(json!({ "id": user_id }))).into_response(),
+        Err(e) => {
+            tracing::error!("Database error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+```
 
 ## References
-- [Spring Data JPA](https://spring.io/projects/spring-data-jpa)
-- [Diesel ORM](https://diesel.rs/)
-- [SQLx](https://github.com/launchbadge/sqlx)
-- [Refinery Migrations](https://crates.io/crates/refinery)
-- [deadpool](https://crates.io/crates/deadpool) 
+- [SQLx Documentation](https://github.com/launchbadge/sqlx)
+- [Microsoft Entra ID Documentation](https://docs.microsoft.com/en-us/azure/active-directory/) 

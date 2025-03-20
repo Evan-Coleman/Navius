@@ -1,150 +1,244 @@
 # Data Validation Roadmap
 
 ## Overview
-Spring Boot offers robust data validation through Bean Validation (JSR-380) with declarative constraints and automatic validation in controllers. This roadmap outlines how to implement a similar validation system for our Rust backend.
+A pragmatic, security-first approach to data validation for our Rust Axum backend that leverages existing validation libraries while providing consistent validation patterns throughout the application.
 
 ## Current State
-Currently, our application may lack a standardized approach to input validation, relying on manual validation code throughout handlers and services.
+Our application needs structured input validation to ensure data integrity and security, particularly for API endpoints exposed to external users.
 
 ## Target State
-A comprehensive validation framework featuring:
-- Declarative validation rules
-- Automatic validation of request inputs
-- Consistent error reporting
-- Customizable validation logic
-- Support for complex validation scenarios
+A lightweight but effective validation system that:
+- Ensures all inputs are properly validated for security
+- Integrates seamlessly with Axum's extractors
+- Provides consistent error responses
+- Supports Microsoft Entra authentication validation
+- Balances security with developer productivity
 
 ## Implementation Progress Tracking
 
-### Phase 1: Core Validation Framework
-1. **Validation Trait System**
-   - [ ] Define validation traits for common types
-   - [ ] Implement standard validators for primitive types
-   - [ ] Create validation context for tracking errors
+### Phase 1: Core Security Validation
+1. **Request Data Validation**
+   - [ ] Integrate with validator crate for struct-level validation
+   - [ ] Implement custom Axum extractor for validated JSON/Form data
+   - [ ] Create security-focused validators for sensitive fields
    
    *Updated at: Not started*
 
-2. **Declarative Validation Rules**
-   - [ ] Build derive macros for field-level validation
-   - [ ] Support common validation rules (min, max, pattern, etc.)
-   - [ ] Implement composition of validation rules
+2. **Authentication Validation**
+   - [ ] Build validation for Entra access tokens
+   - [ ] Implement role and permission validation extractors
+   - [ ] Add audit logging for validation failures
    
    *Updated at: Not started*
 
-3. **Error Collection and Reporting**
-   - [ ] Create standardized validation error format
-   - [ ] Implement error aggregation
-   - [ ] Add path tracking for nested validation errors
+3. **Database Input Sanitization**
+   - [ ] Create helpers for safe database parameter handling
+   - [ ] Implement SQL injection prevention validation
+   - [ ] Add validation for Postgres-specific data types
    
    *Updated at: Not started*
 
-### Phase 2: Integration with Request Handling
-1. **Request Validation Middleware**
-   - [ ] Create middleware to validate incoming requests
-   - [ ] Implement automatic validation based on route parameters
-   - [ ] Add content negotiation for error responses
+### Phase 2: Developer Experience
+1. **Standardized Error Responses**
+   - [ ] Create unified validation error format
+   - [ ] Implement consistent error responses for all validation failures
+   - [ ] Add detailed context for validation errors
    
    *Updated at: Not started*
 
-2. **JSON Request Validation**
-   - [ ] Implement validation for JSON request bodies
-   - [ ] Add support for partial validation
-   - [ ] Create custom deserialization with validation
-   
-   *Updated at: Not started*
-
-3. **Form and Query Parameter Validation**
-   - [ ] Build validation for form submissions
-   - [ ] Implement query parameter validation
-   - [ ] Support for multipart form data validation
-   
-   *Updated at: Not started*
-
-### Phase 3: Advanced Validation Capabilities
-1. **Cross-Field Validation**
-   - [ ] Implement validation across multiple fields
-   - [ ] Support for complex business rules
-   - [ ] Add conditional validation logic
-   
-   *Updated at: Not started*
-
-2. **Asynchronous Validation**
-   - [ ] Create support for async validators
-   - [ ] Implement cascading async validation
-   - [ ] Add timeout handling for external validations
-   
-   *Updated at: Not started*
-
-3. **Custom Validator Registry**
-   - [ ] Build a registry for custom validators
-   - [ ] Support for validation groups
-   - [ ] Add environment-specific validation behavior
-   
-   *Updated at: Not started*
-
-### Phase 4: Schema-Based Validation
-1. **JSON Schema Integration**
-   - [ ] Implement JSON Schema-based validation
-   - [ ] Support for schema references and composition
-   - [ ] Add schema caching for performance
-   
-   *Updated at: Not started*
-
-2. **OpenAPI Schema Validation**
-   - [ ] Create validation based on OpenAPI specifications
-   - [ ] Implement request/response validation against schemas
-   - [ ] Add runtime schema verification
-   
-   *Updated at: Not started*
-
-3. **Schema Generation**
-   - [ ] Build automatic schema generation from types
-   - [ ] Support for schema documentation
-   - [ ] Add versioning for schemas
-   
-   *Updated at: Not started*
-
-### Phase 5: Validation UX Improvements
-1. **Client-Side Validation Hints**
-   - [ ] Generate client-side validation rules from server definitions
-   - [ ] Support for localized validation messages
-   - [ ] Add standardized validation metadata
-   
-   *Updated at: Not started*
-
-2. **Validation Performance Optimization**
-   - [ ] Implement validation caching
-   - [ ] Create optimized validation paths for common scenarios
-   - [ ] Add validation benchmarking
-   
-   *Updated at: Not started*
-
-3. **Validation Reporting**
-   - [ ] Build comprehensive validation error reporting
-   - [ ] Implement validation statistics collection
-   - [ ] Add validation debugging tools
+2. **Common Validation Patterns**
+   - [ ] Build reusable validation functions for common use cases
+   - [ ] Create validation helpers for AWS resource identifiers
+   - [ ] Implement validators for business domain objects
    
    *Updated at: Not started*
 
 ## Implementation Status
 - **Overall Progress**: 0% complete
 - **Last Updated**: March 20, 2024
-- **Next Milestone**: Validation Trait System
+- **Next Milestone**: Request Data Validation
 
 ## Success Criteria
-- Validation is consistent across the application
-- Error messages are clear and actionable
-- Performance overhead is minimal
-- Complex validation scenarios are supported
-- Developer experience is improved over manual validation
-- Security is enhanced through reliable input validation
+- All external inputs are properly validated
+- Security vulnerabilities from invalid input are prevented
+- Validation errors provide clear guidance to API clients
+- Developer experience is improved with consistent validation patterns
+- Performance overhead is minimized
 
 ## Implementation Notes
-While Spring Boot uses reflection-based validation, our Rust implementation will leverage compile-time validation where possible through macros and trait implementations. The focus should be on providing a clean API while maintaining Rust's performance and safety guarantees.
+This approach focuses on practical validation that leverages existing tools like the validator crate and Axum's extractor system rather than building a complex custom validation framework. We'll prioritize security-critical validations while maintaining simplicity and developer productivity.
+
+### Example Implementation
+
+```rust
+use axum::{
+    extract::{FromRequest, RequestParts, State},
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    Json,
+};
+use serde::Deserialize;
+use validator::{Validate, ValidationErrors};
+use std::sync::Arc;
+
+// Example validated request model with security-focused validations
+#[derive(Debug, Deserialize, Validate)]
+pub struct CreateUserRequest {
+    #[validate(length(min = 1, max = 100))]
+    pub name: String,
+
+    #[validate(email)]
+    pub email: String,
+
+    #[validate(length(min = 8), custom = "validate_password_strength")]
+    pub password: String,
+
+    #[validate(custom = "validate_tenant_access")]
+    pub tenant_id: Option<String>,
+}
+
+// Custom validator for password strength
+fn validate_password_strength(password: &str) -> Result<(), validator::ValidationError> {
+    // Check for minimum complexity requirements
+    let has_uppercase = password.chars().any(|c| c.is_uppercase());
+    let has_lowercase = password.chars().any(|c| c.is_lowercase());
+    let has_digit = password.chars().any(|c| c.is_digit(10));
+    let has_special = password.chars().any(|c| !c.is_alphanumeric());
+
+    if !(has_uppercase && has_lowercase && has_digit && has_special) {
+        let mut error = validator::ValidationError::new("password_complexity");
+        error.message = Some("Password must contain uppercase, lowercase, digit, and special characters".into());
+        return Err(error);
+    }
+
+    Ok(())
+}
+
+// Custom validator that checks tenant access against Entra permissions
+fn validate_tenant_access(tenant_id: &str) -> Result<(), validator::ValidationError> {
+    // This would typically check against the current user's permissions
+    // Implementation would be specific to your Entra integration
+    Ok(())
+}
+
+// Standardized validation error response
+#[derive(Debug, serde::Serialize)]
+pub struct ValidationErrorResponse {
+    pub message: String,
+    pub errors: std::collections::HashMap<String, Vec<String>>,
+}
+
+impl IntoResponse for ValidationErrors {
+    fn into_response(self) -> Response {
+        let mut errors = std::collections::HashMap::new();
+        
+        for (field, field_errors) in self.field_errors() {
+            let error_messages: Vec<String> = field_errors
+                .iter()
+                .map(|error| {
+                    error.message.clone()
+                        .unwrap_or_else(|| "Invalid value".into())
+                        .to_string()
+                })
+                .collect();
+            
+            errors.insert(field.to_string(), error_messages);
+        }
+        
+        let error_response = ValidationErrorResponse {
+            message: "Validation failed".to_string(),
+            errors,
+        };
+        
+        (StatusCode::BAD_REQUEST, Json(error_response)).into_response()
+    }
+}
+
+// Custom extractor that validates input
+pub struct ValidatedJson<T>(pub T);
+
+#[axum::async_trait]
+impl<T, B> FromRequest<B> for ValidatedJson<T>
+where
+    T: Validate + serde::de::DeserializeOwned,
+    B: Send + Sync,
+{
+    type Rejection = Response;
+    
+    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
+        // Extract the JSON payload
+        let Json(value) = Json::<T>::from_request(req)
+            .await
+            .map_err(|e| {
+                let error_message = format!("Invalid JSON: {}", e);
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(ValidationErrorResponse {
+                        message: error_message,
+                        errors: std::collections::HashMap::new(),
+                    }),
+                )
+                    .into_response()
+            })?;
+        
+        // Validate the data
+        value.validate().map_err(|e| e.into_response())?;
+        
+        Ok(ValidatedJson(value))
+    }
+}
+
+// Example handler using the validated extractor
+async fn create_user(
+    ValidatedJson(payload): ValidatedJson<CreateUserRequest>,
+    State(db): State<Arc<DbPool>>,
+) -> impl IntoResponse {
+    // Business logic here - we know the data is valid
+    // No need for additional validation checks
+    
+    // Create the user
+    match db.create_user(&payload).await {
+        Ok(user_id) => {
+            (StatusCode::CREATED, Json(json!({ "id": user_id }))).into_response()
+        }
+        Err(e) => {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response()
+        }
+    }
+}
+
+// Security-focused validation middleware for Entra tokens
+async fn validate_entra_token<B>(
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    State(auth_config): State<EntraConfig>,
+    request: Request<B>,
+    next: Next<B>,
+) -> Result<Response, StatusCode> {
+    // Validate the token
+    let token_data = auth_config
+        .validate_token(auth.token())
+        .await
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    
+    // Check for token expiration
+    if token_data.is_expired() {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    
+    // Add validated identity to request extensions
+    request.extensions_mut().insert(EntraIdentity {
+        user_id: token_data.claims.sub.clone(),
+        roles: token_data.claims.roles.clone(),
+        tenant_id: token_data.claims.tid.clone(),
+    });
+    
+    // Continue with the request
+    Ok(next.run(request).await)
+}
+```
 
 ## References
-- [Bean Validation (JSR-380)](https://beanvalidation.org/2.0/spec/)
-- [Spring Validation](https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#validation)
-- [Rust Derive Macros](https://doc.rust-lang.org/reference/procedural-macros.html#derive-macros)
-- [validator](https://docs.rs/validator/latest/validator/)
-- [JSON Schema](https://json-schema.org/) 
+- [validator crate](https://docs.rs/validator/latest/validator/)
+- [Axum extractors](https://docs.rs/axum/latest/axum/extract/index.html)
+- [OWASP Input Validation Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html)
+- [Microsoft Entra Token Validation](https://docs.microsoft.com/en-us/azure/active-directory/develop/access-tokens) 

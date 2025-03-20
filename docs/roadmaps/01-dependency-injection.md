@@ -1,96 +1,137 @@
 # Dependency Injection Roadmap
 
 ## Overview
-Spring Boot's powerful dependency injection (DI) system is one of its core strengths, allowing for clean, decoupled, and testable code. This roadmap outlines steps to implement a similar system in our Rust backend framework.
+Dependency injection is a design pattern that helps make code more modular, maintainable, and testable by separating the creation of objects from their use. This roadmap outlines a lightweight, Rust-idiomatic approach to dependency management that avoids unnecessary complexity while maintaining the benefits of modularity and testability.
 
 ## Current State
-Currently, our application passes `Arc<AppState>` manually to handlers and services, which works but lacks the flexibility and declarative nature of Spring's DI system.
+Currently, our application passes `Arc<AppState>` manually to handlers and services, which is a good foundation but could benefit from a more structured approach to service creation and testing support.
 
 ## Target State
-A lightweight yet powerful DI container that:
-- Allows declarative registration of services and components
-- Supports automatic resolution of dependencies
-- Enables easy mocking for testing
+A lightweight dependency management approach that:
 - Maintains Rust's compile-time safety guarantees
+- Makes testing straightforward with minimal boilerplate
+- Avoids complex abstractions and runtime overhead
+- Provides convenient access to services throughout the application
+- Supports clear initialization and configuration patterns
 
 ## Implementation Progress Tracking
 
-### Phase 1: Basic DI Container
-1. **Create DI Container Interface**
-   - [ ] Define traits for registering services
-   - [ ] Implement lookup mechanisms for retrieving services
-   - [ ] Add support for singleton and transient service lifetimes
+### Phase 1: Structured App State Management
+1. **Core AppState Structure**
+   - [ ] Define a clean AppState struct that holds all services
+   - [ ] Implement proper initialization and shutdown for stateful services
+   - [ ] Create a builder pattern for flexible AppState construction
    
    *Updated at: Not started*
 
-2. **Implement Service Registration Macros**
-   - [ ] Create ergonomic macros for service registration
-   - [ ] Add compile-time checking where possible to maintain Rust's safety guarantees
+2. **Service Trait Definitions**
+   - [ ] Define core traits for major service categories
+   - [ ] Implement real service implementations of these traits
+   - [ ] Add configuration options for service instantiation
    
    *Updated at: Not started*
 
-3. **Build Service Provider**
-   - [ ] Develop a centralized service provider
-   - [ ] Implement factory pattern for service instantiation
-   - [ ] Add support for lazy initialization
+3. **Error Handling**
+   - [ ] Implement proper error propagation for service initialization failures
+   - [ ] Add graceful shutdown mechanisms for all services
+   - [ ] Create helpful error messages for debugging service issues
    
    *Updated at: Not started*
 
-### Phase 2: Handler Integration
-1. **Create Extractor Middleware**
-   - [ ] Implement Axum extractors that pull services from the DI container
-   - [ ] Ensure proper error handling for missing dependencies
+### Phase 2: Testing Support
+1. **Mock Implementations**
+   - [ ] Create mock versions of core services
+   - [ ] Implement helper functions for configuring mock behavior
+   - [ ] Add verification capabilities for testing service interactions
    
    *Updated at: Not started*
 
-2. **Build Handler Dependency Decorators**
-   - [ ] Create macros that allow declaring handler dependencies
-   - [ ] Ensure minimal runtime overhead
+2. **Test Utilities**
+   - [ ] Develop test fixture helpers for common testing patterns
+   - [ ] Implement test-specific AppState constructor
+   - [ ] Create utilities for setting up test environments
    
    *Updated at: Not started*
 
-### Phase 3: Scoped Services
-1. **Implement Request Scoping**
-   - [ ] Add support for services scoped to the request lifetime
-   - [ ] Ensure proper cleanup at the end of the request
-   
-   *Updated at: Not started*
-
-2. **Build Hierarchical Service Resolution**
-   - [ ] Support parent-child container relationships
-   - [ ] Allow service overriding in child containers
-   
-   *Updated at: Not started*
-
-### Phase 4: Testing Support
-1. **Create Mock Service Providers**
-   - [ ] Build a simplified mock service container for tests
-   - [ ] Support easy service substitution in test environments
-   
-   *Updated at: Not started*
-
-2. **Add Test Utility Functions**
-   - [ ] Provide helper functions to easily set up test services
-   - [ ] Create a standardized testing pattern
+3. **Integration Test Support**
+   - [ ] Add support for replacing specific services in integration tests
+   - [ ] Create test-specific service configurations
+   - [ ] Implement service spy functionality for verifying behaviors
    
    *Updated at: Not started*
 
 ## Implementation Status
 - **Overall Progress**: 0% complete
 - **Last Updated**: March 20, 2024
-- **Next Milestone**: Create DI Container Interface
+- **Next Milestone**: Core AppState Structure
 
 ## Success Criteria
-- Services can be registered and resolved with minimal boilerplate
-- Handlers can declare their dependencies declaratively
+- Services are initialized in a clear, declarative manner
+- Handlers can access dependencies with minimal boilerplate
 - Testing with mock services is straightforward
-- Runtime overhead is minimal
-- Compile-time safety is maintained where possible
+- Error handling is robust and informative
+- Application startup and shutdown are clean and deterministic
 
 ## Implementation Notes
-This approach should balance between Spring Boot's flexible DI system and Rust's emphasis on compile-time safety. Complete dynamic resolution may not be possible in all cases given Rust's type system, but we should aim for maximum ergonomics while maintaining safety.
+This approach intentionally avoids complex DI patterns common in languages like Java with Spring, focusing instead on Rust idioms that leverage the type system and ownership model. The goal is clarity and simplicity rather than magic or complex abstractions.
+
+### Example Implementation
+
+```rust
+// Service traits
+trait DatabaseService: Send + Sync {
+    async fn get_user(&self, id: UserId) -> Result<User, DbError>;
+    // Other database methods...
+}
+
+trait AuthService: Send + Sync {
+    async fn authenticate(&self, credentials: Credentials) -> Result<AuthToken, AuthError>;
+    // Other auth methods...
+}
+
+// AppState
+struct AppState {
+    db: Arc<dyn DatabaseService>,
+    auth: Arc<dyn AuthService>,
+    cache: Arc<CacheService>,
+    config: AppConfig,
+}
+
+impl AppState {
+    // Builder pattern
+    fn builder() -> AppStateBuilder {
+        AppStateBuilder::new()
+    }
+    
+    // For tests
+    #[cfg(test)]
+    fn for_testing() -> Self {
+        Self {
+            db: Arc::new(MockDatabaseService::new()),
+            auth: Arc::new(MockAuthService::new()),
+            cache: Arc::new(MockCacheService::new()),
+            config: AppConfig::default(),
+        }
+    }
+}
+
+// Then in handlers
+async fn get_user(
+    State(state): State<Arc<AppState>>,
+    Path(user_id): Path<UserId>,
+) -> impl IntoResponse {
+    match state.db.get_user(user_id).await {
+        Ok(user) => Json(user).into_response(),
+        Err(e) => {
+            tracing::error!("Failed to get user: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+```
 
 ## References
-- [Spring Framework IoC Container](https://docs.spring.io/spring-framework/reference/core/beans.html)
-- [Shaku - Rust DI Container](https://crates.io/crates/shaku)
-- [Factory Pattern in Rust](https://rust-unofficial.github.io/patterns/patterns/creational/builder.html) 
+- [Rust Design Patterns: Dependency Injection](https://rust-unofficial.github.io/patterns/patterns/creational/di.html)
+- [Axum State Management](https://docs.rs/axum/latest/axum/extract/struct.State.html)
+- [Arc Documentation](https://doc.rust-lang.org/std/sync/struct.Arc.html)
+- [Builder Pattern in Rust](https://rust-unofficial.github.io/patterns/patterns/creational/builder.html) 

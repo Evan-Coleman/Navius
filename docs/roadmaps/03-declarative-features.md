@@ -1,146 +1,141 @@
 # Declarative Programming Features Roadmap
 
 ## Overview
-Spring Boot relies heavily on declarative programming through annotations like `@Transactional`, `@Cacheable`, and `@Scheduled`. This roadmap outlines how to implement similar declarative features in our Rust backend using procedural macros.
+A lightweight approach to implementing essential declarative features in our Rust Axum backend, focusing on security, developer experience, and performance. Rather than attempting to recreate Spring Boot's extensive annotation system, we'll implement a targeted set of Rust-idiomatic procedural macros and utilities that provide the most value with minimal complexity.
 
 ## Current State
-Currently, our application uses a more imperative approach, requiring explicit function calls for cross-cutting concerns like caching, validation, and error handling.
+Currently, our application requires manual implementation of cross-cutting concerns like validation, error handling, and logging, leading to repetitive code and potential inconsistencies.
 
 ## Target State
-A comprehensive set of declarative features to handle cross-cutting concerns:
-- Method-level annotations for common patterns
-- Aspect-oriented programming capabilities
-- Minimal runtime overhead
-- Compile-time checking where possible
+A small but powerful set of declarative features that:
+- Improve security by ensuring consistent validation and error handling
+- Enhance developer experience with less boilerplate
+- Maintain Rust's performance characteristics
+- Work seamlessly with Axum's middleware and extractor system
+- Minimize external dependencies
 
 ## Implementation Progress Tracking
 
-### Phase 1: Macro Infrastructure
-1. **Build Macro Foundation**
-   - [ ] Create a shared foundation for procedural macros
-   - [ ] Implement parsing for common attribute parameters
-   - [ ] Add error reporting during macro expansion
+### Phase 1: Essential Validation and Error Handling
+1. **Request Validation**
+   - [ ] Create `#[validate_request]` for automatic input validation on Axum handlers
+   - [ ] Integrate with existing validation libraries like validator
+   - [ ] Implement consistent error responses for validation failures
    
    *Updated at: Not started*
 
-2. **Function Transformation Framework**
-   - [ ] Develop a framework for transforming function definitions
-   - [ ] Support wrapper code generation
-   - [ ] Create function signature analysis utilities
+2. **Error Handling**
+   - [ ] Create `#[api_handler]` macro for standardized error handling
+   - [ ] Implement automatic conversion of internal errors to appropriate HTTP responses
+   - [ ] Add request tracing and correlation IDs
    
    *Updated at: Not started*
 
-3. **Testing Framework for Macros**
-   - [ ] Implement testing utilities for macro expansion
-   - [ ] Create test cases for common use patterns
-   - [ ] Add regression testing for macro edge cases
+3. **Authorization Checks**
+   - [ ] Implement `#[require_permission("permission")]` for authorization enforcement
+   - [ ] Support role-based and attribute-based access control
+   - [ ] Add audit logging for authorization decisions
    
    *Updated at: Not started*
 
-### Phase 2: Basic Declarative Features
-1. **Logging Annotations**
-   - [ ] Create `#[logged]` attribute for automatic method logging
-   - [ ] Support customizable log levels and messages
-   - [ ] Include parameter and return value logging options
+### Phase 2: Performance and Developer Experience 
+1. **Rate Limiting**
+   - [ ] Create simple `#[rate_limit]` attribute for endpoint-level rate limiting
+   - [ ] Implement basic timeout and circuit breaking capabilities
+   - [ ] Support IP-based and token-based rate limiting
    
    *Updated at: Not started*
 
-2. **Error Handling Macros**
-   - [ ] Implement `#[fallible]` for standardized error handling
-   - [ ] Add support for custom error mapping
-   - [ ] Create helper macros for result propagation
+2. **Logging and Instrumentation**
+   - [ ] Implement `#[traced]` for automatic span creation and logging
+   - [ ] Add performance metrics collection
+   - [ ] Support structured logging with context propagation
    
    *Updated at: Not started*
 
-3. **Validation Annotations**
-   - [ ] Develop `#[validate]` for declarative input validation
-   - [ ] Support field-level validation rules
-   - [ ] Add custom validation function support
+### Phase 3: Axum Integration
+1. **Routing Integration**
+   - [ ] Simplify Axum route definitions with declarative attributes
+   - [ ] Support middleware composition via attributes
+   - [ ] Add response transformation helpers
    
    *Updated at: Not started*
 
-### Phase 3: Advanced Declarative Features
-1. **Caching Annotations**
-   - [ ] Implement `#[cacheable]` for automatic result caching
-   - [ ] Support for cache invalidation with `#[cache_evict]`
-   - [ ] Add conditional caching options
-   
-   *Updated at: Not started*
-
-2. **Transaction Management**
-   - [ ] Create `#[transactional]` for declarative transactions
-   - [ ] Support transaction propagation levels
-   - [ ] Add isolation level configuration
-   
-   *Updated at: Not started*
-
-3. **Rate Limiting and Backoff**
-   - [ ] Implement `#[rate_limited]` for function-level rate limiting
-   - [ ] Add `#[with_backoff]` for exponential backoff on failures
-   - [ ] Support for custom rate limiting strategies
-   
-   *Updated at: Not started*
-
-### Phase 4: Aspect-Oriented Programming
-1. **Aspect Framework**
-   - [ ] Develop a lightweight AOP framework
-   - [ ] Support for before, after, and around advice
-   - [ ] Implement pointcut expressions
-   
-   *Updated at: Not started*
-
-2. **Contextual Aspects**
-   - [ ] Add request context awareness to aspects
-   - [ ] Support environment-specific aspect activation
-   - [ ] Implement ordered aspect execution
-   
-   *Updated at: Not started*
-
-3. **Custom Aspect Creation**
-   - [ ] Create utilities for defining custom aspects
-   - [ ] Build documentation generation for aspects
-   - [ ] Add debugging tools for aspect execution
-   
-   *Updated at: Not started*
-
-### Phase 5: Integration with Framework
-1. **Router Integration**
-   - [ ] Seamlessly integrate declarative features with routing
-   - [ ] Support annotations on route handlers
-   - [ ] Add route-specific annotations
-   
-   *Updated at: Not started*
-
-2. **Configuration System Integration**
-   - [ ] Allow configuration-driven aspect behavior
-   - [ ] Implement environment-specific annotation behavior
-   - [ ] Support for externalized aspect configuration
-   
-   *Updated at: Not started*
-
-3. **Metrics and Monitoring**
-   - [ ] Add automatic metric generation for annotated methods
-   - [ ] Implement performance tracking for aspects
-   - [ ] Create dashboard integration for aspect monitoring
+2. **Middleware Integration**
+   - [ ] Create middleware factory macros for common patterns
+   - [ ] Implement middleware ordering utilities
+   - [ ] Support conditional middleware application
    
    *Updated at: Not started*
 
 ## Implementation Status
 - **Overall Progress**: 0% complete
 - **Last Updated**: March 20, 2024
-- **Next Milestone**: Build Macro Foundation
+- **Next Milestone**: Request Validation
 
 ## Success Criteria
-- Declarative features work reliably with minimal boilerplate
-- Runtime overhead is minimal
-- Compile-time validation catches common errors
-- Developer experience is improved over manual implementations
-- Testing is straightforward with the declarative approach
+- Security requirements are consistently enforced across the application
+- Developer productivity is improved with less boilerplate
+- Performance overhead from declarative features is minimal
+- Integration with Axum is seamless and intuitive
+- Features work reliably without excessive dependencies
 
 ## Implementation Notes
-While Rust doesn't have runtime reflection like Java, procedural macros offer a powerful alternative for implementing declarative features. The focus should be on compile-time transformations that generate efficient runtime code.
+This lightweight approach focuses on what provides the most value in a Rust Axum context, rather than trying to recreate Java/Spring patterns that don't align well with Rust's design philosophy. The implementation will use compile-time procedural macros to maintain Rust's performance characteristics.
+
+### Example Implementation
+
+```rust
+// Example of the validation and error handling macros in use
+#[api_handler]
+#[validate_request]
+async fn create_user(
+    State(db): State<Arc<dyn DbService>>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    #[validate] Json(payload): Json<CreateUserRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    // Authorization check (this would be handled by the macro)
+    // require_permission("users.write")?;
+    
+    // Business logic here
+    let user_id = db.create_user(&payload).await?;
+    
+    // Automatic result transformation by api_handler macro
+    Ok(Json(UserCreatedResponse { id: user_id }))
+}
+
+// Example validation on a request struct
+#[derive(Deserialize, Validate)]
+struct CreateUserRequest {
+    #[validate(length(min = 1, max = 100))]
+    name: String,
+    
+    #[validate(email)]
+    email: String,
+}
+
+// Example of a rate-limited endpoint
+#[api_handler]
+#[rate_limit(requests = 5, period = "1m")]
+#[require_permission("reports.generate")]
+async fn generate_report(
+    State(report_svc): State<Arc<dyn ReportService>>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Path(report_id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    let report = report_svc.generate(report_id).await?;
+    Ok(Json(report))
+}
+
+// Example traced function with metrics
+#[traced(level = "debug", metrics = true)]
+async fn process_data(data: &[u8]) -> Result<ProcessedData, ProcessError> {
+    // Processing logic
+    // Spans and metrics are automatically collected
+}
+```
 
 ## References
-- [Spring Framework Annotations](https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#beans-annotation-config)
+- [Axum Documentation](https://docs.rs/axum/latest/axum/)
 - [Rust Procedural Macros](https://doc.rust-lang.org/reference/procedural-macros.html)
-- [Aspect-Oriented Programming with Spring](https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#aop) 
+- [Validator Crate](https://docs.rs/validator/latest/validator/) 
