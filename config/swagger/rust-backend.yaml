@@ -26,6 +26,80 @@ paths:
               schema:
                 $ref: '#/components/schemas/HealthCheckResponse'
   
+  /docs:
+    get:
+      summary: API Documentation UI
+      description: Swagger UI for interactive API documentation
+      tags:
+        - documentation
+      responses:
+        '200':
+          description: Swagger UI HTML page
+          content:
+            text/html:
+              schema:
+                type: string
+  
+  /docs/openapi.yaml:
+    get:
+      summary: OpenAPI Specification
+      description: OpenAPI specification in YAML format
+      tags:
+        - documentation
+      responses:
+        '200':
+          description: OpenAPI specification file
+          content:
+            text/yaml:
+              schema:
+                type: string
+        '404':
+          description: Specification file not found
+          content:
+            text/plain:
+              schema:
+                type: string
+  
+  /actuator/health:
+    get:
+      summary: Detailed health check endpoint
+      description: Returns detailed health information about the API and its dependencies
+      tags:
+        - health
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedHealthResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
+  /actuator/info:
+    get:
+      summary: Info endpoint
+      description: Returns information about the application
+      tags:
+        - actuator
+      responses:
+        '200':
+          description: Application information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InfoResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
   /pet/{id}:
     get:
       summary: Get pet by ID
@@ -50,20 +124,20 @@ paths:
         '404':
           description: Pet not found
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Internal server error
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
+                $ref: '#/components/schemas/ErrorResponse'
 
-  /api/pets/{id}:
+  /read/pet/{id}:
     get:
-      summary: Get pet by ID (authenticated endpoint)
-      description: Returns a pet by ID, requiring authentication
+      summary: Get pet by ID (read-only authenticated endpoint)
+      description: Returns a pet by ID, requiring read-only authentication
       tags:
         - pets
       parameters:
@@ -84,63 +158,73 @@ paths:
         '401':
           description: Unauthorized
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
+                $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Pet not found
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Internal server error
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
+                $ref: '#/components/schemas/ErrorResponse'
   
-  /api/admin/openapi:
-    post:
-      summary: Upload OpenAPI specification
-      description: Upload a custom OpenAPI specification file
+  /full/pet/{id}:
+    get:
+      summary: Get pet by ID (full access authenticated endpoint)
+      description: Returns a pet by ID, requiring full access authentication
       tags:
-        - admin
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                file:
-                  type: string
-                  format: binary
-                  description: OpenAPI specification file (YAML or JSON)
+        - pets
+      parameters:
+        - name: id
+          in: path
+          description: ID of the pet to retrieve
+          required: true
+          schema:
+            type: integer
+            format: int64
       responses:
         '200':
-          description: File uploaded successfully
+          description: Pet found
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
-        '400':
-          description: Invalid request or invalid OpenAPI spec
+                $ref: '#/components/schemas/Pet'
+        '401':
+          description: Unauthorized
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Pet not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
-          description: Server error
+          description: Internal server error
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
+                $ref: '#/components/schemas/ErrorResponse'
 
 components:
   schemas:
@@ -150,11 +234,32 @@ components:
         status:
           type: string
           description: The status of the service
-          example: "healthy - Authentication disabled"
+          example: "healthy"
         version:
           type: string
           description: The version of the service
-          example: "1.0.0"
+          example: "0.1.0"
+        uptime_seconds:
+          type: integer
+          description: The uptime of the service in seconds
+          example: 3600
+        dependencies:
+          type: array
+          description: List of dependencies and their status
+          items:
+            $ref: '#/components/schemas/DependencyStatus'
+    
+    DetailedHealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          description: The status of the service
+          example: "healthy"
+        version:
+          type: string
+          description: The version of the service
+          example: "0.1.0"
         uptime_seconds:
           type: integer
           description: The uptime of the service in seconds
@@ -168,6 +273,50 @@ components:
           description: List of dependencies and their status
           items:
             $ref: '#/components/schemas/DependencyStatus'
+    
+    InfoResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          description: The status of the info service
+          example: "ok"
+        entries:
+          type: array
+          description: Information entries
+          items:
+            $ref: '#/components/schemas/ActuatorEntry'
+    
+    ActuatorEntry:
+      type: object
+      properties:
+        name:
+          type: string
+          description: The name of the entry
+          example: "version"
+        value:
+          type: string
+          description: The value of the entry
+          example: "0.1.0"
+    
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: HTTP status code
+          example: 404
+        message:
+          type: string
+          description: Error message
+          example: "Pet with ID 1 not found"
+        error_type:
+          type: string
+          description: Type of error
+          example: "not_found"
+        details:
+          type: string
+          description: Additional error details (if available)
     
     Data:
       type: object

@@ -10,5 +10,8 @@ pub mod health;
 // Debug and management actuator endpoints
 pub mod actuator;
 
+// API documentation handlers
+pub mod docs;
+
 // Logging middleware
 pub mod logging;

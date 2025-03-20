@@ -442,35 +442,22 @@ pub fn default_issuer_url_formats() -> Vec<String> {
 /// OpenAPI configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenApiConfig {
-    /// Path to the user-provided OpenAPI spec file (YAML or JSON)
-    #[serde(default = "default_openapi_spec_path")]
-    pub spec_file_path: String,
-
-    /// Directory where OpenAPI spec files are stored
-    #[serde(default = "default_openapi_dir")]
-    pub spec_directory: String,
+    /// Name of the OpenAPI spec file (just the filename, not the full path)
+    #[serde(default = "default_openapi_spec_file")]
+    pub spec_file: String,
 }
 
 impl Default for OpenApiConfig {
     fn default() -> Self {
         Self {
-            spec_file_path: default_openapi_spec_path(),
-            spec_directory: default_openapi_dir(),
+            spec_file: default_openapi_spec_file(),
         }
     }
 }
 
-fn default_openapi_dir() -> String {
-    "config/swagger".to_string()
-}
-
-/// Generates the default OpenAPI spec path based on the application name
-/// Format: config/swagger/{app_name}.yaml
-fn default_openapi_spec_path() -> String {
-    // Default app name for when we can't access the app config yet
-    let default_app_name = "rust-backend";
-
-    format!("{}/{}.yaml", default_openapi_dir(), default_app_name)
+/// Default name for the OpenAPI spec file
+fn default_openapi_spec_file() -> String {
+    "rust-backend.yaml".to_string()
 }
 
 /// Environment type
@@ -618,6 +605,10 @@ pub struct AppConfig {
     #[serde(default)]
     pub reliability: ReliabilityConfig,
 
+    /// OpenAPI configuration
+    #[serde(default)]
+    pub openapi: OpenApiConfig,
+
     /// Cache configuration
     #[serde(default)]
     pub cache: CacheConfig,
@@ -658,10 +649,17 @@ impl AppConfig {
         self.api.petstore_url.trim_end_matches('/').to_string()
     }
 
-    /// Get the OpenAPI spec file path based on application name
+    /// Get the OpenAPI spec file path
     pub fn openapi_spec_path(&self) -> String {
-        // Simply return the default path since we can't access the actual fields
-        format!("config/swagger/rust-backend.yaml")
+        // Hardcoded directory + filename from config
+        format!("config/swagger/{}", self.openapi.spec_file)
+    }
+
+    /// Get the OpenAPI spec URL for Swagger UI
+    pub fn openapi_spec_url(&self) -> String {
+        // URL is derived from the filename, and includes the /actuator prefix
+        // since docs routes are mounted under /actuator
+        format!("/actuator/docs/{}", self.openapi.spec_file)
     }
 }
 

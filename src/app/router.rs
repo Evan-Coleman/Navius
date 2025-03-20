@@ -81,7 +81,9 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // Use the actuator health handlers that are specifically designed for the router
         .route("/health", get(health::detailed_health_check))
         // Use the info handler
-        .route("/info", get(actuator::info));
+        .route("/info", get(actuator::info))
+        .route("/docs", get(handlers::docs::swagger_ui_handler))
+        .route("/docs/{*file}", get(handlers::docs::openapi_spec_handler));
 
     // Apply authentication layers if enabled
     let (readonly_routes, fullaccess_routes, actuator_routes) = if auth_enabled {

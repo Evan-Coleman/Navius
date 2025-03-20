@@ -72,6 +72,10 @@ cache:
 reliability:
   enabled: true
 
+# OpenAPI configuration
+openapi:
+  spec_file: "rust-backend.yaml"
+
 logging:
   level: "info"
   format: "json"
