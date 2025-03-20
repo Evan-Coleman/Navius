@@ -16,6 +16,18 @@ This directory contains roadmaps for enhancing our Rust backend framework to mat
 10. [Developer Experience](10-developer-experience.md) - Enhancing the developer workflow with tools and utilities
 11. [AWS Integration](11-aws-integration.md) - Making the framework AWS-first with seamless integration into the AWS ecosystem
 
+## Progress Tracking
+
+Each roadmap includes a progress tracking system with:
+- Checkboxes (`[ ]`) for individual tasks that can be marked as complete (`[x]`) when implemented
+- "Updated at" timestamps for each implementation point to track when updates were made
+- An overall implementation status section showing completion percentage, last update date, and next milestone
+
+To update a roadmap's progress:
+1. Check the boxes of completed tasks: `- [x] Task description`
+2. Update the "Updated at" field with the date and any relevant notes
+3. Update the overall Implementation Status section with the new percentage and next milestone
+
 ## Implementation Approach
 
 Each roadmap is structured into phases that can be implemented incrementally. The roadmaps include:
@@ -23,7 +35,8 @@ Each roadmap is structured into phases that can be implemented incrementally. Th
 - **Overview** - High-level description of the feature area
 - **Current State** - Assessment of the current implementation
 - **Target State** - Description of the desired end state
-- **Implementation Steps** - Phased approach to implementation
+- **Implementation Progress Tracking** - Phased approach to implementation with progress checkboxes
+- **Implementation Status** - Overall progress summary with completion percentage
 - **Success Criteria** - Measurable outcomes
 - **Implementation Notes** - Technical considerations
 - **References** - Relevant resources and inspiration
@@ -50,4 +63,4 @@ To contribute to these roadmaps, please submit a pull request with your proposed
 
 ## Implementation Tracking
 
-As features are implemented, we will update this README to track progress and link to the relevant implementations. 
+As features are implemented, the progress will be updated within each roadmap file. The overall project status can be monitored through the individual implementation progress checkboxes and status sections. 
