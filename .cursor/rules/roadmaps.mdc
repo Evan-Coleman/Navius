@@ -1,0 +1,18 @@
+---
+description: For help when asked to work with roadmaps
+globs: 
+alwaysApply: false
+---
+## When being asked to implement something in a roadmap follow these instructions.
+
+# First Steps
+ - Read the [template-for-updating.md](mdc:docs/roadmaps/template-for-updating.md) file to understand the format and steps to take in the process.
+
+# Second Steps
+ - If asked to work on a specific roadmap and specific step please work through the implementation slowly and carefully
+ - After each logical stopping point when you would like to see if it is working please ask me to start the server, I will then start the server and tell you to procede.
+ - Make sure to create tests for each step when it makes sense to.
+
+# Final Steps
+ - According to the [template-for-updating.md](mdc:docs/roadmaps/template-for-updating.md) file, please update the roadmap you are working on to correctly indicate (not started, started, finished, abandoned) and finally update the updated at time so we know when that particular feature was last worked on.
+ - Check to see if any updates to the base project level readme, or anywhere else that might need updating.
