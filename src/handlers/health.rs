@@ -105,29 +105,45 @@ pub async fn detailed_health_check(
         // Get metrics for more accurate reporting
         let metrics_text = state.metrics_handle.render();
 
-        // Extract cache stats from metrics directly
+        // Extract resource types from metrics by looking for "pet" or other registered types
         let mut stats_vec = Vec::new();
 
-        // Extract resource types from metrics
-        let mut resource_types = Vec::new();
-        for line in metrics_text.lines() {
-            if line.contains("cache_current_size{resource_type=\"") {
-                let start = line.find("resource_type=\"").unwrap() + "resource_type=\"".len();
-                let end = line[start..].find('"').unwrap() + start;
-                let resource_type = &line[start..end];
+        // Look for known resource types
+        let resource_types = vec!["pet"]; // Add other resource types as needed
 
-                if !resource_types.contains(&resource_type) {
-                    resource_types.push(resource_type);
-                }
-            }
-        }
-
-        // Get stats for each resource type
         for resource_type in resource_types {
             if let Some(stats) =
                 get_cache_stats_with_metrics(registry, resource_type, &metrics_text)
             {
                 stats_vec.push(stats);
+            }
+        }
+
+        // If we didn't find any stats with known types, try to extract from metrics
+        if stats_vec.is_empty() {
+            let resource_type_pattern = "resource_type=\"";
+            // Extract resource types from metrics
+            let mut extracted_types = Vec::new();
+            for line in metrics_text.lines() {
+                if line.contains(resource_type_pattern) {
+                    let start =
+                        line.find(resource_type_pattern).unwrap() + resource_type_pattern.len();
+                    let end = line[start..].find('"').unwrap() + start;
+                    let resource_type = &line[start..end];
+
+                    if !extracted_types.contains(&resource_type) {
+                        extracted_types.push(resource_type);
+                    }
+                }
+            }
+
+            // Get stats for each extracted resource type
+            for resource_type in extracted_types {
+                if let Some(stats) =
+                    get_cache_stats_with_metrics(registry, resource_type, &metrics_text)
+                {
+                    stats_vec.push(stats);
+                }
             }
         }
 

@@ -36,11 +36,18 @@ pub async fn fetch_pet_handler(
     // Convert the numeric ID to a string for the path parameter
     let id_str = id.to_string();
 
+    // Log request for easier tracing
+    info!("🔍 Pet lookup requested for ID: {}", id);
+
     // Define the fetch function inline to avoid lifetime issues
     let fetch_fn = move |state: &Arc<AppState>,
                          id: i64|
           -> futures::future::BoxFuture<'static, Result<Upet>> {
         let state = state.clone(); // Clone the state to avoid lifetime issues
+
+        // Log external API call
+        info!("🌐 Calling external Petstore API for pet ID: {}", id);
+
         Box::pin(async move {
             let url = format!("{}/pet/{}", state.config.petstore_api_url(), id);
 
@@ -65,7 +72,18 @@ pub async fn fetch_pet_handler(
     );
 
     // Execute the handler with proper path extraction
-    handler(State(state), Path(id_str)).await
+    let result = handler(State(state), Path(id_str)).await;
+
+    // Log the result of the operation
+    match &result {
+        Ok(_) => info!(
+            "✅ Successfully retrieved pet ID: {} (cached or direct)",
+            id
+        ),
+        Err(e) => info!("❌ Failed to retrieve pet ID: {}, error: {}", id, e),
+    }
+
+    result
 }
 
 /// The core function that does the actual API call to fetch a pet

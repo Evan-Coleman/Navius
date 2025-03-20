@@ -4,6 +4,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
+use std::time::SystemTime;
 use tracing::info;
 
 use crate::app::AppState;
@@ -40,36 +41,70 @@ pub async fn cache_debug(State(state): State<Arc<AppState>>) -> Json<CacheDebugR
 
     // Get cache stats
     let cache_stats = if let Some(registry) = &state.cache_registry {
-        // Just use the metrics to collect basic stats
+        // Add basic registry info
         entries.insert("enabled".to_string(), registry.enabled.to_string());
         entries.insert("ttl_seconds".to_string(), registry.ttl_seconds.to_string());
         entries.insert(
             "max_capacity".to_string(),
             registry.max_capacity.to_string(),
         );
+        entries.insert(
+            "uptime_seconds".to_string(),
+            SystemTime::now()
+                .duration_since(registry.creation_time)
+                .map(|d| d.as_secs().to_string())
+                .unwrap_or_else(|_| "0".to_string()),
+        );
 
-        // Find a resource type from metrics
-        let resource_type = raw_metrics
+        // Try to find any resource type from metrics
+        let resource_types: Vec<String> = raw_metrics
             .keys()
             .filter_map(|key| {
-                if key.starts_with("cache_current_size{resource_type=\"") {
+                if key.contains("resource_type=\"") {
                     // Extract the resource type from the metric name
-                    let start = "cache_current_size{resource_type=\"".len();
-                    let end = key.len() - 2; // Remove trailing "}"
+                    let start = key.find("resource_type=\"").unwrap() + "resource_type=\"".len();
+                    let end = key[start..].find('"').unwrap() + start;
                     Some(key[start..end].to_string())
                 } else {
                     None
                 }
             })
-            .next();
+            .collect::<std::collections::HashSet<String>>() // Deduplicate
+            .into_iter()
+            .collect();
 
-        // Get cache stats for the first resource type found
-        if let Some(resource_type) = resource_type {
-            crate::cache::get_cache_stats_with_metrics(registry, &resource_type, &metrics_text)
+        if !resource_types.is_empty() {
+            // Use the first resource type we find
+            let resource_type = &resource_types[0];
+            entries.insert("found_resource_type".to_string(), resource_type.clone());
+
+            // Get detailed stats for this resource type
+            crate::cache::get_cache_stats_with_metrics(registry, resource_type, &metrics_text)
         } else {
-            None
+            // No registered resource types found in metrics
+            entries.insert("found_resource_types".to_string(), "none".to_string());
+            entries.insert(
+                "resource_registration_status".to_string(),
+                "pending".to_string(),
+            );
+
+            // Create a placeholder stat with the available information
+            Some(CacheStats {
+                resource_type: "unknown".to_string(),
+                uptime_seconds: SystemTime::now()
+                    .duration_since(registry.creation_time)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0),
+                size: 0,
+                active_entries: 0,
+                entries_created: 0,
+                hits: 0,
+                misses: 0,
+                hit_ratio: 0.0,
+            })
         }
     } else {
+        entries.insert("cache_status".to_string(), "disabled".to_string());
         None
     };
 

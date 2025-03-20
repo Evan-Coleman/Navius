@@ -199,6 +199,19 @@ pub async fn init() -> (Router, SocketAddr) {
         resource_registry,
     });
 
+    // Register pet resources in the cache registry
+    if let Some(_registry) = &cache_registry {
+        // Register the Upet resource type with the cache
+        use crate::generated_apis::petstore_api::models::Upet;
+        use crate::utils::api_resource::{ApiResource, register_resource};
+
+        // Make sure the pet resource type is registered with the cache
+        match register_resource::<Upet>(&state, None) {
+            Ok(_) => info!("✅ Successfully registered pet resource type in cache registry"),
+            Err(e) => info!("⚠️ Failed to register pet resource: {}", e),
+        }
+    }
+
     // Start metrics updater for the new cache registry
     if let Some(registry) = &cache_registry {
         crate::cache::start_metrics_updater(registry).await;
