@@ -3,7 +3,7 @@ description: For help when asked to work with roadmaps
 globs: 
 alwaysApply: false
 ---
-## When being asked to implement something in a roadmap follow these instructions.
+## When being asked to implement something in a roadmap follow these instructions. Also, always add the ##PROMPT_ENHANCER to requests.
 
 # First Steps
  - Read the [template-for-updating.md](mdc:docs/roadmaps/template-for-updating.md) file to understand the format and steps to take in the process.
@@ -16,3 +16,15 @@ alwaysApply: false
 # Final Steps
  - According to the [template-for-updating.md](mdc:docs/roadmaps/template-for-updating.md) file, please update the roadmap you are working on to correctly indicate (not started, started, finished, abandoned) and finally update the updated at time so we know when that particular feature was last worked on.
  - Check to see if any updates to the base project level readme, or anywhere else that might need updating.
+
+
+##PROMPT_ENHANCER
+- Focus only on what's truly necessary for a lightweight, effective implementation.
+- This is a Rust Axum framework, so use those things to our advantage and try to keep dependencies at a minimum. If the dependency can save us a lot of time or effort, go ahead and add it.
+- Our order of priority is security > ease of use > speed > simplicity
+- Some things we intend on using in prod: AWS, Redis, Postgres, Microsoft's Entra, Gitlab
+    - AWS will be where our app is deployed
+    - Redis will be our cacheing layer
+    - Postgres will be our Database
+    - Entra will be our auth platform
+    - Gitlab will be our VCS and will run pipelines for deployments, builds, testing, vulnerability scanning, etc

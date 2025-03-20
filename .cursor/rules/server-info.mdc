@@ -1,7 +1,7 @@
 ---
 description: This will be general info about the server. Good info to keep in mind during generation.
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 - This is a new project greenfield with no users, so when we change or remove something it's okay to not have deprecation warnings, or legacy toggles etc.
 - The only route groups we ever want are as follows: public, readonly, fullaccess, actuator
