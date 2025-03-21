@@ -31,11 +31,11 @@ pub use rate_limit::*;
 pub use retry::*;
 
 use crate::{
-    app::AppState,
     config::{
         CircuitBreakerConfig, ConcurrencyConfig, RateLimitConfig, ReliabilityConfig, RetryConfig,
         TimeoutConfig,
     },
+    core::router::AppState,
 };
 
 use std::time::Duration;

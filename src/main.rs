@@ -50,7 +50,11 @@ async fn run_app() -> Result<(), AppError> {
     // Start the server
     info!("Starting server on {}://{}", protocol, addr);
 
-    axum::serve(tokio::net::TcpListener::bind(addr).await?, app)
+    // Bind the TCP listener
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+
+    // Run the server with our app
+    axum::serve(listener, app)
         .await
         .map_err(|e| AppError::InternalError(format!("Server error: {}", e)))?;
 

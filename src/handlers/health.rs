@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use crate::app::AppState;
+use crate::core::router::AppState;
 use crate::models::{DependencyStatus, DetailedHealthResponse, HealthCheckResponse};
 
 /// Handler for the simple health check endpoint

@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::sync::{Arc, RwLock};
 use tracing::{debug, info};
 
-use crate::app::AppState;
+use crate::core::router::AppState;
 use crate::models::DependencyStatus;
 use crate::utils::api_resource::ApiResource;
 

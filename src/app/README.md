@@ -5,7 +5,7 @@ This directory contains the user application components that you can modify to c
 ## Key Files
 
 - `user_router.rs` - **The main file you'll modify** to add your own routes and handlers
-- `router.rs` - The main router that combines core and user routes (generally shouldn't need modifications)
+- `router.rs` - A thin wrapper around the core router implementation (generally shouldn't need modifications)
 
 ## How to Add Your Own Routes
 
@@ -69,4 +69,14 @@ let public_routes = Router::new()
 
 ## Authentication
 
-The framework automatically applies authentication middleware to the appropriate route groups when auth is enabled in the configuration. You don't need to manually apply authentication middleware to your routes. 
+The framework automatically applies authentication middleware to the appropriate route groups when auth is enabled in the configuration. You don't need to manually apply authentication middleware to your routes.
+
+## Project Structure
+
+This project follows a clear separation between core framework functionality and user-extensible code:
+
+- `/src/core/` - Contains core framework code that should not be modified
+- `/src/app/` - Contains user application code that you can customize
+- Other directories like `/src/handlers/` are extensible for adding your own handlers
+
+When extending the application, focus on adding to the user-extensible parts rather than modifying the core framework. 

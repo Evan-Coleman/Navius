@@ -1,188 +1,83 @@
 use axum::{
     Json,
-    body::Body,
-    extract::{ConnectInfo, State},
-    http::Request,
-    middleware::{self, Next},
-    response::{IntoResponse, Response},
-    routing::{Router, delete, get, post},
+    extract::{Path, State},
+    routing::{Router, get, post},
 };
-use metrics_exporter_prometheus::PrometheusHandle;
-use reqwest::Client;
-use std::{
-    net::SocketAddr,
-    sync::Arc,
-    time::{Duration, SystemTime},
-};
-use tower::ServiceBuilder;
-use tower_http::{
-    timeout::TimeoutLayer,
-    trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
-};
-use tracing::{Level, info};
+use std::net::SocketAddr;
+use std::sync::Arc;
+use tracing::info;
 
 use crate::{
-    auth::{
-        EntraAuthLayer, EntraTokenClient,
-        middleware::{EntraAuthConfig, RoleRequirement},
-    },
-    config::AppConfig,
-    core::CoreRouter,
-    handlers::logging,
-    models::{ApiResponse, Data, DetailedHealthResponse, HealthCheckResponse},
-    reliability,
+    auth::EntraAuthLayer,
+    core::router::{AppState, create_core_app_router, init_app_state},
+    handlers::examples::pet,
 };
 
-// Import user router from the crate root
-use crate::app::UserRouter;
+/// Create custom user routes that can be modified by developers
+fn create_user_routes(state: Arc<AppState>) -> Router {
+    // Define whether auth is enabled
+    let auth_enabled = state.config.auth.enabled;
 
-/// Application state shared across all routes
-pub struct AppState {
-    pub client: Client,
-    pub config: AppConfig,
-    pub start_time: SystemTime,
-    pub cache_registry: Option<crate::cache::CacheRegistry>,
-    pub metrics_handle: PrometheusHandle,
-    pub token_client: Option<EntraTokenClient>,
-    pub resource_registry: crate::utils::api_resource::ApiResourceRegistry,
-}
+    // Create auth middleware for different access levels
+    let readonly_auth = EntraAuthLayer::from_app_config_require_read_only_role(&state.config);
+    let fullaccess_auth = EntraAuthLayer::from_app_config_require_full_access_role(&state.config);
 
-/// Simple health check handler that returns a static string
-/// This is used for basic health monitoring
-async fn simple_health_check() -> &'static str {
-    "OK"
-}
+    // 1. PUBLIC ROUTES - available without authentication
+    let public_routes = Router::new()
+        .route("/pet/{id}", get(pet::fetch_pet_handler))
+        // Add more public routes here
+        .route("/hello", get(|| async { "Hello, World!" }));
 
-/// Create the application router with standardized route groups
-pub fn create_router(state: Arc<AppState>) -> Router {
-    // Create logging middleware
-    let logging = middleware::from_fn_with_state(state.clone(), logging::log_request);
+    // 2. READ-ONLY ROUTES - requires basic authentication
+    let readonly_routes = Router::new()
+        .route("/pet/{id}", get(pet::fetch_pet_handler))
+        // Add more read-only routes here
+        ;
 
-    // First, get the core routes that should not be modified by users
-    let core_routes = CoreRouter::create_core_routes(state.clone());
+    // 3. FULL ACCESS ROUTES - requires full access role
+    let fullaccess_routes = Router::new()
+        .route("/pet/{id}", get(pet::fetch_pet_handler))
+        // Add more full access routes here
+        ;
 
-    // Now get the user-defined routes
-    let user_routes = UserRouter::create_user_routes(state.clone());
-
-    // Combine core routes with user-defined routes
-    let app = Router::new()
-        .merge(core_routes)
-        .merge(user_routes)
-        .layer(logging);
-
-    // Create a plain Router with common middleware
-    Router::new()
-        // Use fallback_service for the main app
-        .fallback_service(app)
-        // Add tracing with custom configuration that doesn't duplicate our logging
-        .layer(
-            TraceLayer::new_for_http()
-                .make_span_with(
-                    DefaultMakeSpan::new()
-                        .include_headers(false)
-                        .level(Level::DEBUG),
-                )
-                // Set level to TRACE to avoid duplicating our INFO logs
-                .on_response(
-                    DefaultOnResponse::new()
-                        .include_headers(false)
-                        .level(Level::TRACE),
-                ),
+    // Apply authentication layers if enabled
+    let (readonly_routes, fullaccess_routes) = if auth_enabled {
+        (
+            readonly_routes.layer(readonly_auth),
+            fullaccess_routes.layer(fullaccess_auth),
         )
-        // Add timeout
-        .layer(TimeoutLayer::new(std::time::Duration::from_secs(
-            state.config.server.timeout_seconds,
-        )))
-        // Add socket address info to request extensions
-        .layer(middleware::from_fn(
-            |req: Request<Body>, next: Next| async move {
-                let conn_info_opt = req.extensions().get::<ConnectInfo<SocketAddr>>().cloned();
+    } else {
+        // No auth enabled
+        (readonly_routes, fullaccess_routes)
+    };
 
-                if let Some(conn_info) = conn_info_opt {
-                    let mut req = req;
-                    req.extensions_mut().insert(ConnectInfo(conn_info.0));
-                    next.run(req).await
-                } else {
-                    next.run(req).await
-                }
-            },
-        ))
+    // Combine user-defined routes
+    Router::new()
+        .merge(public_routes)
+        .nest("/read", readonly_routes)
+        .nest("/full", fullaccess_routes)
+        .with_state(state)
+}
+
+/// Create the application router by combining core routes with user routes
+pub fn create_router(state: Arc<AppState>) -> Router {
+    // Get user-defined routes
+    let user_routes = create_user_routes(state.clone());
+
+    // Create the core app router with user routes
+    create_core_app_router(state, user_routes)
 }
 
 /// Initialize the application
+///
+/// Note: The Router returned here has type Router<Arc<AppState>>. When passing to the server
+/// in main.rs, it needs to be used with the appropriate serving method.
 pub async fn init() -> (Router, SocketAddr) {
-    // Load configuration
-    let config = crate::config::app_config::load_config().expect("Failed to load configuration");
+    // Initialize app state and get server address
+    let (state, addr) = init_app_state().await;
 
-    // Initialize metrics
-    let metrics_handle = crate::metrics::metrics_service::init_metrics();
-
-    // Create HTTP client with appropriate middleware
-    let client = Client::builder()
-        .timeout(Duration::from_secs(config.server.timeout_seconds))
-        .build()
-        .expect("Failed to create HTTP client");
-
-    // Create application state
-    let start_time = SystemTime::now();
-
-    // Only set up the cache if enabled
-    let cache_registry = if config.cache.enabled {
-        let registry = crate::cache::init_cache_registry(
-            true,
-            config.cache.max_capacity,
-            config.cache.ttl_seconds,
-        );
-
-        Some(registry)
-    } else {
-        info!("🔧 Cache disabled");
-        None
-    };
-
-    // Create API resource registry
-    let resource_registry = crate::utils::api_resource::ApiResourceRegistry::new();
-
-    // Create the app state
-    let state = Arc::new(AppState {
-        client,
-        config: config.clone(),
-        start_time,
-        cache_registry: cache_registry.clone(),
-        metrics_handle,
-        token_client: if config.auth.enabled {
-            Some(EntraTokenClient::from_config(&config))
-        } else {
-            None
-        },
-        resource_registry,
-    });
-
-    // Register pet resources in the cache registry
-    if let Some(_registry) = &cache_registry {
-        // Register the Upet resource type with the cache
-        use crate::generated_apis::petstore_api::models::Upet;
-        use crate::utils::api_resource::{ApiResource, register_resource};
-
-        // Make sure the pet resource type is registered with the cache
-        match register_resource::<Upet>(&state, None) {
-            Ok(_) => info!("✅ Successfully registered pet resource type in cache registry"),
-            Err(e) => info!("⚠️ Failed to register pet resource: {}", e),
-        }
-    }
-
-    // Start metrics updater for the new cache registry
-    if let Some(registry) = &cache_registry {
-        crate::cache::start_metrics_updater(registry).await;
-    } else {
-        info!("🔧 Cache registry disabled, metrics updater not started");
-    }
-
-    // Create router
+    // Create router with app state
     let app = create_router(state);
-
-    // Configure server address
-    let addr = SocketAddr::from(([0, 0, 0, 0], config.server.port));
 
     (app, addr)
 }

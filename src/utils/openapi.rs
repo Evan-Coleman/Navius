@@ -11,7 +11,7 @@ use std::{
 };
 use tracing::{error, info};
 
-use crate::app::AppState;
+use crate::core::router::AppState;
 use crate::error::{AppError, Result};
 
 /// Handler to serve the user-provided OpenAPI spec file

@@ -5,10 +5,11 @@ use axum::{
 use std::sync::Arc;
 
 use crate::{
-    app::AppState,
     auth::EntraAuthLayer,
     handlers::{self, actuator, health},
 };
+
+use super::AppState;
 
 /// Core router containing essential routes that should not be modified by users
 pub struct CoreRouter;
@@ -44,6 +45,5 @@ impl CoreRouter {
             .merge(public_routes)
             .nest("/actuator", actuator_routes)
             .with_state(state)
-            .with_state(()) // Strip the state to return a Router<()>
     }
 }

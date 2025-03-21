@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use tower::{Layer, Service};
 use tracing::{debug, error, info};
 
-use crate::app::AppState;
+use crate::core::router::AppState;
 use crate::config::app_config;
 use crate::config::constants;
 

@@ -1,7 +1,8 @@
 pub mod router;
-pub mod user_router;
 
-pub use router::AppState;
+// Re-export key components from router module
 pub use router::create_router;
 pub use router::init;
-pub use user_router::UserRouter;
+
+// Re-export AppState from core
+pub use crate::core::router::AppState;

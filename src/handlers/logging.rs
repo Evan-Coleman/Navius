@@ -8,7 +8,7 @@ use axum::{
 use std::sync::Arc;
 use tracing::{debug, info};
 
-use crate::app::AppState;
+use crate::core::router::AppState;
 
 /// Middleware for logging requests
 pub async fn log_request(

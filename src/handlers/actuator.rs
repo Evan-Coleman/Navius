@@ -2,7 +2,7 @@ use axum::{Json, extract::State};
 use std::sync::Arc;
 use tracing::{debug, info};
 
-use crate::app::AppState;
+use crate::core::router::AppState;
 use crate::models::{ActuatorEntry, InfoResponse};
 
 /// Handler for the info endpoint

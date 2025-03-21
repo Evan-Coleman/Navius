@@ -6,7 +6,7 @@ use axum::{
 use std::sync::Arc;
 use tracing::info;
 
-use crate::app::AppState;
+use crate::core::router::AppState;
 
 /// Serves the Swagger UI HTML for the API documentation
 pub async fn swagger_ui_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {

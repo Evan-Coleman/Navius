@@ -9,7 +9,7 @@ use std::{any::Any, fmt::Debug, sync::Arc};
 use tracing::{debug, info, warn};
 
 use crate::{
-    app::AppState,
+    core::router::AppState,
     error::{AppError, Result},
     generated_apis::petstore_api::models::Upet,
     utils::api_logger,

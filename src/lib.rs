@@ -14,9 +14,7 @@ pub mod core;
 /// Application router and state management
 pub mod app {
     pub use crate::app::router::*;
-    pub use crate::app::user_router::UserRouter;
     pub mod router;
-    pub mod user_router;
 }
 
 /// Caching functionality
