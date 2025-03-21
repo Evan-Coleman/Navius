@@ -1,6 +1,17 @@
-// This module contains core handlers that should not be modified by users
-// Currently we're reusing the main handlers from the top-level handlers module,
-// but in the future core-specific handlers could be implemented here.
+// Core handlers for common routes
+// These handlers provide the core functionality and should not be modified by users
 
-// Re-exports for key handlers that are considered part of the core API
-pub use crate::handlers::{actuator, docs, health, logging};
+// Health check handlers
+pub mod health;
+
+// Debug and management actuator endpoints
+pub mod actuator;
+
+// API documentation handlers
+pub mod docs;
+
+// Logging middleware
+pub mod logging;
+
+// Re-export key handlers for easier access
+pub use self::{actuator::*, docs::*, health::*, logging::*};
