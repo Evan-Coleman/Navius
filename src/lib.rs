@@ -53,4 +53,7 @@ pub mod reliability {
 }
 
 /// Utility functions and helpers
-pub mod utils;
+pub mod utils {
+    pub use crate::core::utils::*;
+    pub mod api_resource;
+}

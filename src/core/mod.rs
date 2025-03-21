@@ -6,6 +6,7 @@ pub mod handlers;
 pub mod metrics;
 pub mod reliability;
 pub mod router;
+pub mod utils;
 
 // Re-export key components for easier access
 pub use auth::{EntraAuthLayer, EntraTokenClient};
@@ -15,3 +16,6 @@ pub use error::{AppError, Result};
 pub use metrics::{init_metrics, metrics_handler, try_record_metrics};
 pub use reliability::apply_reliability;
 pub use router::CoreRouter;
+pub use utils::api_resource::{
+    ApiHandlerOptions, ApiResource, ApiResourceRegistry, create_api_handler,
+};
