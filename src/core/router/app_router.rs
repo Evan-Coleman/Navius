@@ -21,11 +21,11 @@ use tower_http::{
 use tracing::{Level, info};
 
 use crate::{
-    auth::{
+    config::AppConfig,
+    core::auth::{
         EntraAuthLayer, EntraTokenClient,
         middleware::{EntraAuthConfig, RoleRequirement},
     },
-    config::AppConfig,
     handlers::logging,
     models::{ApiResponse, Data, DetailedHealthResponse, HealthCheckResponse},
     reliability,

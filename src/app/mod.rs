@@ -1,3 +1,5 @@
+/// Application router and state management
+pub use crate::app::router::*;
 pub mod router;
 
 // Re-export key components from router module

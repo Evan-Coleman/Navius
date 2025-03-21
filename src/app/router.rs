@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tracing::info;
 
 use crate::{
-    auth::EntraAuthLayer,
+    core::auth::EntraAuthLayer,
     core::router::{AppState, create_core_app_router, init_app_state},
     handlers::examples::pet,
 };

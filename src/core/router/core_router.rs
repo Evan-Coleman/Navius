@@ -5,7 +5,7 @@ use axum::{
 use std::sync::Arc;
 
 use crate::{
-    auth::EntraAuthLayer,
+    core::auth::EntraAuthLayer,
     handlers::{self, actuator, health},
 };
 
