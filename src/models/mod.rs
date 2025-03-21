@@ -1,13 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// Data structure for the data endpoint
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Data {
-    pub fact: String,
-    pub length: i32,
-}
-
 /// Basic health check response structure
 ///
 /// For simple Kubernetes/Load Balancer health checks

@@ -34,8 +34,7 @@ pub mod error;
 
 /// Metrics collection and reporting
 pub mod metrics {
-    pub use crate::metrics::metrics_service::*;
-    pub mod metrics_service;
+    pub use crate::core::metrics::*;
 }
 
 /// API request handlers

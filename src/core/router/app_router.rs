@@ -27,7 +27,7 @@ use crate::{
     },
     core::config::app_config::AppConfig,
     handlers::logging,
-    models::{ApiResponse, Data, DetailedHealthResponse, HealthCheckResponse},
+    models::{ApiResponse, DetailedHealthResponse, HealthCheckResponse},
     reliability,
 };
 
@@ -98,7 +98,7 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
     let config = crate::core::config::load_config().expect("Failed to load config");
 
     // Initialize metrics
-    let metrics_handle = crate::metrics::metrics_service::init_metrics();
+    let metrics_handle = crate::core::metrics::init_metrics();
 
     // Create HTTP client with appropriate middleware
     let client = Client::builder()

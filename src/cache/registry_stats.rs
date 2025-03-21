@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use crate::cache::providers::CacheProvider;
 use crate::core::cache::{CacheRegistry, CacheStats, get_cache_stats_with_metrics};
-use crate::metrics::metrics_service::try_record_metrics;
+use crate::core::metrics::try_record_metrics;
 
 /// Get cache statistics with metrics data for all resource types in the registry
 pub fn get_all_cache_stats_with_metrics(registry: &CacheRegistry) -> HashMap<String, CacheStats> {

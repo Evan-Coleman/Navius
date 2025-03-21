@@ -8,7 +8,7 @@ use crate::core::cache::{
     CacheRegistry, ResourceCache, get_cache_stats_with_metrics, get_or_fetch, get_resource_cache,
     init_cache_registry, register_resource_cache,
 };
-use crate::metrics::metrics_service::try_record_metrics;
+use crate::core::metrics::try_record_metrics;
 use crate::utils::api_resource::ApiResource;
 
 /// In-memory cache provider using Moka cache
