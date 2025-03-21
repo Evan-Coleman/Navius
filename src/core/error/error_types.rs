@@ -191,3 +191,122 @@ impl IntoResponse for AppError {
             .into_response()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_severity() {
+        // Test severity levels for different error types
+        assert_eq!(
+            AppError::NotFound("test".into()).severity(),
+            ErrorSeverity::Low
+        );
+        assert_eq!(
+            AppError::BadRequest("test".into()).severity(),
+            ErrorSeverity::Low
+        );
+        assert_eq!(
+            AppError::ValidationError("test".into()).severity(),
+            ErrorSeverity::Low
+        );
+
+        assert_eq!(
+            AppError::Unauthorized("test".into()).severity(),
+            ErrorSeverity::Medium
+        );
+        assert_eq!(
+            AppError::Forbidden("test".into()).severity(),
+            ErrorSeverity::Medium
+        );
+        assert_eq!(
+            AppError::RateLimited("test".into()).severity(),
+            ErrorSeverity::Medium
+        );
+        assert_eq!(
+            AppError::CacheError("test".into()).severity(),
+            ErrorSeverity::Medium
+        );
+
+        assert_eq!(
+            AppError::DatabaseError("test".into()).severity(),
+            ErrorSeverity::High
+        );
+        assert_eq!(
+            AppError::InternalError("test".into()).severity(),
+            ErrorSeverity::High
+        );
+    }
+
+    #[test]
+    fn test_error_type_string() {
+        // Test error type string representations
+        assert_eq!(AppError::NotFound("test".into()).error_type(), "not_found");
+        assert_eq!(
+            AppError::BadRequest("test".into()).error_type(),
+            "bad_request"
+        );
+        assert_eq!(
+            AppError::Unauthorized("test".into()).error_type(),
+            "unauthorized"
+        );
+        assert_eq!(AppError::Forbidden("test".into()).error_type(), "forbidden");
+        assert_eq!(
+            AppError::ValidationError("test".into()).error_type(),
+            "validation_error"
+        );
+    }
+
+    #[test]
+    fn test_status_code_mapping() {
+        // Test HTTP status code mappings
+        assert_eq!(
+            AppError::NotFound("test".into()).status_code(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            AppError::BadRequest("test".into()).status_code(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            AppError::Unauthorized("test".into()).status_code(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            AppError::Forbidden("test".into()).status_code(),
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            AppError::RateLimited("test".into()).status_code(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+        assert_eq!(
+            AppError::ValidationError("test".into()).status_code(),
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
+        assert_eq!(
+            AppError::InternalError("test".into()).status_code(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[test]
+    fn test_error_display() {
+        // Test the Display implementation for errors
+        let error = AppError::NotFound("test entity".into());
+        assert_eq!(error.to_string(), "Not found: test entity");
+
+        let error = AppError::BadRequest("invalid input".into());
+        assert_eq!(error.to_string(), "Bad request: invalid input");
+    }
+
+    #[test]
+    fn test_error_severity_display() {
+        // Test the Display implementation for error severity
+        assert_eq!(ErrorSeverity::Low.to_string(), "low");
+        assert_eq!(ErrorSeverity::Medium.to_string(), "medium");
+        assert_eq!(ErrorSeverity::High.to_string(), "high");
+        assert_eq!(ErrorSeverity::Critical.to_string(), "critical");
+    }
+}

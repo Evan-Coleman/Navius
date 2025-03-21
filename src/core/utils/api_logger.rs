@@ -155,3 +155,65 @@ where
 
     Ok(data)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::AppError;
+    use reqwest::{Response, StatusCode};
+    use serde_json::json;
+    use std::str::FromStr;
+
+    struct MockResponse {
+        status: StatusCode,
+        url: String,
+    }
+
+    impl MockResponse {
+        fn status(&self) -> StatusCode {
+            self.status
+        }
+
+        fn url(&self) -> &str {
+            &self.url
+        }
+    }
+
+    #[test]
+    fn test_log_request_start() {
+        // This test just verifies the function doesn't panic
+        log_request_start("Test API", "https://api.example.com/test");
+    }
+
+    #[test]
+    fn test_log_response_simple() {
+        // Test with a simple string value
+        let data = "Simple test data";
+        log_response_simple("Test API", "https://api.example.com/test", &data);
+
+        // Test with a complex object
+        let data = json!({
+            "id": "test-123",
+            "name": "Test Entity",
+            "attributes": {
+                "key1": "value1",
+                "key2": "value2"
+            }
+        });
+        log_response_simple("Test API", "https://api.example.com/test", &data);
+    }
+
+    #[test]
+    fn test_logging_helper_functions() {
+        // These tests mostly verify that the functions don't panic
+        log_request_error(
+            "Test API",
+            "https://api.example.com/test",
+            "Connection refused",
+        );
+        log_response_error("Test API", StatusCode::INTERNAL_SERVER_ERROR);
+        log_cache_hit("TestEntity", "123");
+        log_cache_miss("TestEntity", "123");
+        log_cache_store("TestEntity", "123");
+    }
+}
