@@ -6,8 +6,8 @@ use oauth2::{AuthUrl, ClientId, ClientSecret, Scope, TokenResponse, TokenUrl, ba
 use reqwest::Client;
 use tracing::{debug, error, info};
 
-use crate::config::app_config::AppConfig;
-use crate::config::constants;
+use crate::core::config::app_config::AppConfig;
+use crate::core::config::constants;
 
 /// Token cache entry
 struct TokenCacheEntry {
@@ -37,8 +37,8 @@ impl EntraTokenClient {
     /// Create a new token client with the given credentials
     pub fn new(tenant_id: &str, client_id: &str, client_secret: &str) -> Self {
         // Use default URL formats from app_config for consistency
-        let auth_url_format = crate::config::app_config::default_authorize_url_format();
-        let token_url_format = crate::config::app_config::default_token_url_format();
+        let auth_url_format = crate::core::config::app_config::default_authorize_url_format();
+        let token_url_format = crate::core::config::app_config::default_token_url_format();
 
         let auth_url_str = auth_url_format.replace("{}", tenant_id);
         let token_url_str = token_url_format.replace("{}", tenant_id);
@@ -95,8 +95,8 @@ impl EntraTokenClient {
             std::env::var(constants::auth::env_vars::CLIENT_SECRET).unwrap_or_default();
 
         // Use default URL formats from app_config for consistency
-        let auth_url_format = crate::config::app_config::default_authorize_url_format();
-        let token_url_format = crate::config::app_config::default_token_url_format();
+        let auth_url_format = crate::core::config::app_config::default_authorize_url_format();
+        let token_url_format = crate::core::config::app_config::default_token_url_format();
 
         let auth_url_str = auth_url_format.replace("{}", &tenant_id);
         let token_url_str = token_url_format.replace("{}", &tenant_id);

@@ -21,11 +21,11 @@ use tower_http::{
 use tracing::{Level, info};
 
 use crate::{
-    config::AppConfig,
     core::auth::{
         EntraAuthLayer, EntraTokenClient,
         middleware::{EntraAuthConfig, RoleRequirement},
     },
+    core::config::app_config::AppConfig,
     handlers::logging,
     models::{ApiResponse, Data, DetailedHealthResponse, HealthCheckResponse},
     reliability,
@@ -95,7 +95,7 @@ pub fn create_core_app_router(state: Arc<AppState>, user_routes: Router) -> Rout
 /// Initialize the application state and resources
 pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
     // Load configuration
-    let config = crate::config::app_config::load_config().expect("Failed to load configuration");
+    let config = crate::core::config::load_config().expect("Failed to load config");
 
     // Initialize metrics
     let metrics_handle = crate::metrics::metrics_service::init_metrics();

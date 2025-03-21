@@ -15,7 +15,7 @@ use super::{
     memory::MemoryCacheProvider,
     redis::{RedisCacheProvider, RedisConfig},
 };
-use crate::config::app_config::{self, AppConfig};
+use crate::config::{self, AppConfig};
 use crate::utils::api_resource::ApiResource;
 
 /// Configuration for the fallback cache provider
@@ -33,17 +33,8 @@ pub struct FallbackConfig {
 impl Default for FallbackConfig {
     fn default() -> Self {
         // Get the app config to use its cache settings
-        let app_config = match app_config::load_config() {
-            Ok(config) => config,
-            Err(_) => {
-                warn!("Failed to load app config for cache defaults, using hardcoded values");
-                return Self {
-                    redis_config: RedisConfig::default(),
-                    memory_max_capacity: 10000,
-                    memory_ttl_seconds: 3600,
-                    reconnect_interval_seconds: 30,
-                };
-            }
+        let app_config = match config::get_config() {
+            config => config,
         };
 
         Self {

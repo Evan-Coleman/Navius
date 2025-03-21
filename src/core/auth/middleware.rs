@@ -17,9 +17,10 @@ use serde::{Deserialize, Serialize};
 use tower::{Layer, Service};
 use tracing::{debug, error, info};
 
+use crate::core::config::app_config;
+use crate::core::config::app_config::AppConfig;
+use crate::core::config::constants;
 use crate::core::router::AppState;
-use crate::config::app_config;
-use crate::config::constants;
 
 /// JWKS (JSON Web Key Set) response
 #[derive(Debug, Clone, Deserialize)]
@@ -239,7 +240,7 @@ impl EntraAuthConfig {
     }
 
     /// Create a new EntraAuthConfig from AppConfig
-    pub fn from_app_config(config: &app_config::AppConfig) -> Self {
+    pub fn from_app_config(config: &AppConfig) -> Self {
         let tenant_id = config.auth.entra.tenant_id.clone();
         let client_id = config.auth.entra.client_id.clone();
         let debug_validation = config.auth.debug;
@@ -575,7 +576,7 @@ impl EntraAuthLayer {
     }
 
     /// Create a new EntraAuthLayer from AppConfig
-    pub fn from_app_config(config: &crate::config::app_config::AppConfig) -> Self {
+    pub fn from_app_config(config: &AppConfig) -> Self {
         Self {
             config: EntraAuthConfig::from_app_config(config),
         }
@@ -617,47 +618,32 @@ impl EntraAuthLayer {
     }
 
     /// Create a new auth layer from app config with added role requirements
-    pub fn from_app_config_with_roles(
-        config: &crate::config::app_config::AppConfig,
-        roles: RoleRequirement,
-    ) -> Self {
+    pub fn from_app_config_with_roles(config: &AppConfig, roles: RoleRequirement) -> Self {
         Self::new(EntraAuthConfig::from_app_config(config).with_role_requirement(roles))
     }
 
     /// Create a new auth layer from app config requiring any of the given roles
-    pub fn from_app_config_require_any_role(
-        config: &crate::config::app_config::AppConfig,
-        roles: Vec<String>,
-    ) -> Self {
+    pub fn from_app_config_require_any_role(config: &AppConfig, roles: Vec<String>) -> Self {
         Self::from_app_config_with_roles(config, RoleRequirement::Any(roles))
     }
 
     /// Create a new auth layer from app config requiring all of the specified roles
-    pub fn from_app_config_require_all_roles(
-        config: &crate::config::app_config::AppConfig,
-        roles: Vec<String>,
-    ) -> Self {
+    pub fn from_app_config_require_all_roles(config: &AppConfig, roles: Vec<String>) -> Self {
         Self::from_app_config_with_roles(config, RoleRequirement::All(roles))
     }
 
     /// Create a new auth layer from app config requiring any of the admin roles
-    pub fn from_app_config_require_admin_role(
-        config: &crate::config::app_config::AppConfig,
-    ) -> Self {
+    pub fn from_app_config_require_admin_role(config: &AppConfig) -> Self {
         Self::from_app_config_require_any_role(config, config.auth.entra.admin_roles.clone())
     }
 
     /// Create a new auth layer from app config requiring any of the read-only roles
-    pub fn from_app_config_require_read_only_role(
-        config: &crate::config::app_config::AppConfig,
-    ) -> Self {
+    pub fn from_app_config_require_read_only_role(config: &AppConfig) -> Self {
         Self::from_app_config_require_any_role(config, config.auth.entra.read_only_roles.clone())
     }
 
     /// Create a new auth layer from app config requiring any of the full access roles
-    pub fn from_app_config_require_full_access_role(
-        config: &crate::config::app_config::AppConfig,
-    ) -> Self {
+    pub fn from_app_config_require_full_access_role(config: &AppConfig) -> Self {
         Self::from_app_config_require_any_role(config, config.auth.entra.full_access_roles.clone())
     }
 }

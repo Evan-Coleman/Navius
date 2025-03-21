@@ -1,13 +1,20 @@
+//! # Application Configuration
+//!
+//! This module provides access to application configuration settings.
+//! It serves as a user-friendly wrapper around the core configuration system.
+
 pub mod app_config;
 pub mod constants;
 #[cfg(test)]
 mod tests;
 
-pub use app_config::AppConfig;
-pub use app_config::load_config;
+// Re-export key components from core config
+pub use crate::core::config::app_config::{
+    AppConfig, AuthConfig, CacheConfig, EnvironmentType, LoggingConfig, ReliabilityConfig,
+    ServerConfig, load_config,
+};
 
 use lazy_static::lazy_static;
-use std::default::Default;
 use std::sync::Arc;
 
 lazy_static! {
@@ -15,31 +22,30 @@ lazy_static! {
         Arc::new(load_config().expect("Failed to load configuration"));
 }
 
-/// Default implementation for tests
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            env: String::from("development"),
-            server: ServerConfig {
-                port: 3000,
-                timeout_seconds: 30,
-                max_retries: 3,
-            },
-            api: ApiConfig {
-                petstore_url: String::from("https://petstore3.swagger.io/api/v3"),
-                cat_fact_url: String::from("https://catfact.ninja/fact"),
-            },
-            logging: LoggingConfig {
-                level: String::from("info"),
-                format: String::from("json"),
-            },
-            cache: CacheConfig {
-                enabled: true,
-                max_capacity: 100,
-                ttl_seconds: 3600,
-            },
-            auth: AuthConfig::default(),
-            reliability: ReliabilityConfig::default(),
-        }
-    }
+/// Shortcut function to get the application configuration
+///
+/// # Returns
+///
+/// The application configuration object, or panics if configuration cannot be loaded
+///
+/// # Example
+///
+/// ```
+/// use crate::config::get_config;
+///
+/// let config = get_config();
+/// println!("Server address: {}", config.server_addr());
+/// ```
+pub fn get_config() -> AppConfig {
+    load_config().expect("Failed to load application configuration")
+}
+
+/// Get the cache configuration
+pub fn get_cache_config() -> CacheConfig {
+    get_config().cache
+}
+
+/// Get the server configuration
+pub fn get_server_config() -> ServerConfig {
+    get_config().server
 }

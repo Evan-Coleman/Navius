@@ -31,7 +31,7 @@ pub use rate_limit::*;
 pub use retry::*;
 
 use crate::{
-    config::{
+    core::config::app_config::{
         CircuitBreakerConfig, ConcurrencyConfig, RateLimitConfig, ReliabilityConfig, RetryConfig,
         TimeoutConfig,
     },
@@ -43,7 +43,7 @@ use std::time::Duration;
 /// Apply reliability middleware to the router based on configuration
 pub fn apply_reliability(
     router: Router<Arc<AppState>>,
-    config: &crate::config::ReliabilityConfig,
+    config: &crate::core::config::app_config::ReliabilityConfig,
 ) -> Router<Arc<AppState>> {
     // Add timeout layer if configured
     if let Some(timeout_layer) = build_timeout_layer(&config.timeout) {
