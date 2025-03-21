@@ -392,7 +392,7 @@ fn cache_hit_ratio() -> f64 {
 /// # Returns
 ///
 /// The resource if successful, or an error
-pub(crate) async fn fetch_with_retry<R: ApiResource, F, Fut, S>(
+pub async fn fetch_with_retry<R: ApiResource, F, Fut, S>(
     state: &Arc<S>,
     id: &R::Id,
     fetch_fn: &F,

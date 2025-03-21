@@ -7,7 +7,7 @@ mod core;
 mod registry;
 
 // Re-export public items
-pub use core::{ApiHandlerOptions, ApiResource, create_api_handler};
+pub use core::{ApiHandlerOptions, ApiResource, create_api_handler, fetch_with_retry};
 pub use registry::*;
 
 use crate::core::cache::cache_manager::register_resource_cache;
