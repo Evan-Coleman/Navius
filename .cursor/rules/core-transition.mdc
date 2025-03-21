@@ -10,3 +10,4 @@ We are implementing a seperation of code concerns. We want all server implementa
     - Create new files that add allow the user to easily understand how to add functionality to the core engine.
     - The router move to core is done, and you can notice that in /src/app there is a router.rs file that is just for users and they know where to put their own routes. This is how we want it done.
     - Make sure when moving things to update lib.rs and all mod.rs files where you need to
+    - Always at the end check to make sure the original directory has been cleaned and replaced with the user-extensible versions of the files you moved.

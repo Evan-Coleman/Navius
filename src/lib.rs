@@ -48,7 +48,9 @@ pub mod models;
 pub mod generated_apis;
 
 /// Reliability features for improved resilience
-pub mod reliability;
+pub mod reliability {
+    pub use crate::core::reliability::*;
+}
 
 /// Utility functions and helpers
 pub mod utils;
