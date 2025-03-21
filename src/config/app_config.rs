@@ -24,6 +24,8 @@ pub struct CacheConfig {
     pub enabled: bool,
     pub ttl_seconds: u64,
     pub max_capacity: u64,
+    #[serde(default = "default_reconnect_interval")]
+    pub reconnect_interval_seconds: u64,
 }
 
 /// API configuration
@@ -773,4 +775,8 @@ pub fn load_config() -> Result<AppConfig, ConfigError> {
     }
 
     Ok(app_config)
+}
+
+fn default_reconnect_interval() -> u64 {
+    30
 }

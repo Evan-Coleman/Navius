@@ -153,7 +153,7 @@ where
                             .map_err(|e| e.to_string())
                     };
 
-                    match crate::cache::get_or_fetch::<R, _, _>(
+                    match crate::core::cache::get_or_fetch::<R, _, _>(
                         registry,
                         resource_type,
                         &cache_key,
@@ -172,7 +172,7 @@ where
                                 "Failed to fetch {} {} from {}: {}",
                                 resource_type,
                                 id_str,
-                                if crate::cache::last_fetch_from_cache() {
+                                if crate::core::cache::last_fetch_from_cache() {
                                     "cache"
                                 } else {
                                     "API"
@@ -207,7 +207,7 @@ where
                     let cache_key = id.to_string();
 
                     // Try to store the resource in the registry
-                    let store_result = match crate::cache::get_resource_cache::<R>(
+                    let store_result = match crate::core::cache::get_resource_cache::<R>(
                         registry,
                         resource_type,
                     ) {
@@ -263,7 +263,7 @@ where
                             match crate::utils::api_resource::register_resource::<R>(&state, None) {
                                 Ok(_) => {
                                     // Successfully registered, now try to get the cache again
-                                    match crate::cache::get_resource_cache::<R>(
+                                    match crate::core::cache::get_resource_cache::<R>(
                                         registry,
                                         resource_type,
                                     ) {

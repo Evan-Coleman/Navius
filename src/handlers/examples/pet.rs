@@ -78,7 +78,7 @@ pub async fn fetch_pet_handler(
     match &result {
         Ok(_) => {
             // Check if it was retrieved from cache using our thread-local
-            let from_cache = crate::cache::last_fetch_from_cache();
+            let from_cache = crate::core::cache::last_fetch_from_cache();
             let source = if from_cache { "from cache" } else { "from API" };
             info!("✅ Successfully retrieved pet ID: {} ({})", id, source)
         }

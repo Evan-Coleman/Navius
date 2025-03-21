@@ -14,8 +14,8 @@ mod tests;
 pub use core::{ApiHandlerOptions, ApiResource, create_api_handler};
 pub use registry::*;
 
+use crate::core::cache::cache_manager::register_resource_cache;
 use crate::core::router::AppState;
-use crate::cache::cache_manager::register_resource_cache;
 use std::sync::Arc;
 use tracing::info;
 

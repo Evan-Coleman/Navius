@@ -20,8 +20,10 @@ pub mod app {
 
 /// Caching functionality
 pub mod cache {
-    pub use crate::cache::cache_manager::*;
-    pub mod cache_manager;
+    pub use crate::cache::providers::*;
+    pub use crate::cache::registry_stats::*;
+    pub mod providers;
+    pub mod registry_stats;
 }
 
 /// Configuration management

@@ -19,10 +19,10 @@ app:
   log_level: "info"
 
 cache:
-  # Longer TTL for production for better performance
+  enabled: true
   ttl_seconds: 600
-  # Larger cache capacity for production
-  max_capacity: 5000
+  max_capacity: 6000
+  reconnect_interval_seconds: 20
 
 # Environment-specific authentication settings
 auth:

@@ -17,8 +17,10 @@ app:
   log_level: "debug"
 
 cache:
-  # Shorter TTL for development to see changes faster
-  ttl_seconds: 60
+  enabled: true
+  # ttl_seconds: 300
+  # max_capacity: 1000
+  # reconnect_interval_seconds: 30
 
 # # Environment-specific authentication settings
 # auth:

@@ -64,8 +64,9 @@ auth:
 
 cache:
   enabled: true
-  ttl_seconds: 300
-  max_capacity: 1000 
+  ttl_seconds: 30
+  max_capacity: 1000
+  reconnect_interval_seconds: 30
 
 # Reference to reliability settings
 # Detailed configuration in reliability.yaml

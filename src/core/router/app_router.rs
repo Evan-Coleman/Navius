@@ -38,7 +38,7 @@ pub struct AppState {
     pub client: Client,
     pub config: AppConfig,
     pub start_time: SystemTime,
-    pub cache_registry: Option<crate::cache::CacheRegistry>,
+    pub cache_registry: Option<crate::core::cache::CacheRegistry>,
     pub metrics_handle: PrometheusHandle,
     pub token_client: Option<EntraTokenClient>,
     pub resource_registry: crate::utils::api_resource::ApiResourceRegistry,
@@ -111,7 +111,7 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
 
     // Only set up the cache if enabled
     let cache_registry = if config.cache.enabled {
-        let registry = crate::cache::init_cache_registry(
+        let registry = crate::core::cache::init_cache_registry(
             true,
             config.cache.max_capacity,
             config.cache.ttl_seconds,
@@ -156,7 +156,7 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
 
     // Start metrics updater for the new cache registry
     if let Some(registry) = &cache_registry {
-        crate::cache::start_metrics_updater(registry).await;
+        crate::core::cache::start_metrics_updater(registry).await;
     } else {
         info!("🔧 Cache registry disabled, metrics updater not started");
     }
