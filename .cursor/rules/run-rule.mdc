@@ -3,6 +3,6 @@ description: basic info about the server and running it
 globs: 
 alwaysApply: true
 ---
-- To run the project you can use ./run_server.sh
+- To run the project you can use ./run_dev.sh
 - Always run in foreground, i will pop it out manually when the server is started so you don't try to do something before it is done.
 - NEVER NEVER put anything from my .env file in a git tracked file.

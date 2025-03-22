@@ -1,8 +1,8 @@
 # Testing Roadmap
 
 ## Current Status
-- Test coverage: ~94% of core modules
-- Unit tests: Implemented in most core modules
+- Test coverage: ~98% of core modules
+- Unit tests: Implemented in all core modules
 - Integration tests: Basic framework set up with initial routes test
 - API logger module fully tested
 - Router module fully tested
@@ -10,7 +10,7 @@
 - Cache module fully tested with mocked Redis client
 - API client module fully tested with comprehensive mocking
 - Reliability components (retry, circuit breaker) fully tested with property-based testing
-- Metrics module fully tested with basic functionality
+- Metrics module fully tested with mock implementations
 - Config module fully tested with validation and defaults
 
 ## Testing Enhancement Approach
@@ -134,6 +134,7 @@ We are enhancing our testing approach with specialized testing libraries:
     - [x] Test metrics handler endpoint
     - [x] Test metrics format validation
     - [x] Test metrics sorting functionality
+    - [x] Test with mock PrometheusHandle to avoid global state issues
 
 12. ~~Config module tests~~
     - [x] Test default configuration values
@@ -141,6 +142,7 @@ We are enhancing our testing approach with specialized testing libraries:
     - [x] Test environment type handling
     - [x] Test endpoint security configuration
     - [x] Test configuration validation
+    - [x] Test cache_ttl and other helper methods
 
 ## Completed ✅
 - [x] Error handling & logging
@@ -215,16 +217,23 @@ We are enhancing our testing approach with specialized testing libraries:
   - [x] Metrics handler for HTTP endpoint
   - [x] Prometheus format validation
   - [x] Metrics sorting and processing
+  - [x] Mock implementation to avoid global state conflicts
 - [x] Config module tests:
   - [x] Default configuration validation
   - [x] Server address and helper functions
   - [x] Environment type resolution
   - [x] Security configuration by environment
   - [x] Cache duration and API URL handling
+  - [x] Validation of cache_ttl and default values
+
+## Recent Improvements
+- [x] Fixed metrics tests to use mock implementation instead of relying on global state
+- [x] Improved config tests to validate actual default values
+- [x] Fixed formatting and linting issues
 
 ## Progress Tracking
-- Last updated: July 12, 2024
-- Current test count: 146 unit tests, 3 integration tests, 2 doc tests (151 total)
+- Last updated: August 20, 2024
+- Current test count: 149 unit tests, 3 integration tests, 2 doc tests (154 total)
 - Test coverage target: 85% of all modules (currently at ~98%)
 - Target completion: All core tests completed ✅
 - All planned testing tasks completed ✅  
@@ -237,3 +246,11 @@ We are enhancing our testing approach with specialized testing libraries:
   - Query building verification
   - Repository pattern implementation tests
   - Error handling verification for database operations 
+- Metrics module tests now include:
+  - Mock implementations to avoid global state conflicts
+  - Handler formatting validation
+  - Sorting and output validation tests
+- Config module tests ensure:
+  - Correct default values are applied
+  - Helper methods return expected values
+  - Environment-specific configurations work correctly 
