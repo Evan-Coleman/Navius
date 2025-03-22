@@ -63,3 +63,98 @@ pub fn register_resource<T: ApiResource + 'static>(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::{
+        cache::cache_manager, config::app_config::AppConfig,
+        utils::api_resource::registry::ApiResourceRegistry,
+    };
+    use metrics_exporter_prometheus::PrometheusBuilder;
+    use reqwest::Client;
+    use serde::{Deserialize, Serialize};
+    use std::{sync::Arc, time::SystemTime};
+
+    // Mock resource for testing
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    struct MockResource {
+        id: i64,
+        name: String,
+    }
+
+    impl ApiResource for MockResource {
+        type Id = i64;
+
+        fn resource_type() -> &'static str {
+            "mock"
+        }
+
+        fn api_name() -> &'static str {
+            "TestAPI"
+        }
+    }
+
+    // Helper function to create test app state
+    fn create_test_app_state(with_cache: bool) -> Arc<AppState> {
+        let cache_registry = if with_cache {
+            Some(cache_manager::init_cache_registry(true, 1000, 300))
+        } else {
+            None
+        };
+
+        let metrics_recorder = PrometheusBuilder::new().build_recorder();
+        let metrics_handle = metrics_recorder.handle();
+
+        Arc::new(AppState {
+            client: Client::new(),
+            config: AppConfig::default(),
+            start_time: SystemTime::now(),
+            cache_registry,
+            metrics_handle,
+            token_client: None,
+            resource_registry: ApiResourceRegistry::new(),
+            db_pool: None,
+        })
+    }
+
+    #[test]
+    fn test_register_resource_with_cache_enabled() {
+        // Create a cache registry
+        let app_state = create_test_app_state(true);
+
+        // This line creates the warning, renaming to _cache_registry
+        let _cache_registry = app_state.cache_registry.as_ref().unwrap();
+
+        // Register the resource
+        let result = register_resource::<MockResource>(&app_state, None);
+
+        // Verify registration succeeded
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_register_resource_with_custom_name() {
+        // Create app state without cache registry
+        let app_state = create_test_app_state(true);
+
+        // Register with custom name
+        let custom_name = "CustomMock";
+        let result = register_resource::<MockResource>(&app_state, Some(custom_name));
+
+        // Verify registration succeeded
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_register_resource_with_cache_disabled() {
+        // Create app state without cache registry
+        let app_state = create_test_app_state(false);
+
+        // Register the resource
+        let result = register_resource::<MockResource>(&app_state, None);
+
+        // Verify registration succeeded
+        assert!(result.is_ok());
+    }
+}

@@ -153,3 +153,186 @@ impl std::fmt::Debug for ResourceRegistration {
             .finish()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::utils::api_resource::ApiResource;
+    use serde::{Deserialize, Serialize};
+    use std::collections::BTreeMap;
+    use std::future::Future;
+    use std::pin::Pin;
+
+    // A mock implementation of ApiResource for testing
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    struct MockResource {
+        id: i64,
+        name: String,
+    }
+
+    impl ApiResource for MockResource {
+        type Id = i64;
+
+        fn resource_type() -> &'static str {
+            "mock_resource"
+        }
+
+        fn api_name() -> &'static str {
+            "MockAPI"
+        }
+    }
+
+    // Helper function to create a health check function for tests
+    fn create_health_check(
+        status: &'static str,
+    ) -> impl Fn(&Arc<AppState>) -> Pin<Box<dyn Future<Output = DependencyStatus> + Send + 'static>>
+    + Send
+    + Sync
+    + 'static {
+        move |_state| {
+            let status_clone = status.to_string();
+            Box::pin(async move {
+                DependencyStatus {
+                    name: "mock_api".to_string(),
+                    status: status_clone,
+                    details: None,
+                }
+            })
+        }
+    }
+
+    #[test]
+    fn test_registry_new() {
+        let registry = ApiResourceRegistry::new();
+        assert_eq!(registry.get_resource_types().len(), 0);
+    }
+
+    #[test]
+    fn test_registry_register() {
+        let registry = ApiResourceRegistry::new();
+
+        // Register a mock resource
+        let result = registry.register::<MockResource, _>(create_health_check("UP"));
+        assert!(result.is_ok());
+
+        // Check if resource was registered
+        let resource_types = registry.get_resource_types();
+        assert_eq!(resource_types.len(), 1);
+        assert_eq!(resource_types[0], "mock_resource");
+    }
+
+    #[test]
+    fn test_registry_register_duplicate() {
+        let registry = ApiResourceRegistry::new();
+
+        // Register a mock resource
+        let result1 = registry.register::<MockResource, _>(create_health_check("UP"));
+        assert!(result1.is_ok());
+
+        // Try to register the same resource again
+        let result2 = registry.register::<MockResource, _>(create_health_check("DOWN"));
+
+        // This should succeed but overwrite the previous registration
+        assert!(result2.is_ok());
+
+        // Only one resource type should exist
+        let resource_types = registry.get_resource_types();
+        assert_eq!(resource_types.len(), 1);
+    }
+
+    #[test]
+    fn test_get_health_check() {
+        let registry = ApiResourceRegistry::new();
+
+        // Register a mock resource
+        registry
+            .register::<MockResource, _>(create_health_check("UP"))
+            .unwrap();
+
+        // Get the health check function
+        let health_check = registry.get_health_check("mock_resource");
+        assert!(health_check.is_some());
+
+        // Non-existent resource should return None
+        let not_found = registry.get_health_check("non_existent");
+        assert!(not_found.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_run_all_health_checks() {
+        let registry = ApiResourceRegistry::new();
+
+        // Register multiple resources with different health statuses
+        registry
+            .register::<MockResource, _>(create_health_check("UP"))
+            .unwrap();
+
+        // Create a second resource type
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        struct AnotherResource {
+            id: String,
+            data: String,
+        }
+
+        impl ApiResource for AnotherResource {
+            type Id = String;
+
+            fn resource_type() -> &'static str {
+                "another_resource"
+            }
+
+            fn api_name() -> &'static str {
+                "AnotherAPI"
+            }
+        }
+
+        registry
+            .register::<AnotherResource, _>(create_health_check("DOWN"))
+            .unwrap();
+
+        // Create app state (minimal for testing)
+        let app_state = Arc::new(AppState {
+            client: reqwest::Client::new(),
+            config: crate::core::config::app_config::AppConfig::default(),
+            start_time: std::time::SystemTime::now(),
+            cache_registry: None,
+            metrics_handle: metrics_exporter_prometheus::PrometheusBuilder::new()
+                .build_recorder()
+                .handle(),
+            token_client: None,
+            resource_registry: ApiResourceRegistry::new(),
+            db_pool: None,
+        });
+
+        // Run all health checks
+        let statuses = registry.run_all_health_checks(&app_state).await;
+
+        // Should have two statuses
+        assert_eq!(statuses.len(), 2);
+
+        // Check statuses contain expected values
+        let has_up = statuses.iter().any(|s| s.status == "UP");
+        let has_down = statuses.iter().any(|s| s.status == "DOWN");
+        assert!(has_up);
+        assert!(has_down);
+    }
+
+    #[test]
+    fn test_debug_impl() {
+        let registry = ApiResourceRegistry::new();
+        let debug_str = format!("{:?}", registry);
+        assert!(debug_str.contains("ApiResourceRegistry"));
+
+        // Test ResourceRegistration debug impl
+        let health_check = Box::new(create_health_check("UP")) as HealthCheckFn;
+        let registration = ResourceRegistration {
+            resource_type: "test".to_string(),
+            api_name: "TestAPI".to_string(),
+            health_check_fn: health_check,
+        };
+
+        let debug_str = format!("{:?}", registration);
+        assert!(debug_str.contains("resource_type: \"test\""));
+        assert!(debug_str.contains("api_name: \"TestAPI\""));
+    }
+}

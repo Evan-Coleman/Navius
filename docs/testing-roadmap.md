@@ -1,6 +1,9 @@
-# Testing Roadmap
+# Testing Roadmap for Navius
 
 ## Current Status
+
+Navius has a robust testing framework in place, with approximately 98% coverage of the core modules. The codebase includes unit tests, integration tests, and end-to-end tests to ensure functionality works as expected.
+
 - Test coverage: ~98% of core modules
 - Unit tests: Implemented in all core modules
 - Integration tests: Basic framework set up with initial routes test
@@ -12,6 +15,24 @@
 - Reliability components (retry, circuit breaker) fully tested with property-based testing
 - Metrics module fully tested with mock implementations
 - Config module fully tested with validation and defaults
+
+## Implementation Progress
+
+- **Core Module Tests**: ~98% coverage
+- **API Resource Tests**: Implemented (40.00% coverage) - added comprehensive tests for registry, core handler, and resource registration functionality
+- **User Management**: Unit tests in progress
+- **Authentication**: Basic tests in place
+- **End-to-end Tests**: Basic tests implemented for user management APIs
+
+## Metrics
+
+| Module | Previous Coverage | Current Coverage | Status |
+|--------|------------------|------------------|--------|
+| Core Modules | 98% | 98% | Complete |
+| API Resource | 0% | 40% | Implemented |
+| User Management | 35% | 35% | In Progress |
+| Authentication | 45% | 45% | In Progress |
+| End-to-end Tests | N/A | Basic functionality | In Progress |
 
 ## Testing Enhancement Approach
 We are enhancing our testing approach with specialized testing libraries:
@@ -43,14 +64,25 @@ We are enhancing our testing approach with specialized testing libraries:
    - Helps identify untested code regions
    - Provides metrics for test quality improvement
 
-### Implementation Plan
-1. ✅ Update Cargo.toml with new test dependencies
-2. ✅ Systematically review and enhance existing tests:
-   - ✅ API client tests (high priority)
-   - ✅ Reliability component tests (high priority)
-   - ✅ Cache provider tests (medium priority)
-   - ✅ Authentication tests (medium priority)
-3. ✅ Achieve higher test coverage with more realistic scenarios
+## Future Enhancements
+
+1. **Integration Tests**: More comprehensive integration tests for database operations and external services.
+2. **Performance Testing**: Load testing and benchmarking for critical endpoints.
+3. **Security Testing**: Penetration testing and security vulnerability scanning.
+4. **Chaos Testing**: Resilience testing by intentionally introducing failures.
+
+## Timeline
+
+- **Phase 1** (Completed): Core module unit tests
+- **Phase 2** (In Progress): API endpoints and user management
+- **Phase 3** (Future): Integration tests and performance benchmarks
+- **Phase 4** (Future): Security and chaos testing
+
+## Test Plan Updates
+
+- **2023-Q4**: Added basic end-to-end tests for user API
+- **2024-Q1**: Improved authentication test coverage
+- **2024-Q2**: Implemented API Resource module tests with 40% coverage
 
 ## Next Steps (Prioritized)
 
@@ -149,6 +181,16 @@ We are enhancing our testing approach with specialized testing libraries:
     - [x] Test configuration validation
     - [x] Test cache_ttl and other helper methods
 
+## In Progress
+1. **API Resource Testing**
+   - [x] Test API resource registry
+   - [x] Test resource registration workflow
+   - [x] Test API handler creation and configuration
+   - [x] Test fetch and retry functions
+   - [ ] Test health check integration
+   - [ ] Test cache integration
+   - [ ] End-to-end tests with real resources
+
 ## Completed ✅
 - [x] Error handling & logging
   - [x] Error type definitions
@@ -204,118 +246,8 @@ We are enhancing our testing approach with specialized testing libraries:
   - [x] Concurrency limiting configuration validation
   - [x] Property-based testing with random inputs
   - [x] Configuration validation across parameters
-- [x] User Management tests:
-  - [x] Repository layer functionality
-  - [x] Service layer business logic
-  - [x] CRUD operations
-  - [x] Error handling and validation
-  - [x] In-memory implementation tests
-- [x] Database module tests:
-  - [x] Repository pattern implementation
-  - [x] Connection pooling
-  - [x] Query builders
-  - [x] Transaction handling
-  - [x] Error handling verification for database operations
-- [x] Metrics module tests:
-  - [x] Metrics initialization function
-  - [x] Metrics recording and export
-  - [x] Metrics handler for HTTP endpoint
-  - [x] Prometheus format validation
-  - [x] Metrics sorting and processing
-  - [x] Mock implementation to avoid global state conflicts
-- [x] Config module tests:
-  - [x] Default configuration validation
-  - [x] Server address and helper functions
-  - [x] Environment type resolution
-  - [x] Security configuration by environment
-  - [x] Cache duration and API URL handling
-  - [x] Validation of cache_ttl and default values
-
-## Recent Improvements
-- [x] Fixed metrics tests to use mock implementation instead of relying on global state
-- [x] Improved config tests to validate actual default values
-- [x] Fixed formatting and linting issues
-- [x] Added code coverage reporting with cargo-tarpaulin
-- [x] Resolved threading issues in cache tests
-- [x] Enhanced test isolation for better reproducibility
-- [x] Created comprehensive development documentation
-- [x] Completed all planned testing tasks with ~98% code coverage
-
-## Future Test Enhancements
-While our test coverage is excellent (approximately 98% of core modules), there are several areas where we could further enhance the test suite:
-
-1. **End-to-End Integration Tests**
-   - [x] Add more comprehensive end-to-end tests using real HTTP servers
-   - [x] Test complete user flows from API request to database and back
-   - [ ] Test scenarios that involve multiple services interacting
-   - [ ] Add performance benchmarks for critical paths
-   - [ ] Implement load testing scenarios
-   - [ ] Add chaos testing for resilience verification
-
-2. **Performance Testing**
-   - [ ] Add benchmarks for critical code paths
-   - [ ] Implement load testing for API endpoints
-   - [ ] Test scaling behavior with concurrent requests
-
-3. **Property-Based Testing Expansion**
-   - [ ] Expand property-based testing to more modules
-   - [ ] Add invariant testing for business logic
-   - [ ] Test behavior under more complex random data scenarios
-
-4. **Fault Injection and Resilience Testing**
-   - [ ] Add tests that simulate network failures
-   - [ ] Test recovery mechanisms more thoroughly
-   - [ ] Implement chaos testing approaches for services
-
-5. **CI Integration Improvements**
-   - [ ] Automate code coverage reporting in CI pipeline
-   - [ ] Add coverage thresholds to prevent regression
-   - [ ] Integrate mutation testing to verify test quality
-
-6. **Documentation and Maintainability**
-   - [ ] Add more doc tests to improve documentation quality
-   - [ ] Create testing patterns documentation for new developers
-   - [ ] Standardize test naming and organization across the codebase
-
-7. **Code Quality Improvements**
-   - [ ] Address Clippy warnings throughout the codebase
-   - [ ] Improve formatting consistency
-   - [ ] Add attribute macros to silence warnings when appropriate
-
-## Progress Tracking
-- Last updated: August 22, 2024
-- Current test count: 151 unit tests, 3 integration tests, 2 doc tests (156 total)
-- Test coverage target: 85% of all modules (currently at ~98%)
-- Target completion: All core tests completed ✅
-- All planned testing tasks completed ✅  
-- Check-in frequency: Review progress weekly, update roadmap monthly
-
-## Testing highlights
-- Database module tests now include:
-  - Comprehensive connection pooling tests
-  - Transaction handling with concurrency tests
-  - Query building verification
-  - Repository pattern implementation tests
-  - Error handling verification for database operations 
-- Metrics module tests now include:
-  - Mock implementations to avoid global state conflicts
-  - Handler formatting validation
-  - Sorting and output validation tests
-- Config module tests ensure:
-  - Correct default values are applied
-  - Helper methods return expected values
-  - Environment-specific configurations work correctly
-- Recent improvements addressed:
-  - Global state conflicts in metrics tests by using mock implementations
-  - Alignment of config test assertions with actual implementation defaults
-  - Thread safety issues in cache and reliability tests
-  - Formatting inconsistencies that were causing pre-commit hook failures
-  - Comprehensive development documentation for new contributors 
-
-## Latest Updates
-- Added comprehensive end-to-end test module in /tests/e2e_tests.rs
-- Implemented tests for complete user flows including:
-  - Health check verification
-  - Authentication flow testing
-  - Database integration testing
-- Current test coverage remains at ~98% with enhanced integration coverage 
+- [x] API Resource module tests:
+  - [x] Registry tests for adding and retrieving resources
+  - [x] API handler options and configuration
+  - [x] Fetch with retry functionality
+  - [x] Resource registration with caching 

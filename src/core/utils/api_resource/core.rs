@@ -501,3 +501,273 @@ fn convert_to_cache_value<R: ApiResource>(resource: &R) -> Option<Upet> {
 fn to_cache_key<R: ApiResource>(id: &R::Id) -> Option<i64> {
     id.to_string().parse::<i64>().ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::utils::api_resource::registry::ApiResourceRegistry;
+    use axum::body::Body;
+    use axum::http::{Request, Response, StatusCode};
+    use axum::routing::get;
+    use futures::future::BoxFuture;
+    use metrics_exporter_prometheus::PrometheusBuilder;
+    use serde::{Deserialize, Serialize};
+    use std::sync::atomic::AtomicUsize;
+    use tower::{BoxError, Service, ServiceExt};
+
+    // Mock API resource for testing
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    struct MockPet {
+        id: i64,
+        name: String,
+        status: String,
+    }
+
+    impl ApiResource for MockPet {
+        type Id = i64;
+
+        fn resource_type() -> &'static str {
+            "pet"
+        }
+
+        fn api_name() -> &'static str {
+            "PetStore"
+        }
+    }
+
+    #[test]
+    fn test_api_handler_options_default() {
+        let options = ApiHandlerOptions::default();
+
+        assert!(options.use_cache);
+        assert!(options.use_retries);
+        assert_eq!(options.max_retry_attempts, 3);
+        assert_eq!(options.cache_ttl_seconds, 300);
+        assert!(options.detailed_logging);
+    }
+
+    #[test]
+    fn test_api_handler_options_custom() {
+        let options = ApiHandlerOptions {
+            use_cache: false,
+            use_retries: false,
+            max_retry_attempts: 5,
+            cache_ttl_seconds: 600,
+            detailed_logging: false,
+        };
+
+        assert!(!options.use_cache);
+        assert!(!options.use_retries);
+        assert_eq!(options.max_retry_attempts, 5);
+        assert_eq!(options.cache_ttl_seconds, 600);
+        assert!(!options.detailed_logging);
+    }
+
+    #[tokio::test]
+    async fn test_create_api_handler() {
+        // Create sample app state
+        let metrics_recorder = PrometheusBuilder::new().build_recorder();
+        let metrics_handle = metrics_recorder.handle();
+
+        let app_state = Arc::new(AppState {
+            client: reqwest::Client::new(),
+            config: crate::core::config::app_config::AppConfig::default(),
+            start_time: std::time::SystemTime::now(),
+            cache_registry: None,
+            metrics_handle,
+            token_client: None,
+            resource_registry: ApiResourceRegistry::new(),
+            db_pool: None,
+        });
+
+        // Create a counter to track how many times the fetch function is called
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let call_count_clone = call_count.clone();
+
+        // Create a fetch function that returns a mock pet
+        let fetch_fn = move |_state: &Arc<AppState>, id: i64| {
+            call_count_clone.fetch_add(1, Ordering::SeqCst);
+            let pet = MockPet {
+                id,
+                name: format!("Pet {}", id),
+                status: "available".to_string(),
+            };
+            async move { Ok(pet) }
+        };
+
+        // Create the handler with default options
+        let handler = create_api_handler(fetch_fn, ApiHandlerOptions::default());
+
+        // Set up a router with the handler
+        let app = axum::Router::new()
+            .route(
+                "/pets/{id}",
+                get(
+                    |state: State<Arc<AppState>>, path: Path<String>| async move {
+                        handler(state, path).await
+                    },
+                ),
+            )
+            .with_state(app_state);
+
+        // Create a test request
+        let request = Request::builder()
+            .uri("/pets/123")
+            .method("GET")
+            .body(Body::empty())
+            .unwrap();
+
+        // Send the request to the router
+        let response = app.oneshot(request).await.unwrap();
+
+        // Check the response
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Extract and parse the body
+        let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let pet: MockPet = serde_json::from_slice(&body_bytes).unwrap();
+
+        // Verify the pet data
+        assert_eq!(pet.id, 123);
+        assert_eq!(pet.name, "Pet 123");
+        assert_eq!(pet.status, "available");
+
+        // Verify the fetch function was called exactly once
+        assert_eq!(call_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_with_retry_success_first_try() {
+        // Create sample app state
+        let app_state = Arc::new(AppState {
+            client: reqwest::Client::new(),
+            config: crate::core::config::app_config::AppConfig::default(),
+            start_time: std::time::SystemTime::now(),
+            cache_registry: None,
+            metrics_handle: PrometheusBuilder::new().build_recorder().handle(),
+            token_client: None,
+            resource_registry: ApiResourceRegistry::new(),
+            db_pool: None,
+        });
+
+        // Create a counter to track how many times the fetch function is called
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let call_count_clone = call_count.clone();
+
+        // Create a fetch function that succeeds on first try
+        let fetch_fn = move |_: &Arc<AppState>, id: i64| {
+            let _count = call_count_clone.fetch_add(1, Ordering::SeqCst);
+            let pet = MockPet {
+                id,
+                name: format!("Pet {}", id),
+                status: "available".to_string(),
+            };
+            async move { Ok(pet) }
+        };
+
+        // Call fetch_with_retry
+        let result = fetch_with_retry(&app_state, &123, &fetch_fn, 3, true).await;
+
+        // Verify success
+        assert!(result.is_ok());
+        let pet = result.unwrap();
+        assert_eq!(pet.id, 123);
+
+        // Verify the fetch function was called exactly once
+        assert_eq!(call_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_with_retry_success_after_retries() {
+        // Create sample app state
+        let app_state = Arc::new(AppState {
+            client: reqwest::Client::new(),
+            config: crate::core::config::app_config::AppConfig::default(),
+            start_time: std::time::SystemTime::now(),
+            cache_registry: None,
+            metrics_handle: PrometheusBuilder::new().build_recorder().handle(),
+            token_client: None,
+            resource_registry: ApiResourceRegistry::new(),
+            db_pool: None,
+        });
+
+        // Create a counter to track how many times the fetch function is called
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let call_count_clone = call_count.clone();
+
+        // Create a fetch function that fails on first two tries, then succeeds
+        let fetch_fn = move |_: &Arc<AppState>, id: i64| {
+            let count = call_count_clone.fetch_add(1, Ordering::SeqCst);
+
+            let future: BoxFuture<'static, Result<MockPet>> = if count < 2 {
+                // First two calls fail
+                Box::pin(async move {
+                    Err(AppError::InternalError(
+                        "Simulated failure for testing".to_string(),
+                    ))
+                })
+            } else {
+                // Third call succeeds
+                let pet = MockPet {
+                    id,
+                    name: format!("Pet {}", id),
+                    status: "available".to_string(),
+                };
+                Box::pin(async move { Ok(pet) })
+            };
+
+            future
+        };
+
+        // Call fetch_with_retry
+        let result = fetch_with_retry(&app_state, &123, &fetch_fn, 3, true).await;
+
+        // Verify success
+        assert!(result.is_ok());
+        let pet = result.unwrap();
+        assert_eq!(pet.id, 123);
+
+        // Verify the fetch function was called exactly three times
+        assert_eq!(call_count.load(Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_with_retry_all_failures() {
+        // Create sample app state
+        let app_state = Arc::new(AppState {
+            client: reqwest::Client::new(),
+            config: crate::core::config::app_config::AppConfig::default(),
+            start_time: std::time::SystemTime::now(),
+            cache_registry: None,
+            metrics_handle: PrometheusBuilder::new().build_recorder().handle(),
+            token_client: None,
+            resource_registry: ApiResourceRegistry::new(),
+            db_pool: None,
+        });
+
+        // Create a counter to track how many times the fetch function is called
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let call_count_clone = call_count.clone();
+
+        // Create a fetch function that always fails
+        let fetch_fn = move |_: &Arc<AppState>, _id: i64| {
+            call_count_clone.fetch_add(1, Ordering::SeqCst);
+            async move {
+                Err(AppError::InternalError(
+                    "Simulated failure for testing".to_string(),
+                ))
+            }
+        };
+
+        // Call fetch_with_retry with 2 max retries
+        let result: Result<MockPet> = fetch_with_retry(&app_state, &123, &fetch_fn, 2, true).await;
+
+        // Verify failure
+        assert!(result.is_err());
+
+        // Verify the fetch function was called exactly three times (initial + 2 retries)
+        assert_eq!(call_count.load(Ordering::SeqCst), 3);
+    }
+}
