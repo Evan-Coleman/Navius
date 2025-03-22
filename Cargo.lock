@@ -1786,6 +1786,7 @@ dependencies = [
  "mockito",
  "moka",
  "oauth2",
+ "once_cell",
  "pin-project",
  "proptest",
  "rand 0.9.0",
