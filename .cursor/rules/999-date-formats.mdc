@@ -8,6 +8,23 @@ alwaysApply: true
 
 When generating content with dates (like "Updated at" timestamps), use the formats configured in `config/default.yaml` under the `date_formats` section.
 
+## System Date Verification
+
+IMPORTANT: Before updating any dates in documents, ALWAYS check the current system date:
+
+```bash
+# Display the formal date format (to use in documentation)
+date "+%B %d, %Y"
+
+# Display the simple date format
+date "+%m/%d/%Y"
+
+# Display the verbose date format
+date -u "+%Y-%m-%dT%H:%M:%S.000Z"
+```
+
+Use the appropriate date format from the current system time - never generate future dates or hardcode past dates.
+
 ## Available Date Formats
 
 The application supports three date formats, each for specific use cases:
@@ -62,9 +79,11 @@ date -u "+%Y-%m-%dT%H:%M:%S.000Z"
 2. **For Documentation:**
    - Use `date_formats.simple` for technical dates
    - Use `date_formats.formal` for roadmaps and user-facing docs
+   - ALWAYS check current system date with `date` command before updating dates
 
 3. **For Progress Tracking:**
    - Use `date_formats.formal` with "Updated at: March 22, 2025"
+   - Get the current date from the system with `date "+%B %d, %Y"`
 
 ## Code Examples
 
@@ -87,4 +106,5 @@ fn format_date(config: &Config, format_type: &str) -> String {
 // Usage examples
 println!("Simple date: {}", format_date(config, "simple")); // 03/22/2025
 println!("Formal date: {}", format_date(config, "formal")); // March 22, 2025
-println!("Verbose date: {}", format_date(config, "verbose")); // 2025-03-22T12:34:56.789Z 
+println!("Verbose date: {}", format_date(config, "verbose")); // 2025-03-22T12:34:56.789Z
+``` 

@@ -1,0 +1,39 @@
+{
+    "editor.formatOnSave": true,
+    "rust-analyzer.checkOnSave.command": "clippy",
+    "rust-analyzer.checkOnSave.extraArgs": ["--", "-W", "clippy::all"],
+    "rust-analyzer.cargo.features": "all",
+    "rust-analyzer.procMacro.enable": true,
+    "rust-analyzer.cargo.buildScripts.enable": true,
+    "rust-analyzer.inlayHints.typeHints.enable": true,
+    "rust-analyzer.inlayHints.chainingHints.enable": true,
+    "rust-analyzer.inlayHints.parameterHints.enable": true,
+    "rust-analyzer.diagnostics.experimental.enable": true,
+    "files.exclude": {
+        "**/target": true,
+        "**/.git": true,
+        "**/node_modules": true
+    },
+    "search.exclude": {
+        "**/target": true,
+        "**/target/generated": true,
+        "**/generated": true,
+        "**/.git": true,
+        "**/*.lock": true
+    },
+    "editor.rulers": [100],
+    "editor.renderWhitespace": "selection",
+    "workbench.colorTheme": "Default Dark+",
+    "workbench.colorCustomizations": {
+        "editorRuler.foreground": "#444444"
+    },
+    "files.associations": {
+        "*.rs.test": "rust"
+    },
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.detectIndentation": false,
+    "files.insertFinalNewline": true,
+    "files.trimTrailingWhitespace": true,
+    "files.trimFinalNewlines": true
+} 

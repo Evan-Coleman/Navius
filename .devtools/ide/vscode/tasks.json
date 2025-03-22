@@ -1,0 +1,74 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "cargo build",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["build"],
+      "problemMatcher": ["$rustc"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "cargo test",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["test"],
+      "problemMatcher": ["$rustc"],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "cargo run",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["run"],
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "cargo doc",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["doc", "--open"],
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "cargo clippy",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["clippy"],
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "cargo fmt",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["fmt"],
+      "problemMatcher": []
+    },
+    {
+      "label": "regenerate API clients",
+      "type": "shell",
+      "command": ".devtools/scripts/regenerate_api.sh",
+      "problemMatcher": []
+    },
+    {
+      "label": "update dependencies",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["update"],
+      "problemMatcher": []
+    },
+    {
+      "label": "run dev server",
+      "type": "shell",
+      "command": ".devtools/scripts/run_dev.sh",
+      "problemMatcher": []
+    }
+  ]
+} 

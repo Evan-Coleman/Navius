@@ -1,0 +1,75 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Navius Server",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=navius"
+                ],
+                "filter": {
+                    "name": "navius",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "env": {
+                "RUST_LOG": "debug",
+                "CONFIG_DIR": "config",
+                "RUN_ENV": "development"
+            },
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Unit Tests",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run"
+                ],
+                "filter": {
+                    "name": "navius",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "env": {
+                "RUST_LOG": "debug"
+            },
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Specific Test",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib"
+                ],
+                "filter": {
+                    "name": "navius",
+                    "kind": "lib"
+                }
+            },
+            "args": ["${input:testName}"],
+            "env": {
+                "RUST_LOG": "debug"
+            },
+            "cwd": "${workspaceFolder}"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "testName",
+            "type": "promptString",
+            "description": "Name of the test to run"
+        }
+    ]
+} 
