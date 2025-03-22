@@ -237,35 +237,112 @@ mod tests {
     }
 
     #[test]
-    fn test_status_code_to_error() {
-        let not_found = StatusCode::NOT_FOUND.with_error("Resource not found");
-        match not_found {
-            AppError::NotFound(msg) => assert_eq!(msg, "Resource not found"),
-            _ => panic!("Expected NotFound variant"),
-        }
+    fn test_log_err() {
+        let result: std::result::Result<(), IoError> = Err(test_error());
+        let logged_result = result.log_err();
+        assert!(logged_result.is_err());
 
-        let bad_request = StatusCode::BAD_REQUEST.with_error("Invalid input");
-        match bad_request {
-            AppError::BadRequest(msg) => assert_eq!(msg, "Invalid input"),
-            _ => panic!("Expected BadRequest variant"),
-        }
+        // Test that logging doesn't affect Ok values
+        let ok_result: std::result::Result<&str, IoError> = Ok("success");
+        let logged_ok = ok_result.log_err();
+        assert_eq!(logged_ok.unwrap(), "success");
+    }
 
-        let unauthorized = StatusCode::UNAUTHORIZED.with_error("Not authenticated");
-        match unauthorized {
-            AppError::Unauthorized(msg) => assert_eq!(msg, "Not authenticated"),
-            _ => panic!("Expected Unauthorized variant"),
-        }
+    #[test]
+    fn test_context_with_empty_message() {
+        let result: std::result::Result<(), IoError> = Err(test_error());
+        let app_result = result.context("");
 
-        let forbidden = StatusCode::FORBIDDEN.with_error("Not authorized");
-        match forbidden {
-            AppError::Forbidden(msg) => assert_eq!(msg, "Not authorized"),
-            _ => panic!("Expected Forbidden variant"),
-        }
-
-        let server_error = StatusCode::INTERNAL_SERVER_ERROR.with_error("Server failed");
-        match server_error {
-            AppError::InternalError(msg) => assert_eq!(msg, "Server failed"),
+        match app_result {
+            Err(AppError::InternalError(msg)) => {
+                assert!(msg.contains("test error"));
+                assert!(msg.starts_with(": test error"));
+            }
             _ => panic!("Expected InternalError variant"),
+        }
+    }
+
+    #[test]
+    fn test_context_with_multiple_contexts() {
+        let result: std::result::Result<(), IoError> = Err(test_error());
+        let app_result = result.context("First context").context("Second context");
+
+        match app_result {
+            Err(AppError::InternalError(msg)) => {
+                assert!(msg.contains("Second context"));
+                assert!(msg.contains("First context"));
+                assert!(msg.contains("test error"));
+            }
+            _ => panic!("Expected InternalError variant"),
+        }
+    }
+
+    #[test]
+    fn test_status_code_to_error() {
+        // Test all status code conversions
+        let test_cases = vec![
+            (StatusCode::NOT_FOUND, AppError::NotFound("test".into())),
+            (StatusCode::BAD_REQUEST, AppError::BadRequest("test".into())),
+            (
+                StatusCode::UNAUTHORIZED,
+                AppError::Unauthorized("test".into()),
+            ),
+            (StatusCode::FORBIDDEN, AppError::Forbidden("test".into())),
+            (
+                StatusCode::TOO_MANY_REQUESTS,
+                AppError::RateLimited("test".into()),
+            ),
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                AppError::ValidationError("test".into()),
+            ),
+            (
+                StatusCode::BAD_GATEWAY,
+                AppError::ExternalServiceError("test".into()),
+            ),
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                AppError::InternalError("test".into()),
+            ),
+            // Test unknown status code
+            (
+                StatusCode::SWITCHING_PROTOCOLS,
+                AppError::InternalError(format!(
+                    "Unexpected status code {}: test",
+                    StatusCode::SWITCHING_PROTOCOLS.as_u16()
+                )),
+            ),
+        ];
+
+        for (status, expected_error) in test_cases {
+            let error = status.with_error("test");
+            assert_eq!(error.to_string(), expected_error.to_string());
+        }
+    }
+
+    #[test]
+    fn test_error_message_formatting() {
+        // Test with different error message types
+        let string_msg = String::from("string error");
+        let str_msg = "str error";
+        let custom_msg = CustomError("custom error");
+
+        let error1 = StatusCode::BAD_REQUEST.with_error(string_msg);
+        let error2 = StatusCode::NOT_FOUND.with_error(str_msg);
+        let error3 = StatusCode::INTERNAL_SERVER_ERROR.with_error(custom_msg);
+
+        assert!(matches!(error1, AppError::BadRequest(msg) if msg == "string error"));
+        assert!(matches!(error2, AppError::NotFound(msg) if msg == "str error"));
+        assert!(matches!(error3, AppError::InternalError(msg) if msg == "custom error"));
+    }
+
+    // Helper struct for testing Display trait
+    #[derive(Debug)]
+    struct CustomError(&'static str);
+
+    impl Display for CustomError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.0)
         }
     }
 }
