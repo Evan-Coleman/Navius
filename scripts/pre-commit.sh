@@ -33,11 +33,12 @@ IGNORED_FILES=(
   "Cargo.lock"                         # Cargo lock file
   "pre-commit.sh"                      # This script itself
   "setup-hooks.sh"                     # Hook setup script
+  ".env.example"                       # Environment example file
 )
 
 # Flags
 DETECTED=0
-IGNORED_PATTERN="\.md$|_test\.rs$|\.test\.ts$|\.lock$|package-lock\.json$|Cargo\.lock$|pre-commit\.sh$|setup-hooks\.sh$"
+IGNORED_PATTERN="\.md$|_test\.rs$|\.test\.ts$|\.lock$|package-lock\.json$|Cargo\.lock$|pre-commit\.sh$|setup-hooks\.sh$|\.env\.example$"
 
 # Foreground colors
 RED='\033[0;31m'

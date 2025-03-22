@@ -12,22 +12,22 @@ pub mod auth {
     /// Environment variable names
     pub mod env_vars {
         /// Tenant ID environment variable
-        pub const TENANT_ID: &str = "RUST_BACKEND_TENANT_ID";
+        pub const TENANT_ID: &str = "NAVIUS_TENANT_ID";
 
         /// Client ID environment variable
-        pub const CLIENT_ID: &str = "RUST_BACKEND_CLIENT_ID";
+        pub const CLIENT_ID: &str = "NAVIUS_CLIENT_ID";
 
         /// Client secret environment variable
-        pub const CLIENT_SECRET: &str = "RUST_BACKEND_SECRET";
+        pub const CLIENT_SECRET: &str = "NAVIUS_SECRET";
 
         /// Audience environment variable
-        pub const AUDIENCE: &str = "RUST_BACKEND_AUDIENCE";
+        pub const AUDIENCE: &str = "NAVIUS_AUDIENCE";
 
         /// Scope environment variable
-        pub const SCOPE: &str = "RUST_BACKEND_SCOPE";
+        pub const SCOPE: &str = "NAVIUS_SCOPE";
 
         /// Token URL environment variable
-        pub const TOKEN_URL: &str = "RUST_BACKEND_TOKEN_URL";
+        pub const TOKEN_URL: &str = "NAVIUS_TOKEN_URL";
 
         /// Debug authentication environment variable
         pub const DEBUG_AUTH: &str = "DEBUG_AUTH";

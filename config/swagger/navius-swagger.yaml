@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: Rust Backend API
+  title: Navius API
   description: |
-    API documentation for the Rust Backend service.
+    API documentation for the Navius service.
     This is a template - replace with your own API documentation.
   version: 1.0.0
   contact:

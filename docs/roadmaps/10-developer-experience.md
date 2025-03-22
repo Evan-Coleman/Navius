@@ -1,7 +1,7 @@
 # Developer Experience Roadmap
 
 ## Overview
-A pragmatic approach to developer experience for our Rust Axum backend, focusing on the essential capabilities needed for efficient development, debugging, and testing in a local environment that mirrors our production stack.
+A pragmatic approach to developer experience for Navius, focusing on the essential capabilities needed for efficient development, debugging, and testing in a local environment that mirrors our production stack.
 
 ## Current State
 Our application needs fundamental developer experience improvements to accelerate development cycles, streamline testing, and ensure consistent development across environments.

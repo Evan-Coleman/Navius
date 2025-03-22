@@ -1,4 +1,4 @@
-Please implement a comprehensive unit testing suite for my Rust backend application. Following these specific instructions, continue building upon our existing progress:
+Please implement a comprehensive unit testing suite for my Navius. Following these specific instructions, continue building upon our existing progress:
 
 BEFORE STARTING READ THIS WEBSITE FOR REFERENCE: https://doc.rust-lang.org/book/ch11-03-test-organization.html
 
@@ -91,8 +91,8 @@ BEFORE STARTING READ THIS WEBSITE FOR REFERENCE: https://doc.rust-lang.org/book/
 7. INTEGRATION TEST PATTERN:
    ```rust
    // In /tests/module_name_tests.rs
-   use rust_backend::core::module_name::{Function, Type};
-   use rust_backend::core::related_module::{RelatedFunction};
+   use navius::core::module_name::{Function, Type};
+   use navius::core::related_module::{RelatedFunction};
    mod common;
    
    #[tokio::test]

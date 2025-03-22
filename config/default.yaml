@@ -6,7 +6,7 @@
 # - API_* for API settings
 # - APP_* for app settings
 # - AUTH_* for auth settings
-# - RUST_BACKEND_* for Entra ID specific settings
+# - NAVIUS_* for Entra ID specific settings
 
 server:
   host: "0.0.0.0"
@@ -32,11 +32,11 @@ auth:
   debug: false
   # Entra ID (Azure AD) settings
   # The following values must be set through environment variables:
-  # - RUST_BACKEND_TENANT_ID
-  # - RUST_BACKEND_CLIENT_ID
-  # - RUST_BACKEND_AUDIENCE
-  # - RUST_BACKEND_SCOPE
-  # - RUST_BACKEND_TOKEN_URL
+  # - NAVIUS_TENANT_ID
+  # - NAVIUS_CLIENT_ID
+  # - NAVIUS_AUDIENCE
+  # - NAVIUS_SCOPE
+  # - NAVIUS_TOKEN_URL
   entra:
     # URL formats for Entra ID (Microsoft Azure AD)
     jwks_uri_format: "https://login.microsoftonline.com/{}/discovery/v2.0/keys"

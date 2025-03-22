@@ -355,8 +355,8 @@ mod tests {
     async fn test_init_app_state() {
         // Mock environment variables for testing - using unsafe blocks for environment manipulation
         unsafe {
-            std::env::set_var("RUST_BACKEND_SERVER_PORT", "8081");
-            std::env::set_var("RUST_BACKEND_CACHE_ENABLED", "false");
+            std::env::set_var("NAVIUS_SERVER_PORT", "8081");
+            std::env::set_var("NAVIUS_CACHE_ENABLED", "false");
         }
 
         // Initialize app state
@@ -369,8 +369,8 @@ mod tests {
 
         // Cleanup environment variables
         unsafe {
-            std::env::remove_var("RUST_BACKEND_SERVER_PORT");
-            std::env::remove_var("RUST_BACKEND_CACHE_ENABLED");
+            std::env::remove_var("NAVIUS_SERVER_PORT");
+            std::env::remove_var("NAVIUS_CACHE_ENABLED");
         }
     }
 }

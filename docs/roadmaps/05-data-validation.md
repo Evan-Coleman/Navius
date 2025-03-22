@@ -1,7 +1,7 @@
 # Data Validation Roadmap
 
 ## Overview
-A pragmatic, security-first approach to data validation for our Rust Axum backend that leverages existing validation libraries while providing consistent validation patterns throughout the application.
+A pragmatic, security-first approach to data validation for Navius that leverages existing validation libraries while providing consistent validation patterns throughout the application.
 
 ## Current State
 Our application needs structured input validation to ensure data integrity and security, particularly for API endpoints exposed to external users.

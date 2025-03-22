@@ -1,7 +1,7 @@
 # Practical Caching Roadmap
 
 ## Overview
-A lightweight, security-focused approach to caching for our Rust Axum backend that improves application performance without unnecessary complexity.
+A lightweight, security-focused approach to caching for Navius that improves application performance without unnecessary complexity.
 
 ## Current State
 Our application needs a structured caching approach to improve response times and reduce database load for frequently accessed data.

@@ -733,7 +733,7 @@ pub fn load_config() -> Result<AppConfig, ConfigError> {
         .add_source(Environment::with_prefix("AUTH").separator("_"))
         .add_source(Environment::with_prefix("RELIABILITY").separator("_"))
         // Add specific environment variables for Entra ID auth
-        .add_source(Environment::with_prefix("RUST_BACKEND").separator("_"))
+        .add_source(Environment::with_prefix("NAVIUS").separator("_"))
         // Add legacy environment variables
         .add_source(Environment::default().try_parsing(true))
         // Build the config

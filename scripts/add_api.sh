@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# add_api.sh - Tool for adding new API clients to the Rust backend
+# add_api.sh - Tool for adding new API clients to the Navius application
 #
 # This script automates the process of adding a new API client to the system:
 # 1. Downloads the OpenAPI/Swagger schema if needed

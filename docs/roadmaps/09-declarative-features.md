@@ -1,7 +1,7 @@
 # Declarative Programming Features Roadmap
 
 ## Overview
-A lightweight approach to implementing essential declarative features in our Rust Axum backend, focusing on security, developer experience, and performance. Rather than attempting to recreate Spring Boot's extensive annotation system, we'll implement a targeted set of Rust-idiomatic procedural macros and utilities that provide the most value with minimal complexity.
+A lightweight approach to implementing essential declarative features in Navius, focusing on security, developer experience, and performance. Rather than attempting to recreate Spring Boot's extensive annotation system, we'll implement a targeted set of Rust-idiomatic procedural macros and utilities that provide the most value with minimal complexity.
 
 ## Current State
 Currently, our application requires manual implementation of cross-cutting concerns like validation, error handling, and logging, leading to repetitive code and potential inconsistencies.

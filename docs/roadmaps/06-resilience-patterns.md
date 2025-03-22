@@ -1,7 +1,7 @@
 # Essential Resilience Patterns
 
 ## Overview
-A pragmatic approach to resilience for our Rust Axum backend that builds on existing implementations while ensuring production readiness, security, and integration with our infrastructure.
+A pragmatic approach to resilience for Navius that builds on existing implementations while ensuring production readiness, security, and integration with our infrastructure.
 
 ## Current State
 Our application already has implementations of circuit breakers, retry mechanisms, and timeouts, but these need assessment for production readiness and integration with our infrastructure.

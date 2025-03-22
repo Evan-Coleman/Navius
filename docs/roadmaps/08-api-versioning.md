@@ -1,7 +1,7 @@
 # API Versioning Roadmap
 
 ## Overview
-A pragmatic approach to API versioning for our Rust Axum backend, focusing on URL path-based versioning for simplicity and clarity.
+A pragmatic approach to API versioning for Navius, focusing on URL path-based versioning for simplicity and clarity.
 
 ## Current State
 Our application requires a structured approach to API versioning to support evolution while maintaining backward compatibility.

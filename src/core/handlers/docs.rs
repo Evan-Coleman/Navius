@@ -23,7 +23,7 @@ pub async fn swagger_ui_handler(State(state): State<Arc<AppState>>) -> impl Into
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rust Backend API Documentation</title>
+    <title>Navius API Documentation</title>
     <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
 </head>
 <body>

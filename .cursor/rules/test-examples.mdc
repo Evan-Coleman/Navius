@@ -125,7 +125,7 @@ mod tests {
 ## Integration Test Example
 ```rust
 // In tests/api_integration_test.rs
-use rust_backend::core::router::build_router;
+use navius::core::router::build_router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::ServiceExt;

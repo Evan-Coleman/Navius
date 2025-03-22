@@ -1,7 +1,7 @@
 # Testing Framework Roadmap
 
 ## Overview
-A focused, security-oriented testing framework for our Rust Axum backend that prioritizes essential test coverage with minimal dependencies. Rather than recreating Spring Boot's extensive testing ecosystem, we'll implement a pragmatic set of testing utilities that leverage Rust's built-in testing capabilities while providing the necessary tools for thorough API testing.
+A focused, security-oriented testing framework for Navius that prioritizes essential test coverage with minimal dependencies. Rather than recreating Spring Boot's extensive testing ecosystem, we'll implement a pragmatic set of testing utilities that leverage Rust's built-in testing capabilities while providing the necessary tools for thorough API testing.
 
 ## Current State
 The application needs a structured testing approach that ensures security, correctness, and reliability without excessive complexity.

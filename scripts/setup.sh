@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🔧 Setting up Rust Backend development environment..."
+echo "🔧 Setting up Navius development environment..."
 
 # Make sure we have Rust installed
 if ! command -v rustc &> /dev/null; then

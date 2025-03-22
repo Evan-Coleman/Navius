@@ -1,7 +1,7 @@
 # AWS Integration Roadmap
 
 ## Overview
-A pragmatic approach to AWS integration for our Rust Axum backend, focusing on essential AWS services needed for a secure, reliable production deployment with proper integration of Postgres, Redis, and Microsoft Entra authentication.
+A pragmatic approach to AWS integration for our Navius, focusing on essential AWS services needed for a secure, reliable production deployment with proper integration of Postgres, Redis, and Microsoft Entra authentication.
 
 ## Current State
 Our application needs AWS integration focused on production readiness while maintaining our security-first approach and minimizing complexity.

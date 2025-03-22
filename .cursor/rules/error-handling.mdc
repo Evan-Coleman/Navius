@@ -1,5 +1,5 @@
 ---
-description: Guidelines for error handling in the Rust backend
+description: Guidelines for error handling in the Navius application
 globs: **/*.rs
 alwaysApply: false
 ---

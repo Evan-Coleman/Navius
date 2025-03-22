@@ -1,11 +1,11 @@
 use fake::faker::name::raw::*;
 use fake::locales::EN;
 use fake::{Fake, Faker};
+use navius::core::config::app_config::{AppConfig, ServerConfig};
+use navius::core::error::AppError;
+use navius::core::utils::api_client::{ApiHandler, check_response_status, create_api_client};
+use navius::core::utils::api_resource::ApiResource;
 use reqwest::{Client, StatusCode};
-use rust_backend::core::config::app_config::{AppConfig, ServerConfig};
-use rust_backend::core::error::AppError;
-use rust_backend::core::utils::api_client::{ApiHandler, check_response_status, create_api_client};
-use rust_backend::core::utils::api_resource::ApiResource;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 

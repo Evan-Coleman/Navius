@@ -4,12 +4,12 @@ auth {
 
 auth:oauth2 {
   grant_type: password
-  access_token_url: https://login.microsoftonline.com/{{rust_backend_tenantID}}/oauth2/v2.0/token
+  access_token_url: https://login.microsoftonline.com/{{navius_tenantID}}/oauth2/v2.0/token
   username: {{admin_username}}
   password: {{admin_password}}
-  client_id: {{rust_backend_clientID}}
-  client_secret: {{rust_backend_secret}}
-  scope: {{rust_backend_audience}}/.default
+  client_id: {{navius_clientID}}
+  client_secret: {{navius_secret}}
+  scope: {{navius_audience}}/.default
 }
 
 script:post-response {

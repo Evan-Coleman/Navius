@@ -31,7 +31,7 @@ lazy_static! {
 /// # Example
 ///
 /// ```
-/// use rust_backend::config::get_config;
+/// use navius::config::get_config;
 ///
 /// let config = get_config();
 /// println!("Server address: {}", config.server_addr());

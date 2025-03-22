@@ -133,7 +133,7 @@ done
 
 # Header
 echo "==================================================="
-echo "  Rust Backend Development Server"
+echo "  Navius Development Server"
 echo "==================================================="
 
 # Check for required tools

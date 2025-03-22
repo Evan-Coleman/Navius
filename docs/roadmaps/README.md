@@ -1,6 +1,6 @@
-# Rust Backend Framework Roadmaps
+# Navius Framework Roadmaps
 
-This directory contains roadmaps for enhancing our Rust backend framework to match the feature set and developer experience of established enterprise frameworks like Spring Boot.
+This directory contains roadmaps for enhancing our Navius framework to match the feature set and developer experience of established enterprise frameworks like Spring Boot.
 
 ## Available Roadmaps
 
