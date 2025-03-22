@@ -1,19 +1,19 @@
 use std::collections::VecDeque;
+use std::error::Error as StdError;
+use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
-use std::error::Error as StdError;
-use std::fmt;
 
+use axum::http::Request;
 use axum::http::StatusCode;
+use axum::response::Response;
 use futures::{FutureExt, TryFutureExt, future::BoxFuture};
 use pin_project::pin_project;
 use tower::{Layer, Service};
 use tracing::{debug, error, info, warn};
-use axum::http::Request;
-use axum::response::Response;
 
 /// Circuit state
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -392,7 +392,9 @@ pub enum CircuitBreakerError {
 impl fmt::Display for CircuitBreakerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CircuitBreakerError::CircuitOpen => write!(f, "Circuit is open, requests are not allowed"),
+            CircuitBreakerError::CircuitOpen => {
+                write!(f, "Circuit is open, requests are not allowed")
+            }
             CircuitBreakerError::ServiceError(e) => write!(f, "Service error: {}", e),
         }
     }
@@ -442,9 +444,12 @@ where
         if state.state == CircuitState::Open {
             if !state.check_transition_to_half_open() {
                 debug!("Circuit breaker is OPEN, failing request fast");
-                return futures::future::ready(Err(Box::new(CircuitBreakerError::CircuitOpen) as _)).boxed();
+                return futures::future::ready(
+                    Err(Box::new(CircuitBreakerError::CircuitOpen) as _),
+                )
+                .boxed();
             }
-            
+
             // If in half-open state, we'll try the request
             debug!("Circuit breaker is in HALF_OPEN state, trying request");
         }
@@ -453,36 +458,36 @@ where
         // Clone the service to allow for state tracking across async boundary
         let clone_service = self.inner.clone();
         let mut service = std::mem::replace(&mut self.inner, clone_service);
-        
+
         // Clone the state to use in future
         let state_clone = self.state.clone();
 
         // Call the inner service
         let future = service.call(req);
-        
+
         // Process the response
         async move {
             // Call the inner service and convert any errors
             let result = future.await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>);
-            
+
             // Update circuit breaker state based on result
             let mut state = state_clone.lock().unwrap();
-            
+
             match &result {
                 Ok(response) => {
                     // Check if the status code is a failure
                     let is_failure = state.is_failure_status(response.status());
-                    
+
                     if is_failure {
                         // Record failure
                         state.record_failure();
-                        debug!("Circuit breaker recorded failure, consecutive={}, total={}, percentage={}%", 
+                        debug!("Circuit breaker recorded failure, consecutive={}, total={}, percentage={}%",
                                state.failure_count, state.failure_count, state.calculate_failure_percentage());
                     } else {
                         // Record success
                         let old_state = state.state;
                         state.record_success();
-                        
+
                         // Log state transition if it happened
                         if old_state != state.state {
                             info!("Circuit breaker state changed: {:?} -> {:?}", old_state, state.state);
@@ -492,11 +497,11 @@ where
                 Err(_) => {
                     // Record failure for error
                     state.record_failure();
-                    debug!("Circuit breaker recorded error as failure, consecutive={}, total={}, percentage={}%", 
+                    debug!("Circuit breaker recorded error as failure, consecutive={}, total={}, percentage={}%",
                            state.failure_count, state.failure_count, state.calculate_failure_percentage());
                 }
             }
-            
+
             result
         }.boxed()
     }

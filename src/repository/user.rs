@@ -95,7 +95,7 @@ impl UserRepository {
     ) -> Result<Option<User>, AppError> {
         sqlx::query_as::<_, User>(
             r#"
-            SELECT id, username, email, full_name, is_active, 
+            SELECT id, username, email, full_name, is_active,
                    role, created_at, updated_at
             FROM users
             WHERE username = $1
@@ -142,7 +142,7 @@ impl UserRepository {
     ) -> Result<Option<User>, AppError> {
         sqlx::query_as::<_, User>(
             r#"
-            SELECT id, username, email, full_name, is_active, 
+            SELECT id, username, email, full_name, is_active,
                    role, created_at, updated_at
             FROM users
             WHERE email = $1
@@ -233,7 +233,7 @@ impl Repository<User, Uuid> for UserRepository {
         if let Some(pool) = self.get_sqlx_pool() {
             return sqlx::query_as::<_, User>(
                 r#"
-                SELECT id, username, email, full_name, is_active, 
+                SELECT id, username, email, full_name, is_active,
                        role, created_at, updated_at
                 FROM users
                 WHERE id = $1
@@ -274,7 +274,7 @@ impl Repository<User, Uuid> for UserRepository {
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 ON CONFLICT (id) DO UPDATE
                 SET email = $3, full_name = $4, is_active = $5, role = $6, updated_at = $8
-                RETURNING id, username, email, full_name, is_active, 
+                RETURNING id, username, email, full_name, is_active,
                          role, created_at, updated_at
                 "#
             )
@@ -345,7 +345,7 @@ impl Repository<User, Uuid> for UserRepository {
         if let Some(pool) = self.get_sqlx_pool() {
             return sqlx::query_as::<_, User>(
                 r#"
-                SELECT id, username, email, full_name, is_active, 
+                SELECT id, username, email, full_name, is_active,
                        role, created_at, updated_at
                 FROM users
                 ORDER BY username
