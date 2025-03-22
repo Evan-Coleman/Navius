@@ -1,0 +1,84 @@
+# Date Formatting Rule
+
+When generating content with dates (like "Updated at" timestamps), use the formats configured in `config/default.yaml` under the `date_formats` section.
+
+## Available Date Formats
+
+The application supports three date formats, each for specific use cases:
+
+### 1. Simple Format (`date_formats.simple`)
+Default: `%m/%d/%Y` → `03/22/2025`
+
+**Use for:**
+- Simple timestamps in technical documentation
+- Internal logs
+- Brief date references
+
+**Get current date in this format:**
+```bash
+date "+%m/%d/%Y"
+```
+
+### 2. Formal Format (`date_formats.formal`)
+Default: `%B %d, %Y` → `March 22, 2025`
+
+**Use for:**
+- User-facing content
+- Formal documentation
+- Roadmap updates and progress tracking
+
+**Get current date in this format:**
+```bash
+date "+%B %d, %Y"
+```
+
+### 3. Verbose Format (`date_formats.verbose`)
+Default: `%Y-%m-%dT%H:%M:%S%.3fZ` → `2025-03-22T12:34:56.789Z`
+
+**Use for:**
+- Database timestamps
+- API responses
+- Any scenario requiring precise time information
+- ISO 8601 compliant timestamps
+
+**Get current date in this format:**
+```bash
+date -u "+%Y-%m-%dT%H:%M:%S.000Z"
+```
+
+## Implementation Guidelines
+
+1. **For Application Logic:**
+   - Always use the configuration values from `config/default.yaml` rather than hardcoding formats
+   - Use `date_formats.verbose` for all database and API data
+   - Use appropriate format for UI display based on context
+
+2. **For Documentation:**
+   - Use `date_formats.simple` for technical dates
+   - Use `date_formats.formal` for roadmaps and user-facing docs
+
+3. **For Progress Tracking:**
+   - Use `date_formats.formal` with "Updated at: March 22, 2025"
+
+## Code Examples
+
+### Rust (with chrono and config)
+```rust
+use chrono::Local;
+use config::Config;
+
+fn format_date(config: &Config, format_type: &str) -> String {
+    let format = match format_type {
+        "simple" => config.get_string("date_formats.simple").unwrap_or("%m/%d/%Y".to_string()),
+        "formal" => config.get_string("date_formats.formal").unwrap_or("%B %d, %Y".to_string()),
+        "verbose" => config.get_string("date_formats.verbose").unwrap_or("%Y-%m-%dT%H:%M:%S%.3fZ".to_string()),
+        _ => "%Y-%m-%d".to_string(), // fallback
+    };
+    
+    Local::now().format(&format).to_string()
+}
+
+// Usage examples
+println!("Simple date: {}", format_date(config, "simple")); // 03/22/2025
+println!("Formal date: {}", format_date(config, "formal")); // March 22, 2025
+println!("Verbose date: {}", format_date(config, "verbose")); // 2025-03-22T12:34:56.789Z 

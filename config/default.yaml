@@ -80,3 +80,16 @@ openapi:
 logging:
   level: "info"
   format: "json"
+
+# Date format configuration
+# These settings control how dates are displayed throughout the application
+date_formats:
+  # Format for simple dates in technical documentation (MM/DD/YYYY)
+  simple: "%m/%d/%Y"
+  
+  # Format for user-facing content and formal documentation (Month DD, YYYY)
+  formal: "%B %d, %Y"
+  
+  # Format for database storage and API responses (ISO 8601)
+  # This is the most precise format and should be used for all data storage
+  verbose: "%Y-%m-%dT%H:%M:%S%.3fZ"

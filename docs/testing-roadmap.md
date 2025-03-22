@@ -2,11 +2,9 @@
 
 ## Current Status
 
-Navius has a robust testing framework in place, with approximately 98% coverage of the core modules. The codebase includes unit tests, integration tests, and end-to-end tests to ensure functionality works as expected.
+Navius has a robust testing framework in place, with approximately 35% overall coverage of the codebase, including core modules. The codebase includes unit tests, integration tests, and end-to-end tests to ensure functionality works as expected.
 
-- Test coverage: ~98% of core modules
-- Unit tests: Implemented in all core modules
-- Integration tests: Basic framework set up with initial routes test
+- Core modules: Well-tested with extensive unit test coverage
 - API logger module fully tested
 - Router module fully tested
 - Auth module fully tested
@@ -15,6 +13,16 @@ Navius has a robust testing framework in place, with approximately 98% coverage 
 - Reliability components (retry, circuit breaker) fully tested with property-based testing
 - Metrics module fully tested with mock implementations
 - Config module fully tested with validation and defaults
+- API Resource module tests implemented (40% coverage)
+
+## Coverage Tracking Strategy
+- Using `navius-coverage.json` to store and track coverage data
+- Full coverage analysis run at key checkpoints:
+  - Before starting work on a module
+  - After completing implementation
+  - Weekly for the full codebase
+- HTML coverage reports generated in the `coverage` directory
+- Coverage script provided in `scripts/coverage.sh`
 
 ## Implementation Progress
 
@@ -28,6 +36,7 @@ Navius has a robust testing framework in place, with approximately 98% coverage 
 
 | Module | Previous Coverage | Current Coverage | Status |
 |--------|------------------|------------------|--------|
+| Overall Codebase | 6.33% | 35.22% | In Progress |
 | Core Modules | 98% | 98% | Complete |
 | API Resource | 0% | 40% | Implemented |
 | User Management | 35% | 35% | In Progress |
@@ -61,8 +70,9 @@ We are enhancing our testing approach with specialized testing libraries:
 
 5. **Coverage Analysis**
    - ✅ Added cargo-tarpaulin for code coverage reporting
-   - Helps identify untested code regions
-   - Provides metrics for test quality improvement
+   - Integrated into workflow with coverage tracking script
+   - Coverage JSON data stored for comparison over time
+   - HTML reports generated for visual analysis
 
 ## Future Enhancements
 
@@ -80,9 +90,10 @@ We are enhancing our testing approach with specialized testing libraries:
 
 ## Test Plan Updates
 
-- **2023-Q4**: Added basic end-to-end tests for user API
-- **2024-Q1**: Improved authentication test coverage
-- **2024-Q2**: Implemented API Resource module tests with 40% coverage
+- **March 22, 2025**: Added basic end-to-end tests for user API
+- **March 22, 2025**: Improved authentication test coverage
+- **March 22, 2025**: Implemented API Resource module tests with 40% coverage
+- **March 22, 2025**: Added coverage tracking script and JSON-based metrics
 
 ## Next Steps (Prioritized)
 
@@ -191,6 +202,13 @@ We are enhancing our testing approach with specialized testing libraries:
    - [ ] Test cache integration
    - [ ] End-to-end tests with real resources
 
+2. **Core Reliability Components**
+   - [ ] Complete circuit breaker tests 
+   - [ ] Complete concurrency limiter tests
+   - [ ] Complete rate limiter tests
+   - [ ] Complete retry mechanism tests
+   - [ ] Test component interactions
+
 ## Completed ✅
 - [x] Error handling & logging
   - [x] Error type definitions
@@ -250,4 +268,21 @@ We are enhancing our testing approach with specialized testing libraries:
   - [x] Registry tests for adding and retrieving resources
   - [x] API handler options and configuration
   - [x] Fetch with retry functionality
-  - [x] Resource registration with caching 
+  - [x] Resource registration with caching
+
+## How to Run Tests and Coverage Analysis
+```bash
+# Run all tests
+cargo test
+
+# Run tests for a specific module
+cargo test -- core::utils::api_resource
+
+# Run coverage analysis
+./scripts/coverage.sh --full       # Full codebase
+./scripts/coverage.sh -m module::path  # Specific module
+
+# Compare with baseline
+./scripts/coverage.sh -b           # Save current as baseline
+./scripts/coverage.sh -c           # Compare with baseline
+``` 

@@ -57,6 +57,9 @@ cargo test core::config
 
 # Generate test coverage report
 cargo tarpaulin --out Html
+
+# Generate JSON coverage report (for integration with other tools)
+cargo tarpaulin -o Json --output-file target/@navius-coverage.json
 ```
 
 ## 📐 Code Style and Formatting

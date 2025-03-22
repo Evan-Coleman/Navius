@@ -274,6 +274,14 @@ cargo tarpaulin --out Html
 
 This will generate an HTML report in the `tarpaulin-report.html` file.
 
+For JSON output (required for integration with other tools):
+
+```bash
+cargo tarpaulin -o Json --output-file target/@navius-coverage.json
+```
+
+This will generate a JSON report in the `target/@navius-coverage.json` file, which can be used by other tools and prompts.
+
 ## Best Practices
 
 1. **Write tests first**: Follow TDD when possible

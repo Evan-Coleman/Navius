@@ -16,6 +16,9 @@ alwaysApply: true
 - Install with: `cargo install cargo-tarpaulin`
 - Run coverage check: `cargo tarpaulin --out Html`
 - Coverage report will be generated as tarpaulin-report.html
+- For JSON output, use: `cargo tarpaulin -o Json --output-file target/@navius-coverage.json`
+- Always output to the target directory with @navius-coverage.json when running tarpaulin for JSON reports
+- This JSON format enables integration with other reporting tools and prompts
 
 ## Coverage Implementation Guidelines
 - Start with the happy path, then add tests for error paths
