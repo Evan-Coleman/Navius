@@ -7,3 +7,11 @@ alwaysApply: true
 - The only route groups we ever want are as follows: public, readonly, fullaccess, actuator
 - public will be "/", readonly will be at "/read", fullaccess will be at "/full", and actuator will be at "/actuator"
 - For example use we will have the /pet/{id} route in all of the route groups
+- The project follows the Axum web framework patterns:
+  - Routes are defined in router modules
+  - Handlers contain the business logic for endpoints
+  - Middleware provides cross-cutting concerns like auth and logging
+- Error handling uses the AppError enum defined in core/error
+- Logging uses tracing for structured logs
+- Tests should use the provided mock implementations when testing routes
+- Config is loaded from environment variables with fallbacks to defaults

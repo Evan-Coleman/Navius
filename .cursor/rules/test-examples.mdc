@@ -1,0 +1,157 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Rust Test Examples
+
+## Basic Unit Test
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add_numbers() {
+        // Arrange
+        let a = 5;
+        let b = 7;
+        
+        // Act
+        let result = add_numbers(a, b);
+        
+        // Assert
+        assert_eq!(result, 12);
+    }
+}
+```
+
+## Async Test
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::test;
+
+    #[tokio::test]
+    async fn test_fetch_data() {
+        // Arrange
+        let client = MockClient::new();
+        
+        // Act
+        let result = fetch_data(&client).await;
+        
+        // Assert
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "data");
+    }
+}
+```
+
+## Table-Driven Test
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_input() {
+        let test_cases = vec![
+            ("valid@email.com", true),
+            ("invalid-email", false),
+            ("another@example.com", true),
+        ];
+        
+        for (input, expected) in test_cases {
+            let result = validate_email(input);
+            assert_eq!(result, expected, "Failed for input: {}", input);
+        }
+    }
+}
+```
+
+## Mocking Example
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::common::MockDatabase;
+
+    #[test]
+    fn test_user_service_get_user() {
+        // Arrange
+        let mock_db = MockDatabase::new();
+        mock_db.expect_get_user()
+            .with(eq("user-1"))
+            .returning(|_| Ok(User { id: "user-1".to_string(), name: "Test User".to_string() }));
+        
+        let service = UserService::new(mock_db);
+        
+        // Act
+        let result = service.get_user("user-1");
+        
+        // Assert
+        assert!(result.is_ok());
+        let user = result.unwrap();
+        assert_eq!(user.id, "user-1");
+        assert_eq!(user.name, "Test User");
+    }
+}
+```
+
+## Testing Errors
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_division_by_zero() {
+        // Arrange
+        let a = 10;
+        let b = 0;
+        
+        // Act
+        let result = safe_divide(a, b);
+        
+        // Assert
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.to_string(), "Cannot divide by zero");
+    }
+}
+```
+
+## Integration Test Example
+```rust
+// In tests/api_integration_test.rs
+use rust_backend::core::router::build_router;
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use tower::ServiceExt;
+
+mod common;
+
+#[tokio::test]
+async fn test_health_endpoint() {
+    // Arrange
+    let app = build_router().into_service();
+    let request = Request::builder()
+        .uri("/actuator/health")
+        .method("GET")
+        .body(Body::empty())
+        .unwrap();
+    
+    // Act
+    let response = app.oneshot(request).await.unwrap();
+    
+    // Assert
+    assert_eq!(response.status(), StatusCode::OK);
+    
+    // Get response body
+    let body_bytes = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    
+    assert_eq!(body["status"], "UP");
+}
+```
