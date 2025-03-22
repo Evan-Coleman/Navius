@@ -203,13 +203,24 @@ mod tests {
     #[test]
     fn test_token_client_creation() {
         // Test creating a client directly with credentials
-        let client =
-            EntraTokenClient::new("test-tenant-id", "test-client-id", "test-client-secret");
+        let client = EntraTokenClient::new(
+            "test-tenant-placeholder",
+            "test-client-placeholder",
+            "test-secret-placeholder",
+        );
 
-        assert_eq!(client.client_id.as_str(), "test-client-id");
-        assert_eq!(client.client_secret.secret().as_str(), "test-client-secret");
-        assert!(client.auth_url.as_str().contains("test-tenant-id"));
-        assert!(client.token_url.as_str().contains("test-tenant-id"));
+        assert_eq!(client.client_id.as_str(), "test-client-placeholder");
+        assert_eq!(
+            client.client_secret.secret().as_str(),
+            "test-secret-placeholder"
+        );
+        assert!(client.auth_url.as_str().contains("test-tenant-placeholder"));
+        assert!(
+            client
+                .token_url
+                .as_str()
+                .contains("test-tenant-placeholder")
+        );
     }
 
     #[test]
@@ -217,15 +228,25 @@ mod tests {
         // Create minimal config
         let mut config = AppConfig::default();
         config.auth.enabled = true;
-        config.auth.entra.tenant_id = "config-tenant-id".to_string();
-        config.auth.entra.client_id = "config-client-id".to_string();
+        config.auth.entra.tenant_id = "config-tenant-placeholder".to_string();
+        config.auth.entra.client_id = "config-client-placeholder".to_string();
 
         // Create client from config
         let client = EntraTokenClient::from_config(&config);
 
-        assert_eq!(client.client_id.as_str(), "config-client-id");
-        assert!(client.auth_url.as_str().contains("config-tenant-id"));
-        assert!(client.token_url.as_str().contains("config-tenant-id"));
+        assert_eq!(client.client_id.as_str(), "config-client-placeholder");
+        assert!(
+            client
+                .auth_url
+                .as_str()
+                .contains("config-tenant-placeholder")
+        );
+        assert!(
+            client
+                .token_url
+                .as_str()
+                .contains("config-tenant-placeholder")
+        );
     }
 
     #[test]
@@ -245,8 +266,11 @@ mod tests {
     #[test]
     fn test_token_cache_operations() {
         // Create a client
-        let client =
-            EntraTokenClient::new("test-tenant-id", "test-client-id", "test-client-secret");
+        let client = EntraTokenClient::new(
+            "test-tenant-placeholder",
+            "test-client-placeholder",
+            "test-secret-placeholder",
+        );
 
         // Test empty cache
         {

@@ -117,3 +117,135 @@ impl CacheProvider for MemoryCacheProvider {
         Ok(result)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::api_resource::ApiResource;
+    use serde::{Deserialize, Serialize};
+    use std::sync::Arc;
+
+    // Test data structure that implements ApiResource
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+    struct TestResource {
+        id: String,
+        name: String,
+        value: i32,
+    }
+
+    impl ApiResource for TestResource {
+        type Id = String;
+
+        fn resource_type() -> &'static str {
+            "test_resource"
+        }
+
+        fn api_name() -> &'static str {
+            "TestService"
+        }
+    }
+
+    #[tokio::test]
+    async fn test_memory_cache_provider_creation() {
+        let provider = MemoryCacheProvider::new(100, 3600);
+        assert!(provider.registry().enabled);
+        assert_eq!(provider.registry().max_capacity, 100);
+        assert_eq!(provider.registry().ttl_seconds, 3600);
+    }
+
+    #[tokio::test]
+    async fn test_memory_cache_init() {
+        let provider = MemoryCacheProvider::new(100, 3600);
+        let result = provider.init();
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_memory_cache_set_and_get() {
+        let provider = MemoryCacheProvider::new(100, 3600);
+
+        // Create a test resource
+        let resource = TestResource {
+            id: "test-1".to_string(),
+            name: "Test Resource".to_string(),
+            value: 42,
+        };
+
+        // Register the resource type directly in the cache registry
+        let registry = provider.registry();
+        // Instead of using register_resource, directly register the cache with our resource type
+        let _ = crate::core::cache::cache_manager::register_resource_cache::<TestResource>(
+            &registry,
+            "test_resource",
+        );
+
+        // Set the resource in the cache
+        let set_result = provider.set("test-1", resource.clone(), 3600).await;
+        assert!(set_result.is_ok());
+
+        // Get the resource from the cache
+        let get_result = provider.get::<TestResource>("test-1").await;
+        assert!(get_result.is_ok());
+
+        let retrieved_resource = get_result.unwrap();
+        assert!(retrieved_resource.is_some());
+
+        let retrieved_resource = retrieved_resource.unwrap();
+        assert_eq!(retrieved_resource.id, "test-1");
+        assert_eq!(retrieved_resource.name, "Test Resource");
+        assert_eq!(retrieved_resource.value, 42);
+    }
+
+    #[tokio::test]
+    async fn test_memory_cache_get_nonexistent() {
+        let provider = MemoryCacheProvider::new(100, 3600);
+
+        // Register the resource type directly in the cache registry
+        let registry = provider.registry();
+        // Instead of using register_resource, directly register the cache with our resource type
+        let _ = crate::core::cache::cache_manager::register_resource_cache::<TestResource>(
+            &registry,
+            "test_resource",
+        );
+
+        // Try to get a resource that doesn't exist
+        let get_result = provider.get::<TestResource>("nonexistent").await;
+        assert!(get_result.is_ok());
+
+        let retrieved_resource = get_result.unwrap();
+        assert!(retrieved_resource.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_memory_cache_unimplemented_methods() {
+        let provider = MemoryCacheProvider::new(100, 3600);
+
+        // Test delete method (should return error since it's not implemented)
+        let delete_result = provider.delete("test-key").await;
+        assert!(delete_result.is_err());
+
+        // Test clear method (should return error since it's not implemented)
+        let clear_result = provider.clear().await;
+        assert!(clear_result.is_err());
+
+        // Test exists method (should return error since it's not implemented)
+        let exists_result = provider.exists("test-key").await;
+        assert!(exists_result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_memory_cache_get_stats() {
+        let provider = MemoryCacheProvider::new(100, 3600);
+
+        // Get stats (basic implementation should return a JSON object)
+        let stats_result = provider.get_stats().await;
+        assert!(stats_result.is_ok());
+
+        let stats = stats_result.unwrap();
+        assert_eq!(stats["provider"], "memory");
+        assert_eq!(stats["enabled"], true);
+        assert_eq!(stats["max_capacity"], 100);
+        assert_eq!(stats["ttl_seconds"], 3600);
+        assert!(stats["stats"].is_array());
+    }
+}

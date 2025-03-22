@@ -554,3 +554,206 @@ pub async fn start_metrics_updater(registry: &CacheRegistry) {
 
     info!("📈 Cache metrics updater started for all resource types");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde::{Deserialize, Serialize};
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tokio::time::sleep;
+
+    // Test data structure that implements ApiResource
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+    struct TestResource {
+        id: String,
+        name: String,
+        value: i32,
+    }
+
+    impl ApiResource for TestResource {
+        type Id = String;
+        
+        fn resource_type() -> &'static str {
+            "test_resource"
+        }
+
+        fn api_name() -> &'static str {
+            "TestService"
+        }
+    }
+
+    #[tokio::test]
+    async fn test_init_cache_registry() {
+        let registry = init_cache_registry(true, 100, 3600);
+        assert!(registry.enabled);
+        assert_eq!(registry.max_capacity, 100);
+        assert_eq!(registry.ttl_seconds, 3600);
+    }
+
+    #[tokio::test]
+    async fn test_register_resource_cache() {
+        let registry = init_cache_registry(true, 100, 3600);
+        
+        // Register resource type
+        let result = register_resource_cache::<TestResource>(&registry, "test_resource");
+        assert!(result.is_ok());
+        
+        // Try to register the same type again - should succeed
+        let result = register_resource_cache::<TestResource>(&registry, "test_resource");
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_get_resource_cache() {
+        let registry = init_cache_registry(true, 100, 3600);
+        
+        // Register and get resource cache
+        let _ = register_resource_cache::<TestResource>(&registry, "test_resource");
+        let cache = get_resource_cache::<TestResource>(&registry, "test_resource");
+        
+        assert!(cache.is_some());
+        let cache = cache.unwrap();
+        assert_eq!(cache.resource_type, "test_resource");
+        assert_eq!(cache.ttl_seconds, 3600);
+    }
+
+    async fn helper_set_and_get_in_cache(registry: &CacheRegistry, key: &str, value: TestResource) {
+        // Get resource cache
+        let cache_opt = get_resource_cache::<TestResource>(registry, "test_resource");
+        assert!(cache_opt.is_some());
+        let cache = cache_opt.unwrap();
+        
+        // Set directly using the cache.cache API
+        cache.cache.insert(key.to_string(), value.clone()).await;
+        
+        // Get using the same API
+        let retrieved = cache.cache.get(key).await;
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap(), value);
+    }
+
+    #[tokio::test]
+    async fn test_cache_set_and_get() {
+        let registry = init_cache_registry(true, 100, 3600);
+        
+        // Register resource cache
+        let _ = register_resource_cache::<TestResource>(&registry, "test_resource");
+        
+        // Create a test resource
+        let resource = TestResource {
+            id: "test-1".to_string(),
+            name: "Test Resource".to_string(),
+            value: 42,
+        };
+        
+        // Use helper to set and get in cache
+        helper_set_and_get_in_cache(&registry, "test-1", resource).await;
+    }
+
+    #[tokio::test]
+    async fn test_get_or_fetch() {
+        let registry = init_cache_registry(true, 100, 3600);
+        
+        // Register resource cache
+        let _ = register_resource_cache::<TestResource>(&registry, "test_resource");
+        
+        // Create a test resource
+        let resource = TestResource {
+            id: "test-2".to_string(),
+            name: "Test Resource 2".to_string(),
+            value: 84,
+        };
+        
+        // First call will fetch
+        let result = get_or_fetch(&registry, "test_resource", "test-2", || async {
+            Ok(resource.clone())
+        }).await;
+        
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), resource);
+        
+        // Second call should hit cache
+        let was_cached_before = last_fetch_from_cache();
+        assert!(!was_cached_before); // First fetch wasn't from cache
+        
+        let result2 = get_or_fetch(&registry, "test_resource", "test-2", || async {
+            // This should not be called if cache hit
+            Ok(TestResource {
+                id: "test-2".to_string(),
+                name: "Different Name".to_string(),
+                value: 999,
+            })
+        }).await;
+        
+        assert!(result2.is_ok());
+        assert_eq!(result2.unwrap(), resource); // Should be original resource
+        
+        // Check if it was from cache
+        let was_cached = last_fetch_from_cache();
+        assert!(was_cached); // Second fetch should be from cache
+    }
+
+    #[tokio::test]
+    async fn test_cache_expiration() {
+        // Create a cache with a very short TTL
+        let registry = init_cache_registry(true, 100, 1);
+        
+        // Register resource cache
+        let _ = register_resource_cache::<TestResource>(&registry, "test_resource");
+        
+        // Create a test resource
+        let resource = TestResource {
+            id: "test-1".to_string(),
+            name: "Test Resource".to_string(),
+            value: 42,
+        };
+        
+        // Set in cache using our helper
+        helper_set_and_get_in_cache(&registry, "test-1", resource.clone()).await;
+        
+        // Wait for more than TTL seconds
+        sleep(Duration::from_secs(2)).await;
+        
+        // Get resource cache again
+        let cache_opt = get_resource_cache::<TestResource>(&registry, "test_resource");
+        assert!(cache_opt.is_some());
+        let cache = cache_opt.unwrap();
+        
+        // Verify it's expired
+        let retrieved = cache.cache.get("test-1").await;
+        assert!(retrieved.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_disabled_cache() {
+        // Create a disabled cache
+        let registry = init_cache_registry(false, 100, 3600);
+        
+        // Register resource cache
+        let _ = register_resource_cache::<TestResource>(&registry, "test_resource");
+        
+        // Create a test resource
+        let resource = TestResource {
+            id: "test-1".to_string(),
+            name: "Test Resource".to_string(),
+            value: 42,
+        };
+        
+        // Try to get the cache - should return None
+        let cache = get_resource_cache::<TestResource>(&registry, "test_resource");
+        assert!(cache.is_none());
+        
+        // get_or_fetch should bypass cache and always call fetch function
+        let result = get_or_fetch(&registry, "test_resource", "test-1", || async {
+            Ok(resource.clone())
+        }).await;
+        
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), resource);
+        
+        // Check if it was from cache
+        let was_cached = last_fetch_from_cache();
+        assert!(!was_cached); // Should not be from cache since cache is disabled
+    }
+}

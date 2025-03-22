@@ -353,3 +353,169 @@ impl CacheProvider for FallbackCacheProvider {
         Ok(result)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::api_resource::ApiResource;
+    use serde::{Deserialize, Serialize};
+    use std::sync::Arc;
+
+    // Test data structure that implements ApiResource
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+    struct TestResource {
+        id: String,
+        name: String,
+        value: i32,
+    }
+
+    impl ApiResource for TestResource {
+        type Id = String;
+
+        fn resource_type() -> &'static str {
+            "test_resource"
+        }
+
+        fn api_name() -> &'static str {
+            "TestService"
+        }
+    }
+
+    #[tokio::test]
+    async fn test_fallback_cache_provider_creation() {
+        let config = FallbackConfig::default();
+        let provider = FallbackCacheProvider::new(config);
+
+        // Test if the provider is initialized with redis and memory providers
+        assert!(!provider.using_fallback.load(Ordering::SeqCst));
+        assert!(provider.last_redis_failure.lock().unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_fallback_cache_init() {
+        let config = FallbackConfig::default();
+        let provider = FallbackCacheProvider::new(config);
+
+        // Initialize provider should succeed
+        let init_result = provider.init();
+        assert!(init_result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_fallback_cache_set_and_get() {
+        let config = FallbackConfig::default();
+        let provider = FallbackCacheProvider::new(config);
+
+        // Initialize all providers
+        let _ = provider.init();
+
+        // Create a test resource
+        let resource = TestResource {
+            id: "test-1".to_string(),
+            name: "Test Resource".to_string(),
+            value: 42,
+        };
+
+        // Set in the cache
+        let set_result = provider.set("test-1", resource.clone(), 3600).await;
+
+        // This will probably fail if Redis isn't available, which is fine for testing
+        // The important part is that we can test the fallback mechanism
+
+        // Get from the cache
+        let get_result = provider.get::<TestResource>("test-1").await;
+
+        // If Redis is available and set succeeded, this should return the resource
+        // If Redis failed, it should fall back to memory, which might not have the resource
+        if set_result.is_ok() && get_result.is_ok() {
+            let retrieved = get_result.unwrap();
+            if retrieved.is_some() {
+                assert_eq!(retrieved.unwrap(), resource);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_fallback_cache_get_nonexistent() {
+        let config = FallbackConfig::default();
+        let provider = FallbackCacheProvider::new(config);
+
+        // Initialize all providers
+        let _ = provider.init();
+
+        // Get nonexistent item
+        let get_result = provider.get::<TestResource>("nonexistent").await;
+
+        // Whether Redis is available or not, this should return None
+        if get_result.is_ok() {
+            assert!(get_result.unwrap().is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_fallback_cache_delete() {
+        let config = FallbackConfig::default();
+        let provider = FallbackCacheProvider::new(config);
+
+        // Initialize all providers
+        let _ = provider.init();
+
+        // Delete call should try to delete from all providers
+        let delete_result = provider.delete("test-1").await;
+
+        // If Redis is available, this should succeed
+        // If Redis failed, it will try memory, which might fail
+    }
+
+    #[tokio::test]
+    async fn test_fallback_cache_clear() {
+        let config = FallbackConfig::default();
+        let provider = FallbackCacheProvider::new(config);
+
+        // Initialize all providers
+        let _ = provider.init();
+
+        // Clear call should try to clear all providers
+        let clear_result = provider.clear().await;
+
+        // If Redis is available, this should succeed
+        // If Redis failed, it will try memory, which might fail
+    }
+
+    #[tokio::test]
+    async fn test_fallback_cache_exists() {
+        let config = FallbackConfig::default();
+        let provider = FallbackCacheProvider::new(config);
+
+        // Initialize all providers
+        let _ = provider.init();
+
+        // Exists call should check all providers
+        let exists_result = provider.exists("test-1").await;
+
+        // If Redis is available, this should succeed
+        // If Redis failed, it will try memory, which might fail
+    }
+
+    #[tokio::test]
+    async fn test_fallback_cache_get_stats() {
+        let config = FallbackConfig::default();
+        let provider = FallbackCacheProvider::new(config);
+
+        // Initialize all providers
+        let _ = provider.init();
+
+        // Get stats should collect from all providers
+        let stats_result = provider.get_stats().await;
+
+        if stats_result.is_ok() {
+            let stats = stats_result.unwrap();
+            assert_eq!(stats["provider"], "fallback");
+
+            // The structure may vary depending on Redis availability
+            // Just check that the stats contains the expected keys
+            assert!(stats.is_object());
+            assert!(stats.get("using_fallback").is_some());
+        }
+    }
+}

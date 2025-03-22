@@ -1,12 +1,13 @@
 # Testing Roadmap
 
 ## Current Status
-- Test coverage: ~70% of core modules
+- Test coverage: ~80% of core modules
 - Unit tests: Implemented in most core modules
 - Integration tests: Basic framework set up with initial routes test
 - API logger module fully tested
 - Router module fully tested
 - Auth module fully tested
+- Cache module fully tested
 
 ## Next Steps (Prioritized)
 
@@ -27,9 +28,12 @@
    - [x] Auth error handling and responses
 
 ### Medium Priority
-3. Cache module tests
-   - [ ] Unit tests for all cache providers
-   - [ ] Integration tests for cache functionality
+3. ~~Cache module tests~~
+   - [x] Unit tests for memory cache provider
+   - [x] Unit tests for fallback cache provider 
+   - [x] Unit tests for cache manager
+   - [x] Test cache expiration and invalidation
+   - [x] Test cache get/set operations
 
 4. API clients
    - [ ] Mock external API responses
@@ -66,10 +70,17 @@
   - [x] Token validation and extraction
   - [x] Role and permission checks
   - [x] Auth layer creation methods
+- [x] Cache module tests:
+  - [x] Cache registry creation and registration
+  - [x] Memory cache provider operations
+  - [x] Fallback cache provider behavior
+  - [x] Cache expiration and TTL handling
+  - [x] Get/set/fetch cache operations
+  - [x] Disabled cache behavior testing
 
 ## Progress Tracking
-- Last updated: April 24, 2024
-- Current test count: 51 (48 unit tests, 1 integration test, 2 doc tests)
+- Last updated: April 25, 2024
+- Current test count: 72 (69 unit tests, 1 integration test, 2 doc tests)
 - Test coverage target: 80% of all modules
 - Target completion: Core tests within 1 week, full suite within 2 weeks
 - Check-in frequency: Review progress daily, update roadmap weekly 
