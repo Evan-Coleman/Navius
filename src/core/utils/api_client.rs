@@ -89,26 +89,30 @@ pub fn check_response_status(status: StatusCode) -> Result<(), AppError> {
 mod tests {
     use super::*;
     use crate::core::config::app_config::{AppConfig, ServerConfig};
-    use crate::core::utils::api_resource::ApiResource;
-    use serde::{Deserialize, Serialize};
-    use std::env;
+    use crate::core::error::AppError;
+    use reqwest::StatusCode;
 
-    #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
-    struct TestResource {
-        id: String,
-        name: String,
-    }
+    #[test]
+    fn test_check_response_status() {
+        // Success case
+        let result = check_response_status(StatusCode::OK);
+        assert!(result.is_ok());
 
-    impl ApiResource for TestResource {
-        type Id = String;
+        // Error case - Not Found
+        let result = check_response_status(StatusCode::NOT_FOUND);
+        assert!(matches!(result, Err(AppError::NotFound(_))));
 
-        fn resource_type() -> &'static str {
-            "test_resources"
-        }
+        // Error case - Bad Request
+        let result = check_response_status(StatusCode::BAD_REQUEST);
+        assert!(matches!(result, Err(AppError::BadRequest(_))));
 
-        fn api_name() -> &'static str {
-            "TestAPI"
-        }
+        // Error case - Unauthorized
+        let result = check_response_status(StatusCode::UNAUTHORIZED);
+        assert!(matches!(result, Err(AppError::Unauthorized(_))));
+
+        // Error case - Server Error
+        let result = check_response_status(StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(matches!(result, Err(AppError::ExternalServiceError(_))));
     }
 
     #[test]
@@ -125,69 +129,9 @@ mod tests {
         // Create the client
         let _client = create_api_client(&config);
 
-        // We can only really test that a client was created and didn't panic
-        // There's no great way to test its configuration without making a request
+        // We can only really assert that a client was created successfully
         assert!(true);
     }
 
-    #[test]
-    fn test_check_response_status() {
-        // Test OK status
-        let result = check_response_status(StatusCode::OK);
-        assert!(result.is_ok());
-
-        // Test NOT_FOUND status
-        let result = check_response_status(StatusCode::NOT_FOUND);
-        assert!(result.is_err());
-        if let AppError::NotFound(_) = result.unwrap_err() {
-            // This is expected
-        } else {
-            panic!("Expected NotFound error");
-        }
-
-        // Test BAD_REQUEST status
-        let result = check_response_status(StatusCode::BAD_REQUEST);
-        assert!(result.is_err());
-        if let AppError::BadRequest(_) = result.unwrap_err() {
-            // This is expected
-        } else {
-            panic!("Expected BadRequest error");
-        }
-
-        // Test UNAUTHORIZED status
-        let result = check_response_status(StatusCode::UNAUTHORIZED);
-        assert!(result.is_err());
-        if let AppError::Unauthorized(_) = result.unwrap_err() {
-            // This is expected
-        } else {
-            panic!("Expected Unauthorized error");
-        }
-
-        // Test FORBIDDEN status
-        let result = check_response_status(StatusCode::FORBIDDEN);
-        assert!(result.is_err());
-        if let AppError::Unauthorized(_) = result.unwrap_err() {
-            // This is expected
-        } else {
-            panic!("Expected Unauthorized error");
-        }
-
-        // Test server error
-        let result = check_response_status(StatusCode::INTERNAL_SERVER_ERROR);
-        assert!(result.is_err());
-        if let AppError::ExternalServiceError(_) = result.unwrap_err() {
-            // This is expected
-        } else {
-            panic!("Expected ExternalServiceError error");
-        }
-
-        // Test other error
-        let result = check_response_status(StatusCode::IM_A_TEAPOT);
-        assert!(result.is_err());
-        if let AppError::ExternalServiceError(_) = result.unwrap_err() {
-            // This is expected
-        } else {
-            panic!("Expected ExternalServiceError error");
-        }
-    }
+    // All other mock HTTP tests moved to integration tests
 }

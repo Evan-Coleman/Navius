@@ -12,6 +12,8 @@ pub mod concurrency;
 pub mod metrics;
 pub mod rate_limit;
 pub mod retry;
+#[cfg(test)]
+mod test;
 
 // Re-export key components for easier access
 pub use circuit_breaker::*;
