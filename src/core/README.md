@@ -1,37 +1,67 @@
-# Core Framework Functionality
+# Navius Framework
 
-This directory contains core functionality of the framework that should not be modified by users. The core functionality includes:
+This directory contains the core functionality of Navius that powers the framework's enterprise-grade features. The core modules provide essential capabilities that should not be modified by users.
 
-- Essential routes for health checks, API documentation, and system information
-- Core middleware for authentication, logging, and observability
-- Infrastructure components that power the framework
+## Core Capabilities
+
+- **Route Management**: Essential routes for health checks, metrics, and API documentation
+- **Security**: Authentication, authorization, and security middleware
+- **Observability**: Metrics collection, tracing, and health monitoring
+- **Reliability**: Circuit breakers, rate limiting, timeouts, and retries
+- **Configuration**: Environment-aware configuration management
+- **Caching**: High-performance caching infrastructure
+- **Error Handling**: Structured error management and reporting
 
 ## Directory Structure
 
-- `router/`: Core routing functionality that should not be modified
-- `handlers/`: Essential handlers for framework features
+- `router/`: Core routing infrastructure
+- `handlers/`: System-level request handlers
+- `auth/`: Authentication and authorization components
+- `cache/`: Caching infrastructure
+- `config/`: Configuration management
+- `database/`: Database connection and transaction management
+- `error/`: Error handling framework
+- `metrics/`: Metrics collection and reporting
+- `reliability/`: Reliability patterns (circuit breakers, retries)
+- `utils/`: Core utility functions
 
-## How to Extend
+## Extending Navius
 
-Rather than modifying the core functionality, users should:
+Navius follows the extension-over-modification pattern. Instead of changing core files:
 
-1. Use the `src/app/user_router.rs` to add custom routes and handlers
-2. Create custom handlers in `src/handlers/` 
-3. Create custom middleware in appropriate directories
-
-The framework is designed so that users can create their own routes and handlers without modifying the core functionality, ensuring stability and maintainability.
+1. Use `src/app/router.rs` to add custom routes and handlers
+2. Create domain-specific services in `src/services/`
+3. Implement data access in `src/repository/`
+4. Create custom handlers in `src/api/`
 
 ## Core Routes
 
-The core framework provides these essential routes:
+Navius provides these essential routes:
 
 - Public Routes:
   - `/health` - Basic health check
+  - `/docs` - API documentation (Swagger UI)
 
-- Actuator Routes (protected by admin authentication when enabled):
-  - `/actuator/health` - Detailed health check
+- Actuator Routes (protected when security is enabled):
+  - `/actuator/health` - Detailed health check with component status
   - `/actuator/info` - System information
-  - `/actuator/docs` - API documentation (Swagger UI)
-  - `/actuator/docs/{*file}` - API documentation resources
+  - `/actuator/metrics` - Prometheus-compatible metrics endpoint
 
-Users should avoid creating routes with the same paths to prevent conflicts. 
+## Performance
+
+The core framework is optimized for maximum performance:
+
+- Asynchronous request handling with Tokio runtime
+- Connection pooling for database and external services
+- Minimal memory footprint with zero-cost abstractions
+- Efficient JSON serialization/deserialization
+
+## Security
+
+Navius implements security best practices by default:
+
+- Automatic TLS configuration
+- CORS protection
+- Content security headers
+- Protection against common web vulnerabilities
+- Secure authentication patterns 

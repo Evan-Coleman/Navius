@@ -481,7 +481,7 @@ impl Default for OpenApiConfig {
 
 /// Default name for the OpenAPI spec file
 fn default_openapi_spec_file() -> String {
-    "rust-backend.yaml".to_string()
+    "navius-swagger.yaml".to_string()
 }
 
 /// Environment type

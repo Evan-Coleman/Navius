@@ -1,10 +1,10 @@
-# PostgreSQL Integration Guide
+# Navius PostgreSQL Integration Guide
 
-This guide explains how to implement PostgreSQL database connections in the application.
+This guide explains how to implement PostgreSQL database connections in your Navius application, leveraging the framework's powerful database abstraction layer.
 
-## Local Development Setup
+## 🐘 Local Development Setup
 
-For local development, a Docker Compose configuration is provided in `test/resources/docker/docker-compose.dev.yml`.
+For local development, Navius provides a Docker Compose configuration in `test/resources/docker/docker-compose.dev.yml`.
 
 To start a PostgreSQL instance:
 
@@ -21,7 +21,7 @@ This creates a PostgreSQL database with the following connection details:
 - Password: postgres
 - Database: app
 
-## Database Configuration
+## ⚙️ Database Configuration
 
 Ensure your `config/development.yaml` has the database section enabled:
 
@@ -34,13 +34,13 @@ database:
   idle_timeout_seconds: 300
 ```
 
-## Implementation Steps
+## 🚀 Implementation Steps
 
-To implement PostgreSQL support, follow these steps:
+Navius makes it easy to integrate with PostgreSQL for data persistence. Follow these steps:
 
 ### 1. Add SQLx Dependency
 
-Add SQLx to your `Cargo.toml`:
+Navius uses SQLx as its preferred database library. Add it to your `Cargo.toml` if it's not already included:
 
 ```toml
 [dependencies]

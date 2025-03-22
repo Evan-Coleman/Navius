@@ -1,15 +1,15 @@
 [package]
-name = "rust-backend"
+name = "navius"
 version = "0.1.0"
 edition = "2024"
 build = "build.rs"
 authors = ["Evan Coleman"]
-description = "A modular Rust backend application with RESTful API endpoints, OpenAPI documentation, caching, and metrics"
+description = "An enterprise-grade web framework built with Rust, designed as a high-performance alternative to Spring Boot"
 license = "MIT"
-repository = "https://github.com/evan-coleman/rust-backend"
+repository = "https://github.com/Evan-Coleman/Navius"
 readme = "README.md"
-keywords = ["api", "backend", "axum", "openapi", "metrics"]
-categories = ["web-programming"]
+keywords = ["api", "backend", "axum", "enterprise", "framework"]
+categories = ["web-programming", "asynchronous"]
 
 # Suppress specific warnings
 [lints.rust]

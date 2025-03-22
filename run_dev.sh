@@ -325,14 +325,14 @@ if [ "$RELEASE_MODE" = true ]; then
         echo "Error: Release build failed. See errors above."
         exit 1
     fi
-    EXEC_PATH="./target/release/rust-backend"
+    EXEC_PATH="./target/release/navius"
 else
     cargo build
     if [ $? -ne 0 ]; then
         echo "Error: Debug build failed. See errors above."
         exit 1
     fi
-    EXEC_PATH="./target/debug/rust-backend"
+    EXEC_PATH="./target/debug/navius"
 fi
 
 BUILD_END_TIME=$(date +%s)

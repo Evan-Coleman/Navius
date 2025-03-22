@@ -77,9 +77,8 @@ if ! command -v systemctl &> /dev/null; then
 fi
 
 # Check that we have the built release binary
-if [ ! -f "./target/release/rust-backend" ]; then
-    echo "Error: Release binary not found at ./target/release/rust-backend"
-    echo "Please build the application first with: cargo build --release"
+if [ ! -f "./target/release/navius" ]; then
+    echo "Error: Release binary not found at ./target/release/navius"
     exit 1
 fi
 
@@ -90,12 +89,12 @@ export SERVER_PORT="$SERVER_PORT"
 export RUST_LOG="${RUST_LOG:-info}"
 
 # Ensure log directory exists
-mkdir -p /var/log/rust-backend
+mkdir -p /var/log/navius
 
 # Create a backup of the current version (for rollback)
-if [ -f "/usr/local/bin/rust-backend" ]; then
-    echo "Creating backup of current version..."
-    cp /usr/local/bin/rust-backend /usr/local/bin/rust-backend.bak
+if [ -f "/usr/local/bin/navius" ]; then
+    echo "Backing up existing binary..."
+    cp /usr/local/bin/navius /usr/local/bin/navius.bak
 fi
 
 # Run database migrations (if not skipped)
@@ -116,8 +115,8 @@ if [ "$SKIP_MIGRATIONS" != "true" ]; then
         echo "Error: Database migrations failed."
         if [ "$ROLLBACK_ON_FAILURE" = "true" ]; then
             echo "Rolling back to previous version..."
-            if [ -f "/usr/local/bin/rust-backend.bak" ]; then
-                mv /usr/local/bin/rust-backend.bak /usr/local/bin/rust-backend
+            if [ -f "/usr/local/bin/navius.bak" ]; then
+                mv /usr/local/bin/navius.bak /usr/local/bin/navius
                 echo "Rollback completed. Previous version restored."
             else
                 echo "Warning: No backup found for rollback."
@@ -129,96 +128,54 @@ if [ "$SKIP_MIGRATIONS" != "true" ]; then
     echo "Migrations completed successfully."
 fi
 
-# Copy the new binary to the production location
-echo "Installing new version..."
-cp ./target/release/rust-backend /usr/local/bin/rust-backend
-chmod +x /usr/local/bin/rust-backend
+# Deploy binary
+echo "Deploying binary..."
+cp ./target/release/navius /usr/local/bin/navius
+chmod +x /usr/local/bin/navius
 
-# Create or update systemd service file
-echo "Configuring systemd service..."
-cat > /etc/systemd/system/rust-backend.service << EOF
+# Create systemd service
+echo "Creating systemd service..."
+cat > /etc/systemd/system/navius.service << EOF
 [Unit]
-Description=Rust Backend API Service
-After=network.target postgresql.service
+Description=Navius API Server
+After=network.target
 
 [Service]
-Type=simple
-User=rust-backend
-Group=rust-backend
-ExecStart=/usr/local/bin/rust-backend
+User=navius
+Group=navius
+ExecStart=/usr/local/bin/navius
 Restart=on-failure
 RestartSec=5
-Environment=CONFIG_DIR=$CONFIG_DIR
-Environment=RUN_ENV=$RUN_ENV
-Environment=SERVER_PORT=$SERVER_PORT
-Environment=RUST_LOG=$RUST_LOG
+Environment=RUST_LOG=info
+Environment=CONFIG_PATH=/etc/navius/config
 
-# Security measures
-PrivateTmp=true
-ProtectSystem=full
+# Security settings
 NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+ProtectHome=true
 
 # Logging
-StandardOutput=append:/var/log/rust-backend/stdout.log
-StandardError=append:/var/log/rust-backend/stderr.log
-
-# Resource limits
-LimitNOFILE=65536
+StandardOutput=append:/var/log/navius/stdout.log
+StandardError=append:/var/log/navius/stderr.log
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# Reload systemd to pick up the new service file
-systemctl daemon-reload
+# Enable service
+echo "Enabling service..."
+systemctl enable navius.service
 
-# Enable service to start on boot
-systemctl enable rust-backend.service
+# Start service
+echo "Starting service..."
+systemctl restart navius.service
 
-# Restart the service
-echo "Restarting service..."
-systemctl restart rust-backend.service
-
-# Wait for service to start and verify it's running
-echo "Waiting for service to start (max ${MAX_STARTUP_TIME}s)..."
-for i in $(seq 1 $MAX_STARTUP_TIME); do
-    if curl -s http://localhost:$SERVER_PORT/health > /dev/null; then
-        echo "Service is up and running (verified in ${i}s)"
-        DEPLOY_SUCCESS=true
-        break
-    fi
-    
-    # Check if service is still running
-    if ! systemctl is-active --quiet rust-backend.service; then
-        echo "Error: Service failed to start"
-        systemctl status rust-backend.service
-        DEPLOY_SUCCESS=false
-        break
-    fi
-    
-    sleep 1
-    
-    if [ $i -eq $MAX_STARTUP_TIME ]; then
-        echo "Error: Service health check timed out after ${MAX_STARTUP_TIME}s"
-        DEPLOY_SUCCESS=false
-    fi
-done
-
-# Handle deployment failure if needed
-if [ "$DEPLOY_SUCCESS" != "true" ]; then
-    echo "Deployment failed!"
-    
-    if [ "$ROLLBACK_ON_FAILURE" = "true" ]; then
-        echo "Rolling back to previous version..."
-        if [ -f "/usr/local/bin/rust-backend.bak" ]; then
-            mv /usr/local/bin/rust-backend.bak /usr/local/bin/rust-backend
-            systemctl restart rust-backend.service
-            echo "Rollback completed. Previous version restored."
-        else
-            echo "Warning: No backup found for rollback."
-        fi
-    fi
-    
+# Service status check
+echo "Checking service status..."
+if ! systemctl is-active --quiet navius.service; then
+    echo "Service failed to start!"
+    systemctl status navius.service
     exit 1
 fi
 
@@ -235,17 +192,17 @@ if [ "$ENABLE_MONITORING" = "true" ]; then
     fi
     
     # Add log rotation
-    cat > /etc/logrotate.d/rust-backend << EOF
-/var/log/rust-backend/*.log {
+    cat > /etc/logrotate.d/navius << EOF
+/var/log/navius/*.log {
     daily
     rotate 14
     compress
     delaycompress
     missingok
     notifempty
-    create 0640 rust-backend rust-backend
+    create 0640 navius navius
     postrotate
-        systemctl kill -s HUP rust-backend.service
+    systemctl kill -s HUP navius.service
     endscript
 }
 EOF
@@ -257,8 +214,8 @@ echo "Service is running on port $SERVER_PORT"
 echo "==================================================="
 
 # Clean up any old backups after successful deployment
-if [ -f "/usr/local/bin/rust-backend.bak" ] && [ "$DEPLOY_SUCCESS" = "true" ]; then
-    rm /usr/local/bin/rust-backend.bak
+if [ -f "/usr/local/bin/navius.bak" ] && [ "$DEPLOY_SUCCESS" = "true" ]; then
+    rm /usr/local/bin/navius.bak
 fi
 
 exit 0 

@@ -75,7 +75,7 @@ reliability:
 
 # OpenAPI configuration
 openapi:
-  spec_file: "rust-backend.yaml"
+  spec_file: "navius-swagger.yaml"
 
 logging:
   level: "info"
