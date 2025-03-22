@@ -4,7 +4,7 @@
 //! It follows the repository pattern where each entity type has its own repository.
 
 pub mod models;
-mod user;
+pub mod user;
 
 #[cfg(test)]
 mod tests;
