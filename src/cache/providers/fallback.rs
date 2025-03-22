@@ -461,7 +461,7 @@ mod tests {
         let _ = provider.init();
 
         // Delete call should try to delete from all providers
-        let delete_result = provider.delete("test-1").await;
+        let _delete_result = provider.delete("test-1").await;
 
         // If Redis is available, this should succeed
         // If Redis failed, it will try memory, which might fail
@@ -476,7 +476,7 @@ mod tests {
         let _ = provider.init();
 
         // Clear call should try to clear all providers
-        let clear_result = provider.clear().await;
+        let _clear_result = provider.clear().await;
 
         // If Redis is available, this should succeed
         // If Redis failed, it will try memory, which might fail
@@ -491,7 +491,7 @@ mod tests {
         let _ = provider.init();
 
         // Exists call should check all providers
-        let exists_result = provider.exists("test-1").await;
+        let _exists_result = provider.exists("test-1").await;
 
         // If Redis is available, this should succeed
         // If Redis failed, it will try memory, which might fail
