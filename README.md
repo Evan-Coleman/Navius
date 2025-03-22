@@ -12,6 +12,50 @@ A modular Rust backend application with RESTful API endpoints, OpenAPI documenta
 - **Structured Error Handling**
 - **Configuration Management** with YAML files and environment variables
 - **Logging** with [tracing](https://github.com/tokio-rs/tracing)
+- **Comprehensive Test Suite** with ~98% code coverage
+
+## Testing
+
+This project has a comprehensive testing framework with various test types:
+
+### Running Tests
+
+```bash
+# Run all tests
+cargo test
+
+# Run only unit tests
+cargo test --lib
+
+# Run only integration tests
+cargo test --test '*'
+
+# Run specific module tests
+cargo test core::config
+
+# Run tests with documentation examples
+cargo test --doc
+
+# Generate test coverage report (requires cargo-tarpaulin)
+cargo tarpaulin --out Html
+```
+
+### Testing Approach
+
+- **Unit Tests**: Located in `#[cfg(test)]` modules within implementation files
+- **Integration Tests**: Located in the `/tests` directory
+- **Doc Tests**: Examples in documentation that serve as tests
+- **Property-Based Tests**: Using proptest to test against randomly generated inputs
+- **Mock Testing**: Using mockito for HTTP requests and mock-it for components
+
+### Testing Tools
+
+- [tokio-test](https://docs.rs/tokio-test/latest/tokio_test/) - Testing async code
+- [proptest](https://docs.rs/proptest/latest/proptest/) - Property-based testing
+- [mockito](https://docs.rs/mockito/latest/mockito/) - HTTP mocking
+- [cargo-tarpaulin](https://github.com/xd009642/tarpaulin) - Code coverage analysis
+
+For more details, see the [Testing Roadmap](docs/testing-roadmap.md).
 
 ## Project Structure
 
