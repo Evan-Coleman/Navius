@@ -153,5 +153,4 @@ async fn test_health_endpoint() {
     let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     
     assert_eq!(body["status"], "UP");
-}
-```
+} 

@@ -3,14 +3,14 @@ description: For help when asked to work with roadmaps
 globs: 
 alwaysApply: true
 ---
-## When being asked to implement something in a roadmap follow these instd the ##PROMPT_ENHANCER to requests.
+## When being asked to implement something in a roadmap follow these instructions. Also, always add the ##PROMPT_ENHANCER to requests.
 
 # First Steps
  - Read the [template-for-updating.md](mdc:docs/roadmaps/template-for-updating.md) file to understand the format and steps to take in the process.
 
 # Second Steps
  - If asked to work on a specific roadmap and specific step please work through the implementation slowly and carefully
- - After each logical stopping point when you would like to see if it is working please ask me to start the server, I will then start the ocede.
+ - After each logical stopping point when you would like to see if it is working please ask me to start the server, I will then start the server and tell you to procede.
  - Make sure to create tests for each step when it makes sense to.
    - Follow the testing guidelines in the testing-guidance.mdc rule
    - Create unit tests alongside implementation
