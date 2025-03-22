@@ -1,9 +1,9 @@
 # Rust Backend Testing Roadmap
 
 ## Current Status
-- Test coverage: ~40% of core modules
-- Unit tests: Partially implemented in core modules
-- Integration tests: Framework set up, needs implementation
+- Test coverage: ~45% of core modules
+- Unit tests: Implemented in most core modules
+- Integration tests: Basic framework set up with initial routes test
 
 ## Completed ✅
 - [x] Restructured test directories per Rust conventions
@@ -20,6 +20,8 @@
   - [x] Error message formatting
 - [x] Implemented basic router tests:
   - [x] Health endpoint test
+  - [x] Route not found test
+  - [x] Set up integration test structure
 
 ## In Progress 🔄
 - [ ] Core modules testing:
@@ -31,12 +33,14 @@
 
 ## Next Steps (Prioritized) 📋
 1. Router module tests (High priority)
-   - [ ] Test route registration
+   - [x] Test route registration
    - [ ] Test middleware application
    - [ ] Test error handling middleware
    - [ ] Test authentication integration
 
 2. Auth module tests (High priority - security critical)
+   - [x] Token client creation tests
+   - [x] Token configuration tests  
    - [ ] Token validation tests
    - [ ] Authentication middleware tests
    - [ ] Authorization tests for different permission levels
@@ -49,6 +53,7 @@
    - [ ] Error handling in handlers
 
 4. Integration tests
+   - [x] Basic routing tests
    - [ ] End-to-end request flow tests
    - [ ] Auth + router + handler integration
    - [ ] Error propagation across modules
@@ -90,5 +95,6 @@
 
 ## Progress Tracking
 - Start date: March 21, 2024
+- Last updated: April 24, 2024
 - Target completion: Core tests within 1 week, full suite within 2 weeks
 - Check-in frequency: Review progress daily, update roadmap weekly 

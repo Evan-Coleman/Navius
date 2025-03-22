@@ -48,21 +48,4 @@ impl CoreRouter {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::AppConfig;
-    use axum::body::Body;
-    use axum::http::Method;
-    use axum::http::Request;
-    use tower::ServiceExt;
-
-    // Health test that doesn't require complex mocking
-    #[tokio::test]
-    async fn test_health_endpoint() {
-        // This is a simplified test that just checks that the router can
-        // be created, even if we can't fully test it
-        let config = AppConfig::default();
-        assert!(!config.server.host.is_empty());
-    }
-}
+// Test moved to tests/router_integration_test.rs
