@@ -2,6 +2,27 @@
 
 set -e  # Exit immediately if a command exits with a non-zero status
 
+# Parse command line arguments first to check for --no-hooks
+SKIP_HOOKS=false
+for arg in "$@"; do
+    case $arg in
+        --no-hooks)
+            SKIP_HOOKS=true
+            break
+            ;;
+    esac
+done
+
+# Setup git hooks if they don't exist and not skipped
+if [ "$SKIP_HOOKS" = false ] && [ ! -x .git/hooks/pre-commit ]; then
+    echo "Git pre-commit hook not found or not executable. Setting up..."
+    if [ -f scripts/setup-hooks.sh ]; then
+        ./scripts/setup-hooks.sh
+    else
+        echo "Warning: setup-hooks.sh not found. Hooks not installed."
+    fi
+fi
+
 # Parse command line arguments
 SKIP_GEN=false
 RELEASE_MODE=false
@@ -18,6 +39,7 @@ print_usage() {
     echo "  --config-dir=DIR     Use specified config directory (default: config)"
     echo "  --env=FILE           Use specified .env file (default: .env)"
     echo "  --environment=ENV    Use specified environment (default: development)"
+    echo "  --no-hooks           Skip git hooks setup"
     echo "  --help               Show this help message"
 }
 
@@ -42,6 +64,10 @@ for arg in "$@"; do
             ;;
         --environment=*)
             RUN_ENV="${arg#*=}"
+            shift
+            ;;
+        --no-hooks)
+            # Already processed above
             shift
             ;;
         --help)

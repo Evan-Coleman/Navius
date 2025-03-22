@@ -238,6 +238,32 @@ To use the abstraction in your handlers:
 
 For detailed documentation, see [API Resource Documentation](docs/api_resource.md).
 
+## Security
+
+### Pre-commit Hook for Sensitive Data Detection
+
+The project includes a pre-commit hook that scans staged files for sensitive data like API keys, secrets, and database credentials to prevent accidental commits of confidential information.
+
+The hook is automatically set up when you run `./run_server.sh` for the first time. If you want to skip this automatic setup, use the `--no-hooks` flag:
+
+```bash
+./run_server.sh --no-hooks
+```
+
+To manually set up the pre-commit hook:
+
+```bash
+./scripts/setup-hooks.sh
+```
+
+This will install a pre-commit hook that:
+- Scans staged files for sensitive patterns like API keys, passwords, and private keys
+- Blocks commits containing sensitive data
+- Shows detailed information about detected sensitive data
+- Can be bypassed with `git commit --no-verify` when needed
+
+To customize the sensitive data patterns, edit `scripts/pre-commit.sh`.
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details. 
