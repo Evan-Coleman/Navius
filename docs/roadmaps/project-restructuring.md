@@ -40,60 +40,28 @@ This roadmap outlines a plan to iteratively restructure the Navius project to im
 - [x] Update testing roadmap to reflect new structure
 - [x] Ensure test coverage metrics work with the new structure
 
-## Step 2: Standardize Source Code Organization
+### 5. Optimize Build Configuration ✅
+- [x] Standardize environment configuration files
+- [x] Optimize build scripts for different environments
+- [x] Update deployment scripts to work with new structure
+- [x] Ensure CI/CD pipelines are compatible with new structure
 
-**Status:** Completed
-
-Complete the core transition initiative and standardize the source code structure:
-
-- [x] Finish moving functionality to `/src/core` following the core transition pattern
-- [x] Establish clear naming conventions for all modules
-- [x] Reorganize remaining `/src` directories to follow a consistent pattern
-- [x] Update import paths throughout the codebase
-
-## Step 3: Improve Documentation Structure
-
-**Status:** Completed
-
-Reorganize documentation to improve discoverability:
-
-- [x] Create a structured documentation hierarchy
-- [x] Ensure consistent formatting across all documentation
-- [x] Update links and references throughout documentation
-- [x] Add a documentation index
-
-## Step 4: Standardize Testing Structure
-
-**Status:** Completed
-
-Improve test organization and consistency:
-
-- [x] Consolidate test directories
-- [x] Establish consistent test naming conventions
-- [x] Update testing roadmap to reflect new structure
-- [x] Ensure test coverage metrics work with the new structure
-
-## Step 5: Optimize Build Configuration
-
-**Status:** Not Started
-
-Improve build process and configuration:
-
-- [ ] Standardize environment configuration files
-- [ ] Optimize build scripts for different environments
-- [ ] Update deployment scripts to work with new structure
-- [ ] Ensure CI/CD pipelines are compatible with new structure
+### 6. Clean Up Generated Code Management ✅
+- [x] Establish clear guidelines for generated code
+- [x] Update generation scripts to follow the new structure
+- [x] Document the code generation process
+- [x] Add appropriate gitignore patterns for generated files
 
 ## Step 6: Clean Up Generated Code Management
 
-**Status:** Not Started
+**Status:** Completed
 
 Improve handling of generated code:
 
-- [ ] Establish clear guidelines for generated code
-- [ ] Update generation scripts to follow the new structure
-- [ ] Document the code generation process
-- [ ] Add appropriate gitignore patterns for generated files
+- [x] Establish clear guidelines for generated code
+- [x] Update generation scripts to follow the new structure
+- [x] Document the code generation process
+- [x] Add appropriate gitignore patterns for generated files
 
 ## Step 7: Create Developer Tooling for Navigation
 

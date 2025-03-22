@@ -10,6 +10,7 @@
 set -e  # Exit immediately if a command exits with a non-zero status
 
 API_REGISTRY="config/api_registry.json"
+GENERATED_DIR="target/generated"
 
 # Function to display usage information
 show_usage() {
@@ -28,7 +29,7 @@ show_usage() {
     echo "  $0                         # Regenerate all APIs"
     echo ""
     echo "Note: All configuration options are read from config/api_registry.json."
-    echo "To modify options, edit the registry file and then run this script."
+    echo "Generated code is stored in ${GENERATED_DIR}/"
 }
 
 # Function to list all registered APIs
@@ -126,7 +127,7 @@ for API_NAME in "${APIS_TO_REGENERATE[@]}"; do
     
     # Simply call add_api.sh with the API name to use registry configuration
     echo "Regenerating $API_NAME using registry configuration"
-    ./scripts/add_api.sh "$API_NAME"
+    .devtools/scripts/add_api.sh "$API_NAME"
     
     echo "✅ Successfully regenerated $API_NAME"
     echo "----------------------------------------"

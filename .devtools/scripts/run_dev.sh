@@ -10,6 +10,7 @@ SERVER_PORT=3000
 WATCH_MODE=false
 RUN_MIGRATIONS=false
 HEALTH_CHECK_TIMEOUT=30
+GENERATED_DIR="target/generated"
 
 # Add trap for cleanup on exit
 cleanup() {
@@ -241,7 +242,7 @@ if [ "$SKIP_GEN" = false ]; then
     # Check if API registry exists
     if [ -f "$API_REGISTRY" ]; then
         # Create generated directory if it doesn't exist
-        mkdir -p generated/openapi
+        mkdir -p ${GENERATED_DIR}/openapi
         
         # Always preserve registry settings
         cp "$API_REGISTRY" "${API_REGISTRY}.bak"
@@ -269,7 +270,7 @@ if [ "$SKIP_GEN" = false ]; then
                 fi
                 
                 # Check if this API is already generated
-                if [ ! -d "generated/${api_name}_api" ]; then
+                if [ ! -d "${GENERATED_DIR}/${api_name}_api" ]; then
                     echo "Generating API client for $api_name..."
                     
                     # Always use the backup for generation

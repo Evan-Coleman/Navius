@@ -36,6 +36,7 @@ fi
 
 API_NAME="$1"
 API_REGISTRY="config/api_registry.json"
+GENERATED_DIR="target/generated"
 SWAGGER_DIR="config/swagger"
 
 # Check if API registry exists
@@ -158,34 +159,41 @@ fi
 
 # Function to update generated_apis.rs with only active APIs
 update_generated_apis() {
-    # Get all active APIs from the registry (those with at least one generation option enabled)
-    ACTIVE_APIS=$(jq -r '.apis[] | select(.options.generate_models == true or .options.generate_api == true or .options.generate_handlers == true) | .name' "$API_REGISTRY")
+    # Get all active APIs from registry
+    ACTIVE_APIS=$(jq -r '.apis[].name' "$API_REGISTRY")
     
-    # Update the bridge file to include all active APIs
     echo "Updating generated_apis.rs..."
     cat > "src/generated_apis.rs" << EOF
 //! Generated API modules
 //!
-//! This file serves as a bridge to the generated API code in the /generated directory.
-//! It uses the #[path] attribute to reference files outside of the src directory.
+//! This file serves as a bridge to the generated API code in the ${GENERATED_DIR} directory.
 
 EOF
 
-    # Add imports and re-exports for all active APIs
+    # Add mod declarations for each active API
     for ACTIVE_API in $ACTIVE_APIS; do
-        # Get entity name for this API
-        API_ENTITY=$(jq -r ".apis[] | select(.name == \"$ACTIVE_API\") | .entity_name" "$API_REGISTRY")
-        API_ENTITY_CAMEL=$(echo "$API_ENTITY" | sed -r 's/(^|_)([a-z])/\U\2/g')
-        
-        # Add import for this API
-        echo "#[path = \"../generated/${ACTIVE_API}_api/src/lib.rs\"]" >> "src/generated_apis.rs"
+        echo "#[path = \"../${GENERATED_DIR}/${ACTIVE_API}_api/src/lib.rs\"]" >> "src/generated_apis.rs"
         echo "pub mod ${ACTIVE_API}_api;" >> "src/generated_apis.rs"
         echo "" >> "src/generated_apis.rs"
         
         # Add re-exports if models are generated
-        if jq -e ".apis[] | select(.name == \"$ACTIVE_API\") | .options.generate_models" "$API_REGISTRY" > /dev/null; then
+        API_ENTITY=$(jq -r --arg name "$ACTIVE_API" '.apis[] | select(.name == $name) | .entity_name // ""' "$API_REGISTRY")
+        if [ ! -z "$API_ENTITY" ]; then
+            # OpenAPI generator adds 'U' prefix to model names
+            API_ENTITY_CAMEL=$(echo "$API_ENTITY" | perl -pe 's/(^|_)(\w)/\U$2/g')
+            PREFIXED_ENTITY="U${API_ENTITY_CAMEL}"
+            
+            # Check if the model file exists first to confirm the name
+            if [ -f "${GENERATED_DIR}/${ACTIVE_API}_api/src/lib.rs" ]; then
+                # Use grep to find the actual model name being re-exported
+                ACTUAL_MODEL=$(grep -o "pub use models::[A-Za-z0-9_]*;" "${GENERATED_DIR}/${ACTIVE_API}_api/src/lib.rs" | cut -d':' -f3 | cut -d';' -f1 | tr -d ' ')
+                if [ ! -z "$ACTUAL_MODEL" ]; then
+                    PREFIXED_ENTITY="$ACTUAL_MODEL"
+                fi
+            fi
+            
             echo "// Re-export from ${ACTIVE_API}_api" >> "src/generated_apis.rs"
-            echo "pub use ${ACTIVE_API}_api::${API_ENTITY_CAMEL};" >> "src/generated_apis.rs"
+            echo "pub use ${ACTIVE_API}_api::${PREFIXED_ENTITY};" >> "src/generated_apis.rs"
             echo "" >> "src/generated_apis.rs"
         fi
     done
@@ -201,9 +209,9 @@ API_NAME_SNAKE=$(echo "$API_NAME" | tr '[:upper:]' '[:lower:]' | tr '-' '_')
 ENTITY_NAME_CAMEL=$(echo "$ENTITY_NAME" | sed -r 's/(^|_)([a-z])/\U\2/g')
 
 # Create necessary directories
-mkdir -p generated/openapi/${API_NAME}
-mkdir -p generated/${API_NAME}_api/src/api
-mkdir -p generated/${API_NAME}_api/src/models
+mkdir -p ${GENERATED_DIR}/openapi/${API_NAME}
+mkdir -p ${GENERATED_DIR}/${API_NAME}_api/src/api
+mkdir -p ${GENERATED_DIR}/${API_NAME}_api/src/models
 mkdir -p ${SWAGGER_DIR}
 
 # Download schema if it's a URL
@@ -246,13 +254,13 @@ else
 fi
 
 # Create OpenAPI Generator config file
-CONFIG_FILE="generated/openapi/${API_NAME}/config.yaml"
+CONFIG_FILE="${GENERATED_DIR}/openapi/${API_NAME}/config.yaml"
 
 echo "Creating OpenAPI Generator configuration..."
 cat > "$CONFIG_FILE" << EOF
 # OpenAPI Generator configuration for $API_NAME
 generatorName: rust
-outputDir: ../../../generated/${API_NAME}_api
+outputDir: ../../../${GENERATED_DIR}/${API_NAME}_api
 packageName: ${API_NAME}_api
 library: reqwest
 apiPackage: api
@@ -289,21 +297,21 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "API client generated successfully in generated/${API_NAME}_api/"
+echo "API client generated successfully in ${GENERATED_DIR}/${API_NAME}_api/"
 
 # Fix structure issues - create the API and models modules
-if [ "$GENERATE_API" = true ] && [ ! -f "generated/${API_NAME}_api/src/api/mod.rs" ]; then
+if [ "$GENERATE_API" = true ] && [ ! -f "${GENERATED_DIR}/${API_NAME}_api/src/api/mod.rs" ]; then
     echo "Creating API module..."
-    mkdir -p "generated/${API_NAME}_api/src/api"
-    echo "// API module - stub for compatibility" > "generated/${API_NAME}_api/src/api/mod.rs"
+    mkdir -p "${GENERATED_DIR}/${API_NAME}_api/src/api"
+    echo "// API module - stub for compatibility" > "${GENERATED_DIR}/${API_NAME}_api/src/api/mod.rs"
 fi
 
-if [ "$GENERATE_MODELS" = true ] && [ ! -f "generated/${API_NAME}_api/src/models/mod.rs" ]; then
+if [ "$GENERATE_MODELS" = true ] && [ ! -f "${GENERATED_DIR}/${API_NAME}_api/src/models/mod.rs" ]; then
     echo "Creating models module..."
-    mkdir -p "generated/${API_NAME}_api/src/models"
+    mkdir -p "${GENERATED_DIR}/${API_NAME}_api/src/models"
     
     # Create a simple model for demonstration
-    cat > "generated/${API_NAME}_api/src/models/mod.rs" << EOF
+    cat > "${GENERATED_DIR}/${API_NAME}_api/src/models/mod.rs" << EOF
 // Generated models for the ${API_NAME} API
 use serde::{Deserialize, Serialize};
 
@@ -352,9 +360,9 @@ fi
 # Create basic handlers file if needed
 if [ "$GENERATE_HANDLERS" = true ]; then
     echo "Creating basic handlers file..."
-    mkdir -p "generated/${API_NAME}_api/src/handlers"
+    mkdir -p "${GENERATED_DIR}/${API_NAME}_api/src/handlers"
 
-    cat > "generated/${API_NAME}_api/src/handlers/mod.rs" << EOF
+    cat > "${GENERATED_DIR}/${API_NAME}_api/src/handlers/mod.rs" << EOF
 // Handlers for ${API_NAME_SNAKE} API
 
 use axum::{
@@ -371,7 +379,7 @@ fi
 
 # Create module file
 echo "Creating module file..."
-cat > "generated/${API_NAME}_api/src/lib.rs" << EOF
+cat > "${GENERATED_DIR}/${API_NAME}_api/src/lib.rs" << EOF
 //! ${API_NAME_CAMEL} API Client
 //!
 //! This is an auto-generated API client for the ${API_NAME} API.
@@ -380,21 +388,21 @@ EOF
 
 # Add module declarations based on what was generated
 if [ "$GENERATE_API" = true ]; then
-    echo "pub mod api;" >> "generated/${API_NAME}_api/src/lib.rs"
+    echo "pub mod api;" >> "${GENERATED_DIR}/${API_NAME}_api/src/lib.rs"
 fi
 
 if [ "$GENERATE_MODELS" = true ]; then
-    echo "pub mod models;" >> "generated/${API_NAME}_api/src/lib.rs"
+    echo "pub mod models;" >> "${GENERATED_DIR}/${API_NAME}_api/src/lib.rs"
 fi
 
 if [ "$GENERATE_HANDLERS" = true ]; then
-    echo "pub mod handlers;" >> "generated/${API_NAME}_api/src/lib.rs"
+    echo "pub mod handlers;" >> "${GENERATED_DIR}/${API_NAME}_api/src/lib.rs"
 fi
 
 # Add re-exports
 if [ "$GENERATE_MODELS" = true ]; then
-    echo -e "\n// Re-export commonly used types" >> "generated/${API_NAME}_api/src/lib.rs"
-    echo "pub use models::${ENTITY_NAME_CAMEL};" >> "generated/${API_NAME}_api/src/lib.rs"
+    echo -e "\n// Re-export commonly used types" >> "${GENERATED_DIR}/${API_NAME}_api/src/lib.rs"
+    echo "pub use models::${ENTITY_NAME_CAMEL};" >> "${GENERATED_DIR}/${API_NAME}_api/src/lib.rs"
 fi
 
 # Update generated_apis.rs with only active APIs
@@ -493,7 +501,7 @@ else
 fi
 
 echo "✅ Successfully added/updated ${API_NAME} API!"
-echo "📁 Generated code in: generated/${API_NAME}_api/"
+echo "�� Generated code in: ${GENERATED_DIR}/${API_NAME}_api/"
 echo "📄 OpenAPI schema stored in: ${SWAGGER_DIR}/${API_NAME}.yaml"
 
 # Print generation options summary

@@ -48,9 +48,9 @@ config.*.yaml
 !config.example.yaml
 
 # Generated API files
-/src/petstore_api/
-# Generated API clients
+# Note: Generated code is now in target/generated
 /generated/
+/target/generated/
 
 # Bruno environment files
 *_environment.bru

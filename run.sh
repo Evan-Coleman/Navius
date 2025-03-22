@@ -35,24 +35,14 @@ for arg in "$@"; do
     esac
 done
 
-# Based on environment, run the appropriate script
+# Run the appropriate script based on environment
 if [ "$ENV" = "development" ]; then
-    echo "Running in development mode..."
-    if [ -f "./run_dev.sh" ]; then
-        ./run_dev.sh "$@"
-    else
-        echo "Error: Development script run_dev.sh not found."
-        exit 1
-    fi
+    echo "Starting in development mode..."
+    exec .devtools/scripts/run_dev.sh "$@"
 elif [ "$ENV" = "production" ]; then
-    echo "Running in production mode..."
-    if [ -f "./deploy_production.sh" ]; then
-        ./deploy_production.sh "$@"
-    else
-        echo "Error: Production script deploy_production.sh not found."
-        exit 1
-    fi
+    echo "Starting in production mode..."
+    exec .devtools/scripts/deploy_production.sh "$@"
 else
-    echo "Error: Unknown environment: $ENV"
+    echo "Unknown environment: $ENV"
     exit 1
 fi 
