@@ -1,7 +1,7 @@
 # Project Restructuring Roadmap
 
-**Status:** Not Started  
-**Updated At:** March 22, 2025
+**Status:** In Progress  
+**Updated At:** March 22, 2024
 **Priority:** High  
 
 ## Overview
@@ -14,16 +14,13 @@ This roadmap outlines a plan to iteratively restructure the Navius project to im
 4. Improve discoverability for new developers
 5. Support the core transition initiative
 
-## Step 1: Consolidate Top-Level Directories
+## Steps
 
-**Status:** Not Started
-
-Consolidate non-essential top-level directories to reduce clutter:
-
-- [ ] Create a `.devtools` directory and move development-related files there
-- [ ] Consolidate script files
-- [ ] Organize CI/CD configuration files
-- [ ] Update documentation to reflect new structure
+### 1. Consolidate Top-Level Directories ✅
+- [x] Create .devtools directory
+- [x] Move development tools and configurations
+- [x] Update path references
+- [x] Verify directory structure
 
 ## Step 2: Standardize Source Code Organization
 
