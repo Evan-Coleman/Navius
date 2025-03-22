@@ -1,17 +1,58 @@
 ---
 description: This will be general info about the server. Good info to keep in mind during generation.
-globs: 
+globs: src/**/*.rs
 alwaysApply: true
 ---
-- This is a new project greenfield with no users, so when we change or remove something it's okay to not have deprecation warnings, or legacy toggles etc.
-- The only route groups we ever want are as follows: public, readonly, fullaccess, actuator
-- public will be "/", readonly will be at "/read", fullaccess will be at "/full", and actuator will be at "/actuator"
-- For example use we will have the /pet/{id} route in all of the route groups
-- The project follows the Axum web framework patterns:
-  - Routes are defined in router modules
-  - Handlers contain the business logic for endpoints
-  - Middleware provides cross-cutting concerns like auth and logging
-- Error handling uses the AppError enum defined in core/error
-- Logging uses tracing for structured logs
-- Tests should use the provided mock implementations when testing routes
-- Config is loaded from environment variables with fallbacks to defaults
+# Server Information
+
+## Project Overview
+- Greenfield project with no legacy constraints
+- Built with Rust and Axum web framework
+- Focus on security, performance, and developer experience
+- Cloud-native design for AWS deployment
+
+## Route Groups
+- `/` - Public routes, no authentication required
+- `/read` - Read-only authenticated routes
+- `/full` - Full access authenticated routes
+- `/actuator` - System monitoring and health checks
+
+## Core Technologies
+- AWS: Cloud infrastructure and services
+- Redis: Caching and session management
+- PostgreSQL: Primary database
+- Microsoft Entra: Authentication platform
+- GitLab: Version control and CI/CD
+
+## Architecture Patterns
+- Follows Axum framework conventions
+- Clean architecture with clear separation of concerns
+- Core business logic in /src/core
+- Modular design with clear boundaries
+- Dependency injection for testability
+
+## Error Handling
+- Centralized error handling with AppError
+- Structured logging with tracing
+- Consistent error response format
+- Error categorization and mapping
+
+## Testing Strategy
+- Unit tests alongside implementation
+- Integration tests for API endpoints
+- Mock implementations for external services
+- 80%+ code coverage requirement
+
+## Security Practices
+- All routes properly authenticated
+- Input validation and sanitization
+- Rate limiting and DOS protection
+- Secure headers and CORS configuration
+- Audit logging for sensitive operations
+
+## Development Workflow
+- Feature branches and pull requests
+- Automated testing in CI/CD
+- Code review requirements
+- Automated deployments
+- Security scanning in pipeline

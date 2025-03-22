@@ -1,0 +1,44 @@
+---
+description: Guidelines for managing Rust dependencies and crates
+globs: Cargo.toml, Cargo.lock
+alwaysApply: false
+---
+# Dependency Management Guidelines
+
+## General Principles
+- Keep dependencies minimal and up-to-date
+- Prefer standard library solutions when possible
+- Use semantic versioning for all dependencies
+- Document why each dependency is needed in Cargo.toml comments
+
+## Version Specification
+- Use exact versions for critical dependencies: `=1.2.3`
+- Use caret requirements for flexible updates: `^1.2.3`
+- Avoid wildcard versions (`*`) in production code
+
+## Common Dependencies
+- tokio: Async runtime
+- axum: Web framework
+- serde: Serialization/deserialization
+- tracing: Logging and instrumentation
+- tower: HTTP middleware
+- sqlx: Database access
+- redis: Caching layer
+
+## Security Considerations
+- Run `cargo audit` regularly
+- Review dependency licenses
+- Keep Cargo.lock in version control
+- Use `cargo update` carefully
+
+## Development Dependencies
+Place in [dev-dependencies] section:
+- mockall: For mocking in tests
+- tokio-test: For async testing
+- cargo-watch: For development
+- cargo-tarpaulin: For test coverage
+
+## Workspace Management
+- Use workspace inheritance where appropriate
+- Keep shared dependencies at workspace root
+- Document workspace structure 

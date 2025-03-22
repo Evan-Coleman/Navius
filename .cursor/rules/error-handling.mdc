@@ -1,0 +1,54 @@
+---
+description: Guidelines for error handling in the Rust backend
+globs: **/*.rs
+alwaysApply: false
+---
+# Error Handling Guidelines
+
+## Core Error Types
+- Use `AppError` from core/error for application-wide error handling
+- Implement specific error types for distinct modules
+- Implement std::error::Error trait for custom errors
+
+## Error Conversion
+- Implement From trait for common error conversions
+- Use anyhow::Context for adding context to errors
+- Keep error messages user-friendly and actionable
+
+## Error Response Format
+```rust
+{
+    "error": {
+        "code": "ERROR_CODE",
+        "message": "User-friendly message",
+        "details": {} // Optional additional context
+    }
+}
+```
+
+## Best Practices
+- Never expose internal error details to clients
+- Log detailed error information server-side
+- Use appropriate error status codes
+- Include request IDs in error responses
+- Handle all Result and Option types explicitly
+
+## Error Categories
+1. Validation Errors (400)
+2. Authentication Errors (401)
+3. Authorization Errors (403)
+4. Not Found Errors (404)
+5. Conflict Errors (409)
+6. Internal Server Errors (500)
+
+## Error Logging
+- Use tracing for structured error logging
+- Include relevant context in error spans
+- Log stack traces for unexpected errors
+- Mask sensitive data in error logs
+
+## Testing Error Scenarios
+- Test both success and error paths
+- Verify error messages are appropriate
+- Test error status codes
+- Ensure proper error propagation 
