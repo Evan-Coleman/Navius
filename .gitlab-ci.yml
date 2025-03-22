@@ -1,0 +1,69 @@
+image: rust:latest
+
+variables:
+  CARGO_HOME: $CI_PROJECT_DIR/.cargo
+  CARGO_TERM_COLOR: always
+  # Optimize CI builds with sparse registry
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+
+# Define a cache template
+.cargo-cache:
+  cache:
+    key:
+      files:
+        - Cargo.lock
+    paths:
+      - .cargo/
+      - target/
+
+stages:
+  - test
+  - lint
+  - coverage
+
+# Basic test job
+test:
+  stage: test
+  extends: .cargo-cache
+  script:
+    - rustc --version
+    - cargo --version
+    - cargo test --all-features
+  artifacts:
+    paths:
+      - target/debug/
+    expire_in: 1 day
+
+# Linting job (formatting and clippy)
+lint:
+  stage: lint
+  extends: .cargo-cache
+  script:
+    - rustup component add rustfmt clippy
+    - cargo fmt -- --check
+    - cargo clippy -- -D warnings
+
+# Code coverage job
+coverage:
+  stage: coverage
+  extends: .cargo-cache
+  script:
+    - cargo install cargo-tarpaulin
+    - cargo tarpaulin --out Xml --exclude-files "generated/*" --timeout 120
+    - ls -la
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: cobertura.xml
+    paths:
+      - cobertura.xml
+    expire_in: 1 week
+  # Add coverage visualization to merge requests
+  coverage: '/^\d+.\d+% coverage/'
+
+# Only run the pipeline on main branch and merge requests
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main" 
