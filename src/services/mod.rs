@@ -1,21 +1,14 @@
-//! # Services module
+//! User-defined services that extend the core functionality
 //!
-//! This module provides services that implement business logic.
-//! Services use repositories to interact with data and implement business rules.
+//! This module allows you to define custom services that build upon the core services.
+//! Place your service implementations here following the established patterns.
 
-#[cfg(test)]
-use mock_it::Mock;
+use crate::core::services;
 
-pub mod error;
-pub mod user;
-pub use error::ServiceError;
-pub use user::{IUserService, UserService};
+// Re-export core services for convenience
+pub use services::*;
 
-#[cfg(test)]
-mod tests;
-
-#[cfg(test)]
-pub type MockUserService = Mock<dyn IUserService, ()>;
-
-/// Type alias for service results
-pub type ServiceResult<T> = Result<T, ServiceError>;
+// Add your custom services below
+// Example:
+// pub mod user_service;
+// pub mod notification_service;
