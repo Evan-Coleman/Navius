@@ -48,4 +48,129 @@ impl CoreRouter {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        core::{auth::EntraTokenClient, config::app_config::AppConfig},
+        models::{DetailedHealthResponse, HealthCheckResponse},
+        utils::api_resource::ApiResourceRegistry,
+    };
+    use axum::{
+        Router,
+        body::{self, Body},
+        http::{Method, Request, StatusCode},
+        response::Response,
+    };
+    use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
+    use reqwest::Client;
+    use std::{sync::Arc, time::SystemTime};
+    use tower::ServiceExt;
+
+    // Helper function to create a minimal test state
+    fn create_test_state(auth_enabled: bool) -> Arc<AppState> {
+        let mut config = AppConfig::default();
+        config.auth.enabled = auth_enabled;
+
+        let metrics_recorder = PrometheusBuilder::new().build_recorder();
+        let metrics_handle: PrometheusHandle = metrics_recorder.handle();
+
+        Arc::new(AppState {
+            client: Client::new(),
+            config,
+            start_time: SystemTime::now(),
+            cache_registry: None,
+            metrics_handle,
+            token_client: None,
+            resource_registry: ApiResourceRegistry::new(),
+        })
+    }
+
+    // Helper to make a request to the router
+    async fn send_request(router: Router, uri: &str, method: Method) -> Response {
+        let req = Request::builder()
+            .uri(uri)
+            .method(method)
+            .body(Body::empty())
+            .unwrap();
+
+        router.oneshot(req).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_public_routes_registration() {
+        // Create state with auth disabled
+        let state = create_test_state(false);
+
+        // Create the core routes
+        let router = CoreRouter::create_core_routes(state);
+
+        // Test the public health endpoint
+        let response = send_request(router, "/health", Method::GET).await;
+
+        // Verify status and response body
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let health_response: HealthCheckResponse = serde_json::from_slice(&body).unwrap();
+        assert_eq!(health_response.status, "healthy");
+    }
+
+    #[tokio::test]
+    async fn test_actuator_routes_registration() {
+        // Create state with auth disabled for easy testing
+        let state = create_test_state(false);
+
+        // Create the core routes
+        let router = CoreRouter::create_core_routes(state);
+
+        // Test the actuator health endpoint
+        let response = send_request(router.clone(), "/actuator/health", Method::GET).await;
+
+        // Verify status and response type
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let health_response: DetailedHealthResponse = serde_json::from_slice(&body).unwrap();
+        assert_eq!(health_response.status, "healthy");
+
+        // Test actuator info endpoint
+        let response = send_request(router, "/actuator/info", Method::GET).await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_actuator_routes_with_auth_enabled() {
+        // Create state with auth enabled
+        let state = create_test_state(true);
+
+        // Create the core routes
+        let router = CoreRouter::create_core_routes(state);
+
+        // Test the actuator health endpoint without auth token
+        // This should fail with 401 Unauthorized because auth is enabled
+        let response = send_request(router, "/actuator/health", Method::GET).await;
+
+        // Verify we get 401 Unauthorized
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_route_not_found() {
+        // Create state with auth disabled
+        let state = create_test_state(false);
+
+        // Create the core routes
+        let router = CoreRouter::create_core_routes(state);
+
+        // Test a non-existent route
+        let response = send_request(router, "/not-found", Method::GET).await;
+
+        // Verify we get a 404 Not Found
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+}
+
 // Test moved to tests/router_integration_test.rs

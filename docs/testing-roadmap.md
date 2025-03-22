@@ -1,19 +1,20 @@
 # Testing Roadmap
 
 ## Current Status
-- Test coverage: ~50% of core modules
+- Test coverage: ~60% of core modules
 - Unit tests: Implemented in most core modules
 - Integration tests: Basic framework set up with initial routes test
 - API logger module fully tested
+- Router module fully tested
 
 ## Next Steps (Prioritized)
 
 ### High Priority
-1. Router module tests
-   - [ ] Test route registration
-   - [ ] Test middleware application
-   - [ ] Test error handling middleware
-   - [ ] Test authentication integration
+1. ~~Router module tests~~
+   - [x] Test route registration
+   - [x] Test middleware application
+   - [x] Test error handling middleware
+   - [x] Test authentication integration
 
 2. Auth module tests (security critical)
    - [ ] Token validation
@@ -49,10 +50,15 @@
   - [x] All logging helper functions
   - [x] Check response status function
   - [x] Different HTTP status code scenarios
+- [x] Router module tests:
+  - [x] Core router route registration
+  - [x] App router middleware application
+  - [x] Route error handling
+  - [x] Authentication layer integration
 
 ## Progress Tracking
 - Last updated: April 24, 2024
-- Current test count: 33 (30 unit tests, 1 integration test, 2 doc tests)
+- Current test count: 41 (38 unit tests, 1 integration test, 2 doc tests)
 - Test coverage target: 80% of all modules
 - Target completion: Core tests within 1 week, full suite within 2 weeks
 - Check-in frequency: Review progress daily, update roadmap weekly 

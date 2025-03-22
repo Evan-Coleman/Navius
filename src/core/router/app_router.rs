@@ -166,3 +166,190 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
 
     (state, addr)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::{self, Body},
+        http::{HeaderMap, HeaderValue, Method, Request, StatusCode},
+        response::Response,
+        routing::get,
+    };
+    use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
+    use std::sync::Arc;
+    use tower::ServiceExt;
+
+    // Simple handler for testing
+    async fn test_handler() -> &'static str {
+        "test_response"
+    }
+
+    // Handler that returns headers from the request
+    async fn echo_headers(headers: HeaderMap) -> String {
+        headers
+            .iter()
+            .map(|(k, v)| format!("{}: {}", k, v.to_str().unwrap_or("invalid")))
+            .collect::<Vec<String>>()
+            .join(", ")
+    }
+
+    // Create minimal app state for testing
+    fn create_test_state() -> Arc<AppState> {
+        let config = AppConfig::default();
+        let metrics_recorder = PrometheusBuilder::new().build_recorder();
+        let metrics_handle: PrometheusHandle = metrics_recorder.handle();
+
+        Arc::new(AppState {
+            client: Client::new(),
+            config,
+            start_time: SystemTime::now(),
+            cache_registry: None,
+            metrics_handle,
+            token_client: None,
+            resource_registry: crate::utils::api_resource::ApiResourceRegistry::new(),
+        })
+    }
+
+    // Helper to make a request to the router with optional headers
+    async fn send_request(
+        router: Router,
+        uri: &str,
+        method: Method,
+        headers: Option<HeaderMap>,
+    ) -> Response {
+        let mut req_builder = Request::builder().uri(uri).method(method);
+
+        // Add headers if provided
+        if let Some(hdrs) = headers {
+            for (name, value) in hdrs.iter() {
+                req_builder = req_builder.header(name, value);
+            }
+        }
+
+        let req = req_builder.body(Body::empty()).unwrap();
+        router.oneshot(req).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_merge_user_routes() {
+        // Create test state
+        let state = create_test_state();
+
+        // Create test user routes
+        let user_routes = Router::new().route("/test", get(test_handler));
+
+        // Create app router by merging core and user routes
+        let app_router = create_core_app_router(state, user_routes);
+
+        // Test user route
+        let response = send_request(app_router, "/test", Method::GET, None).await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Get response body
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8(body.to_vec()).unwrap();
+        assert_eq!(body_str, "test_response");
+    }
+
+    #[tokio::test]
+    async fn test_timeout_middleware() {
+        // Create test state with very short timeout
+        let state = {
+            let config = {
+                let mut cfg = AppConfig::default();
+                // Set a very low timeout for testing
+                cfg.server.timeout_seconds = 1;
+                cfg
+            };
+
+            let metrics_recorder = PrometheusBuilder::new().build_recorder();
+            let metrics_handle: PrometheusHandle = metrics_recorder.handle();
+
+            Arc::new(AppState {
+                client: Client::new(),
+                config,
+                start_time: SystemTime::now(),
+                cache_registry: None,
+                metrics_handle,
+                token_client: None,
+                resource_registry: crate::utils::api_resource::ApiResourceRegistry::new(),
+            })
+        };
+
+        // Handler that simulates a slow response
+        async fn slow_handler() -> &'static str {
+            // Sleep for longer than the timeout
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            "slow_response"
+        }
+
+        // Create test user routes with a slow handler
+        let user_routes = Router::new().route("/slow", get(slow_handler));
+
+        // Create app router with the timeout middleware
+        let app_router = create_core_app_router(state, user_routes);
+
+        // Test slow route - should time out
+        let response = send_request(app_router, "/slow", Method::GET, None).await;
+
+        // Expect request timeout status code
+        assert_eq!(response.status(), StatusCode::REQUEST_TIMEOUT);
+    }
+
+    #[tokio::test]
+    async fn test_request_headers_middleware() {
+        // Create test state
+        let state = create_test_state();
+
+        // User route that tests if headers are properly propagated
+        let user_routes = Router::new().route("/echo-headers", get(echo_headers));
+
+        // Create app router with middleware
+        let app_router = create_core_app_router(state, user_routes);
+
+        // Create custom headers
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Test-Header", HeaderValue::from_static("test-value"));
+        headers.insert("Accept", HeaderValue::from_static("application/json"));
+
+        // Send request with headers
+        let response = send_request(app_router, "/echo-headers", Method::GET, Some(headers)).await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Verify headers were passed through middleware
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8(body.to_vec()).unwrap();
+
+        // Check that our test headers are present
+        assert!(body_str.contains("x-test-header: test-value"));
+        assert!(body_str.contains("accept: application/json"));
+    }
+
+    #[tokio::test]
+    async fn test_init_app_state() {
+        // Mock environment variables for testing - using unsafe blocks for environment manipulation
+        unsafe {
+            std::env::set_var("RUST_BACKEND_SERVER_PORT", "8081");
+            std::env::set_var("RUST_BACKEND_CACHE_ENABLED", "false");
+        }
+
+        // Initialize app state
+        let (state, addr) = init_app_state().await;
+
+        // Verify state was initialized correctly
+        assert_eq!(addr.port(), 8081);
+        assert_eq!(state.config.cache.enabled, false);
+        assert!(state.cache_registry.is_none());
+
+        // Cleanup environment variables
+        unsafe {
+            std::env::remove_var("RUST_BACKEND_SERVER_PORT");
+            std::env::remove_var("RUST_BACKEND_CACHE_ENABLED");
+        }
+    }
+}
