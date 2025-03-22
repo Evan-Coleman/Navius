@@ -1,20 +1,23 @@
-//! API module
+//! User-defined API endpoints and handlers
 //!
-//! This module contains the API routes and handlers.
+//! This module allows you to define custom API endpoints and handlers
+//! that build upon the core API functionality. Follow the established
+//! patterns and error handling guidelines when creating new endpoints.
 
-pub mod users;
+use crate::core::{api, error::Result};
 
-#[cfg(test)]
-mod users_test;
+// Re-export core API components for convenience
+pub use api::*;
 
-use axum::Router;
-
-use crate::core::router::AppState;
-use std::sync::Arc;
-
-/// Configure all API routes
-pub fn configure() -> Router<Arc<AppState>> {
-    Router::new()
-        // User management endpoints
-        .merge(users::configure())
-}
+// Add your custom API endpoints below
+// Example:
+// pub mod user_api;
+// pub mod profile_api;
+//
+// Remember to:
+// 1. Use proper error handling with AppError
+// 2. Follow REST conventions
+// 3. Document your endpoints with OpenAPI annotations
+// 4. Add appropriate validation
+// 5. Include unit and integration tests
+// 6. Use the ApiContext for request handling

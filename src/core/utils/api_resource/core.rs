@@ -9,10 +9,9 @@ use std::{any::Any, fmt::Debug, sync::Arc};
 use tracing::{debug, info, warn};
 
 use crate::{
-    core::router::AppState,
+    core::{router::AppState, utils::api_logger},
     error::{AppError, Result},
     generated_apis::petstore_api::models::Upet,
-    utils::api_logger,
 };
 
 /// Trait for API resources that can be cached and retrieved

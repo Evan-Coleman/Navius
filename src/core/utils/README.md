@@ -1,62 +1,99 @@
-# Core Utility Modules
+# Utility Extensions
 
-This directory contains the core utility implementations that power the application's utility features. These utilities provide foundational functionality that can be extended by users in the `src/utils` directory.
+This module provides a user-friendly interface to extend the core utility features of the application. The core utility implementation is in `src/core/utils`.
 
-## Modules
+## Structure
 
-- `api_logger` - Core API logging functionality
-- `api_resource` - API resource abstractions
-- `openapi` - OpenAPI specification utilities
+- `api_logger.rs` - Extend API logging functionality
+- `api_resource` - Extend API resource abstractions
+- `openapi.rs` - Extend OpenAPI utilities
 
-## API Resource
+## Usage
 
-The API resource module provides a high-level abstraction for working with API resources, handling common concerns like:
+### API Resource Extensions
 
-- Caching
-- Retries
-- Error handling
-- Logging
-- Metrics
-
-### Key Components
-
-- `ApiResource` trait - A trait representing an API resource entity
-- `ApiHandlerOptions` - Configuration options for API handlers
-- `create_api_handler` - Factory function for creating API request handlers
-- `ApiResourceRegistry` - Registry for tracking API resources
-
-### Example Usage
+The `api_resource` module provides a high-level abstraction for working with API resources. You can extend it with custom functionality:
 
 ```rust
-// Create a handler for fetching a pet resource
-let pet_handler = create_api_handler(
-    fetch_pet_from_api,
-    ApiHandlerOptions {
-        use_cache: true,
-        use_retries: true,
-        max_retry_attempts: 3,
-        cache_ttl_seconds: 300,
-        detailed_logging: true,
-    }
-);
+// In src/utils/api_resource/mod.rs
 
-// Register the pet resource type in the registry
-register_resource::<Pet>(&app_state, None)?;
+/// Create a custom health check for API resources
+pub fn create_custom_health_check<T: ApiResource>(
+    api_url: String
+) -> impl Fn(&Arc<AppState>) -> futures::future::BoxFuture<'static, DependencyStatus> + Send + Sync + 'static {
+    move |state: &Arc<AppState>| {
+        let api_url = api_url.clone();
+        Box::pin(async move {
+            // Custom health check implementation
+            DependencyStatus {
+                name: format!("{} API", T::api_name()),
+                status: "healthy".to_string(),
+                details: Some(serde_json::json!({ "url": api_url })),
+            }
+        })
+    }
+}
 ```
 
-## API Logger
+### API Logger Extensions
 
-The API logger module provides utilities for logging API operations, including:
+The `api_logger` module provides utilities for logging API operations. You can extend it with custom logging functionality:
 
-- Request logging
-- Response logging
-- Error logging
-- Cache operation logging
+```rust
+// In src/utils/api_logger.rs
 
-## OpenAPI Utilities
+/// Log specialized API metrics
+pub fn log_api_metrics(
+    api_name: &str,
+    endpoint: &str,
+    duration_ms: u64,
+    status_code: u16,
+) {
+    info!(
+        "📊 API metrics - {}: endpoint={}, duration={}ms, status={}",
+        api_name, endpoint, duration_ms, status_code
+    );
+    
+    // Record metrics
+    metrics::histogram!(
+        "api_request_duration_ms", 
+        duration_ms as f64,
+        "api" => api_name.to_string(),
+        "endpoint" => endpoint.to_string()
+    );
+}
+```
 
-The OpenAPI module provides utilities for working with OpenAPI specifications, including:
+### OpenAPI Extensions
 
-- Serving OpenAPI spec files
-- Validating OpenAPI specifications
-- Reading and writing spec files 
+The `openapi` module provides utilities for working with OpenAPI. You can extend it with custom functionality:
+
+```rust
+// In src/utils/openapi.rs
+
+/// Serve a custom OpenAPI document
+pub async fn serve_custom_openapi_doc(
+    State(state): State<Arc<AppState>>,
+    Path(doc_name): Path<String>
+) -> impl IntoResponse {
+    let base_path = state.config.openapi_spec_path();
+    let parent_dir = PathBuf::from(&base_path).parent().unwrap_or(PathBuf::from("").as_path());
+    let custom_path = parent_dir.join(format!("{}.yaml", doc_name));
+    
+    match std::fs::read_to_string(custom_path) {
+        Ok(content) => {
+            (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "text/yaml")],
+                content,
+            )
+        }
+        Err(_) => {
+            (
+                StatusCode::NOT_FOUND,
+                [(header::CONTENT_TYPE, "text/plain")],
+                format!("Custom OpenAPI doc '{}' not found", doc_name),
+            )
+        }
+    }
+} 

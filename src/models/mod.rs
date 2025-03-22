@@ -1,56 +1,22 @@
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+//! User-defined models that extend the core data structures
+//!
+//! This module allows you to define custom models and data structures
+//! that build upon the core models. Follow the established patterns
+//! and error handling guidelines when creating new models.
 
-/// Basic health check response structure
-///
-/// For simple Kubernetes/Load Balancer health checks
-#[derive(Debug, Serialize, Deserialize)]
-pub struct HealthCheckResponse {
-    pub status: String,
-    pub version: String,
-    pub uptime_seconds: u64,
-    pub dependencies: Option<Vec<DependencyStatus>>,
-}
+use crate::core::error::Result;
+use crate::core::models;
 
-/// Dependency status for detailed health checks
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DependencyStatus {
-    pub name: String,
-    pub status: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub details: Option<BTreeMap<String, String>>,
-}
+// Re-export core models for convenience
+pub use models::*;
 
-/// Detailed health check response structure
-///
-/// For administrators and detailed monitoring
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DetailedHealthResponse {
-    pub status: String,
-    pub version: String,
-    pub uptime_seconds: u64,
-    pub environment: String,
-    pub dependencies: Vec<DependencyStatus>,
-}
-
-/// Actuator entry for key-value responses
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ActuatorEntry {
-    pub name: String,
-    pub value: String,
-}
-
-/// Info endpoint response structure
-#[derive(Debug, Serialize, Deserialize)]
-pub struct InfoResponse {
-    pub status: String,
-    pub entries: Vec<ActuatorEntry>,
-}
-
-/// API response schema
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ApiResponse {
-    pub code: Option<i32>,
-    pub r#type: Option<String>,
-    pub message: Option<String>,
-}
+// Add your custom models below
+// Example:
+// pub mod user;
+// pub mod profile;
+//
+// Remember to:
+// 1. Implement proper error handling using AppError
+// 2. Add validation methods where appropriate
+// 3. Implement necessary database traits
+// 4. Add unit tests for your models

@@ -24,7 +24,7 @@ This roadmap outlines a plan to iteratively restructure the Navius project to im
 
 ### 2. Standardize Source Code Organization 🚧
 - [x] Move services module to core and create user-facing scaffold
-- [ ] Move remaining modules (models, repository, api, utils)
+- [x] Move remaining modules (models, repository, api, utils)
 - [ ] Update import paths throughout the codebase
 - [ ] Verify all tests pass after migration
 

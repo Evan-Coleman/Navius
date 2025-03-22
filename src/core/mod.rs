@@ -1,3 +1,4 @@
+pub mod api;
 pub mod auth;
 pub mod cache;
 pub mod config;
@@ -5,7 +6,9 @@ pub mod database;
 pub mod error;
 pub mod handlers;
 pub mod metrics;
+pub mod models;
 pub mod reliability;
+pub mod repository;
 pub mod router;
 pub mod services;
 pub mod utils;
@@ -19,7 +22,6 @@ pub use error::{AppError, Result};
 pub use metrics::{init_metrics, metrics_handler, try_record_metrics};
 pub use reliability::apply_reliability;
 pub use router::CoreRouter;
-pub use services::*;
 pub use utils::api_resource::{
     ApiHandlerOptions, ApiResource, ApiResourceRegistry, create_api_handler,
 };

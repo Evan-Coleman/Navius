@@ -5,15 +5,15 @@ use axum::{
 use std::sync::Arc;
 use tracing::info;
 
-use crate::{
-    core::router::AppState,
+use crate::core::{
     error::{AppError, Result},
-    generated_apis::petstore_api::models::Upet,
+    router::AppState,
     utils::{
         api_logger,
         api_resource::{ApiHandlerOptions, ApiResource, create_api_handler},
     },
 };
+use crate::generated_apis::petstore_api::models::Upet;
 
 // Implement the ApiResource trait for our model
 impl ApiResource for Upet {

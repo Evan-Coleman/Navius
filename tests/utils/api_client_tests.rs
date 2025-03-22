@@ -3,7 +3,9 @@ use fake::locales::EN;
 use fake::{Fake, Faker};
 use navius::core::config::app_config::{AppConfig, ServerConfig};
 use navius::core::error::AppError;
-use navius::core::utils::api_client::{ApiHandler, check_response_status, create_api_client};
+use navius::core::utils::api_logger::{
+    RequestLogger, api_call, check_response_status, create_api_client,
+};
 use navius::core::utils::api_resource::ApiResource;
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
@@ -19,7 +21,7 @@ impl ApiResource for TestResource {
     type Id = String;
 
     fn resource_type() -> &'static str {
-        "test_resources"
+        "test"
     }
 
     fn api_name() -> &'static str {
