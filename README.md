@@ -2,7 +2,7 @@
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://gitlab.com/ecoleman2/navius)
 [![Test Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)](https://gitlab.com/ecoleman2/navius)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Rust Version](https://img.shields.io/badge/rust-stable-orange)](https://www.rust-lang.org/)
 [![Primary: GitLab](https://img.shields.io/badge/primary-gitlab-orange)](https://gitlab.com/ecoleman2/navius)
 [![Mirror: GitHub](https://img.shields.io/badge/mirror-github-black)](https://github.com/Evan-Coleman/Navius)
@@ -146,6 +146,6 @@ Coming from Spring Boot? Check out our [migration guide](docs/spring-boot-migrat
 
 Contributions are welcome! Please check out our [contributing guide](CONTRIBUTING.md) to get started.
 
-## 📄 License
+## �� License
 
-Navius is MIT licensed. See [LICENSE](LICENSE) for details. 
+Navius is Apache 2.0 licensed. See [LICENSE](LICENSE) for details. 
