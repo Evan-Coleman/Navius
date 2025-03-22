@@ -92,6 +92,8 @@ Environment variables can also be used to override any configuration value from 
 
 ### Running the Server
 
+You can run the server with:
+
 ```bash
 ./run_server.sh
 ```
@@ -119,6 +121,38 @@ cargo run
 ```
 
 The server will start on http://localhost:3000 by default.
+
+### Local Database
+
+For local development, you can use Docker to run a PostgreSQL instance:
+
+```bash
+# From the project root:
+cd test/resources/docker
+docker-compose -f docker-compose.dev.yml up -d
+```
+
+This will create a PostgreSQL database accessible at:
+- Host: localhost
+- Port: 5432
+- User: postgres
+- Password: postgres
+- Database: app
+
+To use with the application, ensure your `config/development.yaml` has the database section enabled:
+
+```yaml
+database:
+  enabled: true
+  url: "postgres://postgres:postgres@localhost:5432/app"
+  max_connections: 10
+  connect_timeout_seconds: 30
+  idle_timeout_seconds: 300
+```
+
+> **Note**: This configuration is for local development only. Production deployments use AWS RDS.
+
+For detailed implementation of the PostgreSQL connection, see the [PostgreSQL Integration Guide](docs/postgresql_integration.md).
 
 ## API Documentation
 

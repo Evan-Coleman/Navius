@@ -3,7 +3,7 @@
 //! This module provides functionality for connecting to PostgreSQL databases,
 //! managing connections, and executing type-safe queries.
 
-mod connection;
+pub mod connection;
 pub mod error;
 mod transaction;
 
@@ -29,6 +29,9 @@ pub trait PgPool: Send + Sync + 'static {
 
     /// Begin a new transaction
     async fn begin(&self) -> Result<Box<dyn PgTransaction>, AppError>;
+
+    /// Get as Any for downcasting
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 /// PostgreSQL Transaction trait

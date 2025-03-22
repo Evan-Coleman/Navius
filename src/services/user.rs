@@ -77,6 +77,18 @@ impl UserService {
         Ok(user)
     }
 
+    /// Get a user by email
+    pub async fn find_by_email(&self, email: &str) -> ServiceResult<User> {
+        let user = self
+            .user_repository
+            .find_by_email(email)
+            .await
+            .map_err(|e| ServiceError::Repository(e.to_string()))?
+            .ok_or(ServiceError::UserNotFound)?;
+
+        Ok(user)
+    }
+
     /// Create a new user
     pub async fn create_user(&self, data: CreateUserDto) -> ServiceResult<User> {
         // Check if username already exists

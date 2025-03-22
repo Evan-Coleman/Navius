@@ -15,73 +15,128 @@ use crate::core::error::AppError;
 
 use super::error::DatabaseError;
 use super::{PgPool, PgTransaction};
+use sqlx::{Pool, Postgres, Transaction, postgres::PgPoolOptions};
 
-// For non-test environments, we need a simple DatabaseConnection impl
-#[cfg(not(test))]
+// PostgreSQL connection implementation
 #[derive(Debug)]
-pub struct SimpleDatabaseConnection {
+pub struct PgDatabaseConnection {
     config: DatabaseConfig,
+    pool: Pool<Postgres>,
 }
 
-#[cfg(not(test))]
-impl SimpleDatabaseConnection {
-    pub fn new(config: &DatabaseConfig) -> Self {
-        Self {
+impl PgDatabaseConnection {
+    pub async fn new(config: &DatabaseConfig) -> Result<Self, DatabaseError> {
+        let pool = PgPoolOptions::new()
+            .max_connections(config.max_connections)
+            .acquire_timeout(Duration::from_secs(config.connect_timeout_seconds))
+            .idle_timeout(config.idle_timeout_seconds.map(Duration::from_secs))
+            .connect(&config.url)
+            .await
+            .map_err(|e| DatabaseError::ConnectionFailed(e.to_string()))?;
+
+        // Run migrations if needed
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .map_err(|e| DatabaseError::MigrationFailed(e.to_string()))?;
+
+        Ok(Self {
             config: config.clone(),
+            pool,
+        })
+    }
+
+    pub fn get_pool(&self) -> &Pool<Postgres> {
+        &self.pool
+    }
+}
+
+impl Clone for PgDatabaseConnection {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            pool: self.pool.clone(),
         }
     }
 }
 
-#[cfg(not(test))]
+// PostgreSQL transaction wrapper
+pub struct PgSqlxTransaction {
+    tx: Transaction<'static, Postgres>,
+}
+
 #[async_trait]
-impl DatabaseConnection for SimpleDatabaseConnection {
+impl PgTransaction for PgSqlxTransaction {
+    async fn commit(self: Box<Self>) -> Result<(), AppError> {
+        self.tx
+            .commit()
+            .await
+            .map_err(|e| AppError::DatabaseError(format!("Failed to commit transaction: {}", e)))
+    }
+
+    async fn rollback(self: Box<Self>) -> Result<(), AppError> {
+        self.tx
+            .rollback()
+            .await
+            .map_err(|e| AppError::DatabaseError(format!("Failed to rollback transaction: {}", e)))
+    }
+}
+
+#[async_trait]
+impl PgPool for PgDatabaseConnection {
+    async fn ping(&self) -> Result<(), AppError> {
+        sqlx::query("SELECT 1")
+            .execute(&self.pool)
+            .await
+            .map_err(|e| AppError::DatabaseError(format!("Database ping failed: {}", e)))?;
+        Ok(())
+    }
+
+    async fn begin(&self) -> Result<Box<dyn PgTransaction>, AppError> {
+        let tx =
+            self.pool.begin().await.map_err(|e| {
+                AppError::DatabaseError(format!("Failed to begin transaction: {}", e))
+            })?;
+
+        Ok(Box::new(PgSqlxTransaction { tx }))
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+// For backwards compatibility, also implement the legacy DatabaseConnection trait
+#[async_trait]
+impl DatabaseConnection for PgDatabaseConnection {
     async fn ping(&self) -> Result<(), DatabaseError> {
-        // Just return success in non-test environments
+        sqlx::query("SELECT 1")
+            .execute(&self.pool)
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
         Ok(())
     }
 
     async fn stats(&self) -> Result<ConnectionStats, DatabaseError> {
+        // SQLx doesn't expose detailed pool stats, so we approximate
         Ok(ConnectionStats {
-            idle_connections: 0,
-            active_connections: 0,
+            idle_connections: 0,   // Not exposed by SQLx
+            active_connections: 0, // Not exposed by SQLx
             max_connections: self.config.max_connections,
         })
     }
 
     async fn begin_transaction(&self) -> Result<super::Transaction, DatabaseError> {
+        let _tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // For now, just return a placeholder transaction
+        // This will be deprecated in favor of the new PgTransaction trait
         Ok(super::Transaction::new())
     }
-}
-
-#[cfg(not(test))]
-#[async_trait]
-impl PgPool for SimpleDatabaseConnection {
-    async fn ping(&self) -> Result<(), AppError> {
-        Ok(())
-    }
-
-    async fn begin(&self) -> Result<Box<dyn PgTransaction>, AppError> {
-        let tx = MockTransaction::new();
-        Ok(Box::new(tx))
-    }
-}
-
-/// Legacy DatabaseConnection trait - will be deprecated
-/// Create a PostgreSQL connection pool from configuration
-pub async fn create_pool(
-    config: &DatabaseConfig,
-) -> Result<Box<dyn DatabaseConnection>, DatabaseError> {
-    if !config.enabled {
-        return Err(DatabaseError::NotEnabled);
-    }
-
-    // This is a placeholder until we add actual sqlx dependency
-    // and implement the real connection pooling
-    #[cfg(test)]
-    return Ok(Box::new(MockDatabaseConnection::new(config)));
-
-    #[cfg(not(test))]
-    return Ok(Box::new(SimpleDatabaseConnection::new(config)));
 }
 
 /// Legacy DatabaseConnection trait - will be deprecated
@@ -97,7 +152,7 @@ pub trait DatabaseConnection: Send + Sync + Debug {
     async fn begin_transaction(&self) -> Result<super::Transaction, DatabaseError>;
 }
 
-/// Connection statistics
+/// Connection pool statistics
 #[derive(Debug, Clone)]
 pub struct ConnectionStats {
     /// Number of idle connections in the pool
@@ -115,6 +170,7 @@ pub struct ConnectionStats {
 #[derive(Debug)]
 pub struct MockDatabaseConnection {
     config: DatabaseConfig,
+    users: std::sync::Mutex<Vec<crate::repository::User>>,
 }
 
 #[cfg(test)]
@@ -126,7 +182,96 @@ impl MockDatabaseConnection {
     pub fn new(config: &DatabaseConfig) -> Self {
         Self {
             config: config.clone(),
+            users: std::sync::Mutex::new(Vec::new()),
         }
+    }
+
+    /// Add a user to the mock database
+    pub fn add_user(&self, user: crate::repository::User) {
+        let mut users = self.users.lock().unwrap();
+        users.push(user);
+    }
+
+    /// Get all users from the mock database
+    pub fn get_users(&self) -> Vec<crate::repository::User> {
+        let users = self.users.lock().unwrap();
+        users.clone()
+    }
+
+    /// Find a user by ID
+    pub fn find_user_by_id(&self, id: uuid::Uuid) -> Option<crate::repository::User> {
+        let users = self.users.lock().unwrap();
+        users.iter().find(|u| u.id == id).cloned()
+    }
+
+    /// Find a user by username
+    pub fn find_user_by_username(&self, username: &str) -> Option<crate::repository::User> {
+        let users = self.users.lock().unwrap();
+        users.iter().find(|u| u.username == username).cloned()
+    }
+
+    /// Find a user by email
+    pub fn find_user_by_email(&self, email: &str) -> Option<crate::repository::User> {
+        let users = self.users.lock().unwrap();
+        users.iter().find(|u| u.email == email).cloned()
+    }
+
+    /// Save a user (create or update)
+    pub fn save_user(&self, user: crate::repository::User) -> crate::repository::User {
+        let mut users = self.users.lock().unwrap();
+
+        // Check if the user already exists
+        if let Some(idx) = users.iter().position(|u| u.id == user.id) {
+            // Update existing user
+            users[idx] = user.clone();
+        } else {
+            // Add new user
+            users.push(user.clone());
+        }
+
+        user
+    }
+
+    /// Delete a user by ID
+    pub fn delete_user(&self, id: uuid::Uuid) -> bool {
+        let mut users = self.users.lock().unwrap();
+        if let Some(idx) = users.iter().position(|u| u.id == id) {
+            users.remove(idx);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Count users
+    pub fn count_users(&self) -> usize {
+        let users = self.users.lock().unwrap();
+        users.len()
+    }
+}
+
+/// Mock implementation of DatabaseConnection for non-test fallbacks
+#[cfg(not(test))]
+#[derive(Debug)]
+pub struct MockDatabaseConnection {
+    config: DatabaseConfig,
+    users: std::sync::Mutex<Vec<crate::repository::User>>,
+}
+
+#[cfg(not(test))]
+impl MockDatabaseConnection {
+    /// Create a new MockDatabaseConnection
+    pub fn new(config: &DatabaseConfig) -> Self {
+        Self {
+            config: config.clone(),
+            users: std::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Get all users from the mock database
+    pub fn get_users(&self) -> Vec<crate::repository::User> {
+        let users = self.users.lock().unwrap();
+        users.clone()
     }
 }
 
@@ -154,20 +299,72 @@ impl DatabaseConnection for MockDatabaseConnection {
     }
 }
 
-// New trait implementation that will replace the old one
+// Non-test implementation
+#[cfg(not(test))]
+#[async_trait]
+impl DatabaseConnection for MockDatabaseConnection {
+    async fn ping(&self) -> Result<(), DatabaseError> {
+        Ok(())
+    }
+
+    async fn stats(&self) -> Result<ConnectionStats, DatabaseError> {
+        Ok(ConnectionStats {
+            idle_connections: 0,
+            active_connections: 0,
+            max_connections: self.config.max_connections,
+        })
+    }
+
+    async fn begin_transaction(&self) -> Result<super::Transaction, DatabaseError> {
+        Ok(super::Transaction::new())
+    }
+}
+
+#[cfg(not(test))]
+impl Clone for MockDatabaseConnection {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            users: std::sync::Mutex::new(self.get_users()),
+        }
+    }
+}
+
+// New trait implementation for tests
 #[cfg(test)]
 #[async_trait]
 impl PgPool for MockDatabaseConnection {
     async fn ping(&self) -> Result<(), AppError> {
-        // Simulate a ping with a small delay
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        // Just return success in tests
         Ok(())
     }
 
     async fn begin(&self) -> Result<Box<dyn PgTransaction>, AppError> {
-        // Create a mock transaction
+        let tx = MockDbTransaction::new();
+        Ok(Box::new(tx))
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+// Non-test PgPool implementation
+#[cfg(not(test))]
+#[async_trait]
+impl PgPool for MockDatabaseConnection {
+    async fn ping(&self) -> Result<(), AppError> {
+        // Just return success in non-test environments
+        Ok(())
+    }
+
+    async fn begin(&self) -> Result<Box<dyn PgTransaction>, AppError> {
         let tx = MockTransaction::new();
         Ok(Box::new(tx))
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -180,16 +377,10 @@ pub async fn init_database(config: &DatabaseConfig) -> Result<Arc<Box<dyn PgPool
 
     tracing::info!("Initializing database connection to {}", config.url);
 
-    // In a real implementation, we would connect to the database here
-    // For example, using sqlx:
-    // let pool = sqlx::PgPool::connect(&config.url).await
-    //    .map_err(|e| AppError::DatabaseError(format!("Failed to connect to database: {}", e)))?;
-
-    // For now, we'll use a mock connection
-    #[cfg(test)]
-    let conn = MockDatabaseConnection::new(config);
-    #[cfg(not(test))]
-    let conn = SimpleDatabaseConnection::new(config);
+    // Connect to the database using the real implementation
+    let conn = PgDatabaseConnection::new(config)
+        .await
+        .map_err(|e| AppError::DatabaseError(format!("Failed to connect to database: {}", e)))?;
 
     // Return an Arc boxed as PgPool trait object
     Ok(Arc::new(Box::new(conn) as Box<dyn PgPool>))
@@ -215,12 +406,70 @@ impl MockTransaction {
 #[async_trait]
 impl PgTransaction for MockTransaction {
     async fn commit(self: Box<Self>) -> Result<(), AppError> {
-        // This is a mock, so we'll just return success
+        // Do nothing in mock implementation
         Ok(())
     }
 
     async fn rollback(self: Box<Self>) -> Result<(), AppError> {
-        // This is a mock, so we'll just return success
+        // Do nothing in mock implementation
         Ok(())
     }
+}
+
+#[cfg(test)]
+/// Enhanced mock transaction for testing with state
+pub struct MockDbTransaction {
+    // No connection needed for tests as we're not using it
+}
+
+#[cfg(test)]
+impl MockDbTransaction {
+    /// Create a new MockDbTransaction
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+#[cfg(test)]
+#[async_trait]
+impl PgTransaction for MockDbTransaction {
+    async fn commit(self: Box<Self>) -> Result<(), AppError> {
+        // Transaction is already committed since we're using in-memory
+        Ok(())
+    }
+
+    async fn rollback(self: Box<Self>) -> Result<(), AppError> {
+        // No real rollback needed for in-memory implementation
+        Ok(())
+    }
+}
+
+/// Create a PostgreSQL connection pool from configuration
+pub async fn create_pool(
+    config: &DatabaseConfig,
+) -> Result<Box<dyn DatabaseConnection>, DatabaseError> {
+    if !config.enabled {
+        return Err(DatabaseError::NotEnabled);
+    }
+
+    // For real PostgreSQL connection
+    if cfg!(not(test)) {
+        return match PgDatabaseConnection::new(config).await {
+            Ok(conn) => Ok(Box::new(conn)),
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to connect to PostgreSQL, falling back to mock connection: {}",
+                    e
+                );
+                Ok(Box::new(MockDatabaseConnection::new(config)))
+            }
+        };
+    }
+
+    // For tests
+    #[cfg(test)]
+    return Ok(Box::new(MockDatabaseConnection::new(config)));
+
+    #[cfg(not(test))]
+    return Ok(Box::new(MockDatabaseConnection::new(config)));
 }

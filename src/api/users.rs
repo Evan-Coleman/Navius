@@ -5,11 +5,12 @@
 use axum::debug_handler;
 use axum::{
     Router,
-    extract::{Json, Path, State},
+    extract::{Json, Path, Query, State},
     http::StatusCode,
     routing::{delete, get, post, put},
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -144,11 +145,33 @@ fn map_service_error(err: ServiceError) -> (StatusCode, String) {
 #[debug_handler]
 async fn get_all_users(
     State(state): State<Arc<AppState>>,
+    Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Vec<UserResponse>>, (StatusCode, String)> {
     // Get user service from app state
     let user_service = get_user_service(state)?;
 
-    // Get all users from service
+    // Check if we have query parameters for filtering
+    if let Some(username) = params.get("username") {
+        // Find by username
+        let user = user_service
+            .get_user_by_username(username)
+            .await
+            .map_err(map_service_error)?;
+
+        // Return the user as a single item in an array
+        return Ok(Json(vec![UserResponse::from(user)]));
+    } else if let Some(email) = params.get("email") {
+        // Find by email
+        let user = user_service
+            .find_by_email(email)
+            .await
+            .map_err(map_service_error)?;
+
+        // Return the user as a single item in an array
+        return Ok(Json(vec![UserResponse::from(user)]));
+    }
+
+    // Get all users from service (no filter)
     let users = user_service
         .get_all_users()
         .await

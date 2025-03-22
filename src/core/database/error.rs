@@ -9,29 +9,37 @@ use crate::core::error::AppError;
 /// Database operation errors
 #[derive(Debug, thiserror::Error)]
 pub enum DatabaseError {
-    /// Database connection is not enabled in configuration
-    #[error("Database is not enabled in configuration")]
+    /// Database not enabled in configuration
+    #[error("Database not enabled in configuration")]
     NotEnabled,
 
-    /// Connection error
-    #[error("Database connection error: {0}")]
-    ConnectionError(String),
+    /// Database connection failed
+    #[error("Database connection failed: {0}")]
+    ConnectionFailed(String),
 
-    /// Query error
-    #[error("Database query error: {0}")]
-    QueryError(String),
+    /// Database query failed
+    #[error("Database query failed: {0}")]
+    QueryFailed(String),
+
+    /// Database transaction failed
+    #[error("Database transaction failed: {0}")]
+    TransactionFailed(String),
 
     /// Transaction error
-    #[error("Database transaction error: {0}")]
+    #[error("Transaction error: {0}")]
     TransactionError(String),
 
-    /// Migration error
-    #[error("Database migration error: {0}")]
-    MigrationError(String),
+    /// No rows returned by query
+    #[error("No rows returned by query")]
+    NoRows,
 
-    /// Row not found
-    #[error("Row not found")]
-    RowNotFound,
+    /// Database migration failed
+    #[error("Database migration failed: {0}")]
+    MigrationFailed(String),
+
+    /// Other database error
+    #[error("Database error: {0}")]
+    Other(String),
 }
 
 impl From<DatabaseError> for AppError {

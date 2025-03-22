@@ -1,0 +1,30 @@
+meta {
+  name: UpdateUser
+  type: http
+  seq: 13
+}
+
+put {
+  url: {{base_url}}/users/{{user_id}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token_set_by_collection_script}}
+}
+
+body:json {
+  {
+    "username": "brunouser",
+    "email": "updated@example.com",
+    "full_name": "Updated Bruno User1",
+    "role": "admin"
+  }
+}
+
+assert {
+  res.status: 200
+  res.body.email: "updated@example.com"
+  res.body.full_name: "Updated Bruno User"
+}

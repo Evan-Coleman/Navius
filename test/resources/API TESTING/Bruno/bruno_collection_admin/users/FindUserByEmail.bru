@@ -1,0 +1,23 @@
+meta {
+  name: FindUserByEmail
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{base_url}}/users?email=updated@example.com
+  body: none
+  auth: bearer
+}
+
+assert {
+  res.status: 200
+  res.body: isArray()
+  res.body.length: 1
+  res.body.0.username: "brunouser"
+  res.body.0.email: "updated@example.com"
+}
+
+auth:bearer {
+  token: {{access_token_set_by_collection_script}}
+} 

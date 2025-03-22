@@ -1,0 +1,28 @@
+meta {
+  name: CreateInvalidUser
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{base_url}}/users
+  body: json
+  auth: bearer
+}
+
+body:json {
+  {
+    "username": "",
+    "email": "not-an-email",
+    "full_name": "",
+    "role": "invalid-role"
+  }
+}
+
+assert {
+  res.status: 400
+}
+
+auth:bearer {
+  token: {{access_token_set_by_collection_script}}
+} 

@@ -43,6 +43,7 @@ tower = { version = "0.5.2", features = ["full"] }
 tower-http = { version = "0.6.2", features = ["trace", "timeout", "catch-panic", "request-id", "cors"] }
 uuid = { version = "1.16.0", features = ["v4", "serde"] }
 tracing-futures = "0.2.5"
+sqlx = { version = "0.8.3", features = ["runtime-tokio-rustls", "postgres", "macros", "chrono", "uuid", "json"] }
 
 # Authentication
 jsonwebtoken = "9.3.1"

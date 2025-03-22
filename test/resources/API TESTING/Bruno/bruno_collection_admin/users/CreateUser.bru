@@ -1,0 +1,32 @@
+meta {
+  name: CreateUser
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{base_url}}/users
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token_set_by_collection_script}}
+}
+
+body:json {
+  {
+    "username": "brunouser1",
+    "email": "bruno1@example.com",
+    "full_name": "Bruno Test User",
+    "role": "admin"
+  }
+}
+
+vars:post-response {
+  user_id: res.body.id
+}
+
+assert {
+  res.status: 201
+}
