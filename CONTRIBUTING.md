@@ -33,7 +33,7 @@ Please be respectful and considerate of others when contributing to this project
 
 4. Run the server:
    ```bash
-   ./run_server.sh
+   ./run_dev.sh
    ```
 
 ## Pull Request Process
@@ -58,4 +58,22 @@ Please be respectful and considerate of others when contributing to this project
 
 ## License
 
-By contributing to this project, you agree that your contributions will be licensed under the project's MIT License. 
+By contributing to this project, you agree that your contributions will be licensed under the project's MIT License.
+
+## Running the Application
+
+You can run the application using the wrapper script:
+
+```bash
+# For development (default mode)
+./run.sh
+
+# For production
+./run.sh --prod
+```
+
+Or specifically for development:
+
+```bash
+./run_dev.sh
+``` 

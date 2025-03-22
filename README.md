@@ -92,16 +92,30 @@ Environment variables can also be used to override any configuration value from 
 
 ### Running the Server
 
-You can run the server with:
+You can run the server using the unified wrapper script:
 
 ```bash
-./run_server.sh
+# For development (default)
+./run.sh
+
+# For production
+./run.sh --prod
 ```
 
-The script supports several options:
+This wrapper script will automatically choose the appropriate environment script based on the `--dev` or `--prod` flag.
+
+#### Development Mode
+
+For development specifically:
 
 ```bash
-./run_server.sh [OPTIONS]
+./run_dev.sh
+```
+
+The development script supports several options:
+
+```bash
+./run_dev.sh [OPTIONS]
 ```
 
 Options:
@@ -110,11 +124,16 @@ Options:
 - `--config-dir=DIR` - Use specified config directory (default: config)
 - `--env=FILE` - Use specified .env file (default: .env)
 - `--environment=ENV` - Use specified environment (default: development)
+- `--port=PORT` - Specify server port (default: 3000)
+- `--watch` - Restart server on file changes
+- `--run-migrations` - Run database migrations before starting
+- `--no-health-check` - Skip health check validation after startup
+- `--no-hooks` - Skip git hooks setup
 - `--help` - Show help message
 
 The script always preserves your manual settings in the API registry when generating APIs, ensuring that your customizations to `generate_api` and `generate_handlers` flags remain as you set them.
 
-Or manually (note the run_server.sh script has required steps to run the application so this may not work):
+Or manually (note the run_dev.sh script has required steps to run the application so this may not work):
 
 ```bash
 cargo run
@@ -244,10 +263,10 @@ For detailed documentation, see [API Resource Documentation](docs/api_resource.m
 
 The project includes a pre-commit hook that scans staged files for sensitive data like API keys, secrets, and database credentials to prevent accidental commits of confidential information.
 
-The hook is automatically set up when you run `./run_server.sh` for the first time. If you want to skip this automatic setup, use the `--no-hooks` flag:
+The hook is automatically set up when you run `./run_dev.sh` for the first time. If you want to skip this automatic setup, use the `--no-hooks` flag:
 
 ```bash
-./run_server.sh --no-hooks
+./run_dev.sh --no-hooks
 ```
 
 To manually set up the pre-commit hook:

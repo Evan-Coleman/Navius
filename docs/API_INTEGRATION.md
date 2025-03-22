@@ -380,10 +380,10 @@ Once you've implemented these changes, rebuild and run the application:
 
 ```bash
 cargo build
-./run_server.sh
+./run_dev.sh
 ```
 
-The `run_server.sh` script preserves your manual API registry settings by default.
+The `run_dev.sh` script preserves your manual API registry settings by default.
 
 Test the new endpoint with curl:
 
