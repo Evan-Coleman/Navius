@@ -327,6 +327,6 @@ This will install a pre-commit hook that:
 
 To customize the sensitive data patterns, edit `scripts/pre-commit.sh`.
 
-## License
+### License
 
 This project is licensed under the MIT License - see the LICENSE file for details. 
