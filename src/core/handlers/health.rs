@@ -102,8 +102,95 @@ pub async fn detailed_health_check(
     // Gather status of dependencies
     let mut dependencies = Vec::new();
 
-    // Database status (future expansion)
-    // let db_status = ...
+    // Database status
+    if state.config.database.enabled {
+        if let Some(db_pool) = &state.db_pool {
+            // Check database connectivity
+            let db_status = match db_pool.ping().await {
+                Ok(_) => {
+                    let mut details = BTreeMap::new();
+
+                    // Add database connection info
+                    details.insert(
+                        "connection_url".to_string(),
+                        if state.config.endpoint_security.expose_sensitive_info {
+                            state.config.database.url.clone()
+                        } else {
+                            // Hide sensitive connection details
+                            let parts: Vec<&str> = state.config.database.url.split('@').collect();
+                            if parts.len() > 1 {
+                                format!("postgres://*****@{}", parts[1])
+                            } else {
+                                "postgres://*****".to_string()
+                            }
+                        },
+                    );
+
+                    // Add connection stats if available
+                    // The stats method is only available in the old DatabaseConnection trait
+                    // We'll need to add this info in a different way for the new PgPool trait
+                    // For now, just add a placeholder
+                    details.insert(
+                        "max_connections".to_string(),
+                        state.config.database.max_connections.to_string(),
+                    );
+
+                    // Add connection timeout info
+                    details.insert(
+                        "connect_timeout_seconds".to_string(),
+                        state.config.database.connect_timeout_seconds.to_string(),
+                    );
+
+                    if let Some(idle_timeout) = state.config.database.idle_timeout_seconds {
+                        details
+                            .insert("idle_timeout_seconds".to_string(), idle_timeout.to_string());
+                    }
+
+                    DependencyStatus {
+                        name: "database".to_string(),
+                        status: "up".to_string(),
+                        details: Some(details),
+                    }
+                }
+                Err(e) => {
+                    let mut details = BTreeMap::new();
+                    details.insert("error".to_string(), e.to_string());
+                    details.insert("checked_at".to_string(), chrono::Utc::now().to_rfc3339());
+
+                    DependencyStatus {
+                        name: "database".to_string(),
+                        status: "down".to_string(),
+                        details: Some(details),
+                    }
+                }
+            };
+
+            dependencies.push(db_status);
+        } else {
+            // Database is enabled but not initialized
+            let mut details = BTreeMap::new();
+            details.insert(
+                "error".to_string(),
+                "Database enabled but not initialized".to_string(),
+            );
+
+            dependencies.push(DependencyStatus {
+                name: "database".to_string(),
+                status: "down".to_string(),
+                details: Some(details),
+            });
+        }
+    } else {
+        // Database not enabled
+        let mut details = BTreeMap::new();
+        details.insert("enabled".to_string(), "false".to_string());
+
+        dependencies.push(DependencyStatus {
+            name: "database".to_string(),
+            status: "disabled".to_string(),
+            details: Some(details),
+        });
+    }
 
     // Cache status with only enabled flag
     let mut cache_details = BTreeMap::new();

@@ -6,7 +6,8 @@ mod tests;
 pub use app_config::AppConfig;
 pub use app_config::load_config;
 use app_config::{
-    ApiConfig, AuthConfig, CacheConfig, LoggingConfig, ReliabilityConfig, ServerConfig,
+    ApiConfig, AuthConfig, CacheConfig, DatabaseConfig, LoggingConfig, ReliabilityConfig,
+    ServerConfig,
 };
 
 use lazy_static::lazy_static;
@@ -44,6 +45,7 @@ impl Default for AppConfig {
                 ttl_seconds: 3600,
                 reconnect_interval_seconds: 30,
             },
+            database: DatabaseConfig::default(),
             auth: AuthConfig::default(),
             reliability: ReliabilityConfig::default(),
             openapi: app_config::OpenApiConfig::default(),

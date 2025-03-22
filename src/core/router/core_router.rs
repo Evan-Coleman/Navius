@@ -83,6 +83,7 @@ mod tests {
             metrics_handle,
             token_client: None,
             resource_registry: ApiResourceRegistry::new(),
+            db_pool: None,
         })
     }
 

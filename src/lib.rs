@@ -56,3 +56,10 @@ pub mod reliability {
 pub mod utils {
     pub use crate::core::utils::*;
 }
+
+/// MockExtern trait implementation for test mocking
+#[cfg(test)]
+pub mod mockable {
+    /// Marker trait for types that can be mocked externally
+    pub trait MockExtern {}
+}

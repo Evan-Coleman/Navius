@@ -42,6 +42,7 @@ pub struct AppState {
     pub metrics_handle: PrometheusHandle,
     pub token_client: Option<EntraTokenClient>,
     pub resource_registry: crate::utils::api_resource::ApiResourceRegistry,
+    pub db_pool: Option<Arc<Box<dyn crate::core::database::PgPool>>>,
 }
 
 /// Create the core application router with middleware
@@ -123,6 +124,23 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
         None
     };
 
+    // Initialize database if enabled
+    let db_pool = if config.database.enabled {
+        match crate::core::init_database(&config.database).await {
+            Ok(pool) => {
+                info!("🔧 Database connection initialized");
+                Some(pool)
+            }
+            Err(e) => {
+                tracing::error!("❌ Failed to initialize database: {}", e);
+                None
+            }
+        }
+    } else {
+        info!("🔧 Database disabled");
+        None
+    };
+
     // Create API resource registry
     let resource_registry = crate::utils::api_resource::ApiResourceRegistry::new();
 
@@ -139,6 +157,7 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
             None
         },
         resource_registry,
+        db_pool,
     });
 
     // Register pet resources in the cache registry
@@ -208,6 +227,7 @@ mod tests {
             metrics_handle,
             token_client: None,
             resource_registry: crate::utils::api_resource::ApiResourceRegistry::new(),
+            db_pool: None,
         })
     }
 
@@ -276,6 +296,7 @@ mod tests {
                 metrics_handle,
                 token_client: None,
                 resource_registry: crate::utils::api_resource::ApiResourceRegistry::new(),
+                db_pool: None,
             })
         };
 

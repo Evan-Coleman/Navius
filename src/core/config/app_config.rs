@@ -28,6 +28,28 @@ pub struct CacheConfig {
     pub reconnect_interval_seconds: u64,
 }
 
+/// Database configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatabaseConfig {
+    pub enabled: bool,
+    pub url: String,
+    pub max_connections: u32,
+    pub connect_timeout_seconds: u64,
+    pub idle_timeout_seconds: Option<u64>,
+}
+
+impl Default for DatabaseConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            url: "postgres://postgres:postgres@localhost:5432/app".to_string(),
+            max_connections: 10,
+            connect_timeout_seconds: 30,
+            idle_timeout_seconds: Some(300),
+        }
+    }
+}
+
 /// API configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ApiConfig {
@@ -614,6 +636,10 @@ pub struct AppConfig {
     /// Cache configuration
     #[serde(default)]
     pub cache: CacheConfig,
+
+    /// Database configuration
+    #[serde(default)]
+    pub database: DatabaseConfig,
 
     /// Environment type (development, testing, staging, production)
     #[serde(default)]
