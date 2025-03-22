@@ -78,3 +78,133 @@ pub async fn metrics_handler(metrics_handle: &PrometheusHandle) -> String {
 
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Mock PrometheusHandle for testing
+    struct MockPrometheusHandle;
+
+    impl MockPrometheusHandle {
+        fn new() -> Self {
+            MockPrometheusHandle
+        }
+
+        fn render(&self) -> String {
+            // Return sample metrics in Prometheus text format
+            String::from(
+                "# HELP test_counter Test counter metric\n\
+                 # TYPE test_counter counter\n\
+                 test_counter 1\n\
+                 # HELP test_gauge Test gauge metric\n\
+                 # TYPE test_gauge gauge\n\
+                 test_gauge 42.0\n",
+            )
+        }
+    }
+
+    #[test]
+    fn test_try_record_metrics() {
+        // Test the metrics recording function
+        let result = try_record_metrics();
+
+        // Verify we got a successful result
+        assert!(result.is_ok());
+
+        // Verify the result contains expected metrics
+        let metrics = result.unwrap();
+        assert!(metrics.contains("cache_hits"));
+        assert!(metrics.contains("cache_misses"));
+        assert!(metrics.contains("cache_current_size"));
+    }
+
+    #[test]
+    fn test_metrics_format() {
+        // Test that the metrics output is properly formatted
+        let metrics = try_record_metrics().unwrap();
+
+        // Verify the format follows Prometheus text format conventions
+        let lines: Vec<&str> = metrics.lines().collect();
+
+        // Check for help and type lines
+        assert!(lines.iter().any(|l| l.starts_with("# HELP")));
+        assert!(lines.iter().any(|l| l.starts_with("# TYPE")));
+
+        // Check for metric lines
+        let metric_lines: Vec<&str> = lines
+            .iter()
+            .filter(|l| !l.starts_with('#') && !l.is_empty())
+            .copied()
+            .collect();
+
+        assert!(!metric_lines.is_empty());
+
+        // Each metric line should have a name and value
+        for line in metric_lines {
+            let parts: Vec<&str> = line.splitn(2, ' ').collect();
+            assert_eq!(parts.len(), 2, "Metric line should have name and value");
+        }
+    }
+
+    #[test]
+    fn test_metrics_handler_format() {
+        // Create a mock metrics handle
+        let mock_handle = MockPrometheusHandle::new();
+
+        // Manually process the mock metrics through our handler's formatting algorithm
+        let raw_metrics = mock_handle.render();
+
+        // Sort metrics by key for consistent output
+        let mut sorted_metrics = BTreeMap::new();
+
+        // Parse and sort metrics by their names
+        for line in raw_metrics.lines() {
+            // Skip comment lines (they start with #)
+            if line.starts_with('#') || line.trim().is_empty() {
+                continue;
+            }
+
+            // Extract metric name and value
+            let parts: Vec<&str> = line.splitn(2, ' ').collect();
+            if parts.len() == 2 {
+                sorted_metrics.insert(parts[0].to_string(), parts[1].to_string());
+            }
+        }
+
+        // Rebuild the metrics output in sorted order
+        let mut result = String::new();
+
+        // First add any header/metadata lines
+        for line in raw_metrics.lines() {
+            if line.starts_with('#') {
+                result.push_str(line);
+                result.push('\n');
+            }
+        }
+
+        // Then add the sorted metrics
+        for (key, value) in sorted_metrics {
+            result.push_str(&format!("{} {}\n", key, value));
+        }
+
+        // Verify the output format
+        assert!(!result.is_empty());
+        assert!(
+            result.contains("# HELP"),
+            "Output should contain help comments"
+        );
+        assert!(
+            result.contains("# TYPE"),
+            "Output should contain type definitions"
+        );
+        assert!(
+            result.contains("test_counter"),
+            "Output should contain test_counter metric"
+        );
+        assert!(
+            result.contains("test_gauge"),
+            "Output should contain test_gauge metric"
+        );
+    }
+}

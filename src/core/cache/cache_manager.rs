@@ -2,17 +2,17 @@ use metrics::{counter, gauge};
 use moka::future::Cache;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::{
     Arc, RwLock,
     atomic::{AtomicU64, Ordering},
 };
+use std::thread_local;
 use std::time::{Duration, SystemTime};
 use tokio::time::interval;
 use tracing::{debug, info};
-use std::cell::RefCell;
-use std::thread_local;
 
 // Import ApiResource trait
 use crate::utils::api_resource::ApiResource;
@@ -82,7 +82,7 @@ pub fn register_resource_cache<T: ApiResource + 'static>(
     // This allows us to access it directly later for the eviction listener
     let active_entries = Arc::new(AtomicU64::new(0));
     let active_entries_clone = active_entries.clone();
-    
+
     // Create the cache with eviction listener
     let cache_builder = Cache::builder()
         .max_capacity(registry.max_capacity)
@@ -339,9 +339,9 @@ pub fn get_cache_stats_with_metrics(
     })
 }
 
-// Thread-local variable to track if the last access was from cache
+// Helper function to see if the last fetch was from cache
 thread_local! {
-    static LAST_FETCH_FROM_CACHE: RefCell<bool> = RefCell::new(false);
+    static LAST_FETCH_FROM_CACHE: RefCell<bool> = const { RefCell::new(false) };
 }
 
 /// Get whether the last fetch operation was from cache
@@ -495,21 +495,21 @@ pub async fn start_metrics_updater(registry: &CacheRegistry) {
 
             for (resource_type, cache_box) in caches.iter() {
                 // Try to get the actual entry count from the cache
-                
+
                 // This is a bit of a hack, but it gets the actual cache size
                 // Try to downcast to a known resource type
                 if let Some(pet_cache) = cache_box.downcast_ref::<ResourceCache<crate::generated_apis::petstore_api::models::Upet>>() {
                     let current_size = pet_cache.cache.entry_count();
-                    
+
                     // Update the metrics with the real cache size
                     gauge!("cache_current_size", "resource_type" => resource_type.to_string())
                         .set(current_size as f64);
-                    
+
                     // Get active entries from the atomic counter
                     let active_entries = pet_cache.active_entries.load(Ordering::Relaxed);
                     gauge!("cache_active_entries", "resource_type" => resource_type.to_string())
                         .set(active_entries as f64);
-                    
+
                     debug!(
                         "📊 Cache metrics updated for {} - size: {}, active: {}",
                         resource_type, current_size, active_entries
@@ -573,7 +573,7 @@ mod tests {
 
     impl ApiResource for TestResource {
         type Id = String;
-        
+
         fn resource_type() -> &'static str {
             "test_resource"
         }
@@ -594,11 +594,11 @@ mod tests {
     #[tokio::test]
     async fn test_register_resource_cache() {
         let registry = init_cache_registry(true, 100, 3600);
-        
+
         // Register resource type
         let result = register_resource_cache::<TestResource>(&registry, "test_resource");
         assert!(result.is_ok());
-        
+
         // Try to register the same type again - should succeed
         let result = register_resource_cache::<TestResource>(&registry, "test_resource");
         assert!(result.is_ok());
@@ -607,11 +607,11 @@ mod tests {
     #[tokio::test]
     async fn test_get_resource_cache() {
         let registry = init_cache_registry(true, 100, 3600);
-        
+
         // Register and get resource cache
         let _ = register_resource_cache::<TestResource>(&registry, "test_resource");
         let cache = get_resource_cache::<TestResource>(&registry, "test_resource");
-        
+
         assert!(cache.is_some());
         let cache = cache.unwrap();
         assert_eq!(cache.resource_type, "test_resource");
@@ -623,10 +623,10 @@ mod tests {
         let cache_opt = get_resource_cache::<TestResource>(registry, "test_resource");
         assert!(cache_opt.is_some());
         let cache = cache_opt.unwrap();
-        
+
         // Set directly using the cache.cache API
         cache.cache.insert(key.to_string(), value.clone()).await;
-        
+
         // Get using the same API
         let retrieved = cache.cache.get(key).await;
         assert!(retrieved.is_some());
@@ -636,17 +636,17 @@ mod tests {
     #[tokio::test]
     async fn test_cache_set_and_get() {
         let registry = init_cache_registry(true, 100, 3600);
-        
+
         // Register resource cache
         let _ = register_resource_cache::<TestResource>(&registry, "test_resource");
-        
+
         // Create a test resource
         let resource = TestResource {
             id: "test-1".to_string(),
             name: "Test Resource".to_string(),
             value: 42,
         };
-        
+
         // Use helper to set and get in cache
         helper_set_and_get_in_cache(&registry, "test-1", resource).await;
     }
@@ -654,29 +654,30 @@ mod tests {
     #[tokio::test]
     async fn test_get_or_fetch() {
         let registry = init_cache_registry(true, 100, 3600);
-        
+
         // Register resource cache
         let _ = register_resource_cache::<TestResource>(&registry, "test_resource");
-        
+
         // Create a test resource
         let resource = TestResource {
             id: "test-2".to_string(),
             name: "Test Resource 2".to_string(),
             value: 84,
         };
-        
+
         // First call will fetch
         let result = get_or_fetch(&registry, "test_resource", "test-2", || async {
             Ok(resource.clone())
-        }).await;
-        
+        })
+        .await;
+
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), resource);
-        
+
         // Second call should hit cache
         let was_cached_before = last_fetch_from_cache();
         assert!(!was_cached_before); // First fetch wasn't from cache
-        
+
         let result2 = get_or_fetch(&registry, "test_resource", "test-2", || async {
             // This should not be called if cache hit
             Ok(TestResource {
@@ -684,11 +685,12 @@ mod tests {
                 name: "Different Name".to_string(),
                 value: 999,
             })
-        }).await;
-        
+        })
+        .await;
+
         assert!(result2.is_ok());
         assert_eq!(result2.unwrap(), resource); // Should be original resource
-        
+
         // Check if it was from cache
         let was_cached = last_fetch_from_cache();
         assert!(was_cached); // Second fetch should be from cache
@@ -698,28 +700,28 @@ mod tests {
     async fn test_cache_expiration() {
         // Create a cache with a very short TTL
         let registry = init_cache_registry(true, 100, 1);
-        
+
         // Register resource cache
         let _ = register_resource_cache::<TestResource>(&registry, "test_resource");
-        
+
         // Create a test resource
         let resource = TestResource {
             id: "test-1".to_string(),
             name: "Test Resource".to_string(),
             value: 42,
         };
-        
+
         // Set in cache using our helper
         helper_set_and_get_in_cache(&registry, "test-1", resource.clone()).await;
-        
+
         // Wait for more than TTL seconds
         sleep(Duration::from_secs(2)).await;
-        
+
         // Get resource cache again
         let cache_opt = get_resource_cache::<TestResource>(&registry, "test_resource");
         assert!(cache_opt.is_some());
         let cache = cache_opt.unwrap();
-        
+
         // Verify it's expired
         let retrieved = cache.cache.get("test-1").await;
         assert!(retrieved.is_none());
@@ -729,29 +731,30 @@ mod tests {
     async fn test_disabled_cache() {
         // Create a disabled cache
         let registry = init_cache_registry(false, 100, 3600);
-        
+
         // Register resource cache
         let _ = register_resource_cache::<TestResource>(&registry, "test_resource");
-        
+
         // Create a test resource
         let resource = TestResource {
             id: "test-1".to_string(),
             name: "Test Resource".to_string(),
             value: 42,
         };
-        
+
         // Try to get the cache - should return None
         let cache = get_resource_cache::<TestResource>(&registry, "test_resource");
         assert!(cache.is_none());
-        
+
         // get_or_fetch should bypass cache and always call fetch function
         let result = get_or_fetch(&registry, "test_resource", "test-1", || async {
             Ok(resource.clone())
-        }).await;
-        
+        })
+        .await;
+
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), resource);
-        
+
         // Check if it was from cache
         let was_cached = last_fetch_from_cache();
         assert!(!was_cached); // Should not be from cache since cache is disabled
