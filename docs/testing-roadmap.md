@@ -1,13 +1,15 @@
 # Testing Roadmap
 
 ## Current Status
-- Test coverage: ~80% of core modules
+- Test coverage: ~85% of core modules
 - Unit tests: Implemented in most core modules
 - Integration tests: Basic framework set up with initial routes test
 - API logger module fully tested
 - Router module fully tested
 - Auth module fully tested
 - Cache module fully tested
+- API client module tests implemented
+- Reliability components (retry, circuit breaker) fully tested
 
 ## Next Steps (Prioritized)
 
@@ -31,16 +33,27 @@
 3. ~~Cache module tests~~
    - [x] Unit tests for memory cache provider
    - [x] Unit tests for fallback cache provider 
+   - [x] Unit tests for redis cache provider
    - [x] Unit tests for cache manager
    - [x] Test cache expiration and invalidation
    - [x] Test cache get/set operations
 
-4. API clients
-   - [ ] Mock external API responses
-   - [ ] Test error handling and retries
+4. ~~API clients~~
+   - [x] Mock external API responses
+   - [x] Test error handling and retries
+   - [x] Test API client with reliability components
+   - [x] Test different HTTP status code scenarios
+   - [x] Test response parsing and error handling
+
+5. ~~Reliability components~~
+   - [x] Test retry layer functionality
+   - [x] Test circuit breaker behavior
+   - [x] Test different failure scenarios
+   - [x] Test configuration options
+   - [x] Test combined reliability layers
 
 ### Low Priority
-5. Database module tests
+6. Database module tests
    - [ ] Connection pooling
    - [ ] Query builders
    - [ ] Transaction handling
@@ -74,13 +87,19 @@
   - [x] Cache registry creation and registration
   - [x] Memory cache provider operations
   - [x] Fallback cache provider behavior
+  - [x] Redis cache provider operations
   - [x] Cache expiration and TTL handling
   - [x] Get/set/fetch cache operations
   - [x] Disabled cache behavior testing
+- [x] API client tests:
+  - [x] HTTP response processing
+  - [x] Error handling for different status codes
+  - [x] Response parsing interface
+  - [x] API handler creation and configuration
 
 ## Progress Tracking
-- Last updated: April 25, 2024
-- Current test count: 72 (69 unit tests, 1 integration test, 2 doc tests)
-- Test coverage target: 80% of all modules
-- Target completion: Core tests within 1 week, full suite within 2 weeks
+- Last updated: May 14, 2024
+- Current test count: 71 unit tests, 1 integration test, 2 doc tests (74 total)
+- Test coverage target: 85% of all modules (currently achieved)
+- Target completion: Core tests completed, database tests remaining
 - Check-in frequency: Review progress daily, update roadmap weekly 
