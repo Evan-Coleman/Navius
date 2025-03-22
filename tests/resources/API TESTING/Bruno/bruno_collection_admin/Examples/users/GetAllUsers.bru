@@ -1,0 +1,20 @@
+meta {
+  name: GetAllUsers
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{base_url}}/users
+  body: none
+  auth: bearer
+}
+
+assert {
+  res.status: 200
+  res.body: isArray()
+}
+
+auth:bearer {
+  token: {{access_token_set_by_collection_script}}
+} 

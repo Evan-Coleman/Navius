@@ -1,4 +1,6 @@
-mod utils;
+mod utils {
+    pub mod api_client_tests;
+}
 
 // This file serves as an entry point for our API client integration tests
 // The actual tests are in the utils module

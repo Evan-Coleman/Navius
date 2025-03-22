@@ -1,0 +1,15 @@
+meta {
+  name: non-existant path
+  type: http
+  seq: 3
+}
+
+get {
+  url: http://localhost:3000/zz
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token_set_by_collection_script}}
+}
