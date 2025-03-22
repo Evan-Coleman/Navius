@@ -11,6 +11,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
     /// Unique identifier
+    #[serde(with = "uuid_serde")]
     pub id: Uuid,
 
     /// Username (unique)
@@ -84,5 +85,26 @@ impl ToString for UserRole {
 impl Default for UserRole {
     fn default() -> Self {
         UserRole::User
+    }
+}
+
+// Helper module for Uuid serialization
+mod uuid_serde {
+    use serde::{self, Deserialize, Deserializer, Serializer};
+    use uuid::Uuid;
+
+    pub fn serialize<S>(uuid: &Uuid, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&uuid.to_string())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Uuid, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Uuid::parse_str(&s).map_err(serde::de::Error::custom)
     }
 }

@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use super::{ServiceError, ServiceResult};
 use crate::core::error::AppError;
-use crate::repository::{User, UserRepository, models::UserRole};
+use crate::repository::{Repository, User, UserRepository, models::UserRole};
 
 /// User creation data transfer object
 #[derive(Debug, Clone)]

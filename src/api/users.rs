@@ -2,6 +2,7 @@
 //!
 //! This module provides API endpoints for user management.
 
+use axum::debug_handler;
 use axum::{
     Router,
     extract::{Json, Path, State},
@@ -16,10 +17,32 @@ use crate::core::router::AppState;
 use crate::repository::models::UserRole;
 use crate::services::{ServiceError, UserService};
 
+// Helper module for Uuid serialization
+mod uuid_serde {
+    use serde::{self, Deserialize, Deserializer, Serializer};
+    use uuid::Uuid;
+
+    pub fn serialize<S>(uuid: &Uuid, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&uuid.to_string())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Uuid, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Uuid::parse_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
 /// API response for user operations
 #[derive(Debug, Serialize)]
 pub struct UserResponse {
     /// User ID
+    #[serde(with = "uuid_serde")]
     pub id: Uuid,
 
     /// Username
@@ -92,13 +115,13 @@ pub struct UpdateUserRequest {
 }
 
 /// Configure user routes
-pub fn configure() -> Router<AppState> {
+pub fn configure() -> Router<Arc<AppState>> {
     Router::new()
         .route("/users", get(get_all_users))
         .route("/users", post(create_user))
-        .route("/users/:id", get(get_user))
-        .route("/users/:id", put(update_user))
-        .route("/users/:id", delete(delete_user))
+        .route("/users/{id}", get(get_user))
+        .route("/users/{id}", put(update_user))
+        .route("/users/{id}", delete(delete_user))
 }
 
 /// Map service errors to HTTP status codes
@@ -118,8 +141,9 @@ fn map_service_error(err: ServiceError) -> (StatusCode, String) {
 }
 
 /// Get all users
+#[debug_handler]
 async fn get_all_users(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<UserResponse>>, (StatusCode, String)> {
     // Get user service from app state
     let user_service = get_user_service(state)?;
@@ -137,10 +161,17 @@ async fn get_all_users(
 }
 
 /// Get a user by ID
+#[debug_handler]
 async fn get_user(
-    State(state): State<AppState>,
-    Path(id): Path<Uuid>,
+    State(state): State<Arc<AppState>>,
+    Path(id_str): Path<String>,
 ) -> Result<Json<UserResponse>, (StatusCode, String)> {
+    // Parse UUID from string
+    let id = match Uuid::parse_str(&id_str) {
+        Ok(uuid) => uuid,
+        Err(_) => return Err((StatusCode::BAD_REQUEST, "Invalid UUID format".to_string())),
+    };
+
     // Get user service from app state
     let user_service = get_user_service(state)?;
 
@@ -157,8 +188,9 @@ async fn get_user(
 }
 
 /// Create a new user
+#[debug_handler]
 async fn create_user(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Json(request): Json<CreateUserRequest>,
 ) -> Result<(StatusCode, Json<UserResponse>), (StatusCode, String)> {
     // Get user service from app state
@@ -201,11 +233,18 @@ async fn create_user(
 }
 
 /// Update a user
+#[debug_handler]
 async fn update_user(
-    State(state): State<AppState>,
-    Path(id): Path<Uuid>,
+    State(state): State<Arc<AppState>>,
+    Path(id_str): Path<String>,
     Json(request): Json<UpdateUserRequest>,
 ) -> Result<Json<UserResponse>, (StatusCode, String)> {
+    // Parse UUID from string
+    let id = match Uuid::parse_str(&id_str) {
+        Ok(uuid) => uuid,
+        Err(_) => return Err((StatusCode::BAD_REQUEST, "Invalid UUID format".to_string())),
+    };
+
     // Get user service from app state
     let user_service = get_user_service(state)?;
 
@@ -246,10 +285,17 @@ async fn update_user(
 }
 
 /// Delete a user
+#[debug_handler]
 async fn delete_user(
-    State(state): State<AppState>,
-    Path(id): Path<Uuid>,
+    State(state): State<Arc<AppState>>,
+    Path(id_str): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    // Parse UUID from string
+    let id = match Uuid::parse_str(&id_str) {
+        Ok(uuid) => uuid,
+        Err(_) => return Err((StatusCode::BAD_REQUEST, "Invalid UUID format".to_string())),
+    };
+
     // Get user service from app state
     let user_service = get_user_service(state)?;
 
@@ -270,7 +316,7 @@ async fn delete_user(
 }
 
 /// Helper function to get the user service from app state
-fn get_user_service(state: AppState) -> Result<Arc<UserService>, (StatusCode, String)> {
+fn get_user_service(state: Arc<AppState>) -> Result<Arc<UserService>, (StatusCode, String)> {
     // Get the database pool from app state
     let db_pool = match state.db_pool {
         Some(ref pool) => pool.clone(),

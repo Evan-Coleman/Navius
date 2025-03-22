@@ -41,7 +41,7 @@ chrono = { version = "0.4.40", features = ["serde"] }
 # Middleware and error handling
 tower = { version = "0.5.2", features = ["full"] }
 tower-http = { version = "0.6.2", features = ["trace", "timeout", "catch-panic", "request-id", "cors"] }
-uuid = { version = "1.16.0", features = ["v4"] }
+uuid = { version = "1.16.0", features = ["v4", "serde"] }
 tracing-futures = "0.2.5"
 
 # Authentication

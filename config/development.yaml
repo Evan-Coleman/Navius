@@ -22,6 +22,14 @@ cache:
   # max_capacity: 1000
   # reconnect_interval_seconds: 30
 
+# Database configuration
+database:
+  enabled: true
+  url: "postgres://postgres:postgres@localhost:5432/app"
+  max_connections: 10
+  connect_timeout_seconds: 30
+  idle_timeout_seconds: 300
+
 # # Environment-specific authentication settings
 # auth:
 #   enabled: true

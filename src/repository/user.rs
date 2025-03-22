@@ -4,6 +4,8 @@
 
 use async_trait::async_trait;
 use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::RwLock;
 use uuid::Uuid;
@@ -11,6 +13,8 @@ use uuid::Uuid;
 use super::{BaseRepository, Repository, User};
 use crate::core::database::PgPool;
 use crate::core::error::AppError;
+
+const USER_DATA_FILE: &str = "user_data.json";
 
 /// User repository for storing and retrieving users
 pub struct UserRepository {
@@ -24,10 +28,49 @@ pub struct UserRepository {
 impl UserRepository {
     /// Create a new user repository
     pub fn new(db_pool: Arc<Box<dyn PgPool>>) -> Self {
-        Self {
+        // Try to load users from the data file if it exists
+        let users = Self::load_users_from_file().unwrap_or_else(|_| HashMap::new());
+
+        let repo = Self {
             base: BaseRepository::new(db_pool),
-            users: Arc::new(RwLock::new(HashMap::new())),
+            users: Arc::new(RwLock::new(users)),
+        };
+
+        repo
+    }
+
+    /// Load users from file
+    fn load_users_from_file() -> Result<HashMap<Uuid, User>, AppError> {
+        if !Path::new(USER_DATA_FILE).exists() {
+            return Ok(HashMap::new());
         }
+
+        let data = fs::read_to_string(USER_DATA_FILE).map_err(|e| {
+            AppError::DatabaseError(format!("Failed to read user data file: {}", e))
+        })?;
+
+        let users: HashMap<Uuid, User> = serde_json::from_str(&data)
+            .map_err(|e| AppError::DatabaseError(format!("Failed to parse user data: {}", e)))?;
+
+        Ok(users)
+    }
+
+    /// Save users to file
+    fn save_users_to_file(&self) -> Result<(), AppError> {
+        let users = self
+            .users
+            .read()
+            .map_err(|e| AppError::DatabaseError(format!("Failed to read users: {}", e)))?;
+
+        let data = serde_json::to_string(&*users).map_err(|e| {
+            AppError::DatabaseError(format!("Failed to serialize user data: {}", e))
+        })?;
+
+        fs::write(USER_DATA_FILE, data).map_err(|e| {
+            AppError::DatabaseError(format!("Failed to write user data file: {}", e))
+        })?;
+
+        Ok(())
     }
 
     /// Find a user by username
@@ -100,6 +143,10 @@ impl Repository<User, Uuid> for UserRepository {
 
         users.insert(entity.id, entity.clone());
 
+        // Persist to file
+        drop(users); // Release the write lock before saving to file
+        self.save_users_to_file()?;
+
         Ok(entity)
     }
 
@@ -113,6 +160,12 @@ impl Repository<User, Uuid> for UserRepository {
             .map_err(|e| AppError::DatabaseError(format!("Failed to write users: {}", e)))?;
 
         let removed = users.remove(&id).is_some();
+
+        // Persist to file if something was removed
+        if removed {
+            drop(users); // Release the write lock before saving to file
+            self.save_users_to_file()?;
+        }
 
         Ok(removed)
     }

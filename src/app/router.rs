@@ -8,6 +8,7 @@ use std::sync::Arc;
 use tracing::info;
 
 use crate::{
+    api,
     core::auth::EntraAuthLayer,
     core::router::{AppState, create_core_app_router, init_app_state},
     handlers::examples::pet,
@@ -26,7 +27,9 @@ fn create_user_routes(state: Arc<AppState>) -> Router {
     let public_routes = Router::new()
         .route("/pet/{id}", get(pet::fetch_pet_handler))
         // Add more public routes here
-        .route("/hello", get(|| async { "Hello, World!" }));
+        .route("/hello", get(|| async { "Hello, World!" }))
+        // Include API routes
+        .merge(api::configure());
 
     // 2. READ-ONLY ROUTES - requires basic authentication
     let readonly_routes = Router::new()

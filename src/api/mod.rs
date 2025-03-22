@@ -2,18 +2,16 @@
 //!
 //! This module contains the API routes and handlers.
 
-mod health;
 mod users;
 
 use axum::Router;
 
 use crate::core::router::AppState;
+use std::sync::Arc;
 
 /// Configure all API routes
-pub fn configure() -> Router<AppState> {
+pub fn configure() -> Router<Arc<AppState>> {
     Router::new()
-        // Health check endpoints
-        .merge(health::configure())
         // User management endpoints
         .merge(users::configure())
 }

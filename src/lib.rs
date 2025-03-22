@@ -37,11 +37,20 @@ pub mod metrics {
     pub use crate::core::metrics::*;
 }
 
+/// API endpoints and handlers
+pub mod api;
+
 /// API request handlers
 pub mod handlers;
 
 /// Data models and schemas
 pub mod models;
+
+/// Repository module for data access
+pub mod repository;
+
+/// Service module for business logic
+pub mod services;
 
 /// Generated API clients
 #[path = "generated_apis.rs"]
