@@ -1,5 +1,7 @@
 pub mod fallback;
 pub mod memory;
+#[cfg(test)]
+mod property_tests;
 pub mod redis;
 
 use crate::utils::api_resource::ApiResource;

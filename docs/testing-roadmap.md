@@ -1,13 +1,13 @@
 # Testing Roadmap
 
 ## Current Status
-- Test coverage: ~90% of core modules
+- Test coverage: ~94% of core modules
 - Unit tests: Implemented in most core modules
 - Integration tests: Basic framework set up with initial routes test
 - API logger module fully tested
 - Router module fully tested
 - Auth module fully tested
-- Cache module fully tested
+- Cache module fully tested with mocked Redis client
 - API client module fully tested with comprehensive mocking
 - Reliability components (retry, circuit breaker) fully tested with property-based testing
 
@@ -29,6 +29,7 @@ We are enhancing our testing approach with specialized testing libraries:
    - ✅ Added proptest for property-based testing
    - Discovers edge cases through random input generation
    - Tests invariants rather than specific examples
+   - Note: Single-threaded runtime must be used to avoid issues with nested runtimes
 
 4. **Test Data Generation**
    - ✅ Added fake for generating realistic test data
@@ -75,7 +76,7 @@ We are enhancing our testing approach with specialized testing libraries:
    - [x] Test configuration-based layer creation
    - [x] Use property-based testing for configuration validation
    - [x] Test component interactions in isolation
-   - [ ] Future work: Test retry and circuit breaker behavior with mock services
+   - [x] Test retry and circuit breaker behavior with mock services
 
 ### Medium Priority
 5. ~~Cache module tests~~
@@ -86,11 +87,13 @@ We are enhancing our testing approach with specialized testing libraries:
    - [x] Test cache expiration and invalidation
    - [x] Test cache get/set operations
 
-6. **Enhance cache provider testing**
-   - [ ] Mock Redis client for deterministic tests
-   - [ ] Test edge cases with property-based testing
-   - [ ] Test concurrent operations
-   - [ ] Test failure modes and recovery
+6. ~~Enhance cache provider testing~~
+   - [x] Mock Redis client for deterministic tests
+   - [x] Test edge cases with property-based testing
+   - [x] Test concurrent operations
+   - [x] Test failure modes and recovery
+   - [x] Test thread safety of cache providers
+   - [x] Fix async runtime issues in property tests
 
 7. ~~API clients~~
    - [x] Mock external API responses
@@ -143,10 +146,15 @@ We are enhancing our testing approach with specialized testing libraries:
   - [x] Cache registry creation and registration
   - [x] Memory cache provider operations
   - [x] Fallback cache provider behavior
-  - [x] Redis cache provider operations
+  - [x] Redis cache provider operations with mocking
   - [x] Cache expiration and TTL handling
   - [x] Get/set/fetch cache operations
   - [x] Disabled cache behavior testing
+  - [x] Property-based testing of cache operations
+  - [x] Concurrent operations testing
+  - [x] Comprehensive error handling testing
+  - [x] Thread-safe mock implementation
+  - [x] Runtime-safe property tests
 - [x] API client tests:
   - [x] HTTP response processing
   - [x] Error handling for different status codes
@@ -166,8 +174,8 @@ We are enhancing our testing approach with specialized testing libraries:
   - [x] Configuration validation across parameters
 
 ## Progress Tracking
-- Last updated: March 21, 2025
-- Current test count: 79 unit tests, 1 integration test, 2 doc tests (82 total)
-- Test coverage target: 85% of all modules (currently at ~90%)
+- Last updated: May 15, 2025
+- Current test count: 107 unit tests, 1 integration test, 2 doc tests (110 total)
+- Test coverage target: 85% of all modules (currently at ~94%)
 - Target completion: Core tests completed, database tests remaining
 - Check-in frequency: Review progress daily, update roadmap weekly 
