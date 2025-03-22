@@ -59,7 +59,7 @@ async fn test_create_user_validation() {
 
     // Try to create user with invalid username
     let create_dto = CreateUserDto {
-        username: "a".to_string(), // Too short
+        username: "ab".to_string(), // Too short - should be at least 3 chars
         email: "test@example.com".to_string(),
         full_name: None,
         role: None,
@@ -253,17 +253,16 @@ async fn test_delete_user() {
     let user = service.create_user(create_dto).await.unwrap();
     let user_id = user.id;
 
-    // Verify user exists
-    let found = service.get_user_by_id(user_id).await;
-    assert!(found.is_ok());
-
     // Delete the user
-    let deleted = service.delete_user(user_id).await.unwrap();
-    assert!(deleted);
+    service.delete_user(user_id).await.unwrap();
 
-    // Verify user no longer exists
+    // Verify user was deleted
     let result = service.get_user_by_id(user_id).await;
     assert!(result.is_err());
+
+    // Verify count is zero
+    let count = service.count_users().await.unwrap();
+    assert_eq!(count, 0);
 
     // Try to delete non-existent user
     let result = service.delete_user(Uuid::new_v4()).await;

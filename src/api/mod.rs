@@ -2,7 +2,10 @@
 //!
 //! This module contains the API routes and handlers.
 
-mod users;
+pub mod users;
+
+#[cfg(test)]
+mod users_test;
 
 use axum::Router;
 

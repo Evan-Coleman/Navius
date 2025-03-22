@@ -37,19 +37,17 @@ pub struct User {
 }
 
 impl User {
-    /// Create a new user with default values
-    pub fn new(username: String, email: String) -> Self {
-        let now = Utc::now();
-
+    /// Create a new user
+    pub fn new(username: String, email: String, full_name: Option<String>, role: UserRole) -> Self {
         Self {
             id: Uuid::new_v4(),
             username,
             email,
-            full_name: None,
+            full_name,
             is_active: true,
-            role: UserRole::User,
-            created_at: now,
-            updated_at: now,
+            role,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
         }
     }
 
@@ -85,6 +83,17 @@ impl ToString for UserRole {
 impl Default for UserRole {
     fn default() -> Self {
         UserRole::User
+    }
+}
+
+impl UserRole {
+    /// Convert the role to a string
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            UserRole::Admin => "admin",
+            UserRole::User => "user",
+            UserRole::ReadOnly => "readonly",
+        }
     }
 }
 

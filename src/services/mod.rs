@@ -3,39 +3,19 @@
 //! This module provides services that implement business logic.
 //! Services use repositories to interact with data and implement business rules.
 
+#[cfg(test)]
+use mock_it::Mock;
+
+pub mod error;
 pub mod user;
+pub use error::ServiceError;
+pub use user::{IUserService, UserService};
 
 #[cfg(test)]
 mod tests;
 
-pub use error::ServiceError;
-pub use user::UserService;
-
-mod error {
-    //! Error types for services
-
-    /// Error type for service operations
-    #[derive(Debug)]
-    pub enum ServiceError {
-        /// Repository error
-        Repository(String),
-
-        /// Validation error
-        Validation(String),
-
-        /// User not found
-        UserNotFound,
-
-        /// Username already exists
-        UsernameExists,
-
-        /// Email already exists
-        EmailExists,
-
-        /// Other generic error
-        Other(String),
-    }
-}
+#[cfg(test)]
+pub type MockUserService = Mock<dyn IUserService, ()>;
 
 /// Type alias for service results
 pub type ServiceResult<T> = Result<T, ServiceError>;

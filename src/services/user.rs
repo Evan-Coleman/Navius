@@ -2,12 +2,15 @@
 //!
 //! This module provides business logic for user-related operations.
 
+use async_trait::async_trait;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use super::{ServiceError, ServiceResult};
-use crate::core::error::AppError;
-use crate::repository::{Repository, User, UserRepository, models::UserRole};
+use crate::{
+    core::error::AppError,
+    repository::{Repository, User, models::UserRole},
+    services::error::{ServiceError, ServiceResult},
+};
 
 /// User creation data transfer object
 #[derive(Debug, Clone)]
@@ -41,187 +44,172 @@ pub struct UpdateUserDto {
     pub role: Option<UserRole>,
 }
 
-/// User service for user-related business logic
-pub struct UserService {
-    /// User repository instance
-    user_repository: Arc<UserRepository>,
+#[async_trait]
+pub trait IUserService: Send + Sync {
+    async fn get_all_users(&self) -> Result<Vec<User>, ServiceError>;
+    async fn get_user_by_id(&self, id: Uuid) -> Result<User, ServiceError>;
+    async fn get_user_by_username(&self, username: &str) -> Result<User, ServiceError>;
+    async fn find_by_email(&self, email: &str) -> Result<User, ServiceError>;
+    async fn create_user(&self, user: CreateUserDto) -> Result<User, ServiceError>;
+    async fn update_user(&self, id: Uuid, user: UpdateUserDto) -> Result<User, ServiceError>;
+    async fn delete_user(&self, id: Uuid) -> Result<(), ServiceError>;
 }
 
-impl UserService {
+pub struct UserService<R>
+where
+    R: Repository<User, Uuid> + Send + Sync + 'static,
+{
+    repository: Arc<R>,
+}
+
+impl<R> UserService<R>
+where
+    R: Repository<User, Uuid> + Send + Sync + 'static,
+{
     /// Create a new user service
-    pub fn new(user_repository: Arc<UserRepository>) -> Self {
-        Self { user_repository }
-    }
-
-    /// Get a user by ID
-    pub async fn get_user_by_id(&self, id: Uuid) -> ServiceResult<User> {
-        let user = self
-            .user_repository
-            .find_by_id(id)
-            .await
-            .map_err(|e| ServiceError::Repository(e.to_string()))?
-            .ok_or(ServiceError::UserNotFound)?;
-
-        Ok(user)
-    }
-
-    /// Get a user by username
-    pub async fn get_user_by_username(&self, username: &str) -> ServiceResult<User> {
-        let user = self
-            .user_repository
-            .find_by_username(username)
-            .await
-            .map_err(|e| ServiceError::Repository(e.to_string()))?
-            .ok_or(ServiceError::UserNotFound)?;
-
-        Ok(user)
-    }
-
-    /// Get a user by email
-    pub async fn find_by_email(&self, email: &str) -> ServiceResult<User> {
-        let user = self
-            .user_repository
-            .find_by_email(email)
-            .await
-            .map_err(|e| ServiceError::Repository(e.to_string()))?
-            .ok_or(ServiceError::UserNotFound)?;
-
-        Ok(user)
-    }
-
-    /// Create a new user
-    pub async fn create_user(&self, data: CreateUserDto) -> ServiceResult<User> {
-        // Check if username already exists
-        if let Some(_) = self
-            .user_repository
-            .find_by_username(&data.username)
-            .await
-            .map_err(|e| ServiceError::Repository(e.to_string()))?
-        {
-            return Err(ServiceError::UsernameExists);
-        }
-
-        // Check if email already exists
-        if let Some(_) = self
-            .user_repository
-            .find_by_email(&data.email)
-            .await
-            .map_err(|e| ServiceError::Repository(e.to_string()))?
-        {
-            return Err(ServiceError::EmailExists);
-        }
-
-        // Validate username and email format
-        self.validate_username(&data.username)?;
-        self.validate_email(&data.email)?;
-
-        // Create user entity
-        let mut user = User::new(data.username, data.email);
-
-        // Set optional fields
-        if let Some(full_name) = data.full_name {
-            user.full_name = Some(full_name);
-        }
-
-        if let Some(role) = data.role {
-            user.role = role;
-        }
-
-        // Save user to repository
-        let created_user = self
-            .user_repository
-            .save(user)
-            .await
-            .map_err(|e| ServiceError::Repository(e.to_string()))?;
-
-        Ok(created_user)
-    }
-
-    /// Update a user
-    pub async fn update_user(&self, id: Uuid, data: UpdateUserDto) -> ServiceResult<User> {
-        // Get existing user
-        let mut user = self.get_user_by_id(id).await?;
-
-        // Update email if provided
-        if let Some(email) = data.email {
-            // Check if email already exists for another user
-            if let Some(existing) = self
-                .user_repository
-                .find_by_email(&email)
-                .await
-                .map_err(|e| ServiceError::Repository(e.to_string()))?
-            {
-                if existing.id != id {
-                    return Err(ServiceError::EmailExists);
-                }
-            }
-
-            // Validate email format
-            self.validate_email(&email)?;
-
-            user.email = email;
-        }
-
-        // Update full name if provided
-        if let Some(full_name) = data.full_name {
-            user.full_name = Some(full_name);
-        }
-
-        // Update active status if provided
-        if let Some(is_active) = data.is_active {
-            user.is_active = is_active;
-        }
-
-        // Update role if provided
-        if let Some(role) = data.role {
-            user.role = role;
-        }
-
-        // Save updated user to repository
-        let updated_user = self
-            .user_repository
-            .save(user)
-            .await
-            .map_err(|e| ServiceError::Repository(e.to_string()))?;
-
-        Ok(updated_user)
-    }
-
-    /// Delete a user
-    pub async fn delete_user(&self, id: Uuid) -> ServiceResult<bool> {
-        // Check if user exists
-        let _ = self.get_user_by_id(id).await?;
-
-        // Delete user from repository
-        let deleted = self
-            .user_repository
-            .delete(id)
-            .await
-            .map_err(|e| ServiceError::Repository(e.to_string()))?;
-
-        Ok(deleted)
+    pub fn new(repository: Arc<R>) -> Self {
+        Self { repository }
     }
 
     /// Get all users
     pub async fn get_all_users(&self) -> ServiceResult<Vec<User>> {
-        let users = self
-            .user_repository
-            .find_all()
-            .await
-            .map_err(|e| ServiceError::Repository(e.to_string()))?;
-
-        Ok(users)
+        self.repository.find_all().await.map_err(ServiceError::from)
     }
 
-    /// Count users
-    pub async fn count_users(&self) -> ServiceResult<usize> {
-        let count = self
-            .user_repository
-            .count()
-            .await
-            .map_err(|e| ServiceError::Repository(e.to_string()))?;
+    /// Get a user by ID
+    pub async fn get_user_by_id(&self, id: Uuid) -> ServiceResult<User> {
+        match self.repository.find_by_id(id).await {
+            Ok(Some(user)) => Ok(user),
+            Ok(None) => Err(ServiceError::UserNotFound),
+            Err(e) => Err(ServiceError::from(e)),
+        }
+    }
 
-        Ok(count)
+    /// Get a user by username
+    pub async fn get_user_by_username(&self, username: &str) -> ServiceResult<User> {
+        // Since we don't have a direct find_by_username method in the Repository trait,
+        // we need to find all users and filter
+        let users = self
+            .repository
+            .find_all()
+            .await
+            .map_err(ServiceError::from)?;
+        users
+            .into_iter()
+            .find(|u| u.username == username)
+            .ok_or(ServiceError::UserNotFound)
+    }
+
+    /// Find a user by email
+    pub async fn find_by_email(&self, email: &str) -> ServiceResult<User> {
+        // Since we don't have a direct find_by_email method in the Repository trait,
+        // we need to find all users and filter
+        let users = self
+            .repository
+            .find_all()
+            .await
+            .map_err(ServiceError::from)?;
+        users
+            .into_iter()
+            .find(|u| u.email == email)
+            .ok_or(ServiceError::UserNotFound)
+    }
+
+    /// Get the number of users in the system
+    pub async fn count_users(&self) -> ServiceResult<usize> {
+        let users = self
+            .repository
+            .find_all()
+            .await
+            .map_err(ServiceError::from)?;
+        Ok(users.len())
+    }
+
+    /// Create a new user
+    pub async fn create_user(&self, user: CreateUserDto) -> ServiceResult<User> {
+        // Validate username and email format
+        self.validate_username(&user.username)?;
+        self.validate_email(&user.email)?;
+
+        // Check if username exists
+        let users = self
+            .repository
+            .find_all()
+            .await
+            .map_err(ServiceError::from)?;
+        if users.iter().any(|u| u.username == user.username) {
+            return Err(ServiceError::UsernameExists);
+        }
+
+        // Check if email exists
+        if users.iter().any(|u| u.email == user.email) {
+            return Err(ServiceError::EmailExists);
+        }
+
+        // Create new user
+        let user = User::new(
+            user.username,
+            user.email,
+            user.full_name,
+            user.role.unwrap_or(UserRole::User),
+        );
+
+        self.repository.save(user).await.map_err(ServiceError::from)
+    }
+
+    /// Update an existing user
+    pub async fn update_user(&self, id: Uuid, user: UpdateUserDto) -> ServiceResult<User> {
+        let mut existing = match self.repository.find_by_id(id).await {
+            Ok(Some(user)) => user,
+            Ok(None) => return Err(ServiceError::UserNotFound),
+            Err(e) => return Err(ServiceError::from(e)),
+        };
+
+        if let Some(email) = &user.email {
+            let users = self
+                .repository
+                .find_all()
+                .await
+                .map_err(ServiceError::from)?;
+            if users.iter().any(|u| u.email == *email && u.id != id) {
+                return Err(ServiceError::EmailExists);
+            }
+            existing.email = email.clone();
+        }
+
+        if let Some(full_name) = user.full_name {
+            existing.full_name = Some(full_name);
+        }
+
+        if let Some(is_active) = user.is_active {
+            existing.is_active = is_active;
+        }
+
+        if let Some(role) = user.role {
+            existing.role = role;
+        }
+
+        existing.updated_at = chrono::Utc::now();
+
+        self.repository
+            .save(existing)
+            .await
+            .map_err(ServiceError::from)
+    }
+
+    /// Delete a user by ID
+    pub async fn delete_user(&self, id: Uuid) -> ServiceResult<()> {
+        match self.repository.find_by_id(id).await {
+            Ok(Some(_)) => {
+                self.repository
+                    .delete(id)
+                    .await
+                    .map_err(ServiceError::from)?;
+                Ok(())
+            }
+            Ok(None) => Err(ServiceError::UserNotFound),
+            Err(e) => Err(ServiceError::from(e)),
+        }
     }
 
     // Helper methods
@@ -253,5 +241,135 @@ impl UserService {
         }
 
         Ok(())
+    }
+}
+
+#[async_trait]
+impl<R> IUserService for UserService<R>
+where
+    R: Repository<User, Uuid> + Send + Sync + 'static,
+{
+    async fn get_all_users(&self) -> Result<Vec<User>, ServiceError> {
+        self.repository.find_all().await.map_err(ServiceError::from)
+    }
+
+    async fn get_user_by_id(&self, id: Uuid) -> Result<User, ServiceError> {
+        match self.repository.find_by_id(id).await {
+            Ok(Some(user)) => Ok(user),
+            Ok(None) => Err(ServiceError::UserNotFound),
+            Err(e) => Err(ServiceError::from(e)),
+        }
+    }
+
+    async fn get_user_by_username(&self, username: &str) -> Result<User, ServiceError> {
+        // Since we don't have a direct find_by_username method in the Repository trait,
+        // we need to find all users and filter
+        let users = self
+            .repository
+            .find_all()
+            .await
+            .map_err(ServiceError::from)?;
+        users
+            .into_iter()
+            .find(|u| u.username == username)
+            .ok_or(ServiceError::UserNotFound)
+    }
+
+    async fn find_by_email(&self, email: &str) -> Result<User, ServiceError> {
+        // Since we don't have a direct find_by_email method in the Repository trait,
+        // we need to find all users and filter
+        let users = self
+            .repository
+            .find_all()
+            .await
+            .map_err(ServiceError::from)?;
+        users
+            .into_iter()
+            .find(|u| u.email == email)
+            .ok_or(ServiceError::UserNotFound)
+    }
+
+    async fn create_user(&self, user: CreateUserDto) -> Result<User, ServiceError> {
+        // Validate username and email format
+        self.validate_username(&user.username)?;
+        self.validate_email(&user.email)?;
+
+        // Check if username exists
+        let users = self
+            .repository
+            .find_all()
+            .await
+            .map_err(ServiceError::from)?;
+        if users.iter().any(|u| u.username == user.username) {
+            return Err(ServiceError::UsernameExists);
+        }
+
+        // Check if email exists
+        if users.iter().any(|u| u.email == user.email) {
+            return Err(ServiceError::EmailExists);
+        }
+
+        // Create new user
+        let user = User::new(
+            user.username,
+            user.email,
+            user.full_name,
+            user.role.unwrap_or(UserRole::User),
+        );
+
+        self.repository.save(user).await.map_err(ServiceError::from)
+    }
+
+    async fn update_user(&self, id: Uuid, user: UpdateUserDto) -> Result<User, ServiceError> {
+        let mut existing = match self.repository.find_by_id(id).await {
+            Ok(Some(user)) => user,
+            Ok(None) => return Err(ServiceError::UserNotFound),
+            Err(e) => return Err(ServiceError::from(e)),
+        };
+
+        if let Some(email) = &user.email {
+            let users = self
+                .repository
+                .find_all()
+                .await
+                .map_err(ServiceError::from)?;
+            if users.iter().any(|u| u.email == *email && u.id != id) {
+                return Err(ServiceError::EmailExists);
+            }
+            existing.email = email.clone();
+        }
+
+        if let Some(full_name) = user.full_name {
+            existing.full_name = Some(full_name);
+        }
+
+        if let Some(is_active) = user.is_active {
+            existing.is_active = is_active;
+        }
+
+        if let Some(role) = user.role {
+            existing.role = role;
+        }
+
+        existing.updated_at = chrono::Utc::now();
+
+        self.repository
+            .save(existing)
+            .await
+            .map_err(ServiceError::from)
+    }
+
+    async fn delete_user(&self, id: Uuid) -> Result<(), ServiceError> {
+        match self.repository.find_by_id(id).await {
+            Ok(Some(_)) => {
+                self.repository
+                    .delete(id)
+                    .await
+                    .map_err(ServiceError::from)?;
+                Ok(())
+            }
+            Ok(None) => Err(ServiceError::UserNotFound),
+            Err(e) => Err(ServiceError::from(e)),
+        }
     }
 }

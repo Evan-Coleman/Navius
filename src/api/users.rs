@@ -7,6 +7,7 @@ use axum::{
     Router,
     extract::{Json, Path, Query, State},
     http::StatusCode,
+    response::IntoResponse,
     routing::{delete, get, post, put},
 };
 use serde::{Deserialize, Serialize};
@@ -14,9 +15,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::core::router::AppState;
-use crate::repository::models::UserRole;
-use crate::services::{ServiceError, UserService};
+use crate::{
+    core::router::AppState,
+    repository::models::UserRole,
+    services::{
+        IUserService,
+        error::ServiceError,
+        user::{CreateUserDto, UpdateUserDto},
+    },
+};
 
 // Helper module for Uuid serialization
 mod uuid_serde {
@@ -40,7 +47,7 @@ mod uuid_serde {
 }
 
 /// API response for user operations
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct UserResponse {
     /// User ID
     #[serde(with = "uuid_serde")]
@@ -84,7 +91,7 @@ impl From<crate::repository::User> for UserResponse {
 }
 
 /// Create user request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct CreateUserRequest {
     /// Username
     pub username: String,
@@ -100,7 +107,7 @@ pub struct CreateUserRequest {
 }
 
 /// Update user request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct UpdateUserRequest {
     /// Email (optional)
     pub email: Option<String>,
@@ -236,7 +243,7 @@ async fn create_user(
     };
 
     // Create DTO from request
-    let create_dto = crate::services::user::CreateUserDto {
+    let create_dto = CreateUserDto {
         username: request.username,
         email: request.email,
         full_name: request.full_name,
@@ -288,7 +295,7 @@ async fn update_user(
     };
 
     // Create DTO from request
-    let update_dto = crate::services::user::UpdateUserDto {
+    let update_dto = UpdateUserDto {
         email: request.email,
         full_name: request.full_name,
         is_active: request.is_active,
@@ -310,43 +317,41 @@ async fn update_user(
 /// Delete a user
 #[debug_handler]
 async fn delete_user(
+    Path(id): Path<String>,
     State(state): State<Arc<AppState>>,
-    Path(id_str): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     // Parse UUID from string
-    let id = match Uuid::parse_str(&id_str) {
+    let user_id = match Uuid::parse_str(&id) {
         Ok(uuid) => uuid,
         Err(_) => return Err((StatusCode::BAD_REQUEST, "Invalid UUID format".to_string())),
     };
 
-    // Get user service from app state
+    // Get user service
     let user_service = get_user_service(state)?;
 
-    // Delete user via service
-    let deleted = user_service
-        .delete_user(id)
-        .await
-        .map_err(map_service_error)?;
-
-    if deleted {
-        Ok(StatusCode::NO_CONTENT)
-    } else {
-        Err((
+    // Delete user
+    match user_service.delete_user(user_id).await {
+        Ok(_) => Ok(StatusCode::NO_CONTENT),
+        Err(ServiceError::UserNotFound) => Err((
+            StatusCode::NOT_FOUND,
+            format!("User with ID {} not found", user_id),
+        )),
+        Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to delete user".to_string(),
-        ))
+            format!("Failed to delete user: {}", e),
+        )),
     }
 }
 
 /// Helper function to get the user service from app state
-fn get_user_service(state: Arc<AppState>) -> Result<Arc<UserService>, (StatusCode, String)> {
+fn get_user_service(state: Arc<AppState>) -> Result<Arc<dyn IUserService>, (StatusCode, String)> {
     // Get the database pool from app state
     let db_pool = match state.db_pool {
         Some(ref pool) => pool.clone(),
         None => {
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Database not configured".to_string(),
+                "Database pool not initialized".to_string(),
             ));
         }
     };
@@ -355,7 +360,7 @@ fn get_user_service(state: Arc<AppState>) -> Result<Arc<UserService>, (StatusCod
     let user_repo = Arc::new(crate::repository::UserRepository::new(db_pool));
 
     // Create user service
-    let user_service = Arc::new(UserService::new(user_repo));
+    let user_service = Arc::new(crate::services::UserService::new(user_repo));
 
     Ok(user_service)
 }
