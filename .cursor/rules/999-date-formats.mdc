@@ -1,3 +1,9 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
 # Date Formatting Rule
 
 When generating content with dates (like "Updated at" timestamps), use the formats configured in `config/default.yaml` under the `date_formats` section.

@@ -26,6 +26,8 @@ For contributions, please:
 1. For bug reports and features, use the [GitLab issue tracker](https://gitlab.com/ecoleman2/navius/-/issues)
 2. Community contributions via GitHub PRs are welcome and will be reviewed
 
+> **Note**: We are currently undergoing a project restructuring to improve organization and developer experience. See the [Project Restructuring Roadmap](docs/roadmaps/project-restructuring.md) for details.
+
 ## 🚀 Why Navius?
 
 ### For Developers
@@ -146,6 +148,6 @@ Coming from Spring Boot? Check out our [migration guide](docs/spring-boot-migrat
 
 Contributions are welcome! Please check out our [contributing guide](CONTRIBUTING.md) to get started.
 
-## �� License
+## 📄 License
 
 Navius is Apache 2.0 licensed. See [LICENSE](LICENSE) for details. 
