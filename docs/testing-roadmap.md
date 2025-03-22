@@ -1,100 +1,58 @@
-# Rust Backend Testing Roadmap
+# Testing Roadmap
 
 ## Current Status
-- Test coverage: ~45% of core modules
+- Test coverage: ~50% of core modules
 - Unit tests: Implemented in most core modules
 - Integration tests: Basic framework set up with initial routes test
+- API logger module fully tested
+
+## Next Steps (Prioritized)
+
+### High Priority
+1. Router module tests
+   - [ ] Test route registration
+   - [ ] Test middleware application
+   - [ ] Test error handling middleware
+   - [ ] Test authentication integration
+
+2. Auth module tests (security critical)
+   - [ ] Token validation
+   - [ ] Authorization middleware
+   - [ ] Role-based access control
+
+### Medium Priority
+3. Cache module tests
+   - [ ] Unit tests for all cache providers
+   - [ ] Integration tests for cache functionality
+
+4. API clients
+   - [ ] Mock external API responses
+   - [ ] Test error handling and retries
+
+### Low Priority
+5. Database module tests
+   - [ ] Connection pooling
+   - [ ] Query builders
+   - [ ] Transaction handling
 
 ## Completed ✅
-- [x] Restructured test directories per Rust conventions
-- [x] Set up unit test framework with `#[cfg(test)]` modules
-- [x] Created common test utilities in `/tests/common/mod.rs`
-- [x] Implemented error handling tests:
-  - [x] Error type conversions
-  - [x] Error severity tests
-  - [x] Status code mapping
-  - [x] Result extensions
-  - [x] Error context handling
-  - [x] Error logging
+- [x] Error handling & logging
+  - [x] Error type definitions
+  - [x] Error context extensions
   - [x] Status code to error mapping
   - [x] Error message formatting
 - [x] Implemented basic router tests:
   - [x] Health endpoint test
   - [x] Route not found test
   - [x] Set up integration test structure
-
-## In Progress 🔄
-- [ ] Core modules testing:
-  - [ ] `utils` module (Priority 1)
-    - [ ] `api_logger.rs` (partially done)
-      - [ ] Complete request/response logging tests
-      - [ ] Add error scenario logging tests
-    - [ ] Other utilities
-
-## Next Steps (Prioritized) 📋
-1. Router module tests (High priority)
-   - [x] Test route registration
-   - [ ] Test middleware application
-   - [ ] Test error handling middleware
-   - [ ] Test authentication integration
-
-2. Auth module tests (High priority - security critical)
-   - [x] Token client creation tests
-   - [x] Token configuration tests  
-   - [ ] Token validation tests
-   - [ ] Authentication middleware tests
-   - [ ] Authorization tests for different permission levels
-   - [ ] Token refresh and expiry tests
-
-3. Handler module tests
-   - [ ] Individual handler function tests
-   - [ ] Request validation tests
-   - [ ] Response formatting tests
-   - [ ] Error handling in handlers
-
-4. Integration tests
-   - [x] Basic routing tests
-   - [ ] End-to-end request flow tests
-   - [ ] Auth + router + handler integration
-   - [ ] Error propagation across modules
-
-## Tooling & Infrastructure 🛠️
-- [ ] Add test coverage reporting
-  - [ ] Install and configure cargo-tarpaulin
-  - [ ] Set up coverage reports in CI
-  - [ ] Establish coverage thresholds (aim for 80%+)
-
-- [ ] CI Pipeline integration
-  - [ ] Configure unit test job
-  - [ ] Configure integration test job
-  - [ ] Set up test failure notification
-  - [ ] Add caching for faster test runs
-
-## Documentation 📚
-- [ ] Update README with:
-  - [ ] Test running instructions
-  - [ ] Test organization explanation
-  - [ ] Contributing guidelines for tests
-
-- [ ] Add inline documentation:
-  - [ ] Document test approaches in key modules
-  - [ ] Add examples that double as doc tests
-
-## Future Enhancements 🚀
-- [ ] Property-based testing for complex logic
-- [ ] Performance benchmarks for critical paths
-- [ ] Fuzz testing for input validation
-- [ ] Load testing for concurrent operations
-- [ ] Snapshot testing for response formats
-
-## Estimation
-- Core module tests: ~2-3 days
-- Integration tests: ~2 days
-- Tooling & CI: ~1 day
-- Documentation: ~0.5 day
+- [x] API Logger module tests:
+  - [x] All logging helper functions
+  - [x] Check response status function
+  - [x] Different HTTP status code scenarios
 
 ## Progress Tracking
-- Start date: March 21, 2024
 - Last updated: April 24, 2024
+- Current test count: 33 (30 unit tests, 1 integration test, 2 doc tests)
+- Test coverage target: 80% of all modules
 - Target completion: Core tests within 1 week, full suite within 2 weeks
 - Check-in frequency: Review progress daily, update roadmap weekly 
