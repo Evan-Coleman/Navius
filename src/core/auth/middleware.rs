@@ -803,3 +803,340 @@ async fn validate_token_wrapper(
 
     Ok(req)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use serde_json::json;
+    use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn test_auth_config_default() {
+        let config = EntraAuthConfig::default();
+
+        // Check default values
+        assert_eq!(config.tenant_id, "common");
+        assert_eq!(config.client_id, "");
+        assert_eq!(config.audience, "api://"); // The actual default value
+        assert!(config.validate_token);
+        assert!(matches!(config.required_roles, RoleRequirement::None));
+        assert!(matches!(
+            config.required_permissions,
+            PermissionRequirement::None
+        ));
+    }
+
+    #[test]
+    fn test_auth_config_from_app_config() {
+        let mut app_config = AppConfig::default();
+
+        // Set custom values for testing
+        app_config.auth.entra.tenant_id = "test-tenant".to_string();
+        app_config.auth.entra.client_id = "test-client".to_string();
+        app_config.auth.entra.audience = "test-audience".to_string();
+
+        let config = EntraAuthConfig::from_app_config(&app_config);
+
+        // Verify configuration was applied
+        assert_eq!(config.tenant_id, "test-tenant");
+        assert_eq!(config.client_id, "test-client");
+        assert_eq!(config.audience, "test-audience");
+    }
+
+    #[test]
+    fn test_auth_config_builder_methods() {
+        // Start with default config
+        let config = EntraAuthConfig::default()
+            .with_role_requirement(RoleRequirement::Any(vec!["admin".to_string()]))
+            .with_permission_requirement(PermissionRequirement::All(vec![
+                "read".to_string(),
+                "write".to_string(),
+            ]));
+
+        // Verify builder methods
+        match config.required_roles {
+            RoleRequirement::Any(roles) => {
+                assert_eq!(roles.len(), 1);
+                assert_eq!(roles[0], "admin");
+            }
+            _ => panic!("Expected RoleRequirement::Any"),
+        }
+
+        match config.required_permissions {
+            PermissionRequirement::All(permissions) => {
+                assert_eq!(permissions.len(), 2);
+                assert_eq!(permissions[0], "read");
+                assert_eq!(permissions[1], "write");
+            }
+            _ => panic!("Expected PermissionRequirement::All"),
+        }
+    }
+
+    #[test]
+    fn test_extract_token() {
+        // Test missing token
+        let headers = HeaderMap::new();
+        let result = extract_token(&headers);
+        assert!(matches!(result, Err(AuthError::MissingToken)));
+
+        // Test invalid token format
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            axum::http::header::AUTHORIZATION,
+            "InvalidFormat".parse().unwrap(),
+        );
+        let result = extract_token(&headers);
+        assert!(matches!(result, Err(AuthError::InvalidTokenFormat)));
+
+        // Test non-bearer token
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            axum::http::header::AUTHORIZATION,
+            "Basic dGVzdDp0ZXN0".parse().unwrap(),
+        );
+        let result = extract_token(&headers);
+        assert!(matches!(result, Err(AuthError::InvalidTokenFormat)));
+
+        // Test valid token format (minimal JWT format with three parts)
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            axum::http::header::AUTHORIZATION,
+            "Bearer header.payload.signature".parse().unwrap(),
+        );
+        let result = extract_token(&headers);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "header.payload.signature");
+
+        // Test invalid JWT format (missing parts)
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            axum::http::header::AUTHORIZATION,
+            "Bearer header.payload".parse().unwrap(),
+        );
+        let result = extract_token(&headers);
+        assert!(matches!(result, Err(AuthError::ValidationFailed(_))));
+    }
+
+    #[test]
+    fn test_validate_claims_roles() {
+        // Create test claims
+        let claims = EntraClaims {
+            aud: "test-audience".to_string(),
+            exp: constants::timestamps::YEAR_2100,
+            iss: "test-issuer".to_string(),
+            nbf: 0,
+            iat: constants::timestamps::JAN_1_2021,
+            sub: "test-subject".to_string(),
+            roles: vec!["user".to_string(), "editor".to_string()],
+            appid: Some("test-app-id".to_string()),
+            app_id_uri: Some("test-app-uri".to_string()),
+            scp: Some("read write".to_string()),
+        };
+
+        // Test with no role requirements
+        let config = EntraAuthConfig::default();
+        assert!(validate_claims(&claims, &config).is_ok());
+
+        // Test with matching "Any" role requirements
+        let config = EntraAuthConfig::default().with_role_requirement(RoleRequirement::Any(vec![
+            "editor".to_string(),
+            "admin".to_string(),
+        ]));
+        assert!(validate_claims(&claims, &config).is_ok());
+
+        // Test with non-matching "Any" role requirements
+        let config = EntraAuthConfig::default()
+            .with_role_requirement(RoleRequirement::Any(vec!["admin".to_string()]));
+        assert!(matches!(
+            validate_claims(&claims, &config),
+            Err(AuthError::AccessDenied(_))
+        ));
+
+        // Test with matching "All" role requirements
+        let config = EntraAuthConfig::default().with_role_requirement(RoleRequirement::All(vec![
+            "user".to_string(),
+            "editor".to_string(),
+        ]));
+        assert!(validate_claims(&claims, &config).is_ok());
+
+        // Test with partially matching "All" role requirements
+        let config = EntraAuthConfig::default().with_role_requirement(RoleRequirement::All(vec![
+            "user".to_string(),
+            "admin".to_string(),
+        ]));
+        assert!(matches!(
+            validate_claims(&claims, &config),
+            Err(AuthError::AccessDenied(_))
+        ));
+    }
+
+    #[test]
+    fn test_validate_permissions() {
+        // Create test claims with scopes
+        let claims = EntraClaims {
+            aud: "test-audience".to_string(),
+            exp: constants::timestamps::YEAR_2100,
+            iss: "test-issuer".to_string(),
+            nbf: 0,
+            iat: constants::timestamps::JAN_1_2021,
+            sub: "test-subject".to_string(),
+            roles: vec![],
+            appid: Some("test-app-id".to_string()),
+            app_id_uri: Some("test-app-uri".to_string()),
+            scp: Some("read write".to_string()),
+        };
+
+        // Test with no permission requirements
+        let config = EntraAuthConfig::default();
+        assert!(validate_permissions(&claims, &config).is_ok());
+
+        // Test with matching "Any" permission requirements
+        let config = EntraAuthConfig::default().with_permission_requirement(
+            PermissionRequirement::Any(vec!["write".to_string(), "delete".to_string()]),
+        );
+        assert!(validate_permissions(&claims, &config).is_ok());
+
+        // Test with non-matching "Any" permission requirements
+        let config = EntraAuthConfig::default()
+            .with_permission_requirement(PermissionRequirement::Any(vec!["delete".to_string()]));
+        assert!(matches!(
+            validate_permissions(&claims, &config),
+            Err(AuthError::AccessDenied(_))
+        ));
+
+        // Test with matching "All" permission requirements
+        let config = EntraAuthConfig::default().with_permission_requirement(
+            PermissionRequirement::All(vec!["read".to_string(), "write".to_string()]),
+        );
+        assert!(validate_permissions(&claims, &config).is_ok());
+
+        // Test with partially matching "All" permission requirements
+        let config = EntraAuthConfig::default().with_permission_requirement(
+            PermissionRequirement::All(vec!["read".to_string(), "delete".to_string()]),
+        );
+        assert!(matches!(
+            validate_permissions(&claims, &config),
+            Err(AuthError::AccessDenied(_))
+        ));
+    }
+
+    #[test]
+    fn test_auth_error_into_response() {
+        // Test error response conversion for each error type
+
+        // MissingToken error
+        let error = AuthError::MissingToken;
+        let response = error.into_response();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        // InvalidTokenFormat error
+        let error = AuthError::InvalidTokenFormat;
+        let response = error.into_response();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        // ValidationFailed error
+        let error = AuthError::ValidationFailed("Test validation error".to_string());
+        let response = error.into_response();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        // InternalError error
+        let error = AuthError::InternalError("Test internal error".to_string());
+        let response = error.into_response();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+        // AccessDenied error
+        let error = AuthError::AccessDenied("Test access denied".to_string());
+        let response = error.into_response();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn test_auth_layer_creation() {
+        // Test default layer creation
+        let layer = EntraAuthLayer::default();
+        assert_eq!(layer.config.tenant_id, "common");
+
+        // Test with roles
+        let layer = EntraAuthLayer::require_any_role(vec!["admin".to_string()]);
+        match layer.config.required_roles {
+            RoleRequirement::Any(roles) => {
+                assert_eq!(roles.len(), 1);
+                assert_eq!(roles[0], "admin");
+            }
+            _ => panic!("Expected RoleRequirement::Any"),
+        }
+
+        // Test with permissions
+        let layer =
+            EntraAuthLayer::require_all_permissions(vec!["read".to_string(), "write".to_string()]);
+        match layer.config.required_permissions {
+            PermissionRequirement::All(permissions) => {
+                assert_eq!(permissions.len(), 2);
+                assert_eq!(permissions[0], "read");
+                assert_eq!(permissions[1], "write");
+            }
+            _ => panic!("Expected PermissionRequirement::All"),
+        }
+    }
+
+    // Test the EntraClaims functionality
+    #[test]
+    fn test_entra_claims_get_scopes() {
+        // Test with empty scopes
+        let claims = EntraClaims {
+            aud: "test-audience".to_string(),
+            exp: constants::timestamps::YEAR_2100,
+            iss: "test-issuer".to_string(),
+            nbf: 0,
+            iat: constants::timestamps::JAN_1_2021,
+            sub: "test-subject".to_string(),
+            roles: vec![],
+            appid: None,
+            app_id_uri: None,
+            scp: None,
+        };
+
+        let scopes = claims.get_scopes();
+        assert!(scopes.is_empty());
+
+        // Test with single scope
+        let claims = EntraClaims {
+            aud: "test-audience".to_string(),
+            exp: constants::timestamps::YEAR_2100,
+            iss: "test-issuer".to_string(),
+            nbf: 0,
+            iat: constants::timestamps::JAN_1_2021,
+            sub: "test-subject".to_string(),
+            roles: vec![],
+            appid: None,
+            app_id_uri: None,
+            scp: Some("read".to_string()),
+        };
+
+        let scopes = claims.get_scopes();
+        assert_eq!(scopes.len(), 1);
+        assert!(scopes.contains(&"read".to_string()));
+
+        // Test with multiple scopes
+        let claims = EntraClaims {
+            aud: "test-audience".to_string(),
+            exp: constants::timestamps::YEAR_2100,
+            iss: "test-issuer".to_string(),
+            nbf: 0,
+            iat: constants::timestamps::JAN_1_2021,
+            sub: "test-subject".to_string(),
+            roles: vec![],
+            appid: None,
+            app_id_uri: None,
+            scp: Some("read write delete".to_string()),
+        };
+
+        let scopes = claims.get_scopes();
+        assert_eq!(scopes.len(), 3);
+        assert!(scopes.contains(&"read".to_string()));
+        assert!(scopes.contains(&"write".to_string()));
+        assert!(scopes.contains(&"delete".to_string()));
+    }
+}
