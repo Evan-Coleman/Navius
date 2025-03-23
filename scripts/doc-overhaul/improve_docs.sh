@@ -147,7 +147,7 @@ case $file_choice in
         ;;
     4)
         # Get files with broken links from validation report
-        files=$(grep -A 100 "^## Broken Links" "$REPORT_FILE" | grep -B 100 "^##" | grep "^\|" | grep -v "File \| Broken Link" | grep -v "^\-\-\-" | cut -d'|' -f2 | sed 's/^ \`//' | sed 's/\` $//' | sort | uniq | grep -v "^##")
+        files=$(grep -A 100 "^## Broken Links" "$REPORT_FILE" | grep -B 100 "^##" | grep "^|" | grep -v "^| File " | grep -v "^|-" | awk -F'|' '{print $2}' | sed 's/^ *//' | sed 's/ *$//' | sort | uniq | grep -v "^$")
         
         if [ -z "$files" ]; then
             print_warning "No files found with broken links."
@@ -178,7 +178,7 @@ case $file_choice in
         ;;
     5)
         # Get files with relative links from validation report
-        files=$(grep -A 100 "^## Relative Links" "$REPORT_FILE" | grep -B 100 "^##" | grep "^\|" | grep -v "File \| Relative Link" | grep -v "^\-\-\-" | cut -d'|' -f2 | sed 's/^ \`//' | sed 's/\` $//' | sort | uniq | grep -v "^##")
+        files=$(grep -A 100 "^## Relative Links" "$REPORT_FILE" | grep -B 100 "^##" | grep "^|" | grep -v "^| File " | grep -v "^|-" | awk -F'|' '{print $2}' | sed 's/^ *//' | sed 's/ *$//' | sort | uniq | grep -v "^$")
         
         if [ -z "$files" ]; then
             print_warning "No files found with relative links."
