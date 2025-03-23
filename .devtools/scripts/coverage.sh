@@ -4,9 +4,10 @@
 
 set -e
 
-COVERAGE_FILE="navius-coverage.json"
-HTML_REPORT="coverage/tarpaulin-report.html"
-COVERAGE_DIR="coverage"
+# Use target/tarpaulin for all coverage output
+COVERAGE_DIR="target/tarpaulin"
+COVERAGE_FILE="$COVERAGE_DIR/navius-coverage.json"
+HTML_REPORT="$COVERAGE_DIR/tarpaulin-report.html"
 
 # Create coverage directory if it doesn't exist
 mkdir -p "$COVERAGE_DIR"
@@ -23,9 +24,11 @@ show_help() {
   echo "  -r, --report           Generate HTML report from existing JSON data"
   echo "  -b, --baseline         Save current coverage as baseline"
   echo "  -c, --compare          Compare current coverage with baseline"
+  echo "  --html                 Generate HTML report alongside JSON (optional)"
   echo ""
   echo "Examples:"
-  echo "  $0 --full              Run full coverage analysis"
+  echo "  $0 --full              Run full coverage analysis (JSON only)"
+  echo "  $0 --full --html       Run full coverage analysis with HTML report"
   echo "  $0 -m core::utils      Run coverage for core::utils module"
   echo "  $0 -r                  Generate HTML report from existing JSON data"
   echo "  $0 -b                  Save current coverage as baseline"
@@ -37,15 +40,13 @@ run_module_coverage() {
   echo "Running coverage analysis for module: $1"
   cargo tarpaulin --packages navius --lib --out Json --output-file "$COVERAGE_FILE" --line -- "$1"
   
-  # Also save to target directory for integration with other tools
-  cargo tarpaulin --packages navius --lib --out Json --output-file "target/@navius-coverage.json" --line -- "$1"
-  
-  # Generate HTML report
-  cargo tarpaulin --packages navius --lib --out Html --output-dir "$COVERAGE_DIR" --line -- "$1"
+  if [ "$GENERATE_HTML" = true ]; then
+    echo "Generating HTML report..."
+    cargo tarpaulin --packages navius --lib --out Html --output-dir "$COVERAGE_DIR" --line -- "$1"
+    echo "HTML report generated at $HTML_REPORT"
+  fi
   
   echo "Coverage analysis complete. Results saved to $COVERAGE_FILE"
-  echo "Additional JSON file saved to target/@navius-coverage.json"
-  echo "HTML report generated at $HTML_REPORT"
 }
 
 # Function to run full coverage analysis
@@ -53,15 +54,13 @@ run_full_coverage() {
   echo "Running full coverage analysis..."
   cargo tarpaulin --packages navius --lib --out Json --output-file "$COVERAGE_FILE" --line
   
-  # Also save to target directory for integration with other tools
-  cargo tarpaulin --packages navius --lib --out Json --output-file "target/@navius-coverage.json" --line
+  if [ "$GENERATE_HTML" = true ]; then
+    echo "Generating HTML report..."
+    cargo tarpaulin --packages navius --lib --out Html --output-dir "$COVERAGE_DIR" --line
+    echo "HTML report generated at $HTML_REPORT"
+  fi
   
-  # Generate HTML report
-  cargo tarpaulin --packages navius --lib --out Html --output-dir "$COVERAGE_DIR" --line
-  
-  echo "Full coverage analysis complete. Results saved to $COVERAGE_FILE"
-  echo "Additional JSON file saved to target/@navius-coverage.json"
-  echo "HTML report generated at $HTML_REPORT"
+  echo "Coverage analysis complete. Results saved to $COVERAGE_FILE"
 }
 
 # Function to generate HTML report from existing JSON data
@@ -124,6 +123,9 @@ compare_coverage() {
   fi
 }
 
+# Initialize HTML generation flag
+GENERATE_HTML=false
+
 # Parse command line arguments
 if [ $# -eq 0 ]; then
   show_help
@@ -137,23 +139,27 @@ while [ $# -gt 0 ]; do
       exit 0
       ;;
     -m|--module)
-      run_module_coverage "$2"
+      MODULE="$2"
       shift 2
       ;;
     -f|--full)
-      run_full_coverage
+      RUN_FULL=true
       shift
       ;;
     -r|--report)
-      generate_report
+      GENERATE_REPORT=true
       shift
       ;;
     -b|--baseline)
-      save_baseline
+      SAVE_BASELINE=true
       shift
       ;;
     -c|--compare)
-      compare_coverage
+      COMPARE=true
+      shift
+      ;;
+    --html)
+      GENERATE_HTML=true
       shift
       ;;
     *)
@@ -162,4 +168,25 @@ while [ $# -gt 0 ]; do
       exit 1
       ;;
   esac
-done 
+done
+
+# Execute requested operations
+if [ "$RUN_FULL" = true ]; then
+  run_full_coverage
+fi
+
+if [ -n "$MODULE" ]; then
+  run_module_coverage "$MODULE"
+fi
+
+if [ "$GENERATE_REPORT" = true ]; then
+  generate_report
+fi
+
+if [ "$SAVE_BASELINE" = true ]; then
+  save_baseline
+fi
+
+if [ "$COMPARE" = true ]; then
+  compare_coverage
+fi 
