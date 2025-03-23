@@ -14,30 +14,73 @@ last_updated: March 23, 2025
 version: 1.0
 ---
 
-# Navius Guides
+# Navius Framework Guides
 
-This section contains comprehensive guides for working with the Navius framework. These guides are organized into categories to help you find the information you need.
+## Overview
+This section contains comprehensive guides for using the Navius framework. These guides are process-oriented, explaining how to accomplish various tasks with Navius.
 
-## Guide Categories
+## Development Guides
 
-- [Development Guides](development/README.md) - Guides for developers working on Navius applications
-- [Feature Guides](features/README.md) - Guides for implementing specific features
-- [Deployment Guides](deployment/README.md) - Guides for deploying Navius applications
+Guides for the development workflow with Navius:
 
-## Key Documents
+- [Development Workflow](development/development-workflow.md) - Daily development process and tools
+- [Testing Guide](development/testing.md) - Comprehensive guide to testing Navius applications
+- [Project Navigation](development/project-navigation.md) - Navigating the Navius codebase effectively
 
-- [Development Workflow](development/development-workflow.md) - Understanding the development process
-- [Testing Guide](development/testing.md) - How to write and run tests
-- [Authentication](features/authentication.md) - Implementing authentication
-- [API Integration](features/api-integration.md) - Working with APIs
-- [AWS Deployment](deployment/aws-deployment.md) - Deploying to AWS
+## Feature Implementation Guides
 
-## Getting Started
+Guides for implementing specific features:
 
-If you're new to the Navius framework, we recommend starting with the [Getting Started](../getting-started/README.md) section before diving into these guides.
+- [API Design](features/api-design.md) - Best practices for designing APIs in Navius
+- [API Integration](features/api-integration.md) - Integrating with external APIs
+- [Authentication](features/authentication.md) - Implementing authentication in your application
+- [Authorization](features/authorization.md) - Implementing authorization and access control
+- [Database Access](features/database-access.md) - Working with databases in Navius
+- [Caching](features/caching.md) - Implementing efficient caching strategies
+- [Validation](features/validation.md) - Validating input data
+- [Error Handling](features/error-handling.md) - Handling errors gracefully
+- [Logging](features/logging.md) - Implementing logging in your application
+- [WebSocket Support](features/websocket-support.md) - Real-time communication with WebSockets
+- [File Upload](features/file-upload.md) - Handling file uploads
 
-For developers who have completed the getting started guides, the following resources provide a good next step:
+## Deployment Guides
 
-1. [Development Workflow](development/development-workflow.md)
-2. [Project Structure](../reference/architecture/project-structure.md)
-3. [Testing Guide](development/testing.md) 
+Guides for deploying Navius applications:
+
+- [Production Deployment](deployment/production-deployment.md) - Deploying to production environments
+- [Cloud Deployment](deployment/cloud-deployment.md) - Deploying to major cloud platforms
+- [Docker Deployment](deployment/docker-deployment.md) - Using Docker for deployment
+- [Kubernetes Deployment](deployment/kubernetes-deployment.md) - Deploying with Kubernetes
+- [Continuous Integration](deployment/continuous-integration.md) - Setting up CI/CD pipelines
+
+## Performance Guides
+
+Guides for optimizing performance:
+
+- [Performance Tuning](performance/performance-tuning.md) - Optimizing application performance
+- [Load Testing](performance/load-testing.md) - Testing application under load
+- [Database Optimization](performance/database-optimization.md) - Optimizing database performance
+- [Caching Strategies](performance/caching-strategies.md) - Advanced caching techniques
+
+## Integration Guides
+
+Guides for integrating with other systems:
+
+- [Email Integration](integration/email-integration.md) - Sending emails from your application
+- [Payment Integration](integration/payment-integration.md) - Integrating payment processors
+- [File Storage](integration/file-storage.md) - Working with cloud storage services
+- [Search Integration](integration/search-integration.md) - Integrating search engines
+
+## How to Use These Guides
+
+Each guide is written as a step-by-step tutorial, designed to help you accomplish specific tasks. We recommend:
+
+1. Start with the [Development Workflow](development/development-workflow.md) guide to understand the basic development process
+2. Explore specific feature guides based on your project requirements
+3. Refer to deployment guides when ready to deploy your application
+
+## Related Sections
+
+- [Getting Started](../getting-started/README.md) - Quick start guides for beginners
+- [Reference Documentation](../reference/README.md) - Technical reference information
+- [Contributing](../contributing/README.md) - Guidelines for contributing to Navius 

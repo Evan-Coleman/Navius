@@ -16,28 +16,60 @@ version: 1.0
 
 # Navius Reference Documentation
 
-This section contains technical reference documentation for the Navius framework. Unlike guides which walk you through processes, reference documentation provides detailed technical specifications and standards.
+## Overview
+This section provides comprehensive technical reference documentation for the Navius framework. These reference documents offer detailed specifications, architecture information, and standards documentation.
 
-## Reference Categories
+## Architecture Reference
 
-- [API Reference](api/README.md) - Detailed documentation of API resources and patterns
-- [Architecture Reference](architecture/README.md) - Architecture diagrams and structural information
-- [Standards](standards/README.md) - Coding standards, naming conventions, and best practices
+### Core Architecture
+- [Architectural Principles](architecture/principles.md) - Fundamental design principles guiding Navius
+- [Directory Organization](architecture/directory-organization.md) - Detailed explanation of the project directory structure
+- [Project Structure](architecture/project-structure.md) - Overview of the project's architecture
 
-## Key Documents
+## API Reference
 
-- [Project Structure](architecture/project-structure.md) - Overview of the project's architecture and organization
-- [API Resources](api/resources.md) - Reference for all API resources
-- [Naming Conventions](standards/naming-conventions.md) - Standards for naming in the Navius framework
-- [Security Standards](standards/security-standards.md) - Security requirements and best practices
+- [API Overview](api/README.md) - Introduction to the Navius API
+- API Resources - Documentation for each API resource
+- API Patterns - Common API design patterns
 
-## Purpose
+## Configuration Reference
 
-Reference documentation serves as a comprehensive resource for developers who need detailed technical information about the Navius framework. While guides focus on "how to do things," reference documentation focuses on "how things work" and "what things are available."
+- [Environment Variables](configuration/environment-variables.md) - Comprehensive list of environment variables
+- Configuration Files - Documentation for configuration file formats
+- Runtime Configuration - How Navius loads and applies configuration
 
-Use this section when you need:
+## Standards Reference
 
-- Detailed specifications for framework components
-- Technical descriptions of features and functionality
-- Standards and conventions for development
-- Architecture details and diagrams 
+- [Naming Conventions](standards/naming-conventions.md) - Standards for naming various components
+- [Error Handling](standards/error-handling.md) - Error handling patterns and practices
+- [Coding Standards](standards/coding-standards.md) - General coding standards
+- [Documentation Standards](standards/documentation-standards.md) - Standards for documentation
+- [Testing Standards](standards/testing-standards.md) - Standards for testing
+
+## Type Reference
+
+- Core Types - Documentation for core data types
+- Utility Types - Documentation for utility data types
+- Database Types - Documentation for database-related types
+
+## Module Reference
+
+- Core Module - Documentation for the core module
+- API Module - Documentation for the API module
+- Database Module - Documentation for the database module
+- Authentication Module - Documentation for the authentication module
+- Middleware Module - Documentation for middleware components
+
+## How to Use This Reference
+
+The reference documentation is organized by topic. You can:
+
+1. Browse the sections above to find specific reference documentation
+2. Use the search functionality to find specific information
+3. Cross-reference with guides for more process-oriented documentation
+
+## Related Sections
+
+- [Getting Started](../getting-started/README.md) - Introductory guides
+- [Guides](../guides/README.md) - Process-oriented guides
+- [Contributing](../contributing/README.md) - Contribution guidelines 

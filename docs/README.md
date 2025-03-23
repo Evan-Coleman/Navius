@@ -14,59 +14,91 @@ last_updated: March 23, 2025
 version: 1.0
 ---
 
-# Navius Documentation
+# Navius Framework Documentation
 
-Welcome to the Navius documentation. This documentation is organized into the following sections to help you find the information you need.
+This is the main documentation repository for the Navius framework, a high-performance Rust web framework designed for building scalable and reliable APIs.
 
-## Documentation Sections
+## 📚 Documentation Sections
 
-- [Getting Started](getting-started/README.md) - Quick start guides for new users
-- [Guides](guides/README.md) - Comprehensive guides for using and extending Navius
-- [Reference](reference/README.md) - Technical reference documentation
-- [Contributing](contributing/README.md) - Guidelines for contributing to the project
-- [Roadmaps](roadmaps/README.md) - Development roadmaps and future plans
-- [Resources](resources/README.md) - Additional resources, glossary, and troubleshooting
+### 🚀 Getting Started
+Quick start guides to get up and running with Navius:
 
-## Key Documents
-
-- [Installation Guide](getting-started/installation.md) - How to install and set up the application
+- [Installation Guide](getting-started/installation.md) - How to install Navius
 - [Development Setup](getting-started/development-setup.md) - Setting up your development environment
-- [Development Workflow](guides/development/development-workflow.md) - Guide for developers working on the project
-- [Project Structure](reference/architecture/project-structure.md) - Overview of the project's architecture
-- [Testing Guide](guides/development/testing.md) - How to test your Navius application
+- [First Application](getting-started/first-application.md) - Build your first Navius application
+- [Project Structure](getting-started/project-structure.md) - Understanding the project layout
 
-## Getting Started
+### 🛠️ Development Guides
+Detailed guides for development workflows:
 
-If you're new to the project, we recommend following this learning path:
+- [Development Workflow](guides/development/development-workflow.md) - Day-to-day development process
+- [Testing Guide](guides/development/testing.md) - How to test Navius applications
+- [Project Navigation](guides/development/project-navigation.md) - Navigating the codebase
 
-1. [Installation Guide](getting-started/installation.md)
-2. [Development Setup](getting-started/development-setup.md)
-3. [First Steps](getting-started/first-steps.md)
-4. [Development Workflow](guides/development/development-workflow.md)
-5. [Project Structure](reference/architecture/project-structure.md)
+### ✨ Feature Guides
+Guides for implementing specific features:
 
-## Documentation Organization
+- [API Design](guides/features/api-design.md) - Best practices for API design
+- [API Integration](guides/features/api-integration.md) - Integrating with external APIs
+- [Authentication](guides/features/authentication.md) - Implementing authentication
+- [Database Access](guides/features/database-access.md) - Working with databases
+- [Caching](guides/features/caching.md) - Implementing caching strategies
+- [WebSocket Support](guides/features/websocket-support.md) - Real-time communication
 
-Our documentation follows a clear organization:
+### 🚢 Deployment Guides
+Instructions for deploying applications:
 
-- **Getting Started**: Quick introduction and setup guides
-- **Guides**: Process-oriented documentation explaining how to accomplish tasks
-- **Reference**: Technical specifications and detailed information
-- **Contributing**: Information for project contributors
-- **Roadmaps**: Future development plans and progress tracking
-- **Resources**: Additional information and troubleshooting
+- [Production Deployment](guides/deployment/production-deployment.md) - Deploying to production
+- [Cloud Deployment](guides/deployment/cloud-deployment.md) - Deploying to cloud platforms
+- [Docker Deployment](guides/deployment/docker-deployment.md) - Working with Docker
+- [Kubernetes Deployment](guides/deployment/kubernetes-deployment.md) - Deploying to Kubernetes
 
-Each section has its own index (README.md) to help you navigate to specific documents.
+### 📖 Reference
+Technical reference documentation:
 
-## Documentation Standards
+- [Architecture](reference/architecture/principles.md) - Architectural principles
+  - [Directory Organization](reference/architecture/directory-organization.md) - Directory structure
+  - [Principles](reference/architecture/principles.md) - Core architectural principles
+- [API Reference](reference/api/README.md) - API documentation
+- [Configuration](reference/configuration/environment-variables.md) - Configuration options
+  - [Environment Variables](reference/configuration/environment-variables.md) - Environment variables reference
+- [Standards](reference/standards/naming-conventions.md) - Coding standards
+  - [Naming Conventions](reference/standards/naming-conventions.md) - Naming conventions
+  - [Error Handling](reference/standards/error-handling.md) - Error handling standards
 
-All documentation follows our [Documentation Standards Guide](roadmaps/implementation/document-standards.md), which ensures consistency across all documents. This includes:
+### 🛣️ Roadmaps
+Development roadmaps for Navius:
 
-- Consistent formatting and structure
-- Clear navigation and cross-references
-- Comprehensive metadata
-- Regular updates and versioning
+- [Documentation Overhaul](roadmaps/12_document_overhaul.md) - Documentation improvement plan
+- [Core Framework Roadmap](roadmaps/10_core_framework.md) - Core framework development plans
+- [Feature Roadmap](roadmaps/11_feature_development.md) - Upcoming feature development
 
-## Contributing to Documentation
+### 🤝 Contributing
+Guidelines for contributors:
 
-If you'd like to contribute to the documentation, please see the [Documentation Contribution Guide](contributing/documentation-contribution.md) for guidelines and processes. 
+- [Contribution Guide](contributing/contribution-guide.md) - How to contribute
+- [Code of Conduct](contributing/code-of-conduct.md) - Community guidelines
+- [Development Process](contributing/development-process.md) - Development workflow for contributors
+- [Test Implementation Template](contributing/test-implementation-template.md) - Template for writing tests
+
+## 🔍 Documentation Search
+
+Use your browser's search functionality (Ctrl+F / Cmd+F) to search within the current document, or navigate to the specific section you're interested in.
+
+## 📝 Documentation Standards
+
+All documentation follows these standards:
+
+1. **Frontmatter**: Each document includes metadata in the YAML frontmatter
+2. **Structure**: Clear headings and subheadings with logical progression
+3. **Code Examples**: Practical examples with syntax highlighting
+4. **Cross-referencing**: Links to related documentation
+5. **Up-to-date**: Regular reviews and updates to ensure accuracy
+
+## 🆘 Need Help?
+
+If you can't find what you're looking for, please:
+
+1. Check the [GitHub Issues](https://github.com/navius/navius/issues) for known documentation issues
+2. Join our [Discord Community](https://discord.gg/navius) for real-time help
+3. Open a new documentation issue if you find something missing or incorrect 

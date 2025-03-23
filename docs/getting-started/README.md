@@ -15,28 +15,56 @@ version: 1.0
 
 # Getting Started with Navius
 
-Welcome to the Navius framework! This section contains quick start guides to help you set up and begin using the framework as quickly as possible.
+## Overview
+This section provides quick-start guides to help new users begin working with the Navius framework. These guides are designed to take you from installation to building your first application.
 
-## Document List
+## Getting Started Guides
 
-- [Installation Guide](installation.md) - How to install the Navius framework
+### Core Setup
+
+- [Installation](installation.md) - Installing the Navius framework
 - [Development Setup](development-setup.md) - Setting up your development environment
-- [First Steps](first-steps.md) - Your first application with Navius
+- [Project Structure](project-structure.md) - Understanding the structure of a Navius project
 
-## Key Documents
+### First Steps
 
-If you're new to the project, we recommend starting with:
+- [First Application](first-application.md) - Building your first Navius application
+- [Basic Concepts](basic-concepts.md) - Understanding key Navius concepts
+- [Hello World API](hello-world-api.md) - Creating a simple API endpoint
 
-- [Installation Guide](installation.md)
-- [Development Setup](development-setup.md)
+### Next Steps
 
-## Getting Started
+- [Database Setup](database-setup.md) - Setting up and connecting to a database
+- [Authentication Setup](authentication-setup.md) - Adding basic authentication
+- [API Resources](api-resources.md) - Creating your first API resources
 
-For a complete onboarding experience, we recommend following these guides in order:
+## Recommended Learning Path
 
-1. [Installation Guide](installation.md)
+For the best learning experience, we recommend following these guides in order:
+
+1. [Installation](installation.md)
 2. [Development Setup](development-setup.md)
-3. [First Steps](first-steps.md)
-4. [Development Workflow](../guides/development/development-workflow.md)
+3. [First Application](first-application.md)
+4. [Basic Concepts](basic-concepts.md)
+5. [Project Structure](project-structure.md)
+6. [Hello World API](hello-world-api.md)
+7. [Database Setup](database-setup.md)
+8. [Authentication Setup](authentication-setup.md)
+9. [API Resources](api-resources.md)
 
-After completing these guides, you'll have a working Navius environment and understand the basic development workflow. 
+After completing these guides, you'll be ready to explore more advanced topics in the [Guides](../guides/README.md) section.
+
+## Prerequisites
+
+Before starting with Navius, you should have:
+
+- Basic knowledge of Rust programming
+- Familiarity with command-line tools
+- Understanding of web development concepts (HTTP, REST, etc.)
+- A code editor or IDE (VS Code, IntelliJ, etc.)
+
+## Related Sections
+
+- [Development Guides](../guides/development/README.md) - More detailed development guides
+- [Feature Guides](../guides/features/README.md) - Guides for implementing specific features
+- [Reference Documentation](../reference/README.md) - Technical reference information 
