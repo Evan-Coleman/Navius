@@ -26,7 +26,7 @@ use crate::{
         middleware::{EntraAuthConfig, RoleRequirement},
     },
     core::config::app_config::AppConfig,
-    handlers::logging,
+    core::handlers::logging,
     models::{ApiResponse, DetailedHealthResponse, HealthCheckResponse},
     reliability,
 };
@@ -43,6 +43,47 @@ pub struct AppState {
     pub token_client: Option<EntraTokenClient>,
     pub resource_registry: crate::utils::api_resource::ApiResourceRegistry,
     pub db_pool: Option<Arc<Box<dyn crate::core::database::PgPool>>>,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        // Load default configuration
+        let config = crate::core::config::app_config::AppConfig {
+            server: Default::default(),
+            api: Default::default(),
+            auth: Default::default(),
+            logging: Default::default(),
+            reliability: Default::default(),
+            openapi: Default::default(),
+            cache: Default::default(),
+            database: Default::default(),
+            environment: Default::default(),
+            endpoint_security: Default::default(),
+        };
+
+        // Create HTTP client with default timeout
+        let client = Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .expect("Failed to create default HTTP client");
+
+        // Get default metrics handle
+        let metrics_handle = crate::core::metrics::init_metrics();
+
+        // Create resource registry
+        let resource_registry = crate::utils::api_resource::ApiResourceRegistry::new();
+
+        Self {
+            client,
+            config,
+            start_time: SystemTime::now(),
+            cache_registry: None,
+            metrics_handle,
+            token_client: None,
+            resource_registry,
+            db_pool: None,
+        }
+    }
 }
 
 /// Create the core application router with middleware

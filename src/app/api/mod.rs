@@ -17,6 +17,10 @@
 //! This module contains all the API endpoint implementations that are intended
 //! to be customized or extended by users of the framework.
 
+use crate::core::router::AppState;
+use axum::{Router, routing::get};
+use std::sync::Arc;
+
 // Add your API modules here:
 // pub mod users;
 // pub mod products;
@@ -30,16 +34,16 @@ pub mod examples;
 /// # Example
 /// ```
 /// use axum::Router;
+/// use std::sync::Arc;
 /// use navius::app::api::routes;
+/// use navius::core::router::AppState;
 ///
-/// let app = Router::new().nest("/api", routes());
+/// let state = Arc::new(AppState::default());
+/// let app: Router<Arc<AppState>> = Router::new().nest("/api", routes()).with_state(state);
 /// ```
-pub fn routes() -> axum::Router {
-    use axum::Router;
-    use axum::routing::get;
-
+pub fn routes() -> Router<Arc<AppState>> {
     // Create a router with our example endpoints
-    Router::new().route("/pets/:id", get(examples::pet::fetch_pet_handler))
+    Router::new().route("/pets/{id}", get(examples::pet::fetch_pet_handler))
 
     // Add your own routes below:
     // .merge(users::routes())

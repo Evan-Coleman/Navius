@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::{
     core::auth::EntraAuthLayer,
-    handlers::{self, actuator, health},
+    core::handlers::{self, actuator, docs, health},
 };
 
 use super::AppState;
@@ -30,8 +30,8 @@ impl CoreRouter {
         let actuator_routes = Router::new()
             .route("/health", get(health::detailed_health_check))
             .route("/info", get(actuator::info))
-            .route("/docs", get(handlers::docs::swagger_ui_handler))
-            .route("/docs/{*file}", get(handlers::docs::openapi_spec_handler));
+            .route("/docs", get(docs::swagger_ui_handler))
+            .route("/docs/{*file}", get(docs::openapi_spec_handler));
 
         // Apply authentication layers if enabled
         let actuator_routes = if auth_enabled {
