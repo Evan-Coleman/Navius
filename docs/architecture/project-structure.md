@@ -1,8 +1,8 @@
-# Navius Project Structure Map
+# Navius Project Structure
 
-**Updated At:** March 25, 2024  
+**Updated At:** March 23, 2025
 
-This document provides a comprehensive map of the Navius project structure to help developers navigate the codebase more efficiently.
+This document provides a comprehensive guide to the Navius project structure, helping developers understand how the codebase is organized and how different components work together.
 
 ## Directory Structure Overview
 
@@ -12,6 +12,7 @@ navius/
 │   ├── coverage/           # Test coverage tools and reports
 │   ├── github/             # GitHub-specific configurations
 │   ├── gitlab/             # GitLab-specific configurations (excluding CI)
+│   ├── ide/                # IDE configurations (VS Code, IntelliJ, etc.)
 │   └── scripts/            # Development and build scripts
 ├── config/                 # Application configuration files
 │   ├── default.yaml        # Default configuration
@@ -28,6 +29,9 @@ navius/
 ├── migrations/             # Database migration files
 ├── src/                    # Source code
 │   ├── app/                # User-extensible application code
+│   │   ├── api/            # User-defined API endpoints
+│   │   ├── services/       # User-defined services
+│   │   └── router.rs       # User-defined routes
 │   ├── cache/              # Cache implementations (wrappers)
 │   ├── config/             # Configuration implementations (wrappers)
 │   ├── core/               # Core business logic and implementations
@@ -51,10 +55,23 @@ navius/
 │   └── common/             # Common test utilities
 ├── .env                    # Environment variables (for development)
 ├── .gitlab-ci.yml          # GitLab CI/CD configuration
-├── build.rs               # Build script
-├── Cargo.toml             # Rust dependencies and project configuration
-└── README.md              # Project overview
+├── build.rs                # Build script
+├── Cargo.toml              # Rust dependencies and project configuration
+└── README.md               # Project overview
 ```
+
+## Version Control Strategy
+
+Navius uses a dual VCS approach:
+
+- **GitLab (Primary)**: Business operations, CI/CD, issue tracking, code review workflow
+- **GitHub (Secondary)**: Public visibility, community engagement, documentation accessibility
+
+### Repository Sync Strategy
+
+Repositories are synchronized using GitLab's mirroring feature:
+- Automatic one-way sync from GitLab → GitHub after successful builds
+- Production code and releases are pushed to GitHub only after validation
 
 ## Core Components and Their Responsibilities
 
@@ -80,9 +97,8 @@ The core module contains the central business logic and implementations:
 User-extensible scaffolding that allows developers to extend the application:
 
 - **router.rs**: User-defined routes and endpoints
-- **auth_config.rs**: Authentication configuration
-- **api**: User-defined API endpoints
-- **services**: User-defined service implementations
+- **api/**: User-defined API endpoints
+- **services/**: User-defined service implementations
 
 ### 3. Generated Code (`target/generated/`)
 
@@ -91,6 +107,35 @@ Auto-generated API clients and models:
 - **[api_name]_api/**: Generated API client code for each API
 - **openapi/**: OpenAPI schemas and configurations
 
+## Module Organization and Dependencies
+
+Navius follows a modular architecture with clean separation of concerns:
+
+1. **HTTP Layer** (API): Defines REST endpoints, handles HTTP requests/responses
+2. **Business Logic** (Services): Implements core application functionality
+3. **Data Access** (Repository): Manages data persistence and retrieval
+4. **Domain Model** (Models): Defines data structures used across the application
+5. **Infrastructure** (Core): Provides framework capabilities like auth, caching, etc.
+
+### Dependencies Between Modules
+
+The dependencies between modules follow a clean architecture approach:
+
+```
+API → Services → Repository → Database
+        ↓
+      Models
+        ↑
+       Core
+```
+
+Specific component dependencies:
+- **api** → depends on → **services**, **repository**, **error**
+- **services** → depends on → **repository**, **error**
+- **repository** → depends on → **database**, **error**
+- **router** → depends on → **api**, **auth**
+- **auth** → depends on → **error**, **config**
+
 ## Major Dependencies and Integrations
 
 - **Axum**: Web framework
@@ -98,6 +143,7 @@ Auto-generated API clients and models:
 - **SQLx**: Database access
 - **Redis**: Cache provider
 - **AWS**: Cloud services integration
+- **Microsoft Entra**: Authentication platform
 
 ## Key Design Patterns
 
@@ -106,6 +152,13 @@ Auto-generated API clients and models:
 3. **Dependency Injection**: Through function parameters and context
 4. **Circuit Breaker Pattern**: For resilient external service calls
 5. **Middleware Pattern**: For cross-cutting concerns
+
+## Route Groups
+
+- `/` - Public routes, no authentication required
+- `/read` - Read-only authenticated routes
+- `/full` - Full access authenticated routes
+- `/actuator` - System monitoring and health checks
 
 ## Common Development Workflows
 
@@ -127,34 +180,33 @@ Auto-generated API clients and models:
 1. Modify the appropriate YAML file in `config/`
 2. Access the configuration through the `config::get_config()` function
 
-## Common File Locations
+## Testing Structure
 
-| What You're Looking For | Where to Find It |
-|-------------------------|------------------|
-| Main entry point | `src/main.rs` |
-| Core application logic | `src/lib.rs` |
-| API routes | `src/core/router/`, `src/app/router.rs` |
-| Error handling | `src/core/error/` |
-| Database access | `src/core/database/` |
-| Authentication | `src/core/auth/` |
-| Generated API clients | `target/generated/` |
-| Configuration | `config/` |
-| Scripts | `.devtools/scripts/` |
-| Tests | `tests/` |
+Each component type has its own testing approach:
 
-## Module Dependencies
+- **Services**: Unit tests focus on business logic
+- **Repositories**: Integration tests focus on data access
+- **API Endpoints**: End-to-end tests focus on HTTP interactions
+- **Models**: Property-based tests focus on invariants
 
-Key dependencies between modules:
+## Navigation Tools
 
-- **api** → depends on → **services**, **repository**, **error**
-- **services** → depends on → **repository**, **error**
-- **repository** → depends on → **database**, **error**
-- **router** → depends on → **api**, **auth**
-- **auth** → depends on → **error**, **config**
+To help with navigating the codebase, several tools are available:
 
-## Navigation Tips
+1. **Documentation**:
+   - See `docs/guides/project-navigation.md` for detailed navigation guidance
+   - Check `docs/architecture/module-dependencies.md` for visualizations of module dependencies
 
-1. Use the module declarations in `src/lib.rs` to understand the module hierarchy
-2. Leveraging the repository pattern helps to understand data flow
-3. Follow API routes to find handler implementations
-4. Use `src/generated_apis.rs` as the entry point for working with external APIs 
+2. **Helper Scripts**:
+   - Use `.devtools/scripts/navigate.sh` to find code components
+   - Use `.devtools/scripts/verify-structure.sh` to validate project structure
+
+3. **IDE Configuration**:
+   - VS Code configuration is available in `.devtools/ide/vscode/`
+   - Use the provided launch configurations for debugging
+
+## Further Resources
+
+- **Developer Onboarding**: See `docs/contributing/onboarding.md`
+- **IDE Setup**: See `docs/contributing/ide-setup.md`
+- **Module Dependencies**: See `docs/architecture/module-dependencies.md` for visualizations 
