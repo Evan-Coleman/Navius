@@ -185,8 +185,9 @@ fn test_multiple_scenarios() {
         let result = function_under_test(input);
         assert_eq!(result, expected, "Failed for input: {}", input);
     }
-} 
+}
 
 ## Related Documents
-- [Development Process](/docs/contributing/development-process.md) - How to contribute code
+- [Contributing Guide](/docs/contributing/contributing.md) - How to contribute to the project
+- [Development Setup](/docs/getting-started/development-setup.md) - Setting up your development environment
 

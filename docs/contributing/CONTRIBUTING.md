@@ -194,5 +194,7 @@ Thank you to all the contributors who have helped make Navius better!
 
 By contributing to Navius, you agree that your contributions will be licensed under the project's [Apache License 2.0](LICENSE). 
 
-- [Development Process](/docs/contributing/development-process.md) - How to contribute code
+## Related Documents
+- [Contributing Guide](/docs/contributing/contributing.md) - How to contribute to the project
+- [Development Setup](/docs/getting-started/development-setup.md) - Setting up your development environment
 

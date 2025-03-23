@@ -77,7 +77,6 @@ Development roadmaps for Navius:
 Guidelines for contributors:
 
 - [Contribution Guide](contributing/contribution-guide.md) - How to contribute
-- [Development Process](contributing/development-process.md) - Development workflow for contributors
 - [Test Implementation Template](contributing/test-implementation-template.md) - Template for writing tests
 
 ## 🔍 Documentation Search

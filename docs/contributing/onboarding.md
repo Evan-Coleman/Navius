@@ -415,8 +415,9 @@ If you need help with the codebase:
 1. Consult the [Project Navigation Guide](../guides/project-navigation.md)
 2. Use the navigation scripts to explore the codebase
 3. Read the documentation in the `docs/` directory
-4. Reach out to the team on the project's communication channels 
+4. Reach out to the team on the project's communication channels
 
 ## Related Documents
-- [Development Process](/docs/contributing/development-process.md) - How to contribute code
+- [Contributing Guide](/docs/contributing/contributing.md) - How to contribute to the project
+- [Development Setup](/docs/getting-started/development-setup.md) - Setting up your development environment
 
