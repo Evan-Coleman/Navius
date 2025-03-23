@@ -56,7 +56,7 @@ echo ""
 clear
 print_header "Step 1: Validating Documentation"
 echo "Running validation to identify issues..."
-./scripts/doc-overhaul/validate_docs.sh
+./scripts/doc-overhaul/detailed_validation.sh
 
 # Step 2: Select a file
 clear
@@ -260,7 +260,7 @@ if [ "$file_choice" = "1" ]; then
     echo ""
     echo "Next steps:"
     echo "1. Run './scripts/doc-overhaul/improve_docs.sh' to improve another file"
-    echo "2. Run './scripts/doc-overhaul/validate_docs.sh' to see remaining issues"
+    echo "2. Run './scripts/doc-overhaul/detailed_validation.sh' to see remaining issues"
     echo ""
     print_success "Happy documenting!"
 fi 

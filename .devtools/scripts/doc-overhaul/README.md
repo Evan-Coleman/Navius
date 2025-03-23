@@ -14,10 +14,10 @@ This directory contains scripts for methodically improving documentation quality
 
 ### Individual Tools
 
-- **validate_docs.sh**: Analyzes all documentation files without making changes, producing a report of issues.
+- **detailed_validation.sh**: Analyzes all documentation files without making changes, producing a detailed report of issues.
 
 ```bash
-./scripts/doc-overhaul/validate_docs.sh
+./scripts/doc-overhaul/detailed_validation.sh
 ```
 
 - **fix_frontmatter.sh**: Adds or fixes frontmatter on a specific file.

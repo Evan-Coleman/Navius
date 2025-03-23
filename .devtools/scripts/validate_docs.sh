@@ -1,16 +1,31 @@
 #!/bin/bash
-# Documentation validation script
-# Checks for common issues in documentation
+
+# CI Documentation Validation Script
+# This is the primary validation script used in CI pipelines for basic documentation checks.
+# For interactive documentation improvement with more detailed validation,
+# see .devtools/scripts/doc-overhaul/detailed_validation.sh
 
 set -e
 
 DOCS_DIR="docs"
 REPORT_FILE="doc_validation_report.txt"
 
+echo "Installing documentation validation tools..."
+npm install -g markdownlint-cli
+npm install -g markdown-link-check
+
 echo "Navius Documentation Validation" > $REPORT_FILE
 echo "===============================" >> $REPORT_FILE
 echo "Date: $(date)" >> $REPORT_FILE
 echo "" >> $REPORT_FILE
+
+# Run markdown linting
+echo "Running markdown linting..."
+markdownlint docs/**/*.md --config .devtools/config/markdownlint.json | tee -a $REPORT_FILE
+
+# Check for broken links using markdown-link-check
+echo "Checking for broken links..."
+find docs -name "*.md" -exec markdown-link-check {} \; | tee -a $REPORT_FILE
 
 # Check for missing frontmatter
 echo "Checking for missing frontmatter..." | tee -a $REPORT_FILE
@@ -20,8 +35,11 @@ find $DOCS_DIR -name "*.md" | grep -v "README.md" | while read file; do
   fi
 done
 
+# Run Python frontmatter validation
+echo "Validating frontmatter..."
+python3 .devtools/scripts/validate_frontmatter.py | tee -a $REPORT_FILE
+
 # Check for broken internal links
-echo "" >> $REPORT_FILE
 echo "Checking for broken internal links..." | tee -a $REPORT_FILE
 find $DOCS_DIR -name "*.md" | while read file; do
   links=$(grep -o "\[.*\](\.\./.*\.md)" "$file" | grep -o "(.*)" | tr -d "()")
@@ -35,7 +53,6 @@ find $DOCS_DIR -name "*.md" | while read file; do
 done
 
 # Check for missing related documents
-echo "" >> $REPORT_FILE
 echo "Checking for missing related documents in frontmatter..." | tee -a $REPORT_FILE
 find $DOCS_DIR -name "*.md" | grep -v "README.md" | while read file; do
   if grep -q "^related:" "$file"; then
@@ -52,7 +69,6 @@ find $DOCS_DIR -name "*.md" | grep -v "README.md" | while read file; do
 done
 
 # Check for inconsistent headings
-echo "" >> $REPORT_FILE
 echo "Checking for inconsistent heading structures..." | tee -a $REPORT_FILE
 find $DOCS_DIR -name "*.md" | grep -v "README.md" | while read file; do
   if ! grep -q "^# " "$file"; then
@@ -65,7 +81,6 @@ find $DOCS_DIR -name "*.md" | grep -v "README.md" | while read file; do
 done
 
 # Check for standard sections in guides
-echo "" >> $REPORT_FILE
 echo "Checking for standard sections in guides..." | tee -a $REPORT_FILE
 find $DOCS_DIR/guides -name "*.md" | grep -v "README.md" | while read file; do
   if ! grep -q "^## Prerequisites" "$file"; then
@@ -78,7 +93,6 @@ find $DOCS_DIR/guides -name "*.md" | grep -v "README.md" | while read file; do
 done
 
 # Check for outdated dates in frontmatter
-echo "" >> $REPORT_FILE
 echo "Checking for outdated dates in frontmatter..." | tee -a $REPORT_FILE
 find $DOCS_DIR -name "*.md" | grep -v "README.md" | while read file; do
   if grep -q "^last_updated:" "$file"; then

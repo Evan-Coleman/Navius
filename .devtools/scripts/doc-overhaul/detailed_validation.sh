@@ -1,6 +1,12 @@
 #!/bin/bash
 
-# Documentation Validation Script
+# Enhanced Documentation Validation Script
+# This is an extended version of the root validate_docs.sh script with additional features
+# for interactive documentation improvement workflows. This script is used by improve_docs.sh
+# and provides more detailed validation and reporting compared to the CI version.
+#
+# For CI validation, see .devtools/scripts/validate_docs.sh
+
 # This script analyzes documentation without making any changes
 
 set -e

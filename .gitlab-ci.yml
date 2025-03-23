@@ -24,6 +24,7 @@ stages:
   - test
   - lint
   - coverage
+  - docs
   - build
   - deploy
 
@@ -66,6 +67,23 @@ coverage:
     expire_in: 1 week
   # Add coverage visualization to merge requests
   coverage: '/^\d+.\d+% coverage/'
+
+# Documentation validation job
+docs:
+  stage: docs
+  image: node:latest
+  before_script:
+    - apt-get update && apt-get install -y python3 python3-pip
+    - pip3 install pyyaml
+  script:
+    - chmod +x .devtools/scripts/validate_docs.sh
+    - bash .devtools/scripts/validate_docs.sh
+  rules:
+    - changes:
+      - docs/**/*
+      - .devtools/scripts/validate_docs.sh
+      - .devtools/config/markdownlint.json
+      - .devtools/scripts/validate_frontmatter.py
 
 # Build release binaries
 build:
