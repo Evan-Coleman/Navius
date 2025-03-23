@@ -1,3 +1,19 @@
+---
+title: Documentation Overhaul Implementation Guide
+description: Detailed instructions for implementing the Documentation Overhaul roadmap
+category: roadmaps
+tags:
+  - documentation
+  - organization
+  - implementation
+  - standards
+related:
+  - ../12_document_overhaul.md
+  - ../template-for-updating.md
+last_updated: March 23, 2025
+version: 1.0
+---
+
 # Documentation Overhaul Implementation Guide
 
 ## Overview
@@ -181,19 +197,20 @@ Update all cross-references in the following files to use the new paths:
 
 ```
 Add the following metadata header to each document:
-```yaml
+
 ---
 title: [Document Title]
 description: [Brief Description]
 category: [Category]
-tags: [Tag1, Tag2, ...]
+tags:
+  - [Tag1]
+  - [Tag2]
 related:
-  - [Related Document 1]
-  - [Related Document 2]
-last_updated: [YYYY-MM-DD]
+  - [path/to/related/document1.md]
+  - [path/to/related/document2.md]
+last_updated: March 23, 2025
 version: 1.0
 ---
-```
 ```
 
 ##### Verification
@@ -251,14 +268,13 @@ Implement documentation validation:
 
 ```
 Set up markdownlint with the following configuration:
-```json
+
 {
   "default": true,
   "MD013": false,
   "MD033": false,
   "MD041": false
 }
-```
 ```
 
 ```

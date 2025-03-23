@@ -1,17 +1,43 @@
-# API and Technical Reference
+---
+title: Navius Reference Documentation
+description: Technical reference documentation for the Navius framework
+category: reference
+tags:
+  - reference
+  - api
+  - architecture
+  - standards
+related:
+  - ../guides/README.md
+  - ../getting-started/README.md
+last_updated: March 23, 2025
+version: 1.0
+---
 
-This directory contains technical reference documentation for the Navius application.
+# Navius Reference Documentation
 
-## Contents
+This section contains technical reference documentation for the Navius framework. Unlike guides which walk you through processes, reference documentation provides detailed technical specifications and standards.
 
-- [API Resource Guide](api_resource_guide.md) - Reference for working with API resources
-- [API Resource Pattern](api_resource_pattern.md) - Detailed explanation of the API resource pattern
-- [API Resources](api_resource.md) - Complete reference for all API resources
-- [Import Patterns](import_patterns.md) - Guidelines for import patterns after restructuring
-- [Naming Conventions](naming_conventions.md) - Standardized naming conventions for the project
-- [Project Structure](project_structure.md) - Overview of the project's code organization
-- [Security Reference](security.md) - Security features and considerations
+## Reference Categories
+
+- [API Reference](api/README.md) - Detailed documentation of API resources and patterns
+- [Architecture Reference](architecture/README.md) - Architecture diagrams and structural information
+- [Standards](standards/README.md) - Coding standards, naming conventions, and best practices
+
+## Key Documents
+
+- [Project Structure](architecture/project-structure.md) - Overview of the project's architecture and organization
+- [API Resources](api/resources.md) - Reference for all API resources
+- [Naming Conventions](standards/naming-conventions.md) - Standards for naming in the Navius framework
+- [Security Standards](standards/security-standards.md) - Security requirements and best practices
 
 ## Purpose
 
-These reference documents provide detailed technical information about the Navius application's architecture, APIs, and implementation details. They serve as a comprehensive reference for developers working with the codebase. 
+Reference documentation serves as a comprehensive resource for developers who need detailed technical information about the Navius framework. While guides focus on "how to do things," reference documentation focuses on "how things work" and "what things are available."
+
+Use this section when you need:
+
+- Detailed specifications for framework components
+- Technical descriptions of features and functionality
+- Standards and conventions for development
+- Architecture details and diagrams 

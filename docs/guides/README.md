@@ -1,18 +1,43 @@
-# User Guides
+---
+title: Navius Guides
+description: Comprehensive guides for using and extending the Navius framework
+category: guides
+tags:
+  - guides
+  - development
+  - features
+  - deployment
+related:
+  - ../getting-started/README.md
+  - ../reference/README.md
+last_updated: March 23, 2025
+version: 1.0
+---
 
-This directory contains guides and tutorials for users of the Navius application.
+# Navius Guides
 
-## Contents
+This section contains comprehensive guides for working with the Navius framework. These guides are organized into categories to help you find the information you need.
 
-- [Installation Guide](installation.md) - How to install and set up the application
-- [Development Guide](DEVELOPMENT.md) - Guide for developers working on the project
-- [API Integration](API_INTEGRATION.md) - Guide for integrating with APIs
-- [PostgreSQL Integration](postgresql_integration.md) - Guide for working with PostgreSQL
-- [Authentication](authentication.md) - Guide to authentication in the application
-- [Testing Guide](testing_guide.md) - Guide to testing the application
-- [Deployment Guide](deployment.md) - Guide to deploying the application
-- [Project Restructuring Guide](project-restructuring-guide.md) - Guide for the ongoing project restructuring
+## Guide Categories
 
-## Purpose
+- [Development Guides](development/README.md) - Guides for developers working on Navius applications
+- [Feature Guides](features/README.md) - Guides for implementing specific features
+- [Deployment Guides](deployment/README.md) - Guides for deploying Navius applications
 
-These guides are intended to help users and developers understand how to use and extend the Navius application. They provide step-by-step instructions, examples, and best practices for common tasks. 
+## Key Documents
+
+- [Development Workflow](development/development-workflow.md) - Understanding the development process
+- [Testing Guide](development/testing.md) - How to write and run tests
+- [Authentication](features/authentication.md) - Implementing authentication
+- [API Integration](features/api-integration.md) - Working with APIs
+- [AWS Deployment](deployment/aws-deployment.md) - Deploying to AWS
+
+## Getting Started
+
+If you're new to the Navius framework, we recommend starting with the [Getting Started](../getting-started/README.md) section before diving into these guides.
+
+For developers who have completed the getting started guides, the following resources provide a good next step:
+
+1. [Development Workflow](development/development-workflow.md)
+2. [Project Structure](../reference/architecture/project-structure.md)
+3. [Testing Guide](development/testing.md) 
