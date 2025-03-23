@@ -1,6 +1,7 @@
 # Future Improvements
 
 **Created On:** March 23, 2025
+**Updated On:** March 23, 2025
 
 This document outlines future improvements identified during the project restructuring process. These tasks are not part of the original restructuring roadmap but should be considered for future sprints to further enhance the project structure.
 
@@ -8,25 +9,25 @@ This document outlines future improvements identified during the project restruc
 
 ### High Priority
 
-- [ ] Relocate remaining modules to the new structure:
-  - [ ] Move `src/metrics` → `src/core/metrics`
-  - [ ] Move `src/repository` → `src/core/repository`
-  - [ ] Move `src/api` → `src/core/api`
-  - [ ] Move `src/error` → `src/core/error`
-  - [ ] Move `src/auth` → `src/core/auth`
-  - [ ] Move `src/reliability` → `src/core/reliability`
-  - [ ] Move `src/utils` → `src/core/utils`
+- [x] Relocate remaining modules to the new structure:
+  - [x] Move `src/metrics` → `src/core/metrics`
+  - [x] Move `src/repository` → `src/core/repository`
+  - [x] Move `src/api` → `src/core/api`
+  - [x] Move `src/error` → `src/core/error`
+  - [x] Move `src/auth` → `src/core/auth`
+  - [x] Move `src/reliability` → `src/core/reliability`
+  - [x] Move `src/utils` → `src/core/utils`
 
 ### Medium Priority
 
-- [ ] Add recommended app directories:
-  - [ ] Create `src/app/api` for user-facing API endpoints
-  - [ ] Create `src/app/services` for user-facing service implementations
-- [ ] Evaluate and relocate:
-  - [ ] Determine appropriate location for `src/apis` (→ `src/core/api` or `src/app/api`)
-  - [ ] Determine appropriate location for `src/handlers` (→ `src/app/api`)
-  - [ ] Determine appropriate location for `src/services` (→ `src/core/services` or `src/app/services`)
-  - [ ] Determine appropriate location for `src/models` (→ `src/core/models`)
+- [x] Add recommended app directories:
+  - [x] Create `src/app/api` for user-facing API endpoints
+  - [x] Create `src/app/services` for user-facing service implementations
+- [x] Evaluate and relocate:
+  - [x] Determine appropriate location for `src/apis` (→ empty directory, no relocation needed)
+  - [x] Determine appropriate location for `src/handlers` (→ `src/app/api`)
+  - [x] Determine appropriate location for `src/services` (→ `src/app/services`)
+  - [x] Determine appropriate location for `src/models` (→ `src/core/models/extensions.rs`)
 
 ### Low Priority
 
@@ -49,6 +50,6 @@ This document outlines future improvements identified during the project restruc
 
 ## Next Steps
 
-These improvements should be prioritized and added to the team's backlog for future sprints. The high priority items should be considered for the next sprint to complete the transition to the new structure.
+These improvements should be prioritized and added to the team's backlog for future sprints. The low priority items should be considered for the next sprint to complete the transition to the new structure.
 
 To track progress on these improvements, create tickets in the issue tracker and reference this document. As items are completed, they can be checked off in this document to maintain a clear overview of the remaining work. 

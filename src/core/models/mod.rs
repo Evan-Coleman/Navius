@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+// User-extensible model definitions
+pub mod extensions;
+
 /// Basic health check response structure
 ///
 /// For simple Kubernetes/Load Balancer health checks

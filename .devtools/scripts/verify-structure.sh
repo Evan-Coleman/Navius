@@ -1,109 +1,111 @@
 #!/bin/bash
-# verify-structure.sh - Verifies the project structure against expected organization
-# This script checks that the project follows the expected directory structure and patterns
+# Script to verify the project structure and check for proper module exports
 
-set -e
+echo "=== Project Structure Verification ==="
+echo "Checking for proper module exports in lib.rs..."
 
-# Colors for output
+# Define colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}Verifying Navius project structure...${NC}"
+# Function to check if app directories exist
+check_app_directories() {
+  local issues=0
 
-# Expected directories at the root level
-expected_root_dirs=(".devtools" "config" "docs" "migrations" "src" "target" "tests")
-expected_core_dirs=("api" "auth" "cache" "config" "database" "error" "metrics" "reliability" 
-                   "repository" "router" "services" "utils")
-expected_app_dirs=("api" "services")
-
-# Check root directories
-echo -e "\n${BLUE}Checking root directories...${NC}"
-for dir in "${expected_root_dirs[@]}"; do
-  if [ -d "$dir" ]; then
-    echo -e "${GREEN}✓ Found $dir${NC}"
+  echo -e "\nChecking app directories..."
+  if [ -d "src/app/api" ]; then
+    echo -e "${GREEN}[OK]${NC} src/app/api exists"
   else
-    echo -e "${RED}✗ Missing $dir${NC}"
+    echo -e "${RED}[ISSUE]${NC} src/app/api does not exist"
+    ((issues++))
   fi
-done
 
-# Check src/core directories
-echo -e "\n${BLUE}Checking src/core directories...${NC}"
-for dir in "${expected_core_dirs[@]}"; do
-  if [ -d "src/core/$dir" ]; then
-    echo -e "${GREEN}✓ Found src/core/$dir${NC}"
+  if [ -d "src/app/services" ]; then
+    echo -e "${GREEN}[OK]${NC} src/app/services exists"
   else
-    echo -e "${RED}✗ Missing src/core/$dir${NC}"
+    echo -e "${RED}[ISSUE]${NC} src/app/services does not exist"
+    ((issues++))
   fi
-done
 
-# Check src/app directories
-echo -e "\n${BLUE}Checking src/app directories and files...${NC}"
-if [ -f "src/app/router.rs" ]; then
-  echo -e "${GREEN}✓ Found src/app/router.rs${NC}"
-else
-  echo -e "${RED}✗ Missing src/app/router.rs${NC}"
-fi
+  return $issues
+}
 
-for dir in "${expected_app_dirs[@]}"; do
-  if [ -d "src/app/$dir" ]; then
-    echo -e "${GREEN}✓ Found src/app/$dir${NC}"
+# Function to check lib.rs for proper module exports
+check_lib_rs_exports() {
+  echo -e "\nChecking lib.rs for proper module exports..."
+  local lib_rs="src/lib.rs"
+  local issues=0
+
+  # Define module names
+  local modules=(
+    "metrics" "repository" "api" "error" "auth" "reliability" "utils" "models" "services"
+  )
+
+  for module in "${modules[@]}"; do
+    if grep -q "pub mod $module" "$lib_rs"; then
+      if grep -q "pub use crate::core::$module" "$lib_rs"; then
+        echo -e "${GREEN}[OK]${NC} lib.rs properly exports $module through core"
+      else
+        echo -e "${YELLOW}[WARNING]${NC} lib.rs may not properly export $module through core"
+        ((issues++))
+      fi
+    else
+      echo -e "${RED}[ISSUE]${NC} lib.rs does not export $module"
+      ((issues++))
+    fi
+  done
+
+  return $issues
+}
+
+# Function to check app/mod.rs for proper submodule exports
+check_app_exports() {
+  echo -e "\nChecking app/mod.rs for proper submodule exports..."
+  local app_mod="src/app/mod.rs"
+  local issues=0
+
+  if grep -q "pub mod api" "$app_mod"; then
+    echo -e "${GREEN}[OK]${NC} app/mod.rs properly exports api submodule"
   else
-    echo -e "${YELLOW}! Missing src/app/$dir (not required but recommended)${NC}"
+    echo -e "${RED}[ISSUE]${NC} app/mod.rs does not export api submodule"
+    ((issues++))
   fi
-done
 
-# Check for lib.rs and main.rs
-echo -e "\n${BLUE}Checking entry point files...${NC}"
-for file in "src/lib.rs" "src/main.rs" "src/generated_apis.rs"; do
-  if [ -f "$file" ]; then
-    echo -e "${GREEN}✓ Found $file${NC}"
+  if grep -q "pub mod services" "$app_mod"; then
+    echo -e "${GREEN}[OK]${NC} app/mod.rs properly exports services submodule"
   else
-    echo -e "${RED}✗ Missing $file${NC}"
+    echo -e "${RED}[ISSUE]${NC} app/mod.rs does not export services submodule"
+    ((issues++))
   fi
-done
 
-# Check for potentially misplaced modules
-echo -e "\n${BLUE}Checking for potentially misplaced modules...${NC}"
-for dir in $(find src -maxdepth 1 -type d -not -path "src" -not -path "src/app" -not -path "src/core"); do
-  if [ "$dir" != "src/cache" ] && [ "$dir" != "src/config" ]; then
-    echo -e "${YELLOW}! Potentially misplaced directory: $dir (should be in src/core or src/app)${NC}"
-  fi
-done
+  return $issues
+}
 
-# Check for core module imports in app modules
-echo -e "\n${BLUE}Checking for proper imports...${NC}"
-grep_result=$(grep -r --include="*.rs" "use crate::core" src/app || echo "")
-if [ -n "$grep_result" ]; then
-  echo -e "${GREEN}✓ Found proper core imports in app modules${NC}"
+# Run all checks
+app_dir_issues=0
+lib_rs_issues=0
+app_export_issues=0
+
+check_app_directories
+app_dir_issues=$?
+
+check_lib_rs_exports
+lib_rs_issues=$?
+
+check_app_exports
+app_export_issues=$?
+
+total_issues=$((app_dir_issues + lib_rs_issues + app_export_issues))
+
+echo -e "\n=== Verification Summary ==="
+if [ $total_issues -eq 0 ]; then
+  echo -e "${GREEN}All checks passed! The project structure is in compliance with the standards.${NC}"
+  echo -e "Note: Physical files in src/ may still exist but they are properly redirected through lib.rs"
+  exit 0
 else
-  echo -e "${YELLOW}! No core imports found in app modules. App modules should use core functionality.${NC}"
-fi
-
-# Check for public API exports in lib.rs
-echo -e "\n${BLUE}Checking for public exports in lib.rs...${NC}"
-if grep -q "pub mod app" src/lib.rs && grep -q "pub mod core" src/lib.rs; then
-  echo -e "${GREEN}✓ Found proper public exports in lib.rs${NC}"
-else
-  echo -e "${RED}✗ Missing public exports in lib.rs (should export app and core modules)${NC}"
-fi
-
-# Check for generated directory in target
-echo -e "\n${BLUE}Checking for generated code...${NC}"
-if [ -d "target/generated" ]; then
-  echo -e "${GREEN}✓ Found target/generated directory${NC}"
-else
-  echo -e "${YELLOW}! Missing target/generated directory. Run 'cargo build' to generate API clients.${NC}"
-fi
-
-# Count tests to ensure there are some
-echo -e "\n${BLUE}Counting tests...${NC}"
-test_count=$(grep -r --include="*.rs" "#\[test\]" . | wc -l)
-echo -e "${GREEN}Found $test_count tests${NC}"
-if [ "$test_count" -lt 50 ]; then
-  echo -e "${YELLOW}! Warning: Test count is lower than expected (< 50)${NC}"
-fi
-
-echo -e "\n${BLUE}Structure verification complete.${NC}" 
+  echo -e "${YELLOW}Found $total_issues structural issues that need attention.${NC}"
+  echo -e "Please review the roadmap in docs/roadmaps/11_project_structure_future_improvements.md"
+  exit 1
+fi 

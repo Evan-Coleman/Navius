@@ -25,12 +25,8 @@
 /// Core framework functionality not intended for modification by users
 pub mod core;
 
-/// Application router and state management
-pub mod app {
-    pub use crate::app::router::*;
-    pub use crate::core::auth::*;
-    pub mod router;
-}
+/// Application components that can be extended by users
+pub mod app;
 
 /// Caching functionality
 pub mod cache {
@@ -44,7 +40,9 @@ pub mod cache {
 pub mod config;
 
 /// Error handling
-pub mod error;
+pub mod error {
+    pub use crate::core::error::*;
+}
 
 /// Metrics collection and reporting
 pub mod metrics {
@@ -52,19 +50,31 @@ pub mod metrics {
 }
 
 /// API endpoints and handlers
-pub mod api;
+pub mod api {
+    pub use crate::core::api::*;
+}
 
 /// API request handlers
-pub mod handlers;
+pub mod handlers {
+    pub use crate::app::api::*;
+}
 
 /// Data models and schemas
-pub mod models;
+pub mod models {
+    pub use crate::core::models::extensions::*;
+    pub use crate::core::models::*;
+}
 
 /// Repository module for data access
-pub mod repository;
+pub mod repository {
+    pub use crate::core::repository::*;
+}
 
 /// Service module for business logic
-pub mod services;
+pub mod services {
+    pub use crate::app::services::*;
+    pub use crate::core::services::*;
+}
 
 /// Generated API clients
 #[path = "generated_apis.rs"]
@@ -78,6 +88,11 @@ pub mod reliability {
 /// Utility functions and helpers
 pub mod utils {
     pub use crate::core::utils::*;
+}
+
+/// Authentication and authorization
+pub mod auth {
+    pub use crate::core::auth::*;
 }
 
 /// MockExtern trait implementation for test mocking

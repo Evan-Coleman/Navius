@@ -8,3 +8,9 @@ pub use router::init;
 
 // Re-export AppState from core
 pub use crate::core::router::AppState;
+
+/// User-facing API endpoints
+pub mod api;
+
+/// User-facing services
+pub mod services;
