@@ -1,0 +1,84 @@
+# Cargo Configuration for Optimized Builds
+# This file contains settings to optimize Rust compilation
+
+# Build settings for faster incremental builds
+[build]
+# Use incremental compilation for development builds
+incremental = true
+# Optimize dependencies with profiles
+pipelining = true
+
+# Specify the default target triple for the project
+[target.'cfg(target_os = "linux")']
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# Faster linker options for macOS
+[target.'cfg(target_os = "macos")']
+# Mac targets
+[target.x86_64-apple-darwin]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[target.aarch64-apple-darwin]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# Faster linker options for Linux
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# Profile settings
+[profile.dev]
+# Basic optimizations, but good debugging
+opt-level = 1
+# Generate debug info
+debug = true
+# Share code between crates in dev build
+codegen-units = 256
+# Enable fast checking of overflow
+overflow-checks = true
+# Include debug assertions
+debug-assertions = true
+# Link time optimizations off in dev for faster compiles
+lto = "off"
+# Make backtraces available
+panic = "unwind"
+
+[profile.release]
+# Maximum optimization
+opt-level = 3
+# Include limited debug info: line tables only
+debug = "line-tables-only"
+# Reduce parallel code generation units to optimize
+codegen-units = 16
+# Politely decline overflow checking in release
+overflow-checks = false
+# Decline debug assertions in release
+debug-assertions = false
+# Turn on link time optimization
+lto = "thin"
+# Make backtraces available
+panic = "unwind"
+# Keep debug symbols for profiling, strip when packaging
+strip = "symbols"
+# Optimize heavily used dependencies
+[profile.release.package."*"]
+opt-level = 3
+
+# Custom profile for development with better performance
+[profile.dev-opt]
+inherits = "dev"
+# Higher optimization than dev but lower than release
+opt-level = 2
+# Share code between crates for faster builds
+codegen-units = 256
+# Keep debug info for better debugging
+debug = true
+# Include debug assertions
+debug-assertions = true
+# No link time optimization to speed up build
+lto = "thin"
+# Specific package optimizations
+[profile.dev-opt.package."*"]
+opt-level = 2 

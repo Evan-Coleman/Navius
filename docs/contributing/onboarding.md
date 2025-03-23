@@ -1,6 +1,6 @@
 # Developer Onboarding Guide
 
-**Updated At:** March 22, 2025
+**Updated At:** March 23, 2025
 
 Welcome to the Navius project! This guide will help you get started as a developer on the project.
 
@@ -167,6 +167,218 @@ Navius follows clean architecture principles:
    - Redis for caching
 
 See the [Module Dependencies Diagram](../architecture/module-dependencies.md) for a visual representation of the architecture.
+
+## Code Examples
+
+Here are practical examples to help you understand how to work with the Navius codebase:
+
+### Adding an API Endpoint
+
+Create a new handler in your application's API directory:
+
+```rust
+// src/app/api/users.rs
+use axum::{
+    Json,
+    extract::{Path, State},
+};
+use std::sync::Arc;
+use tracing::info;
+
+use crate::core::{
+    error::{AppError, Result},
+    router::AppState,
+};
+use crate::app::services::user_service::UserService;
+
+pub async fn get_user_handler(
+    State(state): State<Arc<AppState>>,
+    Path(user_id): Path<String>,
+) -> Result<Json<User>> {
+    info!("🔍 User lookup requested for ID: {}", user_id);
+    
+    // Access user service from state
+    let user_service = &state.user_service;
+    
+    // Fetch user from service
+    let user = user_service.get_user_by_id(&user_id).await?;
+    
+    // Return JSON response
+    Ok(Json(user))
+}
+```
+
+### Adding Routes
+
+Register your new endpoints in the application router:
+
+```rust
+// In src/app/router.rs
+use crate::app::api::users::{get_user_handler, create_user_handler};
+
+// Inside your router function
+pub fn app_routes() -> axum::Router<Arc<AppState>> {
+    let router = axum::Router::new();
+    
+    // Public routes (no authentication)
+    let public_routes = Router::new()
+        .route("/users/:id", get(get_user_handler));
+    
+    // Full access routes (require authentication)
+    let full_access_routes = Router::new()
+        .route("/users", post(create_user_handler));
+        
+    // Combine routes
+    router
+        .merge(public_routes)
+        .nest("/full", full_access_routes)
+}
+```
+
+### Creating a Service
+
+Implement a service for business logic:
+
+```rust
+// src/app/services/user_service.rs
+use async_trait::async_trait;
+use crate::core::error::Result;
+use crate::core::models::User;
+use crate::core::repository::UserRepository;
+
+#[async_trait]
+pub trait UserService: Send + Sync {
+    async fn get_user_by_id(&self, id: &str) -> Result<User>;
+    async fn create_user(&self, user: User) -> Result<User>;
+}
+
+pub struct DefaultUserService {
+    user_repository: Arc<dyn UserRepository>,
+}
+
+impl DefaultUserService {
+    pub fn new(user_repository: Arc<dyn UserRepository>) -> Self {
+        Self { user_repository }
+    }
+}
+
+#[async_trait]
+impl UserService for DefaultUserService {
+    async fn get_user_by_id(&self, id: &str) -> Result<User> {
+        self.user_repository.find_by_id(id).await
+    }
+    
+    async fn create_user(&self, user: User) -> Result<User> {
+        self.user_repository.save(user).await
+    }
+}
+```
+
+### Using the Cache System
+
+Implement a handler that uses the caching system:
+
+```rust
+// src/app/api/products.rs
+use axum::{
+    Json,
+    extract::{Path, State},
+};
+use std::sync::Arc;
+
+use crate::core::{
+    error::Result,
+    router::AppState,
+    utils::api_resource::{ApiHandlerOptions, ApiResource, create_api_handler},
+};
+use crate::models::Product;
+
+impl ApiResource for Product {
+    type Id = String;
+
+    fn resource_type() -> &'static str {
+        "product"
+    }
+
+    fn api_name() -> &'static str {
+        "ProductAPI"
+    }
+}
+
+pub async fn get_product_handler(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<Product>> {
+    // Define the fetch function
+    let fetch_fn = move |state: &Arc<AppState>, id: String| -> futures::future::BoxFuture<'static, Result<Product>> {
+        let state = state.clone();
+        
+        Box::pin(async move {
+            // Your product fetch logic here
+            state.product_service.get_product(&id).await
+        })
+    };
+
+    // Create a handler with caching enabled
+    let handler = create_api_handler(
+        fetch_fn,
+        ApiHandlerOptions {
+            use_cache: true,
+            use_retries: true,
+            max_retry_attempts: 3,
+            cache_ttl_seconds: state.config.cache.ttl_seconds,
+            detailed_logging: true,
+        },
+    );
+
+    // Execute the handler
+    handler(State(state), Path(id)).await
+}
+```
+
+### Testing Your Code
+
+Write unit tests for your implementations:
+
+```rust
+// In your service implementation file
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mockall::predicate::*;
+    use crate::core::repository::MockUserRepository;
+
+    #[tokio::test]
+    async fn test_get_user_by_id() {
+        // Arrange
+        let mut mock_repo = MockUserRepository::new();
+        let user_id = "user-123";
+        let expected_user = User {
+            id: user_id.to_string(),
+            name: "Test User".to_string(),
+            email: "test@example.com".to_string(),
+        };
+        
+        mock_repo
+            .expect_find_by_id()
+            .with(eq(user_id))
+            .returning(move |_| {
+                Ok(expected_user.clone())
+            });
+            
+        let service = DefaultUserService::new(Arc::new(mock_repo));
+        
+        // Act
+        let result = service.get_user_by_id(user_id).await;
+        
+        // Assert
+        assert!(result.is_ok());
+        let user = result.unwrap();
+        assert_eq!(user.id, user_id);
+        assert_eq!(user.name, "Test User");
+    }
+}
+```
 
 ## Documentation
 
