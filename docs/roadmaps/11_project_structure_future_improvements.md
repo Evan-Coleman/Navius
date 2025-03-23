@@ -1,7 +1,7 @@
 # Future Improvements
 
 **Created On:** March 23, 2025
-**Updated On:** March 23, 2025
+**Updated On:** March 26, 2025
 
 This document outlines future improvements identified during the project restructuring process. These tasks are not part of the original restructuring roadmap but should be considered for future sprints to further enhance the project structure.
 
@@ -52,17 +52,24 @@ This document outlines future improvements identified during the project restruc
 
 Based on the results of the structure verification script, the following improvements should be prioritized:
 
-1. **Fix Library Exports**: Add proper exports in `lib.rs` for core modules:
+1. **Fix Library Exports**: ✅ Add proper exports in `lib.rs` for core modules:
    ```rust
    pub use crate::core::router;
    pub use crate::core::cache;
    pub use crate::core::config;
    ```
 
-2. **Complete Core Transition**: Fully relocate old directories to their new locations:
-   - Complete the transition of `src/metrics` → `src/core/metrics`
-   - Complete the transition of `src/repository` → `src/core/repository`
-   - Complete the transition of other root-level directories
+2. **Complete Core Transition**: ✅ Fully relocate old directories to their new locations:
+   - ✅ Complete the transition of `src/metrics` → `src/app/metrics` and `src/core/metrics`
+   - ✅ Complete the transition of `src/repository` → `src/app/repository` and `src/core/repository`
+   - ✅ Complete the transition of other root-level directories:
+     - [x] `src/error` → `src/core/error`
+     - [x] `src/auth` → `src/core/auth` and `src/app/auth`
+     - [x] `src/reliability` → `src/core/reliability` and `src/app/reliability`
+     - [x] `src/utils` → `src/core/utils` and `src/app/utils`
+     - [x] `src/api` → `src/core/api` and `src/app/api`
+     - [x] `src/config` → `src/core/config` and `src/app/config`
+     - [x] `src/cache` → `src/core/cache` and `src/app/cache`
 
 3. **Fix Import Patterns**: Update import statements to use the `crate::core::` prefix instead of direct imports from root modules.
 

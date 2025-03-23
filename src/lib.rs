@@ -30,14 +30,13 @@ pub mod app;
 
 /// Caching functionality
 pub mod cache {
-    pub use crate::cache::providers::*;
-    pub use crate::cache::registry_stats::*;
-    pub mod providers;
-    pub mod registry_stats;
+    pub use crate::core::cache::*;
 }
 
 /// Configuration management
-pub mod config;
+pub mod config {
+    pub use crate::core::config::*;
+}
 
 /// Error handling
 pub mod error {
@@ -93,6 +92,11 @@ pub mod utils {
 /// Authentication and authorization
 pub mod auth {
     pub use crate::core::auth::*;
+}
+
+/// Routing functionality
+pub mod router {
+    pub use crate::core::router::*;
 }
 
 /// MockExtern trait implementation for test mocking
