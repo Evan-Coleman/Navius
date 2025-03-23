@@ -1,3 +1,12 @@
+---
+title: "App Module Diagram"
+description: "Documentation about App Module Diagram"
+category: architecture
+tags:
+  - api
+last_updated: March 23, 2025
+version: 1.0
+---
 # App Module Diagram
 
 This diagram illustrates the structure of the `src/app` directory, which contains user-facing code that can be customized or extended.

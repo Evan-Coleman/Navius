@@ -1,3 +1,12 @@
+---
+title: "Import Pattern Guidelines"
+description: "Documentation about Import Pattern Guidelines"
+category: reference
+tags:
+  - api
+last_updated: March 23, 2025
+version: 1.0
+---
 # Import Pattern Guidelines
 
 This document outlines the import pattern conventions used in the Navius project after the project restructuring.

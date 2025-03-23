@@ -1,3 +1,16 @@
+---
+title: "Contributing to Navius"
+description: "# Clone the repository"
+category: contributing
+tags:
+  - development
+  - documentation
+  - performance
+  - security
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # Contributing to Navius
 
 Thank you for your interest in contributing to Navius! This document provides guidelines and instructions for contributing to the project.

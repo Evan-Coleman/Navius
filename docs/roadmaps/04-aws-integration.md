@@ -1,3 +1,21 @@
+---
+title: "AWS Integration Roadmap"
+description: "Documentation about AWS Integration Roadmap"
+category: roadmap
+tags:
+  - api
+  - authentication
+  - aws
+  - deployment
+  - documentation
+  - integration
+  - performance
+  - redis
+  - security
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # AWS Integration Roadmap
 
 ## Overview

@@ -1,3 +1,18 @@
+---
+title: "Core Module Diagram"
+description: "Documentation about Core Module Diagram"
+category: architecture
+tags:
+  - api
+  - authentication
+  - caching
+  - database
+  - documentation
+  - integration
+  - security
+last_updated: March 23, 2025
+version: 1.0
+---
 # Core Module Diagram
 
 This diagram illustrates the structure of the `src/core` directory, which contains the framework's foundational components.

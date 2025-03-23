@@ -1,3 +1,17 @@
+---
+title: "Module Dependencies Diagram"
+description: "Documentation about Module Dependencies Diagram"
+category: architecture
+tags:
+  - api
+  - architecture
+  - authentication
+  - database
+  - postgres
+  - redis
+last_updated: March 23, 2025
+version: 1.0
+---
 # Module Dependencies Diagram
 
 **Updated At:** March 22, 2025

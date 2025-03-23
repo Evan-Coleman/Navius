@@ -1,3 +1,14 @@
+---
+title: "App-Core Interactions"
+description: "Documentation about App-Core Interactions"
+category: architecture
+tags:
+  - api
+  - architecture
+  - database
+last_updated: March 23, 2025
+version: 1.0
+---
 # App-Core Interactions
 
 This diagram illustrates how the user-facing `src/app` components interact with the framework's `src/core` components.

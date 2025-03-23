@@ -1,3 +1,18 @@
+---
+title: "Resilience Patterns Roadmap"
+description: "Documentation about Resilience Patterns Roadmap"
+category: roadmap
+tags:
+  - api
+  - architecture
+  - documentation
+  - integration
+  - performance
+  - redis
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # Resilience Patterns Roadmap
 
 ## Overview

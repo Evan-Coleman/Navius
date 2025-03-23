@@ -1,3 +1,12 @@
+---
+title: "Contributing Guidelines"
+description: "Documentation about Contributing Guidelines"
+category: contributing
+tags:
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # Contributing Guidelines
 
 This directory contains guidelines and information for contributors to the Navius project.

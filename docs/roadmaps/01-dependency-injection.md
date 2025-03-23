@@ -1,3 +1,18 @@
+---
+title: "Dependency Injection Roadmap"
+description: "Documentation about Dependency Injection Roadmap"
+category: roadmap
+tags:
+  - database
+  - development
+  - documentation
+  - integration
+  - performance
+  - postgres
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # Dependency Injection Roadmap
 
 ## Overview

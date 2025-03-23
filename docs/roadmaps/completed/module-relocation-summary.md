@@ -1,3 +1,14 @@
+---
+title: "Module Relocation Summary"
+description: "Documentation about Module Relocation Summary"
+category: roadmap
+tags:
+  - api
+  - architecture
+  - documentation
+last_updated: March 23, 2025
+version: 1.0
+---
 # Module Relocation Summary
 
 **Completed On:** March 25, 2025
@@ -71,3 +82,11 @@ With the medium priority items completed, future efforts should focus on:
 ## Conclusion
 
 The module relocation work completes the medium priority improvements identified in the project restructuring initiative. The codebase now follows a cleaner architecture with proper separation between core and app-specific code. This organization improves maintainability and provides clear extension points for users of the framework. 
+
+## Overview
+
+
+## Related Documents
+- [Project Structure Roadmap](/docs/roadmaps/completed/11_project_structure_future_improvements.md) - Future improvements
+- [Documentation Overhaul](/docs/roadmaps/12_document_overhaul.md) - Documentation plans
+

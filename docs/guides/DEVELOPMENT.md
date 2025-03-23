@@ -1,3 +1,18 @@
+---
+title: "Navius Development Guide"
+description: "# Using the development script (recommended)"
+category: guide
+tags:
+  - api
+  - architecture
+  - development
+  - documentation
+  - integration
+  - performance
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # Navius Development Guide
 
 This document provides instructions for setting up your development environment and contributing to the Navius project.
@@ -151,3 +166,8 @@ If you need assistance with development:
 - Review the example code in `examples/`
 - Reach out to the project maintainers
 - Open an issue on GitHub/GitLab 
+
+## Related Documents
+- [Installation Guide](/docs/guides/installation.md) - How to install the application
+- [Development Workflow](/docs/guides/development/development-workflow.md) - Development best practices
+

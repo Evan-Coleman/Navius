@@ -1,3 +1,22 @@
+---
+title: "Navius Project Structure"
+description: "Documentation about Navius Project Structure"
+category: architecture
+tags:
+  - api
+  - architecture
+  - authentication
+  - aws
+  - caching
+  - database
+  - development
+  - documentation
+  - integration
+  - redis
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # Navius Project Structure
 
 **Updated At:** March 23, 2025

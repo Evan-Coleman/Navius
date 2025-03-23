@@ -1,3 +1,18 @@
+---
+title: "Project Navigation Guide"
+description: "Documentation about Project Navigation Guide"
+category: guide
+tags:
+  - api
+  - architecture
+  - authentication
+  - database
+  - development
+  - documentation
+  - integration
+last_updated: March 23, 2025
+version: 1.0
+---
 # Project Navigation Guide
 
 **Updated At:** March 22, 2025

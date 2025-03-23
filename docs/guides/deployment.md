@@ -1,3 +1,20 @@
+---
+title: "Navius Deployment Guide"
+description: "# Build the Docker image"
+category: guide
+tags:
+  - api
+  - aws
+  - database
+  - deployment
+  - integration
+  - performance
+  - postgres
+  - redis
+  - security
+last_updated: March 23, 2025
+version: 1.0
+---
 # Navius Deployment Guide
 
 This guide provides comprehensive instructions for deploying Navius applications to various environments, focusing on production-grade deployments with security, scalability, and reliability.

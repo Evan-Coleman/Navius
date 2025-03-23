@@ -1,3 +1,17 @@
+---
+title: "Navius Testing Guide"
+description: "Documentation about Navius Testing Guide"
+category: guide
+tags:
+  - api
+  - database
+  - development
+  - integration
+  - performance
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # Navius Testing Guide
 
 This guide outlines the testing methodology and tools used in the Navius project. We prioritize automated testing to ensure code quality and reliability.
@@ -441,3 +455,8 @@ async fn test_endpoint_performance() {
 ## Conclusion
 
 Testing is a core part of the Navius development process. By following these guidelines, we maintain high code quality and ensure the framework is reliable and robust. For any questions about testing, please reach out to the development team. 
+
+## Related Documents
+- [Installation Guide](/docs/getting-started/installation.md) - How to install the application
+- [Development Workflow](/docs/guides/development/development-workflow.md) - Development best practices
+

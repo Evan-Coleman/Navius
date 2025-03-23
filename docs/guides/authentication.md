@@ -1,3 +1,17 @@
+---
+title: "Navius Authentication Guide"
+description: "Documentation about Navius Authentication Guide"
+category: guide
+tags:
+  - api
+  - authentication
+  - integration
+  - redis
+  - security
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # Navius Authentication Guide
 
 This guide covers the authentication options available in Navius and how to implement them in your application.

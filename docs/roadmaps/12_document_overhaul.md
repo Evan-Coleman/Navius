@@ -1,3 +1,18 @@
+---
+title: "Documentation Overhaul Roadmap"
+description: "Documentation about Documentation Overhaul Roadmap"
+category: roadmap
+tags:
+  - api
+  - architecture
+  - deployment
+  - development
+  - documentation
+  - integration
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # Documentation Overhaul Roadmap
 
 ## Overview

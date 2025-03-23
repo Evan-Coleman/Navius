@@ -1,3 +1,18 @@
+---
+title: "Project Restructuring Roadmap"
+description: "Documentation about Project Restructuring Roadmap"
+category: roadmap
+tags:
+  - api
+  - architecture
+  - deployment
+  - development
+  - documentation
+  - integration
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # Project Restructuring Roadmap
 
 **Status:** Completed  
@@ -204,3 +219,8 @@ The restructuring will be considered successful when:
 - **Reduced Cognitive Load**: Simplified structure reduces the mental effort needed to navigate the codebase
 - **Better GitHub Presentation**: Simplified root directory makes the README more prominent
 - **Support for Core Transition**: Aligns with the ongoing core transition initiative 
+
+## Related Documents
+- [Project Structure Roadmap](/docs/roadmaps/completed/11_project_structure_future_improvements.md) - Future improvements
+- [Documentation Overhaul](/docs/roadmaps/12_document_overhaul.md) - Documentation plans
+

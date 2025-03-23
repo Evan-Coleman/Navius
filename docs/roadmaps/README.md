@@ -1,3 +1,23 @@
+---
+title: "Navius Framework Roadmaps"
+description: "Documentation about Navius Framework Roadmaps"
+category: roadmap
+tags:
+  - api
+  - architecture
+  - authentication
+  - aws
+  - caching
+  - database
+  - development
+  - documentation
+  - integration
+  - performance
+  - security
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # Navius Framework Roadmaps
 
 This directory contains roadmaps for enhancing the Navius framework to match the feature set and developer experience of established enterprise frameworks like Spring Boot.

@@ -1,3 +1,17 @@
+---
+title: "API Versioning Roadmap"
+description: "Documentation about API Versioning Roadmap"
+category: roadmap
+tags:
+  - api
+  - documentation
+  - integration
+  - performance
+  - security
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # API Versioning Roadmap
 
 ## Overview

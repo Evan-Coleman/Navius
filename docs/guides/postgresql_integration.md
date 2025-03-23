@@ -1,3 +1,19 @@
+---
+title: "Navius PostgreSQL Integration Guide"
+description: "# From the project root:"
+category: guide
+tags:
+  - authentication
+  - aws
+  - database
+  - development
+  - integration
+  - performance
+  - postgres
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # Navius PostgreSQL Integration Guide
 
 This guide explains how to implement PostgreSQL database connections in your Navius application, leveraging the framework's powerful database abstraction layer.

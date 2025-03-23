@@ -1,3 +1,13 @@
+---
+title: "Architecture Documentation"
+description: "Documentation about Architecture Documentation"
+category: architecture
+tags:
+  - architecture
+  - documentation
+last_updated: March 23, 2025
+version: 1.0
+---
 # Architecture Documentation
 
 This directory contains documentation about the architecture of the Navius application.

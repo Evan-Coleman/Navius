@@ -1,3 +1,16 @@
+---
+title: "Roadmap Update Template"
+description: "# [Feature Name] Roadmap"
+category: roadmap
+tags:
+  - authentication
+  - development
+  - documentation
+  - integration
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # Roadmap Update Template
 
 When updating roadmap files, follow these guidelines carefully:

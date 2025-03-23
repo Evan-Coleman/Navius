@@ -1,3 +1,12 @@
+---
+title: "IDE Setup for Navius Development"
+description: "Documentation about IDE Setup for Navius Development"
+category: contributing
+tags:
+  - development
+last_updated: March 23, 2025
+version: 1.0
+---
 # IDE Setup for Navius Development
 
 This guide provides instructions for setting up your Integrated Development Environment (IDE) for working with the Navius codebase.

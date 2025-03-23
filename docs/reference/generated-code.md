@@ -1,3 +1,13 @@
+---
+title: "Generated Code Management"
+description: "# Add a new API client"
+category: reference
+tags:
+  - api
+  - documentation
+last_updated: March 23, 2025
+version: 1.0
+---
 # Generated Code Management
 
 This document outlines the guidelines and processes for managing generated code in the Navius project.

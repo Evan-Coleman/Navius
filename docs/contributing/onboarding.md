@@ -1,3 +1,21 @@
+---
+title: "Developer Onboarding Guide"
+description: "# Find files in the auth component"
+category: contributing
+tags:
+  - api
+  - architecture
+  - authentication
+  - caching
+  - database
+  - development
+  - documentation
+  - integration
+  - redis
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # Developer Onboarding Guide
 
 **Updated At:** March 23, 2025

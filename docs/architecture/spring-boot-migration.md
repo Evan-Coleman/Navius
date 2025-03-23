@@ -1,3 +1,21 @@
+---
+title: "Migrating from Spring Boot to Navius"
+description: "Documentation about Migrating from Spring Boot to Navius"
+category: architecture
+tags:
+  - api
+  - authentication
+  - aws
+  - caching
+  - database
+  - development
+  - documentation
+  - performance
+  - redis
+  - security
+last_updated: March 23, 2025
+version: 1.0
+---
 # Migrating from Spring Boot to Navius
 
 This guide helps development teams transition from Spring Boot to Navius, providing patterns, comparisons, and strategies for a successful migration.

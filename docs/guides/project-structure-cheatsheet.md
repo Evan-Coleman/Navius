@@ -1,3 +1,20 @@
+---
+title: "Navius Project Structure Cheatsheet"
+description: "# Run the server"
+category: guide
+tags:
+  - api
+  - architecture
+  - authentication
+  - caching
+  - database
+  - development
+  - documentation
+  - integration
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # Navius Project Structure Cheatsheet
 
 **Updated:** March 24, 2025
@@ -167,3 +184,8 @@ cargo clippy
 - Check the architecture diagrams in `docs/architecture/diagrams/`
 - Read the specific component documentation in `docs/reference/`
 - Review example implementations in `src/app/api/examples/` 
+
+## Related Documents
+- [Installation Guide](/docs/getting-started/installation.md) - How to install the application
+- [Development Workflow](/docs/guides/development/development-workflow.md) - Development best practices
+

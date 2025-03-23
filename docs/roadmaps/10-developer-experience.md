@@ -1,3 +1,24 @@
+---
+title: "Developer Experience Roadmap"
+description: "# Start the development environment"
+category: roadmap
+tags:
+  - api
+  - authentication
+  - aws
+  - database
+  - deployment
+  - development
+  - documentation
+  - integration
+  - performance
+  - postgres
+  - redis
+  - security
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # Developer Experience Roadmap
 
 ## Overview

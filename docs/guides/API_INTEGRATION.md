@@ -1,3 +1,16 @@
+---
+title: "Navius API Integration Guide"
+description: "Documentation about Navius API Integration Guide"
+category: guide
+tags:
+  - api
+  - caching
+  - integration
+  - performance
+  - testing
+last_updated: March 23, 2025
+version: 1.0
+---
 # Navius API Integration Guide
 
 This guide explains how to integrate external APIs into your Navius application using the built-in API resource abstraction.

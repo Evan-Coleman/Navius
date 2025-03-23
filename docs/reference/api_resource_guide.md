@@ -1,3 +1,17 @@
+---
+title: "Navius API Resource Abstraction"
+description: "Documentation about Navius API Resource Abstraction"
+category: reference
+tags:
+  - api
+  - caching
+  - development
+  - documentation
+  - integration
+  - performance
+last_updated: March 23, 2025
+version: 1.0
+---
 # Navius API Resource Abstraction
 
 ## Overview

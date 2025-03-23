@@ -1,3 +1,14 @@
+---
+title: "API Resource Abstraction"
+description: "Documentation about API Resource Abstraction"
+category: reference
+tags:
+  - api
+  - caching
+  - integration
+last_updated: March 23, 2025
+version: 1.0
+---
 # API Resource Abstraction
 
 This document explains the API resource abstraction pattern used in our project, which provides a unified way to handle API resources with built-in reliability features.
