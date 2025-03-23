@@ -40,7 +40,7 @@ lazy_static! {
 /// # Example
 ///
 /// ```
-/// use crate::app::config::get_config;
+/// use navius::app::config::get_config;
 ///
 /// let config = get_config();
 /// println!("Server address: {}", config.server_addr());
