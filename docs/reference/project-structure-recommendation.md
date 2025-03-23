@@ -55,3 +55,8 @@ We recommend consolidating these documents to maintain a single source of truth 
 1. Review this recommendation with the team
 2. If approved, create a task to implement the consolidation
 3. Update the project restructuring roadmap to include this task 
+
+## Related Documents
+- [API Standards](/docs/reference/standards/api-standards.md) - API design guidelines
+- [Error Handling](/docs/reference/error-handling.md) - Error handling patterns
+

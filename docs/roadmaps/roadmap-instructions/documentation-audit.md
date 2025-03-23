@@ -144,3 +144,8 @@ Based on this audit, we recommend:
 4. Create a more intuitive directory structure
 5. Improve cross-referencing between related documents
 6. Implement consistent formatting and style across all documents 
+
+## Related Documents
+- [Project Structure Roadmap](/docs/roadmaps/completed/11_project_structure_future_improvements.md) - Future improvements
+- [Documentation Overhaul](/docs/roadmaps/12_document_overhaul.md) - Documentation plans
+

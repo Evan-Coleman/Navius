@@ -238,3 +238,8 @@ pub fn product_routes() -> Router<Arc<AppState>> {
 6. **Use circuit breakers**: Prevent cascading failures when services are degraded
 
 For more advanced usage scenarios, see the API Integration documentation and the full API Reference. 
+
+## Related Documents
+- [API Standards](/docs/reference/standards/api-standards.md) - API design guidelines
+- [Error Handling](/docs/reference/error-handling.md) - Error handling patterns
+

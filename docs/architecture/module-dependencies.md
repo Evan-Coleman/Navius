@@ -256,3 +256,7 @@ These diagrams are written in Mermaid format, which can be viewed in several way
 3. **Mermaid Live Editor**: Copy the diagram code and paste it into the [Mermaid Live Editor](https://mermaid.live)
 
 4. **Browser Extension**: Use a browser extension like "Mermaid Diagrams" for Chrome 
+
+## Related Documents
+- [Project Structure](/docs/architecture/project-structure.md) - Overall structure
+

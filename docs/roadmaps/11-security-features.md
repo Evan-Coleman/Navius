@@ -519,3 +519,8 @@ mod tests {
 - [JWT Best Practices](https://auth0.com/blog/a-look-at-the-latest-draft-for-jwt-bcp/)
 - [Argon2 Password Hashing](https://password-hashing.net/)
 - [Role-Based Access Control](https://csrc.nist.gov/projects/role-based-access-control) 
+
+## Related Documents
+- [Project Structure Roadmap](/docs/roadmaps/completed/11_project_structure_future_improvements.md) - Future improvements
+- [Documentation Overhaul](/docs/roadmaps/12_document_overhaul.md) - Documentation plans
+

@@ -175,3 +175,8 @@ Planned enhancements to the pattern include:
 1. Configurable retry policies (max attempts, backoff strategy)
 2. Cache TTL options per resource type
 3. Circuit breaker pattern for failing services 
+
+## Related Documents
+- [API Standards](/docs/reference/standards/api-standards.md) - API design guidelines
+- [Error Handling](/docs/reference/error-handling.md) - Error handling patterns
+

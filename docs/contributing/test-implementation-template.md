@@ -186,3 +186,7 @@ fn test_multiple_scenarios() {
         assert_eq!(result, expected, "Failed for input: {}", input);
     }
 } 
+
+## Related Documents
+- [Development Process](/docs/contributing/development-process.md) - How to contribute code
+

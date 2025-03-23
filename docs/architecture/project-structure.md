@@ -229,3 +229,7 @@ To help with navigating the codebase, several tools are available:
 - **Developer Onboarding**: See `docs/contributing/onboarding.md`
 - **IDE Setup**: See `docs/contributing/ide-setup.md`
 - **Module Dependencies**: See `docs/architecture/module-dependencies.md` for visualizations 
+
+## Related Documents
+- [Module Dependencies](/docs/architecture/module-dependencies.md) - Dependencies between modules
+

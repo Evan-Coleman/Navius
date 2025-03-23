@@ -164,3 +164,8 @@ Following these guidelines ensures:
 - **Testability** of user code in isolation
 - **Upgradability** of the framework without breaking user code
 - **Extensibility** through well-defined interfaces 
+
+## Related Documents
+- [Project Structure](/docs/architecture/project-structure.md) - Overall structure
+- [Module Dependencies](/docs/architecture/module-dependencies.md) - Dependencies between modules
+

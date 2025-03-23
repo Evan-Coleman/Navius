@@ -78,3 +78,8 @@ graph LR
     class app_api,app_services,app_router app;
     class core_router,core_utils,core_error,core_repository core;
 ``` 
+
+## Related Documents
+- [Project Structure](/docs/architecture/project-structure.md) - Overall structure
+- [Module Dependencies](/docs/architecture/module-dependencies.md) - Dependencies between modules
+

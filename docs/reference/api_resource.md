@@ -264,3 +264,8 @@ Planned enhancements to the pattern include:
 2. Circuit breaker pattern for automatically handling failing services
 3. Integration with distributed tracing
 4. Dynamic configuration of retry and caching policies 
+
+## Related Documents
+- [API Standards](/docs/reference/standards/api-standards.md) - API design guidelines
+- [Error Handling](/docs/reference/error-handling.md) - Error handling patterns
+

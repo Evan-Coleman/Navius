@@ -408,3 +408,8 @@ mod tests {
 - [refinery Migrations](https://docs.rs/refinery)
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/)
 - [Rust Database Patterns](https://rust-lang.github.io/async-book/06_multiple_futures/02_join.html) 
+
+## Related Documents
+- [Project Structure Roadmap](/docs/roadmaps/completed/11_project_structure_future_improvements.md) - Future improvements
+- [Documentation Overhaul](/docs/roadmaps/12_document_overhaul.md) - Documentation plans
+

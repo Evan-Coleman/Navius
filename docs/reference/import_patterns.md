@@ -97,3 +97,8 @@ This script automatically updates imports in core modules to use the `crate::cor
 2. **Maintainability** - Makes code easier to maintain as the project evolves
 3. **Refactoring** - Simplifies refactoring efforts
 4. **Onboarding** - Makes it easier for new developers to understand the codebase structure 
+
+## Related Documents
+- [API Standards](/docs/reference/standards/api-standards.md) - API design guidelines
+- [Error Handling](/docs/reference/error-handling.md) - Error handling patterns
+

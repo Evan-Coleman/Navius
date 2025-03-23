@@ -704,3 +704,8 @@ For more advanced use cases, refer to the following resources:
 - [Advanced JWT Configuration](advanced_jwt.md)
 - [OAuth2 Provider Implementation Guide](oauth2_providers.md)
 - [Custom Authentication Schemes](custom_auth.md) 
+
+## Related Documents
+- [Installation Guide](/docs/getting-started/installation.md) - How to install the application
+- [Development Workflow](/docs/guides/development/development-workflow.md) - Development best practices
+

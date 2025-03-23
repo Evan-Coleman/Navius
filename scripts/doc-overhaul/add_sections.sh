@@ -109,8 +109,6 @@ get_related_doc_examples() {
             echo "- [API Standards](/docs/reference/standards/api-standards.md) - API design guidelines\n- [Error Handling](/docs/reference/error-handling.md) - Error handling patterns"
             ;;
         "contributing")
-            echo "- [Code of Conduct](/docs/contributing/code-of-conduct.md) - Guidelines for participation\n- [Development Process](/docs/contributing/development-process.md) - How to contribute code"
-            ;;
         "roadmap")
             echo "- [Project Structure Roadmap](/docs/roadmaps/completed/11_project_structure_future_improvements.md) - Future improvements\n- [Documentation Overhaul](/docs/roadmaps/12_document_overhaul.md) - Documentation plans"
             ;;

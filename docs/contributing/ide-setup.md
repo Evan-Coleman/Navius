@@ -102,3 +102,7 @@ If debugging doesn't work properly:
 - [Rust Analyzer Manual](https://rust-analyzer.github.io/manual.html)
 - [VS Code Rust Debugging](https://code.visualstudio.com/docs/languages/rust)
 - [CLion Rust Guide](https://www.jetbrains.com/help/clion/rust-support.html) 
+
+## Related Documents
+- [Development Process](/docs/contributing/development-process.md) - How to contribute code
+

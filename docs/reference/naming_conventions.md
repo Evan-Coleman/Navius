@@ -154,3 +154,8 @@ This script identifies files with uppercase characters in their names, which may
 2. **Consistency** - Ensures all developers follow the same patterns
 3. **Idiomatic** - Follows Rust's recommended naming conventions
 4. **Tooling** - Better integration with Rust tools and IDE features 
+
+## Related Documents
+- [API Standards](/docs/reference/standards/api-standards.md) - API design guidelines
+- [Error Handling](/docs/reference/error-handling.md) - Error handling patterns
+

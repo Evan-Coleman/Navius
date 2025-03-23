@@ -20,10 +20,6 @@ Navius uses a dual repository approach:
   - Public issue discussions
   - Status badges for marketing
 
-## Code of Conduct
-
-By participating in this project, you agree to abide by the [Code of Conduct](CODE_OF_CONDUCT.md). Please read it before contributing.
-
 ## How to Contribute
 
 ### For Core Team Members

@@ -14,7 +14,6 @@ A summary of the specific changes implemented in this PR.
 - [ ] I have added/updated tests that prove my fix or feature works
 
 ## Community Guidelines
-- [ ] I have read and agree to the project's code of conduct and contribution guidelines
 - [ ] I understand this PR will be reviewed by the project team and may require changes before acceptance
 
 ## Additional Context

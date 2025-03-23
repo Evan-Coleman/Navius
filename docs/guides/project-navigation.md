@@ -127,3 +127,8 @@ The VS Code configuration includes several predefined tasks:
 - [Project Structure](docs/architecture/project-structure-map.md): Detailed project structure map
 - [Core Components](docs/architecture/core-components.md): Overview of core components
 - [Contribution Guidelines](docs/contributing/): How to contribute to the project 
+
+## Related Documents
+- [Installation Guide](/docs/getting-started/installation.md) - How to install the application
+- [Development Workflow](/docs/guides/development/development-workflow.md) - Development best practices
+

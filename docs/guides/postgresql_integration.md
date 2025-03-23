@@ -392,3 +392,8 @@ For production environments:
 - Use database indexes for performance
 - Write integration tests against a real database
 - Monitor query performance and optimize slow queries 
+
+## Related Documents
+- [Installation Guide](/docs/getting-started/installation.md) - How to install the application
+- [Development Workflow](/docs/guides/development/development-workflow.md) - Development best practices
+

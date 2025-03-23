@@ -508,3 +508,8 @@ mod tests {
 - [Rate Limiting Patterns](https://cloud.google.com/architecture/rate-limiting-strategies-patterns)
 - [Bulkhead Pattern](https://docs.microsoft.com/en-us/azure/architecture/patterns/bulkhead)
 - [Retry Pattern](https://docs.microsoft.com/en-us/azure/architecture/patterns/retry) 
+
+## Related Documents
+- [Project Structure Roadmap](/docs/roadmaps/completed/11_project_structure_future_improvements.md) - Future improvements
+- [Documentation Overhaul](/docs/roadmaps/12_document_overhaul.md) - Documentation plans
+
