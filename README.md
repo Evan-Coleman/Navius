@@ -7,6 +7,24 @@
 [![Primary: GitLab](https://img.shields.io/badge/primary-gitlab-orange)](https://gitlab.com/ecoleman2/navius)
 [![Mirror: GitHub](https://img.shields.io/badge/mirror-github-black)](https://github.com/Evan-Coleman/Navius)
 
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <h2>⚠️ Development Status Notice ⚠️</h2>
+        <p><strong>This project is currently under active development.</strong></p>
+        <hr>
+        <ul align="left">
+          <li>All information in this repository is subject to change</li>
+          <li>Features and documentation may be incomplete</li>
+          <li>Claims and statements should be considered provisional</li>
+        </ul>
+        <p><em>Last Updated: March 23, 2025</em></p>
+      </td>
+    </tr>
+  </table>
+</div>
+
 > **Enterprise-grade web framework built for speed, reliability, and developer productivity**
 
 Navius is a high-performance, modern alternative to Spring Boot, built with Rust. It delivers exceptional performance, security, and developer experience while reducing infrastructure costs and eliminating entire classes of runtime errors.

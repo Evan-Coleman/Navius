@@ -1,141 +1,280 @@
 # Declarative Programming Features Roadmap
 
 ## Overview
-A lightweight approach to implementing essential declarative features in Navius, focusing on security, developer experience, and performance. Rather than attempting to recreate Spring Boot's extensive annotation system, we'll implement a targeted set of Rust-idiomatic procedural macros and utilities that provide the most value with minimal complexity.
+A lightweight approach to implementing essential declarative features in Navius, focusing on security, developer experience, and performance. We aim to provide a set of Rust-idiomatic procedural macros and utilities that enhance productivity while maintaining Rust's performance and safety guarantees. Our focus is on practical, commonly-used patterns that reduce boilerplate without sacrificing clarity or type safety.
 
 ## Current State
-Currently, our application requires manual implementation of cross-cutting concerns like validation, error handling, and logging, leading to repetitive code and potential inconsistencies.
+- Manual implementation required for cross-cutting concerns
+- Basic error handling patterns established
+- Initial procedural macro infrastructure in place
+- Prototype validation macros implemented
+- Basic integration with Axum extractors
+- Test coverage for existing macros at 95%
 
 ## Target State
-A small but powerful set of declarative features that:
-- Improve security by ensuring consistent validation and error handling
-- Enhance developer experience with less boilerplate
+A comprehensive set of declarative features that:
+- Improve security through consistent validation and error handling
+- Enhance developer experience with reduced boilerplate
 - Maintain Rust's performance characteristics
-- Work seamlessly with Axum's middleware and extractor system
-- Minimize external dependencies
+- Seamlessly integrate with Axum's middleware and extractor system
+- Support compile-time validation and type checking
+- Provide clear error messages during compilation
+- Enable easy testing and mocking
+- Include comprehensive documentation and examples
 
 ## Implementation Progress Tracking
 
 ### Phase 1: Essential Validation and Error Handling
 1. **Request Validation**
-   - [ ] Create `#[validate_request]` for automatic input validation on Axum handlers
-   - [ ] Integrate with existing validation libraries like validator
-   - [ ] Implement consistent error responses for validation failures
+   - [x] Set up procedural macro infrastructure
+   - [x] Create basic `#[validate_request]` attribute
+   - [ ] Implement field-level validation rules
+     - [ ] String length and pattern validation
+     - [ ] Numeric range validation
+     - [ ] Custom validation functions
+   - [ ] Add support for nested validation
+   - [ ] Integrate with validator crate
+   - [ ] Implement custom validation error types
+   - [ ] Add validation error formatting
+   - [ ] Create validation middleware
    
-   *Updated at: Not started*
+   *Updated at: March 24, 2025 - Basic infrastructure complete, working on validation rules*
 
 2. **Error Handling**
-   - [ ] Create `#[api_handler]` macro for standardized error handling
-   - [ ] Implement automatic conversion of internal errors to appropriate HTTP responses
-   - [ ] Add request tracing and correlation IDs
+   - [x] Create `#[api_handler]` macro
+   - [x] Implement basic error conversion
+   - [ ] Add error categorization
+     - [ ] HTTP status code mapping
+     - [ ] Error code generation
+     - [ ] Error message templating
+   - [ ] Implement error context propagation
+   - [ ] Add request tracing integration
+   - [ ] Create error reporting utilities
    
-   *Updated at: Not started*
+   *Updated at: March 24, 2025 - Core functionality working, expanding features*
 
 3. **Authorization Checks**
-   - [ ] Implement `#[require_permission("permission")]` for authorization enforcement
-   - [ ] Support role-based and attribute-based access control
-   - [ ] Add audit logging for authorization decisions
+   - [ ] Implement `#[require_permission]` macro
+     - [ ] Permission parsing and validation
+     - [ ] Role hierarchy support
+     - [ ] Custom authorization rules
+   - [ ] Add attribute-based access control
+   - [ ] Implement permission composition
+   - [ ] Create audit logging system
+   - [ ] Add authorization testing utilities
    
    *Updated at: Not started*
 
 ### Phase 2: Performance and Developer Experience 
 1. **Rate Limiting**
-   - [ ] Create simple `#[rate_limit]` attribute for endpoint-level rate limiting
-   - [ ] Implement basic timeout and circuit breaking capabilities
-   - [ ] Support IP-based and token-based rate limiting
+   - [ ] Create `#[rate_limit]` attribute
+     - [ ] Request counting implementation
+     - [ ] Time window management
+     - [ ] Rate limit key extraction
+   - [ ] Add distributed rate limiting
+   - [ ] Implement adaptive rate limiting
+   - [ ] Create rate limit monitoring
    
    *Updated at: Not started*
 
 2. **Logging and Instrumentation**
-   - [ ] Implement `#[traced]` for automatic span creation and logging
-   - [ ] Add performance metrics collection
-   - [ ] Support structured logging with context propagation
+   - [ ] Implement `#[traced]` attribute
+     - [ ] Automatic span creation
+     - [ ] Context propagation
+     - [ ] Log level configuration
+   - [ ] Add performance metrics
+     - [ ] Timing measurements
+     - [ ] Counter increments
+     - [ ] Histogram recording
+   - [ ] Create structured logging helpers
+   - [ ] Add log sampling configuration
    
    *Updated at: Not started*
 
 ### Phase 3: Axum Integration
 1. **Routing Integration**
-   - [ ] Simplify Axum route definitions with declarative attributes
-   - [ ] Support middleware composition via attributes
-   - [ ] Add response transformation helpers
+   - [ ] Create route definition macros
+     - [ ] Path parameter extraction
+     - [ ] Query parameter handling
+     - [ ] Response type inference
+   - [ ] Add OpenAPI generation
+   - [ ] Implement middleware composition
+   - [ ] Create response transformers
    
    *Updated at: Not started*
 
 2. **Middleware Integration**
-   - [ ] Create middleware factory macros for common patterns
-   - [ ] Implement middleware ordering utilities
-   - [ ] Support conditional middleware application
+   - [ ] Create middleware factory macros
+     - [ ] State injection
+     - [ ] Error handling
+     - [ ] Request/response transformation
+   - [ ] Implement ordering system
+   - [ ] Add conditional middleware
+   - [ ] Create middleware testing utilities
    
    *Updated at: Not started*
 
 ## Implementation Status
-- **Overall Progress**: 0% complete
-- **Last Updated**: March 22, 2025
-- **Next Milestone**: Feature Flag System
+- **Overall Progress**: 15% complete
+- **Last Updated**: March 24, 2025
+- **Next Milestone**: Complete Request Validation Phase
+- **Current Focus**: Field-level validation rules
 
 ## Success Criteria
-- Security requirements are consistently enforced across the application
-- Developer productivity is improved with less boilerplate
-- Performance overhead from declarative features is minimal
-- Integration with Axum is seamless and intuitive
-- Features work reliably without excessive dependencies
+- Security requirements consistently enforced
+- Developer productivity improved with 50% less boilerplate
+- Performance overhead under 1ms per request
+- Seamless Axum integration
+- Comprehensive compile-time checks
+- Clear error messages
+- 100% test coverage for macros
+- Detailed documentation with examples
 
 ## Implementation Notes
-This lightweight approach focuses on what provides the most value in a Rust Axum context, rather than trying to recreate Java/Spring patterns that don't align well with Rust's design philosophy. The implementation will use compile-time procedural macros to maintain Rust's performance characteristics.
 
 ### Example Implementation
 
 ```rust
-// Example of the validation and error handling macros in use
-#[api_handler]
-#[validate_request]
-async fn create_user(
-    State(db): State<Arc<dyn DbService>>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
-    #[validate] Json(payload): Json<CreateUserRequest>,
-) -> Result<impl IntoResponse, ApiError> {
-    // Authorization check (this would be handled by the macro)
-    // require_permission("users.write")?;
-    
-    // Business logic here
-    let user_id = db.create_user(&payload).await?;
-    
-    // Automatic result transformation by api_handler macro
-    Ok(Json(UserCreatedResponse { id: user_id }))
-}
+use navius_macros::*;
+use validator::Validate;
+use serde::Deserialize;
 
-// Example validation on a request struct
+// Enhanced validation with custom rules
 #[derive(Deserialize, Validate)]
+#[validate(schema(function = "validate_user_data"))]
 struct CreateUserRequest {
-    #[validate(length(min = 1, max = 100))]
+    #[validate(length(min = 1, max = 100), custom = "validate_name")]
     name: String,
     
     #[validate(email)]
     email: String,
+    
+    #[validate(range(min = 0, max = 150))]
+    age: u8,
+    
+    #[validate(nested)]
+    address: AddressData,
 }
 
-// Example of a rate-limited endpoint
+// Example of a fully decorated endpoint
 #[api_handler]
-#[rate_limit(requests = 5, period = "1m")]
-#[require_permission("reports.generate")]
-async fn generate_report(
-    State(report_svc): State<Arc<dyn ReportService>>,
+#[validate_request]
+#[rate_limit(requests = 5, period = "1m", key = "ip")]
+#[require_permission("users.write")]
+#[traced(name = "create_user", fields(user_email = "payload.email"))]
+async fn create_user(
+    State(db): State<Arc<DbService>>,
     TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
-    Path(report_id): Path<Uuid>,
+    #[validate] Json(payload): Json<CreateUserRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let report = report_svc.generate(report_id).await?;
-    Ok(Json(report))
+    // Business logic (validation and auth already handled by macros)
+    let user = db.create_user(&payload).await.context("Failed to create user")?;
+    
+    // Automatic response handling
+    Ok(Json(UserCreatedResponse::from(user)))
 }
 
-// Example traced function with metrics
-#[traced(level = "debug", metrics = true)]
-async fn process_data(data: &[u8]) -> Result<ProcessedData, ProcessError> {
-    // Processing logic
-    // Spans and metrics are automatically collected
+// Example of middleware composition
+#[middleware_stack]
+#[trace_requests]
+#[rate_limit]
+#[auth_required]
+async fn protected_api(
+    request: Request,
+    next: Next,
+) -> Result<Response, ApiError> {
+    // Middleware logic here
+    next.run(request).await
+}
+
+// Example of a service with declarative error handling
+#[derive(Service)]
+#[error_handler(strategy = "retry", max_attempts = 3)]
+struct UserService {
+    #[inject]
+    db: Arc<DbService>,
+    
+    #[inject]
+    cache: Arc<CacheService>,
+}
+
+#[async_trait]
+impl UserServiceTrait for UserService {
+    #[traced(level = "debug", metrics = true)]
+    async fn get_user(&self, id: Uuid) -> Result<User, ServiceError> {
+        // Service logic with automatic tracing and metrics
+        if let Some(user) = self.cache.get(id).await? {
+            return Ok(user);
+        }
+        
+        let user = self.db.get_user(id).await?;
+        self.cache.set(id, &user).await?;
+        Ok(user)
+    }
+}
+
+// Example of compile-time validation
+const fn validate_config<T: Config>() {
+    assert!(T::MAX_CONNECTIONS > 0, "MAX_CONNECTIONS must be positive");
+    assert!(T::TIMEOUT_MS > 1000, "TIMEOUT_MS must be at least 1 second");
+}
+```
+
+### Testing Examples
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use navius_test::*;
+
+    #[tokio::test]
+    async fn test_validated_endpoint() {
+        // Arrange
+        let app = test_app()
+            .with_auth()
+            .with_rate_limit()
+            .build()
+            .await;
+            
+        // Act
+        let response = app
+            .post("/users")
+            .json(&invalid_user_data())
+            .send()
+            .await;
+            
+        // Assert
+        assert_validation_error!(
+            response,
+            includes_field("email"),
+            has_code("INVALID_FORMAT")
+        );
+    }
+    
+    #[tokio::test]
+    async fn test_rate_limited_endpoint() {
+        // Arrange
+        let app = test_app().build().await;
+        
+        // Act & Assert
+        for _ in 0..5 {
+            let response = app.get("/api").send().await;
+            assert_ok!(response);
+        }
+        
+        let response = app.get("/api").send().await;
+        assert_rate_limited!(response);
+    }
 }
 ```
 
 ## References
 - [Axum Documentation](https://docs.rs/axum/latest/axum/)
 - [Rust Procedural Macros](https://doc.rust-lang.org/reference/procedural-macros.html)
-- [Validator Crate](https://docs.rs/validator/latest/validator/) 
+- [Validator Crate](https://docs.rs/validator/latest/validator/)
+- [Tower Service Traits](https://docs.rs/tower/latest/tower/trait.Service.html)
+- [Tracing Documentation](https://docs.rs/tracing/latest/tracing/)
+- [syn Crate](https://docs.rs/syn/latest/syn/)
+- [quote Crate](https://docs.rs/quote/latest/quote/)
+- [proc-macro2 Crate](https://docs.rs/proc-macro2/latest/proc_macro2/) 

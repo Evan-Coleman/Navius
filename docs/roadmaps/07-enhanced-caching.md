@@ -1,341 +1,527 @@
-# Practical Caching Roadmap
+# Enhanced Caching Roadmap
 
 ## Overview
-A lightweight, security-focused approach to caching for Navius that improves application performance without unnecessary complexity.
+A sophisticated multi-level caching system that leverages Redis for distributed caching while providing local caching capabilities. This roadmap focuses on building a performant, reliable, and easy-to-use caching infrastructure that supports various caching strategies and patterns.
 
 ## Current State
-Our application needs a structured caching approach to improve response times and reduce database load for frequently accessed data.
+- Basic Redis connection
+- Simple key-value caching
+- No local caching
+- Limited cache invalidation
 
 ## Target State
-A practical caching system that:
-- Uses Redis as the primary caching layer
-- Secures cache access with proper authentication and key strategies
-- Provides straightforward integration with Axum handlers
-- Implements sensible cache invalidation strategies
-- Includes minimal but effective monitoring
+A complete caching system featuring:
+- Multi-level caching (memory, Redis)
+- Advanced caching strategies
+- Cache invalidation patterns
+- Cache monitoring and metrics
+- Cache consistency management
+- Performance optimization
 
 ## Implementation Progress Tracking
 
-### Phase 1: Core Redis Caching
-1. **Redis Connection**
-   - [ ] Implement Redis connection with proper error handling
-   - [ ] Create secure key generation strategies 
-   - [ ] Add connection pooling with retry handling
+### Phase 1: Core Caching Infrastructure
+1. **Redis Integration**
+   - [ ] Implement connection management:
+     - [ ] Connection pooling
+     - [ ] Failover handling
+     - [ ] Reconnection logic
+     - [ ] Error handling
+   - [ ] Add data operations:
+     - [ ] Key-value operations
+     - [ ] Hash operations
+     - [ ] List operations
+     - [ ] Set operations
+   - [ ] Create serialization:
+     - [ ] JSON serialization
+     - [ ] Binary serialization
+     - [ ] Custom formats
+     - [ ] Compression
+   - [ ] Implement monitoring:
+     - [ ] Connection status
+     - [ ] Operation metrics
+     - [ ] Error tracking
+     - [ ] Performance stats
    
    *Updated at: Not started*
 
-2. **Basic Cache Operations**
-   - [ ] Implement typed get/set operations with serialization
-   - [ ] Add TTL-based expiration for cached items
-   - [ ] Create cache miss handling with source data loading
+2. **Local Cache**
+   - [ ] Implement memory cache:
+     - [ ] LRU eviction
+     - [ ] TTL support
+     - [ ] Size limits
+     - [ ] Thread safety
+   - [ ] Add cache operations:
+     - [ ] Get/Set/Delete
+     - [ ] Batch operations
+     - [ ] Atomic updates
+     - [ ] Clear cache
+   - [ ] Create eviction:
+     - [ ] Time-based
+     - [ ] Size-based
+     - [ ] Priority-based
+     - [ ] Custom policies
+   - [ ] Implement monitoring:
+     - [ ] Hit rates
+     - [ ] Size tracking
+     - [ ] Eviction stats
+     - [ ] Performance data
    
    *Updated at: Not started*
 
-3. **Axum Integration**
-   - [ ] Build cache middleware for Axum routes
-   - [ ] Create response caching for appropriate endpoints
-   - [ ] Add request deduplication for concurrent requests
+3. **Cache Coordination**
+   - [ ] Implement consistency:
+     - [ ] Write-through
+     - [ ] Write-behind
+     - [ ] Read-through
+     - [ ] Refresh-ahead
+   - [ ] Add synchronization:
+     - [ ] Cache warming
+     - [ ] Cache rebuild
+     - [ ] Cache clear
+     - [ ] Cache sync
+   - [ ] Create notifications:
+     - [ ] Update events
+     - [ ] Clear events
+     - [ ] Error events
+     - [ ] Status events
+   - [ ] Implement recovery:
+     - [ ] Error handling
+     - [ ] Data recovery
+     - [ ] State sync
+     - [ ] Fallback logic
    
    *Updated at: Not started*
 
-### Phase 2: Security and Performance
-1. **Cache Security Enhancements**
-   - [ ] Implement tenant isolation in cache keys
-   - [ ] Add identity context in caching decisions
-   - [ ] Create secure cache key generation to prevent enumeration
+### Phase 2: Advanced Features
+1. **Caching Strategies**
+   - [ ] Implement patterns:
+     - [ ] Cache-aside
+     - [ ] Write-through
+     - [ ] Write-behind
+     - [ ] Refresh-ahead
+   - [ ] Add policies:
+     - [ ] TTL policies
+     - [ ] Refresh policies
+     - [ ] Eviction policies
+     - [ ] Custom policies
+   - [ ] Create handlers:
+     - [ ] Miss handlers
+     - [ ] Error handlers
+     - [ ] Update handlers
+     - [ ] Clear handlers
+   - [ ] Implement optimization:
+     - [ ] Batch loading
+     - [ ] Prefetching
+     - [ ] Background refresh
+     - [ ] Lazy loading
    
    *Updated at: Not started*
 
-2. **Performance Optimization**
-   - [ ] Implement batch operations for related data
-   - [ ] Add compression for large cached values
-   - [ ] Create background refresh for critical cached data
+2. **Cache Invalidation**
+   - [ ] Implement patterns:
+     - [ ] Time-based
+     - [ ] Event-based
+     - [ ] Version-based
+     - [ ] Pattern-based
+   - [ ] Add consistency:
+     - [ ] Atomic updates
+     - [ ] Transaction support
+     - [ ] Conflict resolution
+     - [ ] Version control
+   - [ ] Create propagation:
+     - [ ] Event publishing
+     - [ ] Subscriber handling
+     - [ ] Batch updates
+     - [ ] Async clearing
+   - [ ] Implement verification:
+     - [ ] State checking
+     - [ ] Data validation
+     - [ ] Consistency checks
+     - [ ] Health checks
    
    *Updated at: Not started*
 
-3. **Cache Invalidation**
-   - [ ] Implement targeted invalidation on data changes
-   - [ ] Add cache stampede protection
-   - [ ] Create cache versioning for schema changes
+3. **Performance Optimization**
+   - [ ] Implement compression:
+     - [ ] Data compression
+     - [ ] Key compression
+     - [ ] Batch compression
+     - [ ] Custom formats
+   - [ ] Add pipelining:
+     - [ ] Command batching
+     - [ ] Multi operations
+     - [ ] Bulk loading
+     - [ ] Async operations
+   - [ ] Create monitoring:
+     - [ ] Performance metrics
+     - [ ] Resource usage
+     - [ ] Latency tracking
+     - [ ] Bottleneck detection
+   - [ ] Implement tuning:
+     - [ ] Memory usage
+     - [ ] Connection pools
+     - [ ] Thread pools
+     - [ ] Queue sizes
    
    *Updated at: Not started*
 
-### Phase 3: Reliability
-1. **Fallback Strategies**
-   - [ ] Implement degraded mode for Redis outages
-   - [ ] Add circuit breaker for cache operations
-   - [ ] Create graceful performance degradation
+### Phase 3: Integration Features
+1. **Framework Integration**
+   - [ ] Implement middleware:
+     - [ ] Cache middleware
+     - [ ] Error handling
+     - [ ] Metrics collection
+     - [ ] Health checks
+   - [ ] Add annotations:
+     - [ ] Cache control
+     - [ ] Cache invalidation
+     - [ ] Cache configuration
+     - [ ] Cache monitoring
+   - [ ] Create interceptors:
+     - [ ] Cache operations
+     - [ ] Error handling
+     - [ ] Metrics collection
+     - [ ] Event handling
+   - [ ] Implement testing:
+     - [ ] Unit tests
+     - [ ] Integration tests
+     - [ ] Performance tests
+     - [ ] Chaos tests
    
    *Updated at: Not started*
 
-2. **Monitoring**
-   - [ ] Add basic cache hit/miss metrics collection
-   - [ ] Implement cache hit/miss logging
-   - [ ] Create simple local dashboard for cache performance
+2. **Documentation**
+   - [ ] Create guides:
+     - [ ] Usage guides
+     - [ ] Configuration
+     - [ ] Best practices
+     - [ ] Troubleshooting
+   - [ ] Add examples:
+     - [ ] Basic usage
+     - [ ] Advanced patterns
+     - [ ] Integration examples
+     - [ ] Performance tuning
+   - [ ] Implement generation:
+     - [ ] API docs
+     - [ ] Metrics docs
+     - [ ] Configuration docs
+     - [ ] Pattern docs
+   - [ ] Create tutorials:
+     - [ ] Getting started
+     - [ ] Advanced usage
+     - [ ] Performance tuning
+     - [ ] Monitoring setup
    
    *Updated at: Not started*
 
 ## Implementation Status
 - **Overall Progress**: 0% complete
-- **Last Updated**: March 22, 2025
-- **Next Milestone**: Adaptive TTL Implementation
+- **Last Updated**: April 24, 2024
+- **Next Milestone**: Redis Integration Implementation
 
 ## Success Criteria
-- Cache operations are secure and respect tenant boundaries
-- Cache hit rates exceed 80% for key operations
-- Cache-related errors do not impact application availability
-- Performance improvements are measurable and consistent
-- Development team can easily leverage caching for new features
+- Multi-level caching works seamlessly
+- Cache invalidation is reliable and consistent
+- Performance metrics show significant improvements
+- Cache coordination prevents data inconsistencies
+- Integration with framework is developer-friendly
+- Monitoring provides actionable insights
 
 ## Implementation Notes
-This approach focuses on practical caching mechanisms that provide immediate performance benefits without unnecessary complexity. We'll leverage Redis for its speed and capabilities while ensuring security and simplicity are maintained.
 
-Note: AWS-specific ElastiCache configuration, CloudWatch metrics integration, and AWS VPC security are managed in the AWS Integration roadmap.
+### Cache Manager Implementation
+```rust
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use tokio::sync::RwLock;
+use redis::{Client, Commands, RedisError};
+use serde::{de::DeserializeOwned, Serialize};
+use thiserror::Error;
 
-### Example Implementation
+#[derive(Debug, Clone)]
+pub struct CacheConfig {
+    pub redis_url: String,
+    pub local_cache_size: usize,
+    pub default_ttl: Duration,
+    pub refresh_ahead_time: Duration,
+}
 
+pub struct CacheManager {
+    config: Arc<CacheConfig>,
+    redis: Client,
+    local_cache: Arc<RwLock<HashMap<String, CacheEntry>>>,
+}
+
+#[derive(Debug, Clone)]
+struct CacheEntry {
+    value: Vec<u8>,
+    expires_at: Instant,
+}
+
+#[derive(Debug, Error)]
+pub enum CacheError {
+    #[error("Redis error: {0}")]
+    Redis(#[from] RedisError),
+    
+    #[error("Serialization error: {0}")]
+    Serialization(#[from] bincode::Error),
+    
+    #[error("Cache miss")]
+    Miss,
+    
+    #[error("Invalid data: {0}")]
+    InvalidData(String),
+}
+
+impl CacheManager {
+    pub async fn new(config: CacheConfig) -> Result<Self, CacheError> {
+        let redis = Client::open(config.redis_url.as_str())?;
+        
+        Ok(Self {
+            config: Arc::new(config),
+            redis,
+            local_cache: Arc::new(RwLock::new(HashMap::new())),
+        })
+    }
+    
+    pub async fn get<T: DeserializeOwned>(&self, key: &str) -> Result<T, CacheError> {
+        // Try local cache first
+        if let Some(entry) = self.local_cache.read().await.get(key) {
+            if entry.expires_at > Instant::now() {
+                return bincode::deserialize(&entry.value).map_err(CacheError::from);
+            }
+        }
+        
+        // Try Redis
+        let mut conn = self.redis.get_connection()?;
+        let value: Option<Vec<u8>> = conn.get(key)?;
+        
+        match value {
+            Some(data) => {
+                // Update local cache
+                let entry = CacheEntry {
+                    value: data.clone(),
+                    expires_at: Instant::now() + self.config.default_ttl,
+                };
+                self.local_cache.write().await.insert(key.to_string(), entry);
+                
+                bincode::deserialize(&data).map_err(CacheError::from)
+            }
+            None => Err(CacheError::Miss),
+        }
+    }
+    
+    pub async fn set<T: Serialize>(&self, key: &str, value: &T, ttl: Option<Duration>) -> Result<(), CacheError> {
+        let data = bincode::serialize(value)?;
+        let ttl = ttl.unwrap_or(self.config.default_ttl);
+        
+        // Update Redis
+        let mut conn = self.redis.get_connection()?;
+        conn.set_ex(key, data.clone(), ttl.as_secs() as usize)?;
+        
+        // Update local cache
+        let entry = CacheEntry {
+            value: data,
+            expires_at: Instant::now() + ttl,
+        };
+        self.local_cache.write().await.insert(key.to_string(), entry);
+        
+        Ok(())
+    }
+    
+    pub async fn invalidate(&self, key: &str) -> Result<(), CacheError> {
+        // Remove from Redis
+        let mut conn = self.redis.get_connection()?;
+        conn.del(key)?;
+        
+        // Remove from local cache
+        self.local_cache.write().await.remove(key);
+        
+        Ok(())
+    }
+    
+    pub async fn clear(&self) -> Result<(), CacheError> {
+        // Clear Redis
+        let mut conn = self.redis.get_connection()?;
+        conn.flushdb()?;
+        
+        // Clear local cache
+        self.local_cache.write().await.clear();
+        
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde::{Deserialize, Serialize};
+    
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+    struct TestData {
+        id: String,
+        value: i32,
+    }
+    
+    #[tokio::test]
+    async fn test_cache_operations() {
+        let config = CacheConfig {
+            redis_url: "redis://localhost".to_string(),
+            local_cache_size: 1000,
+            default_ttl: Duration::from_secs(300),
+            refresh_ahead_time: Duration::from_secs(60),
+        };
+        
+        let cache = CacheManager::new(config).await.unwrap();
+        
+        // Test set and get
+        let data = TestData {
+            id: "test".to_string(),
+            value: 42,
+        };
+        
+        cache.set("test_key", &data, None).await.unwrap();
+        
+        let retrieved: TestData = cache.get("test_key").await.unwrap();
+        assert_eq!(retrieved, data);
+        
+        // Test invalidation
+        cache.invalidate("test_key").await.unwrap();
+        assert!(matches!(cache.get::<TestData>("test_key").await, Err(CacheError::Miss)));
+        
+        // Test clear
+        cache.set("test_key1", &data, None).await.unwrap();
+        cache.set("test_key2", &data, None).await.unwrap();
+        cache.clear().await.unwrap();
+        
+        assert!(matches!(cache.get::<TestData>("test_key1").await, Err(CacheError::Miss)));
+        assert!(matches!(cache.get::<TestData>("test_key2").await, Err(CacheError::Miss)));
+    }
+}
+```
+
+### Cache Middleware Implementation
 ```rust
 use axum::{
     extract::State,
     http::{Request, StatusCode},
-    middleware::{Next},
-    response::{IntoResponse, Response},
-    routing::get,
-    Router,
+    middleware::Next,
+    response::Response,
 };
-use redis::{AsyncCommands, Client};
-use serde::{de::DeserializeOwned, Serialize};
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
+use tower_http::request::RequestId;
 
-// Simple cache service with secure key handling
-#[derive(Clone)]
-pub struct CacheService {
-    client: Arc<Client>,
-    prefix: String,
+pub struct CacheMiddleware {
+    cache: Arc<CacheManager>,
 }
 
-impl CacheService {
-    pub fn new(redis_url: String, prefix: String) -> Result<Self, redis::RedisError> {
-        // Connect to Redis
-        let client = Client::open(redis_url)?;
-        
-        Ok(Self {
-            client: Arc::new(client),
-            prefix,
-        })
+impl CacheMiddleware {
+    pub fn new(cache: Arc<CacheManager>) -> Self {
+        Self { cache }
     }
     
-    // Secure key generation that includes tenant isolation
-    fn make_key(&self, key: &str, tenant_id: Option<&str>) -> String {
-        match tenant_id {
-            Some(tenant) => format!("{}:{}:{}", self.prefix, tenant, key),
-            None => format!("{}:global:{}", self.prefix, key),
-        }
-    }
-    
-    // Type-safe cache get with automatic deserialization
-    pub async fn get<T>(&self, key: &str, tenant_id: Option<&str>) -> Result<Option<T>, redis::RedisError>
-    where
-        T: DeserializeOwned,
-    {
-        let key = self.make_key(key, tenant_id);
-        let mut conn = self.client.get_async_connection().await?;
+    pub async fn handle<B>(
+        &self,
+        request: Request<B>,
+        next: Next<B>,
+    ) -> Result<Response, StatusCode> {
+        let cache_key = self.generate_cache_key(&request);
         
-        let result: Option<String> = conn.get(&key).await?;
-        
-        match result {
-            Some(data) => {
-                match serde_json::from_str(&data) {
-                    Ok(value) => Ok(Some(value)),
-                    Err(_) => {
-                        // Invalid data in cache, remove it
-                        let _: () = conn.del(&key).await?;
-                        Ok(None)
+        // Try to get from cache
+        match self.cache.get::<Vec<u8>>(&cache_key).await {
+            Ok(cached_response) => {
+                // Return cached response
+                Response::builder()
+                    .header("X-Cache", "HIT")
+                    .body(cached_response)
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+            }
+            Err(CacheError::Miss) => {
+                // Get fresh response
+                let response = next.run(request).await;
+                
+                // Cache the response if successful
+                if response.status().is_success() {
+                    if let Ok(body) = hyper::body::to_bytes(response.into_body()).await {
+                        let _ = self.cache.set(&cache_key, &body.to_vec(), None).await;
                     }
                 }
+                
+                Ok(response)
             }
-            None => Ok(None),
-        }
-    }
-    
-    // Type-safe cache set with automatic serialization and TTL
-    pub async fn set<T>(&self, key: &str, value: &T, ttl_seconds: u64, tenant_id: Option<&str>) -> Result<(), redis::RedisError>
-    where
-        T: Serialize,
-    {
-        let key = self.make_key(key, tenant_id);
-        let serialized = serde_json::to_string(value)
-            .map_err(|e| redis::RedisError::from((redis::ErrorKind::IoError, "Serialization error", e.to_string())))?;
-        
-        let mut conn = self.client.get_async_connection().await?;
-        
-        // Set with expiration
-        conn.set_ex(key, serialized, ttl_seconds).await
-    }
-    
-    // Cache invalidation
-    pub async fn invalidate(&self, key: &str, tenant_id: Option<&str>) -> Result<(), redis::RedisError> {
-        let key = self.make_key(key, tenant_id);
-        let mut conn = self.client.get_async_connection().await?;
-        let _: () = conn.del(key).await?;
-        Ok(())
-    }
-    
-    // Pattern-based cache invalidation (e.g., for related items)
-    pub async fn invalidate_pattern(&self, pattern: &str, tenant_id: Option<&str>) -> Result<(), redis::RedisError> {
-        let pattern = self.make_key(&format!("{}*", pattern), tenant_id);
-        let mut conn = self.client.get_async_connection().await?;
-        
-        // Get keys matching pattern
-        let keys: Vec<String> = conn.keys(&pattern).await?;
-        
-        if !keys.is_empty() {
-            let _: () = conn.del(keys).await?;
-        }
-        
-        Ok(())
-    }
-}
-
-// Simple response caching middleware for Axum
-pub async fn cache_response<B>(
-    State(cache): State<CacheService>,
-    request: Request<B>,
-    next: Next<B>,
-) -> Result<Response, StatusCode>
-where
-    B: Send,
-{
-    // Only cache GET requests
-    if request.method() != axum::http::Method::GET {
-        return Ok(next.run(request).await);
-    }
-    
-    let path = request.uri().path().to_string();
-    
-    // Get tenant from request extensions (if available)
-    let tenant_id = request
-        .extensions()
-        .get::<UserIdentity>()
-        .map(|identity| identity.tenant_id.as_str());
-    
-    // Try to get from cache
-    match cache.get::<Vec<u8>>(&path, tenant_id).await {
-        Ok(Some(cached_bytes)) => {
-            // Return cached response
-            let response = axum::response::Response::builder()
-                .status(StatusCode::OK)
-                .header("X-Cache", "HIT")
-                .body(axum::body::Body::from(cached_bytes))
-                .unwrap();
-            
-            Ok(response)
-        }
-        _ => {
-            // Cache miss, get response and cache it
-            let mut response = next.run(request).await;
-            
-            if response.status().is_success() {
-                // Extract response body to cache it
-                let (parts, body) = response.into_parts();
-                let bytes = match hyper::body::to_bytes(body).await {
-                    Ok(bytes) => bytes,
-                    Err(_) => {
-                        return Err(StatusCode::INTERNAL_SERVER_ERROR);
-                    }
-                };
-                
-                // Cache response asynchronously (don't block the response)
-                let cache_service = cache.clone();
-                let path_clone = path.clone();
-                let tenant_clone = tenant_id.map(|s| s.to_string());
-                let bytes_clone = bytes.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = cache_service
-                        .set(&path_clone, &bytes_clone.to_vec(), 300, tenant_clone.as_deref())
-                        .await
-                    {
-                        eprintln!("Failed to cache response: {}", e);
-                    }
-                });
-                
-                // Rebuild the response
-                let response = axum::response::Response::from_parts(
-                    parts,
-                    axum::body::Body::from(bytes),
-                );
-                
-                Ok(response)
-            } else {
-                // Don't cache non-success responses
-                Ok(response)
+            Err(_) => {
+                // On cache error, bypass cache
+                Ok(next.run(request).await)
             }
         }
     }
-}
-
-// Configure the application with caching middleware
-pub fn configure_cache(app: Router, cache_service: CacheService) -> Router {
-    app.layer(axum::middleware::from_fn_with_state(
-        cache_service.clone(),
-        cache_response,
-    ))
-    .with_state(cache_service)
-}
-
-// Usage in application setup
-async fn create_cache_service() -> CacheService {
-    // Get Redis configuration
-    let redis_url = format!(
-        "redis://{}:{}",
-        std::env::var("REDIS_HOST").unwrap_or("localhost".to_string()),
-        std::env::var("REDIS_PORT").unwrap_or("6379".to_string())
-    );
-
-    CacheService::new(redis_url, "app".to_string())
-        .expect("Failed to create cache service")
-}
-
-// Example usage in an Axum handler
-async fn get_user_details(
-    State(cache): State<CacheService>,
-    State(db): State<DbPool>,
-    Path(user_id): Path<Uuid>,
-    Extension(identity): Extension<UserIdentity>,
-) -> impl IntoResponse {
-    let tenant_id = identity.tenant_id.as_str();
-    let cache_key = format!("user:{}", user_id);
     
-    // Try to get from cache first
-    if let Ok(Some(user)) = cache.get::<User>(&cache_key, Some(tenant_id)).await {
-        return (StatusCode::OK, Json(user)).into_response();
+    fn generate_cache_key<B>(&self, request: &Request<B>) -> String {
+        // Generate cache key based on request method, path, and query
+        format!(
+            "{}:{}:{}",
+            request.method(),
+            request.uri().path(),
+            request.uri().query().unwrap_or("")
+        )
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::Body,
+        http::{Method, Request},
+        Router,
+    };
+    use tower::ServiceExt;
     
-    // Cache miss, get from database
-    match db.get_user(user_id).await {
-        Ok(user) => {
-            // Cache the result in background
-            let cache_service = cache.clone();
-            let user_clone = user.clone();
-            let tenant = tenant_id.to_string();
-            tokio::spawn(async move {
-                if let Err(e) = cache_service
-                    .set(&cache_key, &user_clone, 300, Some(&tenant))
-                    .await
-                {
-                    tracing::error!("Failed to cache user: {}", e);
-                }
-            });
-            
-            (StatusCode::OK, Json(user)).into_response()
-        }
-        Err(_) => StatusCode::NOT_FOUND.into_response(),
+    #[tokio::test]
+    async fn test_cache_middleware() {
+        let config = CacheConfig {
+            redis_url: "redis://localhost".to_string(),
+            local_cache_size: 1000,
+            default_ttl: Duration::from_secs(300),
+            refresh_ahead_time: Duration::from_secs(60),
+        };
+        
+        let cache = Arc::new(CacheManager::new(config).await.unwrap());
+        let middleware = CacheMiddleware::new(cache);
+        
+        let app = Router::new()
+            .route("/test", axum::routing::get(|| async { "test response" }))
+            .layer(axum::middleware::from_fn(move |req, next| {
+                middleware.handle(req, next)
+            }));
+        
+        // First request should miss cache
+        let response = app
+            .clone()
+            .oneshot(Request::builder().method(Method::GET).uri("/test").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        
+        assert_eq!(response.headers().get("X-Cache"), None);
+        
+        // Second request should hit cache
+        let response = app
+            .oneshot(Request::builder().method(Method::GET).uri("/test").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        
+        assert_eq!(response.headers().get("X-Cache").unwrap(), "HIT");
     }
 }
 ```
 
 ## References
-- [redis-rs](https://docs.rs/redis/latest/redis/)
-- [Axum middleware](https://docs.rs/axum/latest/axum/middleware/index.html)
-- [Caching Best Practices](https://docs.microsoft.com/en-us/azure/architecture/best-practices/caching)
-- [Redis Documentation](https://redis.io/documentation) 
+- [Redis Documentation](https://redis.io/documentation)
+- [Caching Patterns](https://docs.microsoft.com/en-us/azure/architecture/patterns/cache-aside)
+- [Multi-Level Caching](https://aws.amazon.com/caching/best-practices/)
+- [Cache Invalidation Strategies](https://www.mnot.net/cache_docs/)
+- [Redis Best Practices](https://redis.io/topics/memory-optimization) 

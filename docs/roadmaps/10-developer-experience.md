@@ -1,467 +1,345 @@
 # Developer Experience Roadmap
 
 ## Overview
-A pragmatic approach to developer experience for Navius, focusing on the essential capabilities needed for efficient development, debugging, and testing in a local environment that mirrors our production stack.
+A comprehensive approach to developer experience for Navius, focusing on creating an efficient, enjoyable, and productive development environment. Our goal is to provide developers with powerful tools, clear documentation, and streamlined workflows while maintaining high standards for security, testing, and code quality.
 
 ## Current State
 - Visual Studio Code configuration completed with enhanced settings
-- Basic development environment setup needed
+- Basic development environment setup with Docker Compose
 - Testing infrastructure in place with 35% coverage
-- Need improved debugging and observability tools
+- Initial debugging tools implemented
+- Basic documentation structure established
+- Prototype hot reload functionality
+- Initial service mocks available
 
 ## Target State
-A practical developer experience featuring:
+A complete developer experience featuring:
 - Efficient local development workflow that mirrors production
-- Essential debugging and observability capabilities 
+- Comprehensive debugging and observability capabilities
 - Security-focused testing tools
-- Just enough documentation to onboard developers quickly
+- Clear, practical documentation with examples
+- Automated code quality checks
+- Streamlined deployment process
+- Performance profiling tools
+- Integrated security scanning
 
 ## Implementation Progress Tracking
 
 ### Phase 1: Development Environment
 1. **Local Development Setup**
-   - [ ] Create Docker Compose configuration for local services:
-     - [ ] PostgreSQL container with proper initialization
-     - [ ] Redis container with persistence
-     - [ ] Mock AWS services with LocalStack
-     - [ ] Health check endpoints for all services
-   - [ ] Implement environment-based configuration loading:
-     - [ ] Development environment overrides
-     - [ ] Local secrets management
-     - [ ] Service connection strings
-     - [ ] Feature flags
-   - [ ] Build service mocks/emulators:
-     - [ ] Mock authentication service
-     - [ ] Mock external APIs
-     - [ ] Mock AWS services
-     - [ ] Mock payment providers
-   - [ ] Create unified startup script:
-     - [ ] Service dependency checks
-     - [ ] Database migrations
-     - [ ] Configuration validation
-     - [ ] Health verification
+   - [x] Create base Docker Compose configuration
+   - [x] Set up PostgreSQL container with initialization
+   - [x] Configure Redis container with persistence
+   - [ ] Implement LocalStack integration
+     - [ ] S3 emulation
+     - [ ] SQS/SNS mocking
+     - [ ] DynamoDB local
+   - [ ] Add service health checks
+     - [ ] Database connectivity
+     - [ ] Cache availability
+     - [ ] AWS service status
+   - [x] Configure environment-based settings
+   - [ ] Implement secrets management
+     - [ ] Development secrets
+     - [ ] Test credentials
+     - [ ] Service tokens
    
-   *Updated at: Not started*
+   *Updated at: March 24, 2025 - Basic infrastructure complete, working on AWS mocking*
 
 2. **Rapid Iteration Tools**
-   - [ ] Implement file watching with cargo-watch:
-     - [ ] Source code recompilation
-     - [ ] Test execution
-     - [ ] Linting
-     - [ ] Documentation generation
-   - [ ] Create development mode:
-     - [ ] Enhanced error messages
-     - [ ] Request/response logging
-     - [ ] Performance metrics
-     - [ ] Stack traces
-   - [ ] Add hot reload capabilities:
+   - [x] Set up cargo-watch integration
+   - [x] Configure automatic recompilation
+   - [ ] Implement hot reload system
      - [ ] Configuration reloading
-     - [ ] Template recompilation
-     - [ ] Static asset serving
      - [ ] Route updates
-   - [ ] Implement test data seeding:
-     - [ ] Development database setup
-     - [ ] Test data generation
-     - [ ] Data reset functionality
-     - [ ] Fixture management
+     - [ ] Template refresh
+   - [ ] Add development mode features
+     - [ ] Enhanced logging
+     - [ ] Performance tracking
+     - [ ] Memory profiling
+   - [x] Create test data seeding
    
-   *Updated at: Not started*
+   *Updated at: March 24, 2025 - Core tools available, expanding features*
 
 3. **Development Testing Tools**
-   - [ ] Create testing utilities:
-     - [ ] API endpoint testing helpers
-     - [ ] Request builders
-     - [ ] Response validators
-     - [ ] Test data generators
-   - [ ] Implement security validation:
-     - [ ] Header validation
-     - [ ] Authentication testing
+   - [x] Create API testing utilities
+   - [x] Implement request builders
+   - [x] Add response validators
+   - [ ] Enhance security testing
+     - [ ] Authentication flows
      - [ ] Authorization checks
-     - [ ] Input sanitization
-   - [ ] Add permission testing:
-     - [ ] Role-based access control
-     - [ ] Scope validation
-     - [ ] Token verification
-     - [ ] Policy enforcement
-   - [ ] Create data validation:
-     - [ ] Schema validation
-     - [ ] Data sanitization
-     - [ ] Format verification
-     - [ ] Constraint checking
+     - [ ] Input validation
+   - [ ] Add performance testing
+     - [ ] Load testing
+     - [ ] Stress testing
+     - [ ] Benchmarking
    
-   *Updated at: Not started*
+   *Updated at: March 24, 2025 - Basic testing infrastructure in place*
 
 4. **IDE Configuration and Documentation**
-   - [x] Create Visual Studio Code configuration:
+   - [x] Configure Visual Studio Code
      - [x] Recommended extensions
      - [x] Workspace settings
      - [x] Debug configurations
      - [x] Task definitions
-   - [x] Set up Rust Analyzer settings:
+   - [x] Set up Rust Analyzer
      - [x] Inlay hints
      - [x] Code completion
      - [x] Type information
-     - [x] Documentation
-   - [x] Configure code navigation:
+   - [x] Add code navigation
      - [x] Symbol search
      - [x] Go to definition
      - [x] Find references
-     - [x] Outline view
-   - [x] Document IDE setup:
-     - [x] Installation guide
-     - [x] Extension setup
-     - [x] Configuration options
-     - [x] Troubleshooting
+   - [x] Create documentation
    
-   *Updated at: April 24, 2024 - Completed VS Code configuration with enhanced settings for Rust development including customized file nesting, project-specific theming, todo tracking, and spell checking with domain-specific terms.*
+   *Updated at: March 24, 2025 - Complete IDE setup with enhanced features*
 
 ### Phase 2: Debugging and Observability
 1. **Request Debugging**
-   - [ ] Implement structured logging:
-     - [ ] Request/response logging
-     - [ ] Error tracking
-     - [ ] Performance metrics
-     - [ ] Security events
-   - [ ] Create request tracing:
-     - [ ] Correlation IDs
-     - [ ] Span tracking
-     - [ ] Service dependencies
-     - [ ] Error context
-   - [ ] Add timing annotations:
-     - [ ] Request duration
+   - [x] Implement structured logging
+   - [x] Add request tracing
+   - [ ] Create performance profiling
+     - [ ] Request timing
      - [ ] Database queries
-     - [ ] External calls
      - [ ] Cache operations
-   - [ ] Implement correlation:
-     - [ ] Request chaining
-     - [ ] Error correlation
-     - [ ] User session tracking
-     - [ ] Service dependencies
+   - [ ] Add distributed tracing
+     - [ ] Service correlation
+     - [ ] Error tracking
+     - [ ] Dependency mapping
    
-   *Updated at: Not started*
+   *Updated at: March 24, 2025 - Core logging implemented*
 
 2. **Error Handling**
-   - [ ] Create error messages:
-     - [ ] Detailed error context
-     - [ ] Stack traces
-     - [ ] Cause chain
-     - [ ] Recovery suggestions
-   - [ ] Implement error catalog:
-     - [ ] Error categories
-     - [ ] Error codes
-     - [ ] Documentation
-     - [ ] Examples
-   - [ ] Add error context:
-     - [ ] Request information
-     - [ ] User context
-     - [ ] System state
-     - [ ] Dependencies
-   - [ ] Build error reporting:
+   - [x] Create error catalog
+   - [x] Implement error context
+   - [ ] Add error reporting
      - [ ] Error aggregation
-     - [ ] Alert generation
-     - [ ] Error patterns
+     - [ ] Pattern detection
      - [ ] Impact analysis
+   - [ ] Create debugging tools
+     - [ ] Stack trace analysis
+     - [ ] Memory dumps
+     - [ ] Thread inspection
    
-   *Updated at: Not started*
+   *Updated at: March 24, 2025 - Basic error handling complete*
 
 3. **Database Tools**
-   - [ ] Implement migrations:
-     - [ ] Version control
-     - [ ] Rollback support
-     - [ ] Data preservation
-     - [ ] Schema validation
-   - [ ] Create database tools:
-     - [ ] Schema reset
-     - [ ] Data seeding
-     - [ ] Backup/restore
-     - [ ] Query analysis
-   - [ ] Add query logging:
-     - [ ] Performance metrics
+   - [x] Implement migrations
+   - [x] Add schema versioning
+   - [ ] Create query analysis
+     - [ ] Performance monitoring
      - [ ] Query plans
-     - [ ] Lock analysis
      - [ ] Index usage
-   - [ ] Implement debugging:
-     - [ ] Transaction tracking
-     - [ ] Deadlock detection
-     - [ ] Connection monitoring
-     - [ ] Cache analysis
+   - [ ] Add debugging tools
+     - [ ] Transaction viewer
+     - [ ] Lock inspector
+     - [ ] Connection monitor
    
-   *Updated at: Not started*
+   *Updated at: March 24, 2025 - Core database tools available*
 
 ### Phase 3: Documentation and Examples
 1. **Documentation**
-   - [ ] Build API documentation:
-     - [ ] OpenAPI specification
-     - [ ] Request/response examples
-     - [ ] Authentication guide
-     - [ ] Error handling
-   - [ ] Create getting started:
-     - [ ] Installation guide
-     - [ ] Configuration guide
-     - [ ] Development setup
-     - [ ] First application
-   - [ ] Document security:
-     - [ ] Authentication setup
-     - [ ] Authorization guide
+   - [x] Create API documentation
+   - [x] Write getting started guide
+   - [ ] Add security documentation
+     - [ ] Authentication flows
+     - [ ] Authorization patterns
      - [ ] Security best practices
-     - [ ] Vulnerability handling
-   - [ ] Add environment setup:
-     - [ ] Prerequisites
-     - [ ] Installation steps
-     - [ ] Configuration guide
-     - [ ] Troubleshooting
+   - [ ] Create advanced guides
+     - [ ] Performance optimization
+     - [ ] Scaling strategies
+     - [ ] Monitoring setup
    
-   *Updated at: Not started*
+   *Updated at: March 24, 2025 - Basic documentation complete*
 
 2. **Patterns and Examples**
-   - [ ] Document Axum patterns:
-     - [ ] Route organization
-     - [ ] Middleware usage
-     - [ ] Error handling
-     - [ ] State management
-   - [ ] Create example handlers:
-     - [ ] CRUD operations
-     - [ ] Authentication
-     - [ ] File uploads
+   - [x] Document common patterns
+   - [x] Create example handlers
+   - [ ] Add advanced examples
      - [ ] WebSocket handling
-   - [ ] Add implementation examples:
-     - [ ] Database access
-     - [ ] Cache usage
-     - [ ] External APIs
-     - [ ] Background tasks
-   - [ ] Document best practices:
-     - [ ] Code organization
-     - [ ] Error handling
-     - [ ] Testing strategies
-     - [ ] Performance tips
+     - [ ] File uploads
+     - [ ] Background jobs
+   - [ ] Create tutorials
+     - [ ] Basic CRUD app
+     - [ ] Auth integration
+     - [ ] API gateway
    
-   *Updated at: Not started*
+   *Updated at: March 24, 2025 - Core examples available*
 
 ## Implementation Status
-- **Overall Progress**: 10% complete
-- **Last Updated**: April 24, 2024
-- **Next Milestone**: Local Development Environment
+- **Overall Progress**: 45% complete
+- **Last Updated**: March 24, 2025
+- **Next Milestone**: Complete Hot Reload System
+- **Current Focus**: AWS Service Mocking
 
 ## Success Criteria
-- Developers can run the complete system locally with one command
-- Code changes are reflected quickly during development
-- Error messages provide actionable guidance
-- Development issues can be diagnosed efficiently
-- Security testing can be performed effectively in development
-- New developers can be onboarded in less than one day
+- Development setup completed in under 15 minutes
+- Code changes reflected in under 2 seconds
+- Test suite runs in under 5 minutes
+- Clear error messages with solutions
+- 100% API documentation coverage
+- Comprehensive example coverage
+- Security testing automation
+- Performance profiling tools
 
 ## Implementation Notes
 
-### Example Implementation: Local Development Environment
+### Development Environment Setup
+```bash
+# Start the development environment
+./run_dev.sh
 
+# Configuration:
+NAVIUS_ENV=development
+NAVIUS_LOG_LEVEL=debug
+NAVIUS_HOT_RELOAD=true
+NAVIUS_MOCK_AWS=true
+
+# Available development commands:
+cargo watch -x check -x test  # Continuous testing
+cargo dev                     # Development build with hot reload
+cargo doc --open             # Generate and view documentation
+```
+
+### Example Development Workflow
 ```rust
-use std::env;
-use axum::{
-    routing::get,
-    Router, 
-    extract::State,
-    middleware::{self, Next},
-    response::Response,
-};
-use tokio::fs::File;
-use notify::{Watcher, RecursiveMode};
-use serde::Deserialize;
+use navius_dev::prelude::*;
 
-// Development environment configuration
-#[derive(Deserialize, Clone)]
-pub struct DevConfig {
-    // Local development overrides
-    pub development_mode: bool,
-    pub enhanced_logging: bool,
-    pub reload_templates: bool,
-    pub postgres_connection: String,
-    pub redis_connection: String,
-    pub mock_services: Vec<String>,
+// Development mode configuration
+#[derive(Debug, DevConfig)]
+struct DevConfig {
+    #[dev(mock = "redis")]
+    cache: CacheConfig,
+    
+    #[dev(mock = "localstack")]
+    aws: AwsConfig,
+    
+    #[dev(mock = "postgres")]
+    database: DbConfig,
 }
 
-impl DevConfig {
-    pub fn from_env() -> Self {
-        // Load from dev.env file or environment
-        dotenv::from_filename("dev.env").ok();
+// Development-specific handler with enhanced debugging
+#[debug_handler]
+#[hot_reload]
+async fn create_user(
+    State(state): State<AppState>,
+    #[validate] Json(user): Json<NewUser>,
+) -> Result<Json<User>, AppError> {
+    // Development-only logging
+    dev_log!("Creating user: {:?}", user);
+    
+    // Performance tracking in development
+    let _span = dev_trace_span!("create_user");
+    
+    // Actual handler logic
+    let user = state.db().create_user(user).await?;
+    
+    // Development-only response enhancement
+    Ok(Json(user)).with_dev_info()
+}
+
+// Development test utilities
+#[cfg(test)]
+mod tests {
+    use navius_test::prelude::*;
+
+    #[tokio::test]
+    async fn test_create_user() -> TestResult {
+        // Arrange
+        let ctx = TestContext::builder()
+            .with_mock_db()
+            .with_mock_cache()
+            .with_mock_aws()
+            .build()
+            .await?;
+            
+        // Act
+        let response = ctx.client
+            .post("/users")
+            .json(&fake::user())
+            .send()
+            .await?;
+            
+        // Assert
+        assert_status!(response, StatusCode::CREATED);
+        assert_json_matches!(response, json_schema!("user"));
         
-        Self {
-            development_mode: env::var("DEV_MODE")
-                .unwrap_or_else(|_| "true".to_string())
-                .parse()
-                .unwrap_or(true),
-            enhanced_logging: env::var("DEV_ENHANCED_LOGGING")
-                .unwrap_or_else(|_| "true".to_string())
-                .parse()
-                .unwrap_or(true),
-            reload_templates: env::var("DEV_RELOAD_TEMPLATES")
-                .unwrap_or_else(|_| "true".to_string())
-                .parse()
-                .unwrap_or(true),
-            postgres_connection: env::var("DEV_POSTGRES_URL")
-                .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/app_dev".to_string()),
-            redis_connection: env::var("DEV_REDIS_URL")
-                .unwrap_or_else(|_| "redis://localhost:6379".to_string()),
-            mock_services: env::var("DEV_MOCK_SERVICES")
-                .unwrap_or_else(|_| "external_api,payment_service".to_string())
-                .split(',')
-                .map(|s| s.trim().to_string())
-                .collect(),
-        }
-    }
-}
-
-// Development environment setup middleware
-async fn dev_middleware(
-    State(dev_config): State<DevConfig>,
-    request: axum::http::Request<axum::body::Body>,
-    next: Next,
-) -> Response {
-    let mut response = next.run(request).await;
-    
-    // Add development-only headers
-    if dev_config.enhanced_logging {
-        response.headers_mut().insert(
-            "X-Dev-Mode", 
-            "true".parse().unwrap()
-        );
-    }
-    
-    response
-}
-
-// Main development server setup
-pub async fn setup_development_server() -> Router {
-    // Load development configuration
-    let dev_config = DevConfig::from_env();
-    
-    // Set up file watcher for hot reloading
-    if dev_config.reload_templates {
-        let mut watcher = notify::recommended_watcher(|res| {
-            match res {
-                Ok(event) => println!("File changed: {:?}", event),
-                Err(e) => println!("Watch error: {:?}", e),
-            }
-        }).unwrap();
+        // Verify side effects
+        ctx.verify_db_called(once());
+        ctx.verify_cache_updated();
+        ctx.verify_no_aws_calls();
         
-        watcher.watch("./templates", RecursiveMode::Recursive).unwrap();
+        Ok(())
     }
-    
-    // Set up database with development schema
-    let db_pool = setup_database(&dev_config.postgres_connection).await;
-    
-    // Set up Redis connection
-    let redis_client = setup_redis(&dev_config.redis_connection).await;
-    
-    // Set up mock services if configured
-    let mock_services = if !dev_config.mock_services.is_empty() {
-        setup_mock_services(&dev_config.mock_services).await
-    } else {
-        setup_real_services().await
-    };
-    
-    // Configure the application with development-specific middleware
-    Router::new()
-        .route("/dev/status", get(dev_status_handler))
-        .route("/dev/seed-data", get(seed_test_data))
-        .route("/dev/reset-db", get(reset_database))
-        .nest("/api", 
-            build_api_router()
-                .layer(middleware::from_fn_with_state(
-                    dev_config.clone(),
-                    dev_middleware,
-                ))
-        )
-        .with_state(dev_config)
-        .with_state(db_pool)
-        .with_state(redis_client)
-        .with_state(mock_services)
-}
-
-// Development status handler
-async fn dev_status_handler(
-    State(dev_config): State<DevConfig>,
-) -> axum::Json<serde_json::Value> {
-    axum::Json(serde_json::json!({
-        "dev_mode": true,
-        "enhanced_logging": dev_config.enhanced_logging,
-        "mock_services": dev_config.mock_services,
-        "connections": {
-            "postgres": dev_config.postgres_connection,
-            "redis": dev_config.redis_connection,
-        }
-    }))
-}
-
-// Database seeding utility
-async fn seed_test_data() -> &'static str {
-    // Insert test data for development
-    "Test data seeded"
-}
-
-// Database reset utility
-async fn reset_database() -> &'static str {
-    // Reset database to clean state
-    "Database reset complete"
 }
 ```
 
-### Docker Compose Configuration
-```yaml
-version: '3.8'
+### Development Mode Features
+```rust
+// Enhanced error handling in development
+#[derive(Debug, Error)]
+pub enum DevError {
+    #[error("Database error: {0}")]
+    Database(#[source] DbError),
+    
+    #[error("Cache error: {0}")]
+    Cache(#[source] CacheError),
+    
+    #[error("AWS error: {0}")]
+    Aws(#[source] AwsError),
+}
 
-services:
-  postgres:
-    image: postgres:14
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: app_dev
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+impl DevError {
+    // Development-only helper for detailed error information
+    pub fn dev_details(&self) -> DevErrorDetails {
+        DevErrorDetails {
+            error: self.to_string(),
+            source: self.source().map(|e| e.to_string()),
+            suggestion: self.get_suggestion(),
+            docs_link: self.get_docs_link(),
+            stack_trace: Backtrace::capture(),
+        }
+    }
+}
 
-  redis:
-    image: redis:6
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+// Development-only middleware for enhanced debugging
+pub struct DevMiddleware {
+    config: DevConfig,
+}
 
-  localstack:
-    image: localstack/localstack
-    ports:
-      - "4566:4566"
-    environment:
-      - SERVICES=s3,dynamodb,sqs
-      - DEFAULT_REGION=us-west-2
-      - AWS_ACCESS_KEY_ID=test
-      - AWS_SECRET_ACCESS_KEY=test
-    volumes:
-      - localstack_data:/tmp/localstack
-      - ./localstack:/docker-entrypoint-initaws.d
+impl DevMiddleware {
+    pub fn new(config: DevConfig) -> Self {
+        Self { config }
+    }
+}
 
-volumes:
-  postgres_data:
-  redis_data:
-  localstack_data:
+#[async_trait]
+impl Middleware for DevMiddleware {
+    async fn handle(&self, req: Request, next: Next) -> Result<Response, AppError> {
+        // Start development timing
+        let start = Instant::now();
+        
+        // Add development headers
+        let req = req.with_dev_headers();
+        
+        // Process request
+        let response = next.run(req).await?;
+        
+        // Add development information
+        response
+            .with_dev_timing(start.elapsed())
+            .with_dev_headers()
+            .with_dev_body()
+    }
+}
 ```
 
 ## References
 - [Rust Development Tools](https://www.rust-lang.org/tools)
+- [cargo-watch Documentation](https://crates.io/crates/cargo-watch)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
 - [LocalStack Documentation](https://docs.localstack.cloud/overview/)
-- [VS Code Rust Extension](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
-- [Axum Documentation](https://docs.rs/axum/latest/axum/) 
+- [Visual Studio Code Rust](https://code.visualstudio.com/docs/languages/rust)
+- [Rust Analyzer](https://rust-analyzer.github.io/)
+- [tokio Console](https://docs.rs/console-subscriber/)
+- [OpenTelemetry Rust](https://docs.rs/opentelemetry/) 

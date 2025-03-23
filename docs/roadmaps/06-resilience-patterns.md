@@ -1,379 +1,495 @@
-# Essential Resilience Patterns
+# Resilience Patterns Roadmap
 
 ## Overview
-A pragmatic approach to resilience for Navius that builds on existing implementations while ensuring production readiness, security, and integration with our infrastructure.
+A comprehensive resilience system that implements circuit breakers, retries, rate limiting, and other patterns to ensure system stability and reliability under various failure conditions. This roadmap focuses on building production-ready resilience features that protect both the application and its dependencies.
 
 ## Current State
-Our application already has implementations of circuit breakers, retry mechanisms, and timeouts, but these need assessment for production readiness and integration with our infrastructure.
+- Basic error handling
+- No circuit breaker implementation
+- Manual retry logic
+- Limited rate limiting
 
 ## Target State
-A focused resilience system that:
-- Ensures security during failure scenarios
-- Makes existing resilience patterns production-ready
-- Provides Axum middleware for easy integration
-- Protects critical services (Postgres, Redis, external APIs)
-- Includes essential monitoring for resilience health
+A complete resilience system featuring:
+- Circuit breaker pattern
+- Intelligent retry policies
+- Rate limiting and throttling
+- Fallback mechanisms
+- Bulkhead pattern
+- Health monitoring
 
 ## Implementation Progress Tracking
 
-### Phase 1: Production-Ready Existing Patterns
-1. **Circuit Breaker Hardening**
-   - [ ] Audit existing circuit breaker implementation for production readiness
-   - [ ] Add proper metrics and logging for circuit state changes
-   - [ ] Implement secure failure handling for authentication services
+### Phase 1: Core Resilience Patterns
+1. **Circuit Breaker**
+   - [ ] Implement core breaker:
+     - [ ] State management
+     - [ ] Failure counting
+     - [ ] Recovery timing
+     - [ ] Half-open state
+   - [ ] Add configuration:
+     - [ ] Failure thresholds
+     - [ ] Timeout settings
+     - [ ] Recovery intervals
+     - [ ] Success thresholds
+   - [ ] Create monitoring:
+     - [ ] State changes
+     - [ ] Error tracking
+     - [ ] Success rates
+     - [ ] Response times
+   - [ ] Implement notifications:
+     - [ ] State changes
+     - [ ] Error alerts
+     - [ ] Recovery events
+     - [ ] Health status
    
    *Updated at: Not started*
 
-2. **Retry Mechanism Enhancement**
-   - [ ] Review and optimize existing retry logic
-   - [ ] Add exponential backoff with jitter for external services
-   - [ ] Create retry policies specific to Postgres and Redis operations
+2. **Retry Policies**
+   - [ ] Create retry handler:
+     - [ ] Retry counting
+     - [ ] Backoff timing
+     - [ ] Jitter addition
+     - [ ] Max attempts
+   - [ ] Implement strategies:
+     - [ ] Exponential backoff
+     - [ ] Linear backoff
+     - [ ] Random jitter
+     - [ ] Custom policies
+   - [ ] Add context handling:
+     - [ ] Error context
+     - [ ] Attempt tracking
+     - [ ] Success criteria
+     - [ ] Timeout handling
+   - [ ] Create monitoring:
+     - [ ] Retry counts
+     - [ ] Success rates
+     - [ ] Timing metrics
+     - [ ] Error tracking
    
    *Updated at: Not started*
 
-3. **Timeout Management**
-   - [ ] Assess current timeout implementations
-   - [ ] Add context propagation for nested timeouts
-   - [ ] Create consistent timeout handling across all external calls
+3. **Rate Limiting**
+   - [ ] Implement rate limiter:
+     - [ ] Request counting
+     - [ ] Window tracking
+     - [ ] Token buckets
+     - [ ] Leaky buckets
+   - [ ] Add configuration:
+     - [ ] Rate limits
+     - [ ] Window sizes
+     - [ ] Burst limits
+     - [ ] Client limits
+   - [ ] Create storage:
+     - [ ] Redis backend
+     - [ ] Local cache
+     - [ ] Distributed state
+     - [ ] Cleanup jobs
+   - [ ] Implement monitoring:
+     - [ ] Usage tracking
+     - [ ] Limit events
+     - [ ] Client metrics
+     - [ ] Alert triggers
    
    *Updated at: Not started*
 
-### Phase 2: Security-Focused Resilience
-1. **Rate Limiting**
-   - [ ] Implement IP-based rate limiting for public endpoints
-   - [ ] Add tenant-based rate limiting using Redis
-   - [ ] Create rate limit policies for authentication endpoints
+### Phase 2: Advanced Features
+1. **Fallback Mechanisms**
+   - [ ] Implement fallbacks:
+     - [ ] Cache fallback
+     - [ ] Default values
+     - [ ] Degraded mode
+     - [ ] Static content
+   - [ ] Add strategies:
+     - [ ] Priority order
+     - [ ] Cache timing
+     - [ ] Stale data
+     - [ ] Recovery paths
+   - [ ] Create handlers:
+     - [ ] Error handling
+     - [ ] Data validation
+     - [ ] State recovery
+     - [ ] Client notification
+   - [ ] Implement monitoring:
+     - [ ] Fallback usage
+     - [ ] Success rates
+     - [ ] Recovery times
+     - [ ] Error tracking
    
    *Updated at: Not started*
 
-2. **Secure Fallbacks**
-   - [ ] Build secure default responses for authentication failures
-   - [ ] Implement graceful degradation for non-critical features
-   - [ ] Create fallback chains with security context preservation
+2. **Bulkhead Pattern**
+   - [ ] Create isolation:
+     - [ ] Thread pools
+     - [ ] Connection pools
+     - [ ] Resource limits
+     - [ ] Queue limits
+   - [ ] Implement management:
+     - [ ] Pool sizing
+     - [ ] Queue handling
+     - [ ] Timeout control
+     - [ ] Resource cleanup
+   - [ ] Add monitoring:
+     - [ ] Pool metrics
+     - [ ] Queue stats
+     - [ ] Resource usage
+     - [ ] Performance data
+   - [ ] Create controls:
+     - [ ] Dynamic sizing
+     - [ ] Load balancing
+     - [ ] Priority handling
+     - [ ] Overflow control
    
    *Updated at: Not started*
 
-3. **External Service Resilience**
-   - [ ] Implement specific resilience patterns for external services
-   - [ ] Add failover capabilities for critical operations
-   - [ ] Create secure credential refresh mechanism
+3. **Health Monitoring**
+   - [ ] Implement checks:
+     - [ ] System health
+     - [ ] Service health
+     - [ ] Resource health
+     - [ ] Custom checks
+   - [ ] Add metrics:
+     - [ ] Response times
+     - [ ] Error rates
+     - [ ] Resource usage
+     - [ ] Pattern stats
+   - [ ] Create dashboards:
+     - [ ] Health status
+     - [ ] Pattern metrics
+     - [ ] Alert status
+     - [ ] Trend analysis
+   - [ ] Implement alerts:
+     - [ ] Health alerts
+     - [ ] Pattern alerts
+     - [ ] Resource alerts
+     - [ ] Custom alerts
    
    *Updated at: Not started*
 
-### Phase 3: Axum Integration
-1. **Resilience Middleware**
-   - [ ] Create Axum middleware for core resilience patterns
-   - [ ] Build route-specific resilience configuration
-   - [ ] Implement middleware ordering for optimal resilience
+### Phase 3: Integration Features
+1. **Service Integration**
+   - [ ] Implement middleware:
+     - [ ] Pattern injection
+     - [ ] Context handling
+     - [ ] Error handling
+     - [ ] Metric collection
+   - [ ] Add service discovery:
+     - [ ] Health checks
+     - [ ] Load balancing
+     - [ ] Failover
+     - [ ] Recovery
+   - [ ] Create management:
+     - [ ] Configuration
+     - [ ] Monitoring
+     - [ ] Alerting
+     - [ ] Recovery
+   - [ ] Implement testing:
+     - [ ] Pattern tests
+     - [ ] Load tests
+     - [ ] Chaos tests
+     - [ ] Recovery tests
    
    *Updated at: Not started*
 
-2. **Observability**
-   - [ ] Add logging for resilience-related events
-   - [ ] Implement essential metrics for resilience patterns
-   - [ ] Create simple alerting for resilience failures
+2. **Documentation**
+   - [ ] Create guides:
+     - [ ] Pattern usage
+     - [ ] Configuration
+     - [ ] Monitoring
+     - [ ] Troubleshooting
+   - [ ] Add examples:
+     - [ ] Pattern examples
+     - [ ] Config examples
+     - [ ] Testing examples
+     - [ ] Recovery examples
+   - [ ] Implement generation:
+     - [ ] API docs
+     - [ ] Metrics docs
+     - [ ] Alert docs
+     - [ ] Pattern docs
+   - [ ] Create tutorials:
+     - [ ] Setup guides
+     - [ ] Usage guides
+     - [ ] Testing guides
+     - [ ] Recovery guides
    
    *Updated at: Not started*
 
 ## Implementation Status
 - **Overall Progress**: 0% complete
-- **Last Updated**: March 22, 2025
+- **Last Updated**: April 24, 2024
 - **Next Milestone**: Circuit Breaker Implementation
 
 ## Success Criteria
-- All external service calls have appropriate resilience patterns
-- Failures are handled gracefully without security implications
-- System recovers automatically from temporary failures
-- Critical paths have multiple layers of protection
-- Resilience patterns are easily applied through middleware
+- Circuit breakers prevent cascading failures
+- Retry policies handle transient failures
+- Rate limiting protects system resources
+- Fallbacks provide graceful degradation
+- Bulkheads isolate failures effectively
+- Health monitoring provides actionable insights
 
 ## Implementation Notes
-This approach focuses on making our existing resilience patterns production-ready while adding only essential new capabilities. We'll leverage Axum's middleware system for easy application of resilience patterns.
 
-Note: AWS-specific monitoring, authentication with Entra, and cloud service resilience patterns are covered in the AWS Integration roadmap.
-
-### Example Implementation
-
+### Circuit Breaker Implementation
 ```rust
-use axum::{
-    extract::State,
-    http::{Request, StatusCode},
-    middleware::Next,
-    response::{IntoResponse, Response},
-    Router,
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
 };
-use std::{sync::Arc, time::Duration};
-use tokio::time::timeout;
-use metrics::{counter, gauge};
+use tokio::sync::RwLock;
+use serde::Deserialize;
 
-// Enhanced circuit breaker with improved metrics and failure handling
-#[derive(Clone)]
-pub struct CircuitBreaker {
-    name: String,
-    state: Arc<tokio::sync::RwLock<CircuitState>>,
-    failure_threshold: u32,
-    success_threshold: u32,
-    reset_timeout: Duration,
+#[derive(Debug, Clone, Deserialize)]
+pub struct CircuitBreakerConfig {
+    pub failure_threshold: u32,
+    pub reset_timeout: Duration,
+    pub half_open_timeout: Duration,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-enum CircuitState {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CircuitState {
     Closed,
-    Open(std::time::Instant),
+    Open(Instant),
     HalfOpen,
 }
 
+pub struct CircuitBreaker {
+    config: Arc<CircuitBreakerConfig>,
+    state: Arc<RwLock<CircuitState>>,
+    failure_count: Arc<RwLock<u32>>,
+}
+
 impl CircuitBreaker {
-    pub fn new(name: &str, failure_threshold: u32, reset_timeout: Duration) -> Self {
+    pub fn new(config: CircuitBreakerConfig) -> Self {
         Self {
-            name: name.to_string(),
-            state: Arc::new(tokio::sync::RwLock::new(CircuitState::Closed)),
-            failure_threshold,
-            success_threshold: 2,
-            reset_timeout,
+            config: Arc::new(config),
+            state: Arc::new(RwLock::new(CircuitState::Closed)),
+            failure_count: Arc::new(RwLock::new(0)),
         }
     }
     
-    // Execute operation with circuit breaker protection
-    pub async fn execute<F, T, E>(&self, operation: F) -> Result<T, ResilienceError<E>>
+    pub async fn execute<F, T, E>(&self, f: F) -> Result<T, E>
     where
-        F: FnOnce() -> futures::future::BoxFuture<'static, Result<T, E>> + Send + 'static,
-        T: Send + 'static,
-        E: std::error::Error + Send + Sync + 'static,
+        F: FnOnce() -> Result<T, E>,
+        E: std::error::Error,
     {
-        let current_state = {
-            let state = self.state.read().await;
-            match *state {
-                CircuitState::Open(opened_at) => {
-                    if opened_at.elapsed() > self.reset_timeout {
-                        // Reset timeout has passed, try half-open
-                        drop(state);
-                        let mut state = self.state.write().await;
-                        *state = CircuitState::HalfOpen;
-                        CircuitState::HalfOpen
-                    } else {
-                        // Still open, fast fail
-                        counter!("circuit_breaker.fast_fail", "name" => self.name.clone()).increment(1);
-                        return Err(ResilienceError::CircuitOpen);
-                    }
+        match *self.state.read().await {
+            CircuitState::Open(opened_at) => {
+                if opened_at.elapsed() >= self.config.reset_timeout {
+                    *self.state.write().await = CircuitState::HalfOpen;
+                    self.try_half_open(f).await
+                } else {
+                    Err(CircuitBreakerError::CircuitOpen.into())
                 }
-                state => state,
             }
-        };
-        
-        // Track successful executions in half-open state
-        let mut success_counter = 0;
-        
-        // Execute the operation
-        match operation().await {
+            CircuitState::HalfOpen => self.try_half_open(f).await,
+            CircuitState::Closed => self.try_closed(f).await,
+        }
+    }
+    
+    async fn try_half_open<F, T, E>(&self, f: F) -> Result<T, E>
+    where
+        F: FnOnce() -> Result<T, E>,
+        E: std::error::Error,
+    {
+        match f() {
             Ok(result) => {
-                // Handle success based on state
-                if current_state == CircuitState::HalfOpen {
-                    let mut state = self.state.write().await;
-                    success_counter += 1;
-                    
-                    if success_counter >= self.success_threshold {
-                        // Enough successes, close the circuit
-                        *state = CircuitState::Closed;
-                        counter!("circuit_breaker.closed", "name" => self.name.clone()).increment(1);
-                    }
-                }
-                
+                *self.state.write().await = CircuitState::Closed;
+                *self.failure_count.write().await = 0;
                 Ok(result)
             }
-            Err(err) => {
-                // Handle error based on state
-                match current_state {
-                    CircuitState::Closed => {
-                        let mut state = self.state.write().await;
-                        counter!("circuit_breaker.failure", "name" => self.name.clone()).increment(1);
-                        
-                        // Increment failure counter in metrics
-                        if counter!("circuit_breaker.failure_count", "name" => self.name.clone()).increment(1) >= self.failure_threshold {
-                            // Too many failures, open the circuit
-                            *state = CircuitState::Open(std::time::Instant::now());
-                            counter!("circuit_breaker.opened", "name" => self.name.clone()).increment(1);
-                        }
-                    }
-                    CircuitState::HalfOpen => {
-                        // Any failure in half-open state opens the circuit again
-                        let mut state = self.state.write().await;
-                        *state = CircuitState::Open(std::time::Instant::now());
-                        counter!("circuit_breaker.reopened", "name" => self.name.clone()).increment(1);
-                    }
-                    _ => {}
-                }
-                
-                Err(ResilienceError::OperationFailed(Box::new(err)))
+            Err(e) => {
+                *self.state.write().await = CircuitState::Open(Instant::now());
+                Err(e)
             }
         }
     }
-}
-
-// Middleware for applying circuit breaker to specific routes
-pub fn with_circuit_breaker(circuit_breaker: CircuitBreaker) -> axum::middleware::from_fn_with_state_arc<CircuitBreaker> {
-    axum::middleware::from_fn_with_state(circuit_breaker, circuit_breaker_middleware)
-}
-
-async fn circuit_breaker_middleware<B>(
-    State(circuit_breaker): State<CircuitBreaker>,
-    request: Request<B>,
-    next: Next<B>,
-) -> Result<Response, StatusCode> {
-    // Apply circuit breaker to the request
-    let response = circuit_breaker
-        .execute(|| {
-            let request_future = next.run(request);
-            Box::pin(async move {
-                let response = request_future.await;
-                
-                // Consider 5xx errors as circuit breaker failures
-                if response.status().is_server_error() {
-                    Err(format!("Server error: {}", response.status()))
-                } else {
-                    Ok(response)
-                }
-            })
-        })
-        .await;
     
-    match response {
-        Ok(response) => Ok(response),
-        Err(ResilienceError::CircuitOpen) => {
-            // Return service unavailable when circuit is open
-            Ok(StatusCode::SERVICE_UNAVAILABLE.into_response())
-        }
-        Err(_) => {
-            // Other errors become internal server errors
-            Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response())
-        }
-    }
-}
-
-// Enhanced retry mechanism with jitter
-pub async fn with_retry<F, T, E>(
-    operation: F,
-    max_retries: u32,
-    base_delay: Duration,
-) -> Result<T, E>
-where
-    F: Fn() -> futures::future::BoxFuture<'static, Result<T, E>> + Send + Sync + Clone + 'static,
-    T: Send + 'static,
-    E: std::error::Error + Send + Sync + 'static,
-{
-    let mut attempts = 0;
-    let mut delay = base_delay;
-    
-    loop {
-        match operation().await {
-            Ok(result) => return Ok(result),
-            Err(err) => {
-                attempts += 1;
-                
-                if attempts >= max_retries {
-                    return Err(err);
-                }
-                
-                // Exponential backoff with jitter
-                let jitter = rand::random::<f64>() * 0.1 * delay.as_millis() as f64;
-                delay = Duration::from_millis((delay.as_millis() as f64 * 1.5 + jitter) as u64);
-                
-                // Log retry attempt
-                tracing::info!(
-                    "Retrying operation (attempt {}/{}), delay: {:?}",
-                    attempts + 1,
-                    max_retries,
-                    delay
-                );
-                
-                // Wait before retrying
-                tokio::time::sleep(delay).await;
-            }
-        }
-    }
-}
-
-// Error types for resilience operations
-#[derive(Debug)]
-pub enum ResilienceError<E> {
-    OperationFailed(Box<E>),
-    CircuitOpen,
-    Timeout,
-    RateLimited,
-}
-
-// Configure application with resilience patterns
-pub fn configure_resilience(app: Router) -> Router {
-    // Create circuit breakers
-    let db_circuit_breaker = CircuitBreaker::new("database", 5, Duration::from_secs(30));
-    let auth_circuit_breaker = CircuitBreaker::new("auth", 3, Duration::from_secs(10));
-    
-    // Apply middleware to appropriate routes
-    app.route_layer(with_circuit_breaker(db_circuit_breaker.clone()))
-       .route(
-           "/api/auth/*path",
-           axum::routing::any(|| async {}).layer(with_circuit_breaker(auth_circuit_breaker)),
-       )
-       .with_state(db_circuit_breaker)
-}
-
-// Example usage of resilience patterns in an Axum handler
-async fn resilient_api_call(
-    State(db): State<Arc<dyn DbService>>,
-    Path(id): Path<String>,
-) -> impl IntoResponse {
-    // Use timeout for external API call
-    let api_result = match timeout(
-        Duration::from_secs(2),
-        with_retry(
-            || {
-                Box::pin(async {
-                    // Make an external API call
-                    let client = reqwest::Client::new();
-                    let resp = client.get(&format!("https://api.example.com/data/{}", id))
-                        .send()
-                        .await?
-                        .error_for_status()?
-                        .json::<serde_json::Value>()
-                        .await?;
-                    
-                    Ok::<_, reqwest::Error>(resp)
-                })
-            },
-            3,
-            Duration::from_millis(100),
-        ),
-    )
-    .await
+    async fn try_closed<F, T, E>(&self, f: F) -> Result<T, E>
+    where
+        F: FnOnce() -> Result<T, E>,
+        E: std::error::Error,
     {
-        Ok(Ok(result)) => Ok(result),
-        Ok(Err(e)) => Err(format!("API error: {}", e)),
-        Err(_) => Err("API call timed out".to_string()),
-    };
-    
-    match api_result {
-        Ok(data) => (StatusCode::OK, Json(data)).into_response(),
-        Err(msg) => {
-            // Use fallback strategy
-            match db.get_cached_data(id).await {
-                Ok(Some(cached)) => {
-                    // Return stale data with warning
-                    (
-                        StatusCode::OK,
-                        [("X-Data-Source", "cache")],
-                        Json(cached),
-                    )
-                        .into_response()
+        match f() {
+            Ok(result) => {
+                *self.failure_count.write().await = 0;
+                Ok(result)
+            }
+            Err(e) => {
+                let mut failures = self.failure_count.write().await;
+                *failures += 1;
+                
+                if *failures >= self.config.failure_threshold {
+                    *self.state.write().await = CircuitState::Open(Instant::now());
                 }
-                _ => (StatusCode::SERVICE_UNAVAILABLE, msg).into_response(),
+                
+                Err(e)
             }
         }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CircuitBreakerError {
+    #[error("Circuit is open")]
+    CircuitOpen,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::error::Error;
+    
+    #[tokio::test]
+    async fn test_circuit_breaker() {
+        let config = CircuitBreakerConfig {
+            failure_threshold: 3,
+            reset_timeout: Duration::from_secs(5),
+            half_open_timeout: Duration::from_secs(1),
+        };
+        
+        let breaker = CircuitBreaker::new(config);
+        
+        // Test successful execution
+        let result = breaker.execute(|| Ok::<_, Box<dyn Error>>("success")).await;
+        assert!(result.is_ok());
+        
+        // Test failure counting
+        for _ in 0..3 {
+            let result = breaker.execute(|| Err("error".into())).await;
+            assert!(result.is_err());
+        }
+        
+        // Circuit should be open
+        let state = *breaker.state.read().await;
+        assert!(matches!(state, CircuitState::Open(_)));
+        
+        // Test that requests fail fast when open
+        let result = breaker.execute(|| Ok::<_, Box<dyn Error>>("success")).await;
+        assert!(result.is_err());
+        
+        // Wait for reset
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        
+        // Test half-open state
+        let result = breaker.execute(|| Ok::<_, Box<dyn Error>>("success")).await;
+        assert!(result.is_ok());
+        
+        // Circuit should be closed
+        let state = *breaker.state.read().await;
+        assert_eq!(state, CircuitState::Closed);
+    }
+}
+```
+
+### Rate Limiter Implementation
+```rust
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use tokio::sync::RwLock;
+use serde::Deserialize;
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RateLimitConfig {
+    pub requests_per_second: u32,
+    pub burst_size: u32,
+    pub window_size: Duration,
+}
+
+pub struct RateLimiter {
+    config: Arc<RateLimitConfig>,
+    windows: Arc<RwLock<HashMap<String, WindowState>>>,
+}
+
+#[derive(Debug)]
+struct WindowState {
+    count: u32,
+    last_reset: Instant,
+}
+
+impl RateLimiter {
+    pub fn new(config: RateLimitConfig) -> Self {
+        Self {
+            config: Arc::new(config),
+            windows: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+    
+    pub async fn check(&self, key: &str) -> bool {
+        let mut windows = self.windows.write().await;
+        let now = Instant::now();
+        
+        let state = windows.entry(key.to_string()).or_insert_with(|| WindowState {
+            count: 0,
+            last_reset: now,
+        });
+        
+        // Reset window if needed
+        if state.last_reset.elapsed() >= self.config.window_size {
+            state.count = 0;
+            state.last_reset = now;
+        }
+        
+        // Check if under limit
+        if state.count < self.config.requests_per_second {
+            state.count += 1;
+            true
+        } else {
+            false
+        }
+    }
+    
+    pub async fn clean_old_windows(&self) {
+        let mut windows = self.windows.write().await;
+        let now = Instant::now();
+        
+        windows.retain(|_, state| {
+            state.last_reset.elapsed() < self.config.window_size * 2
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[tokio::test]
+    async fn test_rate_limiter() {
+        let config = RateLimitConfig {
+            requests_per_second: 10,
+            burst_size: 5,
+            window_size: Duration::from_secs(1),
+        };
+        
+        let limiter = RateLimiter::new(config);
+        let key = "test_client";
+        
+        // Test within limit
+        for _ in 0..10 {
+            assert!(limiter.check(key).await);
+        }
+        
+        // Test exceeding limit
+        assert!(!limiter.check(key).await);
+        
+        // Test window reset
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        assert!(limiter.check(key).await);
+        
+        // Test cleanup
+        limiter.clean_old_windows().await;
+        let windows = limiter.windows.read().await;
+        assert!(windows.contains_key(key));
     }
 }
 ```
 
 ## References
-- [Resilience4j](https://github.com/resilience4j/resilience4j)
-- [Axum Middleware](https://docs.rs/axum/latest/axum/middleware/index.html)
-- [Circuit Breaker Pattern](https://docs.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker)
-- [Backoff and Retry Strategies](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/) 
+- [Resilience4j Documentation](https://resilience4j.readme.io/docs)
+- [Circuit Breaker Pattern](https://martinfowler.com/bliki/CircuitBreaker.html)
+- [Rate Limiting Patterns](https://cloud.google.com/architecture/rate-limiting-strategies-patterns)
+- [Bulkhead Pattern](https://docs.microsoft.com/en-us/azure/architecture/patterns/bulkhead)
+- [Retry Pattern](https://docs.microsoft.com/en-us/azure/architecture/patterns/retry) 
