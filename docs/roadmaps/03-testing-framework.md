@@ -1,198 +1,229 @@
 # Testing Framework Roadmap
 
 ## Overview
-A focused, security-oriented testing framework for Navius that prioritizes essential test coverage with minimal dependencies. Rather than recreating Spring Boot's extensive testing ecosystem, we'll implement a pragmatic set of testing utilities that leverage Rust's built-in testing capabilities while providing the necessary tools for thorough API testing.
+A comprehensive testing framework that enables thorough testing at all levels while maintaining developer productivity. This roadmap builds on our existing testing infrastructure that has achieved 35% overall coverage and 98% coverage in core modules.
 
 ## Current State
-The application needs a structured testing approach that ensures security, correctness, and reliability without excessive complexity.
+- Core modules have 98% test coverage
+- API Resource module at 40% coverage
+- Integration of key testing libraries (mockito, mock-it, proptest, fake)
+- Basic end-to-end tests implemented
+- Coverage tracking with tarpaulin in place
 
 ## Target State
-A lightweight but comprehensive testing framework that:
-- Prioritizes security-critical component testing
-- Makes writing tests straightforward for developers
-- Leverages Rust's built-in testing capabilities
-- Provides specialized utilities for Axum handlers and routes
-- Enables reliable integration testing with minimal setup
+A complete testing framework featuring:
+- Comprehensive unit testing utilities
+- Integration test infrastructure
+- Performance testing capabilities
+- Security testing tools
+- Automated test generation where appropriate
+- Developer-friendly test writing experience
 
 ## Implementation Progress Tracking
 
-### Phase 1: Security and Unit Testing Essentials
-1. **Security Testing Infrastructure**
-   - [ ] Create authentication/authorization test helpers
-   - [ ] Implement security assertion utilities
-   - [ ] Add request validation test tools
+### Phase 1: Core Testing Infrastructure (Completed)
+1. **Testing Libraries Integration**
+   - [x] Add mockito for HTTP interaction testing
+   - [x] Integrate mock-it for trait mocking
+   - [x] Set up proptest for property-based testing
+   - [x] Add fake for test data generation
+   - [x] Configure tarpaulin for coverage tracking
+   
+   *Updated at: March 22, 2025 - All core testing libraries successfully integrated*
+
+2. **Core Module Testing**
+   - [x] Implement router module tests
+   - [x] Add auth module tests
+   - [x] Create cache module tests
+   - [x] Add API client tests
+   - [x] Implement reliability component tests
+   
+   *Updated at: March 22, 2025 - Core modules at 98% coverage*
+
+3. **Test Infrastructure**
+   - [x] Set up test data utilities
+   - [x] Create common test fixtures
+   - [x] Implement test database handling
+   - [x] Add test logging configuration
+   
+   *Updated at: March 22, 2025 - Basic test infrastructure complete*
+
+### Phase 2: Enhanced Testing Capabilities (In Progress)
+1. **API Resource Testing**
+   - [x] Test API resource registry
+   - [x] Test resource registration workflow
+   - [x] Test API handler creation
+   - [ ] Complete health check integration tests
+   - [ ] Implement cache integration tests
+   - [ ] Add end-to-end resource tests
+   
+   *Updated at: March 22, 2025 - 40% complete, focusing on integration tests*
+
+2. **Integration Testing Framework**
+   - [ ] Create database integration test helpers
+   - [ ] Implement Redis integration test utilities
+   - [ ] Add AWS service test doubles
+   - [ ] Create API integration test framework
    
    *Updated at: Not started*
 
-2. **Mocking Fundamentals**
-   - [ ] Implement lightweight trait-based mocks for critical services
-   - [ ] Create configurable mock responses for security components
-   - [ ] Add simple verification capabilities for test assertions
+3. **Performance Testing Tools**
+   - [ ] Set up load testing infrastructure
+   - [ ] Create performance benchmark suite
+   - [ ] Add response time testing tools
+   - [ ] Implement resource usage tracking
    
    *Updated at: Not started*
 
-3. **Handler Unit Testing**
-   - [ ] Build Axum-specific handler test utilities
-   - [ ] Create reusable test fixtures for common scenarios
-   - [ ] Implement response validation helpers
+### Phase 3: Advanced Testing Features
+1. **Security Testing**
+   - [ ] Implement authentication test helpers
+   - [ ] Create authorization test utilities
+   - [ ] Add security header validation
+   - [ ] Set up vulnerability scanning
    
    *Updated at: Not started*
 
-### Phase 2: Integration Testing Essentials
-1. **API Testing Framework**
-   - [ ] Create test application builder with minimal configuration
-   - [ ] Implement type-safe route testing
-   - [ ] Add JSON response validation utilities
+2. **Property-Based Testing**
+   - [ ] Expand property test coverage
+   - [ ] Add custom generators for domain types
+   - [ ] Implement shrinking strategies
+   - [ ] Create property test helpers
    
    *Updated at: Not started*
 
-2. **Database Testing**
-   - [ ] Implement transaction-based test isolation
-   - [ ] Create simple test data factories
-   - [ ] Add database state assertions
-   
-   *Updated at: Not started*
-
-3. **Error Scenario Testing**
-   - [ ] Build tools for testing error responses
-   - [ ] Implement failure injection for resilience testing
-   - [ ] Add security failure scenario testing
-   
-   *Updated at: Not started*
-
-### Phase 3: CI and Developer Experience
-1. **CI Integration**
-   - [ ] Create optimized test suite organization
-   - [ ] Implement security-focused test tagging
-   - [ ] Add code coverage reporting
-   
-   *Updated at: Not started*
-
-2. **Developer Utilities**
-   - [ ] Build test helpers for common scenarios
-   - [ ] Create concise test builders with sensible defaults
-   - [ ] Implement debug utilities for test failures
+3. **Developer Tools**
+   - [ ] Create test generation utilities
+   - [ ] Add test debugging helpers
+   - [ ] Implement test organization tools
+   - [ ] Create documentation generators
    
    *Updated at: Not started*
 
 ## Implementation Status
-- **Overall Progress**: 0% complete
+- **Overall Progress**: 35% complete
 - **Last Updated**: March 22, 2025
-- **Next Milestone**: Coverage Analysis Tool
+- **Next Milestone**: Complete API Resource Testing
 
 ## Success Criteria
-- Security-critical paths have thorough test coverage
-- Writing new tests requires minimal boilerplate
-- Tests run quickly enough for developer feedback loops
-- Integration tests reliably test API behavior
-- Database tests don't require complex setup
+- Maintain 80%+ coverage across all new code
+- Maintain 98%+ coverage in core modules
+- All API endpoints have integration tests
+- Performance benchmarks established for critical paths
+- Security testing integrated into CI/CD
+- Developer-friendly test writing experience
 
 ## Implementation Notes
-This approach focuses on practical testing capabilities that provide the most value for ensuring security and correctness. We'll leverage Rust's built-in testing capabilities and Axum's design to create a lightweight yet effective testing framework.
 
-### Example Implementation
-
+### Test Organization
 ```rust
-// Example of a handler unit test
-#[tokio::test]
-async fn test_create_user_handler_validates_input() {
-    // Arrange
-    let mock_db = MockDbService::new();
-    mock_db.expect_create_user().times(0); // Expect no calls since validation should fail
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::{
+        setup_test_db,
+        create_test_user,
+        mock_http_client,
+    };
+    use fake::{Fake, Faker};
+    use proptest::prelude::*;
     
-    let app = test_app()
-        .with_service(mock_db)
-        .build();
+    // Test fixture
+    struct TestContext {
+        db: TestDb,
+        redis: TestRedis,
+        http: MockHttpClient,
+    }
     
-    // Act
-    let response = app
-        .call(
-            Request::builder()
-                .method("POST")
-                .uri("/api/users")
-                .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer test-token")
-                .body(json!({"name": "", "email": "not-an-email"}).to_string())
-                .unwrap()
-        )
-        .await;
+    impl TestContext {
+        async fn setup() -> Self {
+            let db = setup_test_db().await;
+            let redis = TestRedis::new();
+            let http = mock_http_client();
+            
+            Self { db, redis, http }
+        }
+        
+        async fn create_test_data(&self) -> TestUser {
+            create_test_user(&self.db).await
+        }
+    }
     
-    // Assert
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    // Unit tests
+    #[tokio::test]
+    async fn test_user_creation() {
+        let ctx = TestContext::setup().await;
+        let user_data = Faker.fake::<UserData>();
+        
+        let result = create_user(&ctx.db, user_data).await;
+        assert!(result.is_ok());
+    }
     
-    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
-    let error: ValidationErrorResponse = serde_json::from_slice(&body).unwrap();
+    // Property tests
+    proptest! {
+        #[test]
+        fn test_user_validation(
+            name in "[A-Za-z]{2,50}",
+            age in 0..150u8,
+        ) {
+            let result = validate_user_data(name, age);
+            
+            prop_assert!(
+                result.is_ok() == (age >= 18 && name.len() >= 2)
+            );
+        }
+    }
     
-    assert!(error.fields.contains_key("name"));
-    assert!(error.fields.contains_key("email"));
+    // Integration tests
+    #[tokio::test]
+    async fn test_user_api_flow() {
+        let ctx = TestContext::setup().await;
+        let app = create_test_app(ctx.db, ctx.redis, ctx.http);
+        
+        // Test full API flow
+        let user = ctx.create_test_data().await;
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/users")
+                    .method("POST")
+                    .body(Body::from(serde_json::to_vec(&user).unwrap()))
+                    .unwrap()
+            )
+            .await
+            .unwrap();
+            
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
 }
+```
 
-// Example of an integration test with security focus
-#[tokio::test]
-async fn test_protected_endpoint_requires_authentication() {
-    // Arrange
-    let app = test_app().build();
-    
-    // Act - Call without auth token
-    let response = app
-        .call(
-            Request::builder()
-                .method("GET")
-                .uri("/api/protected-resource")
-                .body(Body::empty())
-                .unwrap()
-        )
-        .await;
-    
-    // Assert
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-}
+### Performance Testing
+```rust
+#[cfg(test)]
+mod bench {
+    use criterion::{criterion_group, criterion_main, Criterion};
+    use tokio::runtime::Runtime;
 
-// Example of a database integration test
-#[tokio::test]
-async fn test_user_creation_persists_to_database() {
-    // Arrange
-    let db_pool = test_db_pool().await;
-    
-    let app = test_app()
-        .with_db_pool(db_pool.clone())
-        .build();
-    
-    // Use transaction to ensure test isolation
-    let test_tx = db_pool.begin().await.unwrap();
-    
-    // Act
-    let response = app
-        .call(
-            Request::builder()
-                .method("POST")
-                .uri("/api/users")
-                .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer valid-test-token")
-                .body(json!({"name": "Test User", "email": "test@example.com"}).to_string())
-                .unwrap()
-        )
-        .await;
-    
-    // Assert
-    assert_eq!(response.status(), StatusCode::CREATED);
-    
-    // Verify database state
-    let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE email = $1")
-        .bind("test@example.com")
-        .fetch_one(&test_tx)
-        .await
-        .unwrap();
-    
-    assert_eq!(user.name, "Test User");
-    
-    // Rollback transaction to clean up
-    test_tx.rollback().await.unwrap();
+    pub fn benchmark_api_endpoint(c: &mut Criterion) {
+        let rt = Runtime::new().unwrap();
+        let ctx = rt.block_on(TestContext::setup());
+        
+        c.bench_function("create_user", |b| {
+            b.to_async(&rt).iter(|| async {
+                let user_data = Faker.fake::<UserData>();
+                create_user(&ctx.db, user_data).await
+            })
+        });
+    }
+
+    criterion_group!(benches, benchmark_api_endpoint);
+    criterion_main!(benches);
 }
 ```
 
 ## References
-- [Rust Testing Documentation](https://doc.rust-lang.org/book/ch11-00-testing.html)
-- [Axum Testing](https://docs.rs/axum/latest/axum/middleware/index.html)
-- [SQLx Testing](https://github.com/launchbadge/sqlx/blob/main/FAQ.md#how-do-i-mock-sqlx-in-my-tests)
-- [mockall](https://docs.rs/mockall/latest/mockall/) 
+- [Rust Testing Book](https://doc.rust-lang.org/book/ch11-00-testing.html)
+- [Tokio Testing](https://docs.rs/tokio/latest/tokio/testing/index.html)
+- [Proptest Documentation](https://altsysrq.github.io/proptest-book/intro.html)
+- [Criterion.rs](https://bheisler.github.io/criterion.rs/book/) 

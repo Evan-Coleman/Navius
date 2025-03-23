@@ -18,52 +18,101 @@ A lightweight dependency management approach that:
 
 ### Phase 1: Structured App State Management
 1. **Core AppState Structure**
-   - [ ] Define a clean AppState struct that holds all services
-   - [ ] Implement proper initialization and shutdown for stateful services
-   - [ ] Create a builder pattern for flexible AppState construction
+   - [ ] Define service trait interfaces for all major components
+   - [ ] Create AppState struct with proper type parameters
+   - [ ] Implement service accessor methods
+   - [ ] Add service lifecycle management
+   - [ ] Create builder pattern for AppState construction
+   - [ ] Add configuration validation
    
    *Updated at: Not started*
 
-2. **Service Trait Definitions**
-   - [ ] Define core traits for major service categories
-   - [ ] Implement real service implementations of these traits
-   - [ ] Add configuration options for service instantiation
+2. **Service Registration System**
+   - [ ] Create service registry trait
+   - [ ] Implement service provider pattern
+   - [ ] Add service dependency resolution
+   - [ ] Create service configuration system
+   - [ ] Add service initialization ordering
+   - [ ] Implement service validation
    
    *Updated at: Not started*
 
 3. **Error Handling**
-   - [ ] Implement proper error propagation for service initialization failures
-   - [ ] Add graceful shutdown mechanisms for all services
-   - [ ] Create helpful error messages for debugging service issues
+   - [ ] Define service initialization error types
+   - [ ] Implement error context for debugging
+   - [ ] Add service dependency validation
+   - [ ] Create helpful error messages
+   - [ ] Add error recovery mechanisms
+   - [ ] Implement graceful shutdown
    
    *Updated at: Not started*
 
 ### Phase 2: Testing Support
-1. **Mock Implementations**
-   - [ ] Create mock versions of core services
-   - [ ] Implement helper functions for configuring mock behavior
-   - [ ] Add verification capabilities for testing service interactions
+1. **Mock Service Framework**
+   - [ ] Create mock service trait
+   - [ ] Implement mock service provider
+   - [ ] Add mock configuration system
+   - [ ] Create mock service factory
+   - [ ] Add verification capabilities
+   - [ ] Implement spy functionality
    
    *Updated at: Not started*
 
 2. **Test Utilities**
-   - [ ] Develop test fixture helpers for common testing patterns
-   - [ ] Implement test-specific AppState constructor
-   - [ ] Create utilities for setting up test environments
+   - [ ] Create test AppState builder
+   - [ ] Add test configuration helpers
+   - [ ] Implement service replacement utilities
+   - [ ] Create test data factories
+   - [ ] Add assertion helpers
+   - [ ] Implement cleanup utilities
    
    *Updated at: Not started*
 
 3. **Integration Test Support**
-   - [ ] Add support for replacing specific services in integration tests
    - [ ] Create test-specific service configurations
-   - [ ] Implement service spy functionality for verifying behaviors
+   - [ ] Add service isolation utilities
+   - [ ] Implement test transaction support
+   - [ ] Create integration test helpers
+   - [ ] Add performance test support
+   - [ ] Implement chaos testing utilities
+   
+   *Updated at: Not started*
+
+### Phase 3: Advanced Features
+1. **Service Lifecycle Management**
+   - [ ] Implement proper startup ordering
+   - [ ] Add graceful shutdown support
+   - [ ] Create health check system
+   - [ ] Add dependency validation
+   - [ ] Implement recovery mechanisms
+   - [ ] Create monitoring hooks
+   
+   *Updated at: Not started*
+
+2. **Configuration Management**
+   - [ ] Create type-safe configuration
+   - [ ] Add environment overrides
+   - [ ] Implement secrets handling
+   - [ ] Add configuration validation
+   - [ ] Create hot reload support
+   - [ ] Implement audit logging
+   
+   *Updated at: Not started*
+
+3. **Performance Optimization**
+   - [ ] Implement lazy initialization
+   - [ ] Add connection pooling
+   - [ ] Create resource limits
+   - [ ] Implement caching layer
+   - [ ] Add performance monitoring
+   - [ ] Create scaling hooks
    
    *Updated at: Not started*
 
 ## Implementation Status
 - **Overall Progress**: 0% complete
 - **Last Updated**: March 22, 2025
-- **Next Milestone**: Service registration system
+- **Next Milestone**: Core AppState Structure
 
 ## Success Criteria
 - Services are initialized in a clear, declarative manner
@@ -71,61 +120,169 @@ A lightweight dependency management approach that:
 - Testing with mock services is straightforward
 - Error handling is robust and informative
 - Application startup and shutdown are clean and deterministic
+- Configuration is type-safe and validated
+- Performance overhead is minimal
 
 ## Implementation Notes
-This approach intentionally avoids complex DI patterns common in languages like Java with Spring, focusing instead on Rust idioms that leverage the type system and ownership model. The goal is clarity and simplicity rather than magic or complex abstractions.
 
-### Example Implementation
-
+### Core Service Pattern
 ```rust
-// Service traits
-trait DatabaseService: Send + Sync {
+// Service traits with clear contracts
+pub trait DatabaseService: Send + Sync {
     async fn get_user(&self, id: UserId) -> Result<User, DbError>;
-    // Other database methods...
+    async fn create_user(&self, user: NewUser) -> Result<User, DbError>;
+    async fn transaction<F, R>(&self, f: F) -> Result<R, DbError>
+    where
+        F: FnOnce(&Transaction) -> Result<R, DbError> + Send;
 }
 
-trait AuthService: Send + Sync {
+pub trait CacheService: Send + Sync {
+    async fn get<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, CacheError>;
+    async fn set<T: Serialize>(&self, key: &str, value: &T, ttl: Duration) -> Result<(), CacheError>;
+    async fn delete(&self, key: &str) -> Result<(), CacheError>;
+}
+
+pub trait AuthService: Send + Sync {
     async fn authenticate(&self, credentials: Credentials) -> Result<AuthToken, AuthError>;
-    // Other auth methods...
+    async fn validate_token(&self, token: &str) -> Result<Claims, AuthError>;
+    async fn refresh_token(&self, token: &str) -> Result<AuthToken, AuthError>;
 }
 
-// AppState
-struct AppState {
-    db: Arc<dyn DatabaseService>,
-    auth: Arc<dyn AuthService>,
-    cache: Arc<CacheService>,
-    config: AppConfig,
+// AppState with proper type parameters
+pub struct AppState<DB, Cache, Auth>
+where
+    DB: DatabaseService,
+    Cache: CacheService,
+    Auth: AuthService,
+{
+    db: Arc<DB>,
+    cache: Arc<Cache>,
+    auth: Arc<Auth>,
+    config: Arc<AppConfig>,
 }
 
-impl AppState {
-    // Builder pattern
-    fn builder() -> AppStateBuilder {
+// Builder pattern for clean initialization
+impl<DB, Cache, Auth> AppState<DB, Cache, Auth>
+where
+    DB: DatabaseService,
+    Cache: CacheService,
+    Auth: AuthService,
+{
+    pub fn builder() -> AppStateBuilder<DB, Cache, Auth> {
         AppStateBuilder::new()
     }
     
-    // For tests
-    #[cfg(test)]
-    fn for_testing() -> Self {
-        Self {
-            db: Arc::new(MockDatabaseService::new()),
-            auth: Arc::new(MockAuthService::new()),
-            cache: Arc::new(MockCacheService::new()),
-            config: AppConfig::default(),
-        }
+    pub fn db(&self) -> &Arc<DB> {
+        &self.db
+    }
+    
+    pub fn cache(&self) -> &Arc<Cache> {
+        &self.cache
+    }
+    
+    pub fn auth(&self) -> &Arc<Auth> {
+        &self.auth
+    }
+    
+    pub fn config(&self) -> &Arc<AppConfig> {
+        &self.config
     }
 }
 
-// Then in handlers
-async fn get_user(
-    State(state): State<Arc<AppState>>,
-    Path(user_id): Path<UserId>,
-) -> impl IntoResponse {
-    match state.db.get_user(user_id).await {
-        Ok(user) => Json(user).into_response(),
-        Err(e) => {
-            tracing::error!("Failed to get user: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+// Service provider for registration
+pub trait ServiceProvider {
+    type Service;
+    type Config;
+    type Error;
+    
+    async fn create_service(
+        config: Self::Config,
+        registry: &ServiceRegistry,
+    ) -> Result<Self::Service, Self::Error>;
+}
+
+// Mock implementations for testing
+#[cfg(test)]
+pub struct MockDatabaseService {
+    users: Arc<Mutex<HashMap<UserId, User>>>,
+    error_mode: Arc<AtomicBool>,
+}
+
+#[cfg(test)]
+impl DatabaseService for MockDatabaseService {
+    async fn get_user(&self, id: UserId) -> Result<User, DbError> {
+        if self.error_mode.load(Ordering::SeqCst) {
+            return Err(DbError::ConnectionError);
         }
+        
+        let users = self.users.lock().await;
+        users.get(&id)
+            .cloned()
+            .ok_or(DbError::NotFound)
+    }
+    
+    // Other implementations...
+}
+
+// Example usage in handlers
+pub async fn create_user<DB: DatabaseService>(
+    State(state): State<Arc<AppState<DB, impl CacheService, impl AuthService>>>,
+    Json(new_user): Json<NewUser>,
+) -> Result<Json<User>, AppError> {
+    let user = state.db().create_user(new_user).await?;
+    Ok(Json(user))
+}
+```
+
+### Testing Support
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    struct TestContext {
+        app: AppState<MockDatabaseService, MockCacheService, MockAuthService>,
+    }
+    
+    impl TestContext {
+        async fn setup() -> Self {
+            let app = AppState::builder()
+                .with_database(MockDatabaseService::new())
+                .with_cache(MockCacheService::new())
+                .with_auth(MockAuthService::new())
+                .with_config(TestConfig::default())
+                .build()
+                .await
+                .expect("Failed to build test context");
+                
+            Self { app }
+        }
+        
+        async fn create_test_user(&self) -> User {
+            let new_user = NewUser {
+                name: "Test User".to_string(),
+                email: "test@example.com".to_string(),
+            };
+            
+            self.app.db().create_user(new_user).await
+                .expect("Failed to create test user")
+        }
+    }
+    
+    #[tokio::test]
+    async fn test_user_creation() {
+        let ctx = TestContext::setup().await;
+        let new_user = NewUser {
+            name: "Test User".to_string(),
+            email: "test@example.com".to_string(),
+        };
+        
+        let result = create_user(
+            State(Arc::new(ctx.app)),
+            Json(new_user),
+        ).await;
+        
+        assert!(result.is_ok());
     }
 }
 ```
@@ -134,4 +291,5 @@ async fn get_user(
 - [Rust Design Patterns: Dependency Injection](https://rust-unofficial.github.io/patterns/patterns/creational/di.html)
 - [Axum State Management](https://docs.rs/axum/latest/axum/extract/struct.State.html)
 - [Arc Documentation](https://doc.rust-lang.org/std/sync/struct.Arc.html)
-- [Builder Pattern in Rust](https://rust-unofficial.github.io/patterns/patterns/creational/builder.html) 
+- [Builder Pattern in Rust](https://rust-unofficial.github.io/patterns/patterns/creational/builder.html)
+- [Testing in Rust](https://doc.rust-lang.org/book/ch11-00-testing.html) 
