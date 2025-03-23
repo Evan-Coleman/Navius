@@ -28,6 +28,20 @@ cp .devtools/ide/vscode/* .vscode/
 - **File Associations**: Proper association of Rust test files
 - **Search Exclusions**: Excludes generated code and build artifacts from search results
 - **Recommended Extensions**: Curated list of useful extensions for Rust development
+- **Project-specific Theming**: Custom colors to quickly identify you're working in the Navius project
+- **File Nesting**: Improved file organization with intuitive nesting of related files
+- **Enhanced Navigation**: Custom tree rendering and icon theme for better project structure visibility
+- **Todo Tracking**: Configured Todo Tree extension with custom highlighting for different types of tasks
+- **Spelling Checker**: Pre-configured with domain-specific terms for the project
+
+### Enhanced Productivity Features
+
+The settings include specific configurations for the new project structure:
+
+- **Module Organization**: Icon themes that distinguish between `app` and `core` directories
+- **Code Navigation**: File nesting patterns that group related files (e.g., mod.rs with its children)
+- **Visual Cues**: Custom colors for different types of code markers (TODO, FIXME, REFACTOR, etc.)
+- **Code Quality**: Integration with Clippy for enhanced linting
 
 ## IntelliJ IDEA / CLion Setup
 

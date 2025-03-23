@@ -84,6 +84,7 @@ date -u "+%Y-%m-%dT%H:%M:%S.000Z"
 3. **For Progress Tracking:**
    - Use `date_formats.formal` with "Updated at: March 22, 2025"
    - Get the current date from the system with `date "+%B %d, %Y"`
+   - Updated at does not need to be updated if the date is already == today.
 
 ## Code Examples
 

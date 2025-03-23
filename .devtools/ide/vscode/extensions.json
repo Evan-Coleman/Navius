@@ -10,6 +10,11 @@
         "ms-vscode.cpptools",
         "matklad.rust-analyzer",
         "bungcip.better-toml",
-        "EditorConfig.EditorConfig"
+        "EditorConfig.EditorConfig",
+        "pkief.material-icon-theme",
+        "christian-kohler.path-intellisense",
+        "kevinkyang.auto-comment-blocks",
+        "davidanson.vscode-markdownlint",
+        "yzhang.markdown-all-in-one"
     ]
 } 

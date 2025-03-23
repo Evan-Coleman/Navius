@@ -9,8 +9,10 @@
     "rust-analyzer.inlayHints.chainingHints.enable": true,
     "rust-analyzer.inlayHints.parameterHints.enable": true,
     "rust-analyzer.diagnostics.experimental.enable": true,
+    "rust-analyzer.showUnlinkedFileNotification": false,
     "files.exclude": {
-        "**/target": true,
+        "target": true,
+        ".DS_Store": true,
         "**/.git": true,
         "**/node_modules": true
     },
@@ -19,21 +21,103 @@
         "**/target/generated": true,
         "**/generated": true,
         "**/.git": true,
-        "**/*.lock": true
+        "**/*.lock": true,
+        "**/Cargo.lock": true
     },
     "editor.rulers": [100],
     "editor.renderWhitespace": "selection",
-    "workbench.colorTheme": "Default Dark+",
-    "workbench.colorCustomizations": {
-        "editorRuler.foreground": "#444444"
-    },
-    "files.associations": {
-        "*.rs.test": "rust"
-    },
     "editor.tabSize": 4,
     "editor.insertSpaces": true,
     "editor.detectIndentation": false,
     "files.insertFinalNewline": true,
     "files.trimTrailingWhitespace": true,
-    "files.trimFinalNewlines": true
+    "files.trimFinalNewlines": true,
+    "explorer.fileNesting.enabled": true,
+    "explorer.fileNesting.patterns": {
+        "*.rs": "${capture}.*.rs",
+        "mod.rs": "*.rs"
+    },
+    "explorer.fileNesting.expand": false,
+    "workbench.editor.labelFormat": "medium",
+    "workbench.tree.indent": 16,
+    "workbench.tree.renderIndentGuides": "always",
+    "workbench.iconTheme": "material-icon-theme",
+    "workbench.colorTheme": "Default Dark+",
+    "workbench.colorCustomizations": {
+        "activityBar.activeBackground": "#093652",
+        "activityBar.background": "#0a4061",
+        "statusBar.background": "#0a4061",
+        "statusBarItem.hoverBackground": "#0b4c74",
+        "editorRuler.foreground": "#444444"
+    },
+    "material-icon-theme.folders.associations": {
+        "core": "core",
+        "app": "app",
+        "api": "api",
+        "services": "services",
+        "repository": "database",
+        "models": "class",
+        "tests": "test",
+        "config": "config"
+    },
+    "todo-tree.general.tags": [
+        "TODO",
+        "FIXME",
+        "REFACTOR",
+        "OPTIMIZE",
+        "REVIEW"
+    ],
+    "todo-tree.highlights.defaultHighlight": {
+        "icon": "alert",
+        "type": "text",
+        "foreground": "#f8f8f8",
+        "background": "#0a4061",
+        "opacity": 50,
+        "iconColour": "#0a4061"
+    },
+    "todo-tree.highlights.customHighlight": {
+        "TODO": {
+            "background": "#2d7eb1",
+            "iconColour": "#2d7eb1"
+        },
+        "FIXME": {
+            "background": "#e51400",
+            "icon": "flame",
+            "iconColour": "#e51400"
+        },
+        "REFACTOR": {
+            "background": "#ff9100",
+            "icon": "sync",
+            "iconColour": "#ff9100"
+        },
+        "OPTIMIZE": {
+            "background": "#9300ff",
+            "icon": "dashboard",
+            "iconColour": "#9300ff"
+        },
+        "REVIEW": {
+            "background": "#008000",
+            "icon": "eye",
+            "iconColour": "#008000"
+        }
+    },
+    "cSpell.words": [
+        "actix",
+        "axum",
+        "dotenvy",
+        "entra",
+        "jsonwebtoken",
+        "moka",
+        "navius",
+        "reqwest",
+        "rustls",
+        "serde",
+        "sqlx",
+        "thiserror",
+        "tokio",
+        "tracing"
+    ],
+    "files.associations": {
+        "*.rs.test": "rust"
+    }
 } 
