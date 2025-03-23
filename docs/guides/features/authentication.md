@@ -1,14 +1,20 @@
 ---
 title: "Navius Authentication Guide"
-description: "Documentation about Navius Authentication Guide"
-category: guide
+description: "A comprehensive guide to implementing secure authentication in Navius applications, including Microsoft Entra integration, session management with Redis, and security best practices"
+category: guides
 tags:
-  - api
   - authentication
-  - integration
-  - redis
   - security
-  - testing
+  - microsoft-entra
+  - redis
+  - session-management
+  - oauth2
+  - jwt
+related:
+  - ../reference/api/authentication-api.md
+  - ../guides/features/api-integration.md
+  - ../reference/configuration/environment-variables.md
+  - ../guides/deployment/security-checklist.md
 last_updated: March 23, 2025
 version: 1.0
 ---

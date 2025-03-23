@@ -1,34 +1,26 @@
 ---
-title: Navius API Integration Guide
-description: Techniques for integrating external APIs into Navius applications
+title: "Navius API Integration Guide"
+description: "A comprehensive guide for integrating external APIs with Navius applications, including best practices, caching strategies, and testing approaches"
 category: guides
 tags:
   - api
+  - caching
   - integration
-  - external-services
-  - client
+  - performance
+  - testing
 related:
-  - api-design.md
-  - ../development/testing.md
-  - ../../reference/standards/error-handling.md
+  - ../reference/api/README.md
+  - ../guides/features/authentication.md
+  - ../guides/development/testing.md
+  - ../guides/features/caching.md
 last_updated: March 23, 2025
 version: 1.0
 ---
-
 # Navius API Integration Guide
 
+This guide explains how to integrate external APIs into your Navius application using the built-in API resource abstraction.
+
 ## Overview
-This guide explains how to integrate external APIs into your Navius application using the built-in API resource abstraction. It covers client generation, resilience patterns, caching strategies, and testing approaches to create reliable, high-performance API integrations.
-
-## Prerequisites
-Before using this guide, ensure you have:
-
-- Basic understanding of HTTP client/server communication
-- Familiarity with async programming in Rust
-- Knowledge of API concepts (endpoints, status codes, etc.)
-- Navius development environment set up
-
-## Key Features
 
 Navius makes it easy to integrate with external APIs by providing:
 
@@ -38,11 +30,9 @@ Navius makes it easy to integrate with external APIs by providing:
 - 🔍 **Type-safe data transformation** using Rust's powerful type system
 - 📊 **Detailed metrics and logging** for API calls
 
-## Step-by-step API Integration
+## Adding an API Integration
 
-### 1. Adding an API Integration
-
-#### Automated Method (Recommended)
+### Automated Method (Recommended)
 
 The easiest way to add a new API integration is to use the provided script:
 
@@ -62,7 +52,7 @@ This will:
 3. Configure routes for the new API
 4. Add the API to the registry
 
-#### Manual Method
+### Manual Method
 
 If you prefer to add an API integration manually:
 
@@ -187,7 +177,7 @@ let api_routes = Router::new()
     .route("/pet/:id", get(get_pet_handler));
 ```
 
-### 2. API Resource Abstractions
+## API Resource Abstractions
 
 The `ApiResource` trait provides the foundation for the API abstraction:
 
@@ -207,11 +197,11 @@ This allows the framework to automatically provide:
 - Metrics collection for API calls
 - Retry logic with backoff
 
-### 3. Implementing Reliability Patterns
+## Reliability Patterns
 
 Navius implements several reliability patterns for API integrations:
 
-#### Caching
+### Caching
 
 API responses are automatically cached using the configured cache implementation:
 
@@ -224,7 +214,7 @@ ApiHandlerOptions {
 }
 ```
 
-#### Retry Logic
+### Retry Logic
 
 Failed API calls can be automatically retried with exponential backoff:
 
@@ -237,7 +227,7 @@ ApiHandlerOptions {
 }
 ```
 
-#### Circuit Breaking
+### Circuit Breaking
 
 Navius implements circuit breaking to prevent cascading failures:
 
@@ -258,7 +248,7 @@ let client = PetstoreClient::new("https://petstore.swagger.io/v2")
     .with_circuit_breaker(circuit_breaker);
 ```
 
-### 4. Error Handling
+## Handling Errors
 
 Navius provides a standardized error handling pattern for API calls:
 
@@ -406,56 +396,21 @@ async fn test_pet_handler() {
 
 ## Performance Considerations
 
-When integrating APIs, consider these factors:
+When integrating APIs, consider:
 
-1. **Caching Strategy**: 
-   - Choose appropriate TTL values based on data freshness requirements
-   - Use shorter TTLs for frequently changing data
-   - Use longer TTLs for relatively static data
+1. **Caching Strategy**: Choose appropriate TTL values based on data freshness requirements
+2. **Batch Operations**: Use batch endpoints where available instead of multiple single-item calls
+3. **Concurrent Requests**: Use `futures::future::join_all` for parallel API calls
+4. **Response Size**: Request only the fields you need if the API supports field filtering
+5. **Timeouts**: Configure appropriate timeouts to prevent blocking application threads
 
-2. **Batch Operations**: 
-   - Use batch endpoints where available instead of multiple single-item calls
-   - Implement request coalescing for multiple simultaneous requests
+## Conclusion
 
-3. **Concurrent Requests**: 
-   - Use `futures::future::join_all` for parallel API calls
-   - Limit concurrency to avoid overwhelming downstream services
+Navius provides a comprehensive API integration framework that makes it easy to connect to external services while maintaining resilience, performance, and code quality. By using the API resource abstraction pattern, you can ensure consistent patterns for all API integrations in your application.
 
-4. **Response Size**: 
-   - Request only the fields you need if the API supports field filtering
-   - Consider pagination for large data sets
-
-5. **Timeouts**: 
-   - Configure appropriate timeouts to prevent blocking application threads
-   - Use shorter timeouts for user-facing requests
-   - Use longer timeouts for background processing
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Connection Timeouts**: 
-   - Verify network connectivity to the external API
-   - Check if the API endpoint URL is correct
-   - Ensure firewall rules allow outbound connections
-
-2. **Authentication Failures**: 
-   - Verify API keys or tokens are valid and not expired
-   - Check if authentication headers are properly formatted
-   - Ensure credentials have proper permissions
-
-3. **Rate Limiting**: 
-   - Implement backoff strategies for rate-limited APIs
-   - Consider adding request throttling
-   - Monitor rate limit headers in responses
-
-4. **Data Format Issues**: 
-   - Validate request/response schemas against API documentation
-   - Use debug logging to inspect raw request/response bodies
-   - Ensure proper content-type headers are set
+For more complex scenarios or custom integrations, you can extend the framework's base components to implement domain-specific functionality while still benefiting from the built-in reliability features. 
 
 ## Related Documents
+- [Installation Guide](/docs/getting-started/installation.md) - How to install the application
+- [Development Workflow](/docs/guides/development/development-workflow.md) - Development best practices
 
-- [API Design Guide](api-design.md) - Designing APIs in Navius
-- [Authentication Guide](authentication.md) - Handling authentication
-- [Testing Guide](../development/testing.md) - Testing API integrations 

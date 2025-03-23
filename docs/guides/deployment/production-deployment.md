@@ -1,39 +1,38 @@
 ---
-title: Navius Production Deployment Guide
-description: Comprehensive guide for deploying Navius applications to production environments
+title: "Navius Deployment Guide"
+description: "A comprehensive guide to deploying Navius applications in production environments, covering AWS deployment, Docker containerization, security considerations, and monitoring setup"
 category: guides
 tags:
   - deployment
-  - production
+  - aws
   - docker
   - kubernetes
-  - aws
+  - monitoring
+  - security
+  - ci-cd
+  - infrastructure
 related:
-  - cloud-deployment.md
-  - ../../reference/configuration/environment-variables.md
-  - ../development/testing.md
+  - ../guides/deployment/aws-deployment.md
+  - ../guides/deployment/docker-deployment.md
+  - ../guides/deployment/kubernetes-deployment.md
+  - ../reference/configuration/environment-variables.md
+  - ../guides/features/authentication.md
 last_updated: March 23, 2025
 version: 1.0
 ---
+# Navius Deployment Guide
 
-# Navius Production Deployment Guide
-
-## Overview
-This guide provides comprehensive instructions for deploying Navius applications to production environments, focusing on security, scalability, and reliability. It covers various deployment options, configuration best practices, and performance tuning.
-
-## Prerequisites
-Before deploying to production, ensure you have:
-
-- A built and tested Navius application
-- Access to your target infrastructure (cloud account, server credentials, etc.)
-- CI/CD pipeline configured for automated deployments (recommended)
-- Database and cache services ready for production use
+This guide provides comprehensive instructions for deploying Navius applications to various environments, focusing on production-grade deployments with security, scalability, and reliability.
 
 ## Deployment Options
+
+Navius applications can be deployed in multiple ways, depending on your infrastructure preferences:
 
 ### Docker Containers
 
 Navius excels in containerized environments, offering minimal resource usage and fast startup times.
+
+#### Docker Deployment Example
 
 ```bash
 # Build the Docker image
@@ -52,6 +51,8 @@ docker run -d \
 ### Kubernetes
 
 Navius applications are ideal for Kubernetes due to their small footprint and rapid startup time.
+
+#### Kubernetes Deployment Example
 
 ```yaml
 apiVersion: apps/v1
@@ -95,7 +96,7 @@ spec:
             memory: "128Mi"
 ```
 
-Service definition:
+#### Service Definition
 
 ```yaml
 apiVersion: v1
@@ -111,9 +112,42 @@ spec:
   type: ClusterIP
 ```
 
+### AWS Deployment
+
+Navius is optimized for deploying on AWS infrastructure, with built-in integrations for many AWS services.
+
+#### AWS Deployment with CloudFormation
+
+```yaml
+# AWS CloudFormation template example (simplified)
+Resources:
+  NaviusApiInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      ImageId: ami-0abcdef1234567890
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          amazon-linux-extras install docker
+          systemctl start docker
+          docker run -d -p 80:8080 your-registry/navius:latest
+```
+
+### Serverless Deployment (AWS Lambda)
+
+Navius supports serverless deployment via AWS Lambda, offering extremely fast cold-start times compared to JVM-based alternatives:
+
+```bash
+# Deploy using Serverless Framework
+serverless deploy
+```
+
 ### Bare Metal Deployment
 
 For maximum performance, Navius can be deployed directly to bare metal servers:
+
+#### Manual Deployment Process
 
 ```bash
 # SSH to your server
@@ -126,7 +160,7 @@ sudo mkdir -p /opt/navius/config
 scp target/release/navius user@server:/opt/navius/
 ```
 
-Systemd service configuration:
+#### Systemd Service Configuration
 
 ```ini
 # /etc/systemd/system/navius.service
@@ -205,13 +239,15 @@ DATABASE_IDLE_TIMEOUT_SECONDS=300
 
 ### Memory Limits
 
-Configure memory limits:
+Configure the JVM (if running under the JVM):
 
 ```
 RUST_MAX_MEMORY=512m
 ```
 
 ## Monitoring & Observability
+
+Navius provides built-in observability features:
 
 ### Prometheus Metrics
 
@@ -241,6 +277,8 @@ LOG_FORMAT=json
 
 ## Scaling Strategies
 
+Navius applications can scale both vertically and horizontally:
+
 ### Vertical Scaling
 
 Navius is extremely efficient with resources. For many applications, a modest instance size is sufficient:
@@ -253,9 +291,9 @@ Navius is extremely efficient with resources. For many applications, a modest in
 
 For high-traffic applications, horizontal scaling is recommended:
 
-1. Deploy multiple instances behind a load balancer
-2. Configure sticky sessions if using server-side sessions
-3. Ensure all state is stored in shared resources (database, Redis)
+1. **Deploy multiple instances behind a load balancer**
+2. **Configure sticky sessions if using server-side sessions**
+3. **Ensure all state is stored in shared resources (database, Redis)**
 
 ## Security Best Practices
 
@@ -286,6 +324,8 @@ cargo build --release
 ```
 
 ## CI/CD Pipeline Integration
+
+Navius works well with modern CI/CD pipelines:
 
 ### GitHub Actions
 
@@ -402,8 +442,11 @@ In production, migrations can be run:
 **Symptom**: Application fails to connect to the database  
 **Solution**: Verify connection strings, network connectivity, and firewall rules
 
-## Related Documents
+## Conclusion
 
-- [Cloud Deployment Guide](cloud-deployment.md) - Deploying to specific cloud providers
-- [Environment Variables Reference](../../reference/configuration/environment-variables.md) - Complete list of configuration options
-- [Testing Guide](../development/testing.md) - Ensuring application quality before deployment 
+Navius's efficient resource usage, fast startup time, and resilient design make it an excellent choice for production deployments of any scale. By following the recommendations in this guide, you can ensure your application performs optimally in production environments. 
+
+## Related Documents
+- [Installation Guide](/docs/getting-started/installation.md) - How to install the application
+- [Development Workflow](/docs/guides/development/development-workflow.md) - Development best practices
+

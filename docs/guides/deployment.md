@@ -1,17 +1,22 @@
 ---
 title: "Navius Deployment Guide"
-description: "# Build the Docker image"
-category: guide
+description: "A comprehensive guide to deploying Navius applications in production environments, covering AWS deployment, Docker containerization, security considerations, and monitoring setup"
+category: guides
 tags:
-  - api
-  - aws
-  - database
   - deployment
-  - integration
-  - performance
-  - postgres
-  - redis
+  - aws
+  - docker
+  - kubernetes
+  - monitoring
   - security
+  - ci-cd
+  - infrastructure
+related:
+  - ../guides/deployment/aws-deployment.md
+  - ../guides/deployment/docker-deployment.md
+  - ../guides/deployment/kubernetes-deployment.md
+  - ../reference/configuration/environment-variables.md
+  - ../guides/features/authentication.md
 last_updated: March 23, 2025
 version: 1.0
 ---
