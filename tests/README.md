@@ -58,3 +58,14 @@ Common test utilities are located in the `common` directory. These include:
 3. If a unit test doesn't fit well in the source directory, place it in the `unit/` directory
 4. Place test resources in the `resources/` directory
 5. Follow the naming conventions established in existing tests 
+
+## PropTest Regression Files
+
+The `proptest-regressions` directory contains saved failure cases that the PropTest library has discovered during property-based testing. These files:
+
+- Are automatically generated when PropTest finds a failing test case
+- Store the "seeds" for reproducing those failures 
+- Allow PropTest to re-run previously failed cases before generating new ones
+- Should be committed to source control
+
+For more information on property testing in this project, see the property-based tests in various modules such as `src/cache/providers/property_tests.rs`. 

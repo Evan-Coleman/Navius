@@ -54,3 +54,6 @@ config.*.yaml
 
 # Bruno environment files
 *_environment.bru
+
+# Make sure proptest regression files are not ignored
+!**/proptest-regressions/
