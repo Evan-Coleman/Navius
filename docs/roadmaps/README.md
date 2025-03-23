@@ -7,6 +7,7 @@ This directory contains roadmaps for enhancing the Navius framework to match the
 - [Template for Updates](template-for-updating.md) - Guidelines for updating roadmaps
 - [Testing Framework](03-testing-framework.md) - Current focus area (35% complete)
 - [Project Status Dashboard](#current-implementation-status) - Overall project status
+- [Roadmap Instructions](roadmap-instructions/README.md) - Implementation guides for roadmaps
 
 ## Active Roadmaps
 
@@ -22,6 +23,8 @@ This directory contains roadmaps for enhancing the Navius framework to match the
 | 08 | [API Versioning](08-api-versioning.md) | 0% | Low | 05 |
 | 09 | [Declarative Features](09-declarative-features.md) | 0% | Low | 01 |
 | 10 | [Developer Experience](10-developer-experience.md) | 10% | High | None |
+| 11 | [Security Features](11-security-features.md) | 0% | High | None |
+| 12 | [Documentation Overhaul](12_document_overhaul.md) | 0% | Medium | None |
 
 ## Completed Roadmaps
 
@@ -46,6 +49,7 @@ This directory contains roadmaps for enhancing the Navius framework to match the
 | Testing Framework | 35% | 🔄 In Progress | API Resource Testing |
 | Developer Experience | 10% | 🔄 In Progress | Local Dev Environment |
 | Core Features | 0% | ⏳ Not Started | DI Implementation |
+| Documentation | 0% | ⏳ Not Started | Documentation Audit |
 
 ### Testing Coverage
 
@@ -79,6 +83,12 @@ This directory contains roadmaps for enhancing the Navius framework to match the
    - Add error handling
    - Target: Reach 30% completion
 
+4. **Documentation Overhaul**
+   - Complete documentation audit
+   - Define document standards
+   - Start reorganizing documentation structure
+   - Target: Reach 25% completion
+
 ### Roadmap Dependencies
 
 ```mermaid
@@ -90,6 +100,7 @@ graph TD
     DI --> Decl[09: Declarative Features]
     Val[05: Data Validation] --> API[08: API Versioning]
     AWS --> Res[06: Resilience Patterns]
+    Doc[12: Documentation Overhaul] -.-> All[All Roadmaps]
 ```
 
 ## Quality Gates
@@ -149,6 +160,14 @@ Each roadmap follows our standardized tracking system:
 3. Include specific implementation details
 4. Update overall progress metrics
 5. Maintain documentation quality
+
+## Roadmap Implementation Instructions
+
+Detailed implementation guides for roadmaps are available in the [roadmap-instructions](roadmap-instructions/README.md) directory. These provide step-by-step guidance, specific prompts, and verification steps for completing roadmap tasks.
+
+Currently available implementation guides:
+- [Project Restructuring Guide](roadmap-instructions/project-restructuring-guide.md)
+- [Documentation Overhaul Guide](roadmap-instructions/documentation-overhaul-guide.md)
 
 ## References
 
