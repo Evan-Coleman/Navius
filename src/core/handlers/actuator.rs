@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tracing::{debug, info};
 
 use crate::core::router::AppState;
-use crate::models::{ActuatorEntry, InfoResponse};
+use crate::core::models::{ActuatorEntry, InfoResponse};
 
 /// Handler for the info endpoint
 ///

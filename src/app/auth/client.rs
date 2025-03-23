@@ -17,8 +17,8 @@
 //! This module allows developers to customize and extend the core authentication functionality.
 //! Add your custom auth logic, role mappings, or domain-specific auth requirements here.
 
-use crate::config::AppConfig;
 use crate::core::auth::{EntraAuthLayer, EntraTokenClient};
+use crate::core::config::AppConfig;
 use crate::core::error::{AppError, ErrorSeverity, Result};
 
 /// Example: Create a custom auth layer with specific role requirements

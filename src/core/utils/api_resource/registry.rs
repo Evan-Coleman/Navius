@@ -4,8 +4,8 @@ use std::sync::{Arc, RwLock};
 use tracing::{debug, info};
 
 use crate::core::router::AppState;
-use crate::models::DependencyStatus;
-use crate::utils::api_resource::ApiResource;
+use crate::core::models::DependencyStatus;
+use crate::core::utils::api_resource::ApiResource;
 
 /// Type for a health check function
 pub type HealthCheckFn = Box<

@@ -1,4 +1,4 @@
-use crate::error::error_types::{AppError, Result};
+use crate::core::error::error_types::{AppError, Result};
 use axum::http::StatusCode;
 use std::fmt::Display;
 use tracing::{error, warn};

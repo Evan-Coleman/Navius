@@ -1,7 +1,7 @@
 # Future Improvements
 
 **Created On:** March 23, 2025
-**Updated On:** March 26, 2025
+**Updated On:** March 29, 2025
 
 This document outlines future improvements identified during the project restructuring process. These tasks are not part of the original restructuring roadmap but should be considered for future sprints to further enhance the project structure.
 
@@ -71,9 +71,9 @@ Based on the results of the structure verification script, the following improve
      - [x] `src/config` → `src/core/config` and `src/app/config`
      - [x] `src/cache` → `src/core/cache` and `src/app/cache`
 
-3. **Fix Import Patterns**: Update import statements to use the `crate::core::` prefix instead of direct imports from root modules.
+3. **Fix Import Patterns**: ✅ Update import statements to use the `crate::core::` prefix instead of direct imports from root modules.
 
-4. **Address Naming Conventions**: Review and update file names to follow Rust's snake_case convention.
+4. **Address Naming Conventions**: ✅ Review and update file names to follow Rust's snake_case convention.
 
 These improvements should be prioritized and added to the team's backlog for future sprints. The findings of the structure verification script provide a clear roadmap for completing the transition to the new structure.
 

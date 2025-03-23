@@ -15,7 +15,7 @@ use tokio::time::interval;
 use tracing::{debug, info};
 
 // Import ApiResource trait
-use crate::utils::api_resource::ApiResource;
+use crate::core::utils::api_resource::ApiResource;
 
 /// Generic cache for any resource type that implements ApiResource
 #[derive(Debug)]

@@ -13,10 +13,10 @@ use crate::core::database::error::DatabaseError;
 use crate::core::database::{DatabaseConnection, PgPool};
 
 // Import the User model for tests
-use crate::repository::Repository;
-use crate::repository::User;
-use crate::repository::models::UserRole;
-use crate::repository::user::UserRepository;
+use crate::core::repository::Repository;
+use crate::core::repository::User;
+use crate::core::repository::models::UserRole;
+use crate::core::repository::user::UserRepository;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 

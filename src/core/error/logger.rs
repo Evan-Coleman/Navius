@@ -1,4 +1,4 @@
-use crate::error::error_types::{AppError, ErrorSeverity};
+use crate::core::error::error_types::{AppError, ErrorSeverity};
 use std::fmt::Display;
 use tracing::{Level, debug, error, info, trace, warn};
 

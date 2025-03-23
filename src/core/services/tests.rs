@@ -7,9 +7,9 @@ use uuid::Uuid;
 
 use crate::core::config::app_config::DatabaseConfig;
 use crate::core::database::connection::MockDatabaseConnection;
-use crate::repository::{User, UserRepository, models::UserRole};
-use crate::services::user::{CreateUserDto, UpdateUserDto};
-use crate::services::{ServiceError, UserService};
+use crate::core::repository::{User, UserRepository, models::UserRole};
+use crate::core::services::user::{CreateUserDto, UpdateUserDto};
+use crate::core::services::{ServiceError, UserService};
 
 /// Create a test user repository
 fn create_test_user_repository() -> Arc<UserRepository> {

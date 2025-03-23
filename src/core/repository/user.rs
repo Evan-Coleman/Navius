@@ -13,7 +13,7 @@ use super::{BaseRepository, Repository, User};
 use crate::core::database::PgPool;
 use crate::core::database::connection::PgDatabaseConnection;
 use crate::core::error::AppError;
-use crate::repository::models::UserRole;
+use crate::core::repository::models::UserRole;
 
 /// User repository for storing and retrieving users
 pub struct UserRepository {

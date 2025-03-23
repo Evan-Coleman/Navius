@@ -20,7 +20,7 @@ use tracing::{Span, error, info};
 use tracing_futures::Instrument;
 use uuid::Uuid;
 
-use crate::error::{AppError, ErrorResponse, log_error};
+use crate::core::error::{AppError, ErrorResponse, log_error};
 
 /// Generate a unique request ID
 pub fn generate_request_id() -> String {

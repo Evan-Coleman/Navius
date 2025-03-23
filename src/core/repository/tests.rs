@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::core::config::app_config::DatabaseConfig;
 use crate::core::database::connection::MockDatabaseConnection;
-use crate::repository::{Repository, User, UserRepository, models::UserRole};
+use crate::core::repository::{Repository, User, UserRepository, models::UserRole};
 
 /// Create a test database pool
 fn create_test_db_pool() -> Arc<Box<dyn crate::core::database::PgPool>> {
