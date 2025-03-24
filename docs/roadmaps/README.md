@@ -45,6 +45,7 @@ This directory contains roadmaps for enhancing the Navius framework to match the
 | 10 | [Developer Experience](10-developer-experience.md) | 10% | High | None |
 | 11 | [Security Features](11-security-features.md) | 0% | High | None |
 | 12 | [Documentation Overhaul](12_document_overhaul.md) | 0% | Medium | None |
+| 15 | [API Model Management](15-api-model-management.md) | 0% | High | None |
 
 ## Completed Roadmaps
 

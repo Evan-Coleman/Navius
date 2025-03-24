@@ -26,6 +26,7 @@ Roadmap instructions differ from general guides in several ways:
 |---------|----------------------|--------|
 | Project Restructuring | [Project Restructuring Guide](project-restructuring-guide.md) | Complete |
 | Documentation Overhaul | [Documentation Overhaul Guide](documentation-overhaul-guide.md) | Not Started |
+| API Model Management | [API Model Management Guide](api-model-management-guide.md) | Not Started |
 
 ## How to Use Roadmap Instructions
 
