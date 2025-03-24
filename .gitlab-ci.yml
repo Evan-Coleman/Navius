@@ -6,6 +6,11 @@ variables:
   # Optimize CI builds with sparse registry
   CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
   MDBOOK_VERSION: "0.4.36"
+  # Add cargo build optimizations for CI
+  CARGO_BUILD_JOBS: 4  # Parallel compilation jobs - adjust based on CI runner specs
+  CARGO_INCREMENTAL: 0  # Disable incremental builds in CI (full builds are better for CI)
+  RUSTFLAGS: "-C target-cpu=native"  # Optimize for CI machine
+  RUST_BACKTRACE: 1  # Better error reporting
 
 # Define a cache template
 .cargo-cache:
@@ -16,17 +21,23 @@ variables:
     paths:
       - .cargo/
       - target/
+      # Cache generated API code
+      - target/generated/
 
 # Define common setup for Rust jobs
 .rust-setup:
   before_script:
     - apt-get update
-    - apt-get install -y clang llvm-dev libclang-dev lld
+    - apt-get install -y clang llvm-dev libclang-dev lld jq
     # Set linker to use clang directly instead of lld
     - mkdir -p .cargo
     - echo '[target.x86_64-unknown-linux-gnu]' > .cargo/config.toml
     - echo 'linker = "clang"' >> .cargo/config.toml
     - echo 'rustflags = ["-C", "link-arg=-fuse-ld=gold"]' >> .cargo/config.toml
+    # Generate API clients before compilation
+    - mkdir -p target/generated
+    - chmod +x .devtools/scripts/regenerate_api.sh
+    - ./.devtools/scripts/regenerate_api.sh || echo "API generation failed, will be retried during build"
 
 stages:
   - test
@@ -49,6 +60,7 @@ test:
   artifacts:
     paths:
       - target/debug/
+      - target/generated/
     expire_in: 1 day
 
 # Linting job (formatting and clippy)
@@ -87,7 +99,7 @@ docs:
   stage: docs
   image: node:latest
   before_script:
-    - apt-get update && apt-get install -y python3 python3-pip
+    - apt-get update && apt-get install -y python3 python3-pip jq
     - pip3 install pyyaml
   script:
     - chmod +x .devtools/scripts/validate_docs.sh
@@ -114,7 +126,7 @@ docs:quality-report:
   stage: docs
   image: node:latest
   before_script:
-    - apt-get update && apt-get install -y python3 python3-pip pandoc
+    - apt-get update && apt-get install -y python3 python3-pip pandoc jq
     - pip3 install pyyaml
   script:
     - chmod +x .devtools/scripts/doc-overhaul/generate_report.sh
@@ -137,6 +149,7 @@ build:
   artifacts:
     paths:
       - target/release/navius
+      - target/generated/
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_BRANCH == "master"
@@ -158,7 +171,7 @@ pages:
   stage: docs
   before_script:
     - apt-get update
-    - apt-get install -y clang llvm-dev libclang-dev
+    - apt-get install -y clang llvm-dev libclang-dev jq
     - cargo install mdbook --version ${MDBOOK_VERSION}
   script:
     - cd docs
