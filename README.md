@@ -18,6 +18,7 @@
           <li>All information in this repository is subject to change</li>
           <li>Features and documentation may be incomplete</li>
           <li>Claims and statements should be considered provisional</li>
+          <li>Codebase cleanup in progress (see <a href="docs/roadmaps/17-codebase-cleanup.mdc">Cleanup Roadmap</a>)</li>
         </ul>
         <p><em>Last Updated: March 23, 2025</em></p>
       </td>
