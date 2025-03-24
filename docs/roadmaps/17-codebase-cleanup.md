@@ -11,7 +11,60 @@ last_updated: June 24, 2024
 version: 1.0
 ---
 
-# Codebase Cleanup and Error Resolution Roadmap
+# Codebase Cleanup Plan
+
+This document outlines the plan for cleaning up the Navius codebase to enhance its stability, maintainability, and readability.
+
+## Overall Progress
+🚀 **Progress:** 60% Complete
+
+## Phase 1: Analysis and Documentation (COMPLETED)
+- [x] Identify redundant code sections
+- [x] Map out unused features
+- [x] Document current architecture issues
+- [x] Create a consolidated list of technical debt
+
+## Phase 2: Implementation (IN PROGRESS)
+
+### 2.1 Structure Reorganization (COMPLETED)
+- [x] Reorganize directory structure
+- [x] Move utility functions to appropriate modules
+- [x] Consolidate duplicate functionality
+- [x] Update imports correctly to avoid "Cannot find" errors
+
+### 2.2 Implementation Fixes (IN PROGRESS)
+- [x] Fix `AppError` to include missing variants (`AuthenticationError` and `NotImplementedError`)
+- [x] Fix ambiguous `init_metrics` by making explicit imports
+- [x] Fix the metrics handler to correctly use the metrics macros
+- [x] Fix type mismatches with `PgPool` in health handlers
+- [ ] Fix type mismatches in pet repository
+- [ ] Implement missing methods in `ResourceCache`
+- [ ] Add required methods to `CacheRegistry`
+
+### 2.3 Feature Cleanup (NOT STARTED)
+- [ ] Remove or complete placeholder endpoints
+- [ ] Finalize authentication integration
+- [ ] Standardize error handling across all endpoints
+- [ ] Implement comprehensive logging strategy
+
+## Current Focus
+- Fixed the `AppError` to include missing variants (`AuthenticationError` and `NotImplementedError`)
+- Fixed the ambiguous `init_metrics` function with explicit imports
+- Fixed the type mismatches in database pools to handle the `Arc<Box<dyn PgPool>>` type properly
+- Fixed metrics handler code to properly use the metrics macros
+
+## Next Step
+Complete the Implementation Fixes (Phase 2.2) by addressing the remaining type mismatches and implementing the missing methods.
+
+## Timeline
+- Start Date: June 15, 2024
+- Target Completion: July 15, 2024
+- Last Updated: June 25, 2024
+
+## Dependencies
+- Core team availability for code reviews
+- Backward compatibility requirements
+- Integration with new roadmap features
 
 ## Overview
 This roadmap outlines the strategy to address approximately 60 test errors and 32 build errors following the implementation of the Pet API Database Integration. We will also update outdated documentation and ensure consistency across the codebase.

@@ -1,279 +1,280 @@
-image: rust:latest
+# image: rust:latest
 
-variables:
-  CARGO_HOME: $CI_PROJECT_DIR/.cargo
-  CARGO_TERM_COLOR: always
-  # Optimize CI builds with sparse registry
-  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
-  MDBOOK_VERSION: "0.4.36"
-  # Add cargo build optimizations for CI
-  CARGO_BUILD_JOBS: 4  # Parallel compilation jobs - adjust based on CI runner specs
-  RUSTFLAGS: "-C target-cpu=native -C opt-level=2"  # Optimize for CI machine
-  RUST_BACKTRACE: 1  # Better error reporting
-  # Enable incremental compilation for faster builds
-  CARGO_INCREMENTAL: 1
+# variables:
+#   CARGO_HOME: $CI_PROJECT_DIR/.cargo
+#   CARGO_TERM_COLOR: always
+#   # Optimize CI builds with sparse registry
+#   CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+#   MDBOOK_VERSION: "0.4.36"
+#   # Add cargo build optimizations for CI
+#   CARGO_BUILD_JOBS: 4  # Parallel compilation jobs - adjust based on CI runner specs
+#   RUSTFLAGS: "-C target-cpu=native -C opt-level=2"  # Optimize for CI machine
+#   RUST_BACKTRACE: 1  # Better error reporting
+#   # Enable incremental compilation for faster builds
+#   CARGO_INCREMENTAL: 1
 
-# Define a cache template
-.cargo-cache:
-  cache:
-    key:
-      files:
-        - recipe.json
-        - Cargo.lock
-    paths:
-      - .cargo/
-      - target/
-      - target/generated/
+# # Define a cache template
+# .cargo-cache:
+#   cache:
+#     key:
+#       files:
+#         - recipe.json
+#         - Cargo.lock
+#     paths:
+#       - .cargo/
+#       - target/
+#       - target/generated/
 
-stages:
-  - prepare
-  - cook
-  - generate
-  - test
-  - lint
-  - coverage
-  - docs
-  - build
-  - deploy
+# stages:
+#   - prepare
+#   - cook
+#   - generate
+#   - test
+#   - lint
+#   - coverage
+#   - docs
+#   - build
+#   - deploy
 
-# Install cargo-chef and prepare dependencies
-chef-prepare:
-  stage: prepare
-  image: lukemathwalker/cargo-chef:latest-rust-1
-  script:
-    - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld jq
-    # No need to install cargo-chef as it's included in the image
-    - cargo chef prepare --recipe-path recipe.json
-  artifacts:
-    paths:
-      - recipe.json
-    expire_in: 1 week
+# # Install cargo-chef and prepare dependencies
+# chef-prepare:
+#   stage: prepare
+#   image: lukemathwalker/cargo-chef:latest-rust-1
+#   script:
+#     - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld jq
+#     # No need to install cargo-chef as it's included in the image
+#     - cargo chef prepare --recipe-path recipe.json
+#   artifacts:
+#     paths:
+#       - recipe.json
+#     expire_in: 1 week
 
-# Cook dependencies - this is the caching Docker layer!
-chef-cook:
-  stage: cook
-  image: lukemathwalker/cargo-chef:latest-rust-1
-  needs:
-    - chef-prepare
-  script:
-    - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld --no-install-recommends
-    # Set up linker configuration for faster linking
-    - mkdir -p .cargo
-    - echo '[target.x86_64-unknown-linux-gnu]' > .cargo/config.toml
-    - echo 'linker = "clang"' >> .cargo/config.toml
-    - echo 'rustflags = ["-C", "link-arg=-fuse-ld=gold"]' >> .cargo/config.toml
-    # Cook the dependencies
-    - cargo chef cook --recipe-path recipe.json --release
-    # Create basic directory structure
-    - mkdir -p target/generated
-  artifacts:
-    paths:
-      - target/
-      - .cargo/
-    expire_in: 1 day
-  cache:
-    key:
-      files:
-        - recipe.json
-        - Cargo.lock
-    paths:
-      - target/
-      - .cargo/
-    policy: pull-push
+# # Cook dependencies - this is the caching Docker layer!
+# chef-cook:
+#   stage: cook
+#   image: lukemathwalker/cargo-chef:latest-rust-1
+#   needs:
+#     - chef-prepare
+#   script:
+#     - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld --no-install-recommends
+#     # Set up linker configuration for faster linking
+#     - mkdir -p .cargo
+#     - echo '[target.x86_64-unknown-linux-gnu]' > .cargo/config.toml
+#     - echo 'linker = "clang"' >> .cargo/config.toml
+#     - echo 'rustflags = ["-C", "link-arg=-fuse-ld=gold"]' >> .cargo/config.toml
+#     # Cook the dependencies
+#     - cargo chef cook --recipe-path recipe.json --release
+#     # Create basic directory structure
+#     - mkdir -p target/generated
+#   artifacts:
+#     paths:
+#       - target/
+#       - .cargo/
+#     expire_in: 1 day
+#   cache:
+#     key:
+#       files:
+#         - recipe.json
+#         - Cargo.lock
+#     paths:
+#       - target/
+#       - .cargo/
+#     policy: pull-push
 
-# Generate API clients in a separate job
-generate-apis:
-  stage: generate
-  image: openapitools/openapi-generator-cli:v7.12.0
-  needs:
-    - chef-cook
-  script:
-    - apt-get update && apt-get install -y jq --no-install-recommends
-    # Create the basic structure
-    - mkdir -p target/generated
-    # Copy over needed files from chef-cook stage
-    - cp -r .cargo target/ || true
-    # Generate API clients
-    - chmod +x .devtools/scripts/regenerate_api.sh
-    - echo "Generating API clients..."
-    - ./.devtools/scripts/regenerate_api.sh
-    # Ensure the generated directory exists (without depending on specific APIs)
-    - mkdir -p src/../target/generated
-    # Create empty lib.rs in case no APIs were generated to prevent compilation failures
-    - for api_dir in $(find target/generated -mindepth 1 -maxdepth 1 -type d -name "*_api" 2>/dev/null || echo ""); do
-    -   mkdir -p "$api_dir/src"
-    -   test -f "$api_dir/src/lib.rs" || echo "// Empty placeholder" > "$api_dir/src/lib.rs"
-    - done
-    - ls -la target/generated || true
-    - find target/generated -type f -name "*.rs" | wc -l
-  artifacts:
-    paths:
-      - target/generated/
-    expire_in: 1 day
-  cache:
-    key: 
-      files:
-        - config/api_registry.json
-    paths:
-      - target/generated/
-    policy: pull-push
+# # Generate API clients in a separate job
+# generate-apis:
+#   stage: generate
+#   image: openapitools/openapi-generator-cli:v7.12.0
+#   needs:
+#     - chef-cook
+#   script:
+#     - apt-get update && apt-get install -y jq --no-install-recommends
+#     # Create the basic structure
+#     - mkdir -p target/generated
+#     # Copy over needed files from chef-cook stage
+#     - cp -r .cargo target/ || true
+#     # Generate API clients
+#     - chmod +x .devtools/scripts/regenerate_api.sh
+#     - echo "Generating API clients..."
+#     - ./.devtools/scripts/regenerate_api.sh
+#     # Ensure the generated directory exists (without depending on specific APIs)
+#     - mkdir -p src/../target/generated
+#     # Create empty lib.rs in case no APIs were generated to prevent compilation failures
+#     - for api_dir in $(find target/generated -mindepth 1 -maxdepth 1 -type d -name "*_api" 2>/dev/null || echo ""); do
+#     -   mkdir -p "$api_dir/src"
+#     -   test -f "$api_dir/src/lib.rs" || echo "// Empty placeholder" > "$api_dir/src/lib.rs"
+#     - done
+#     - ls -la target/generated || true
+#     - find target/generated -type f -name "*.rs" | wc -l
+#   artifacts:
+#     paths:
+#       - target/generated/
+#     expire_in: 1 day
+#   cache:
+#     key: 
+#       files:
+#         - config/api_registry.json
+#     paths:
+#       - target/generated/
+#     policy: pull-push
 
-# Basic test job
-test:
-  stage: test
-  image: rust:latest
-  needs:
-    - chef-cook
-    - generate-apis
-  script:
-    - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld jq
-    - rustc --version
-    - cargo --version
-    # Ensure generated files exist before continuing
-    - mkdir -p target/generated
-    - for api_dir in $(find target/generated -mindepth 1 -maxdepth 1 -type d -name "*_api" 2>/dev/null || echo ""); do
-    -   mkdir -p "$api_dir/src"
-    -   test -f "$api_dir/src/lib.rs" || echo "// Empty placeholder" > "$api_dir/src/lib.rs"
-    - done
-    # Now run tests with pre-built dependencies
-    - cargo test --all-features
-  artifacts:
-    paths:
-      - target/debug/
-      - target/generated/
-    expire_in: 1 day
+# # Basic test job
+# test:
+#   stage: test
+#   image: rust:latest
+#   needs:
+#     - chef-cook
+#     - generate-apis
+#   script:
+#     - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld jq
+#     - rustc --version
+#     - cargo --version
+#     # Ensure generated files exist before continuing
+#     - mkdir -p target/generated
+#     - for api_dir in $(find target/generated -mindepth 1 -maxdepth 1 -type d -name "*_api" 2>/dev/null || echo ""); do
+#     -   mkdir -p "$api_dir/src"
+#     -   test -f "$api_dir/src/lib.rs" || echo "// Empty placeholder" > "$api_dir/src/lib.rs"
+#     - done
+#     # Now run tests with pre-built dependencies
+#     - cargo test --all-features
+#   artifacts:
+#     paths:
+#       - target/debug/
+#       - target/generated/
+#     expire_in: 1 day
 
-# Linting job (formatting and clippy)
-lint:
-  stage: lint
-  image: rust:latest
-  needs:
-    - chef-cook
-    - generate-apis
-  script:
-    - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld jq
-    - rustup component add rustfmt clippy
-    - cargo fmt -- --check
-    - cargo clippy -- -D warnings
+# # Linting job (formatting and clippy)
+# lint:
+#   stage: lint
+#   image: rust:latest
+#   needs:
+#     - chef-cook
+#     - generate-apis
+#   script:
+#     - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld jq
+#     - rustup component add rustfmt clippy
+#     - cargo fmt -- --check
+#     - cargo clippy -- -D warnings
 
-# Code coverage job
-coverage:
-  stage: coverage
-  image: rust:latest
-  needs:
-    - chef-cook
-    - generate-apis
-  script:
-    - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld jq
-    - bash .devtools/scripts/coverage.sh
-  artifacts:
-    reports:
-      coverage_report:
-        coverage_format: cobertura
-        path: cobertura.xml
-    paths:
-      - cobertura.xml
-      - .devtools/coverage/
-    expire_in: 1 week
-  # Add coverage visualization to merge requests
-  coverage: '/^\d+.\d+% coverage/'
+# # Code coverage job
+# coverage:
+#   stage: coverage
+#   image: rust:latest
+#   needs:
+#     - chef-cook
+#     - generate-apis
+#   script:
+#     - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld jq
+#     - bash .devtools/scripts/coverage.sh
+#   artifacts:
+#     reports:
+#       coverage_report:
+#         coverage_format: cobertura
+#         path: cobertura.xml
+#     paths:
+#       - cobertura.xml
+#       - .devtools/coverage/
+#     expire_in: 1 week
+#   # Add coverage visualization to merge requests
+#   coverage: '/^\d+.\d+% coverage/'
 
-# Documentation validation job
-docs:
-  stage: docs
-  image: node:latest
-  before_script:
-    - apt-get update && apt-get install -y python3 python3-pip jq
-    - pip3 install pyyaml
-  script:
-    - chmod +x .devtools/scripts/validate_docs.sh
-    - chmod +x .devtools/scripts/doc-overhaul/comprehensive_test.sh
-    - chmod +x .devtools/scripts/doc-overhaul/generate_report.sh
-    - export CI_MODE=true
-    - bash .devtools/scripts/validate_docs.sh
-  artifacts:
-    paths:
-      - doc_validation_report.txt
-      - target/reports/docs_validation/
-    expire_in: 1 week
-    when: always
-  rules:
-    - changes:
-      - docs/**/*
-      - .devtools/scripts/validate_docs.sh
-      - .devtools/scripts/validate_frontmatter.py
-      - .devtools/scripts/doc-overhaul/**/*
-      - .devtools/config/markdownlint.json
+# # Documentation validation job
+# docs:
+#   stage: docs
+#   image: node:latest
+#   before_script:
+#     - apt-get update && apt-get install -y python3 python3-pip jq
+#     - pip3 install pyyaml
+#   script:
+#     - chmod +x .devtools/scripts/validate_docs.sh
+#     - chmod +x .devtools/scripts/doc-overhaul/comprehensive_test.sh
+#     - chmod +x .devtools/scripts/doc-overhaul/generate_report.sh
+#     - export CI_MODE=true
+#     - bash .devtools/scripts/validate_docs.sh
+#   artifacts:
+#     paths:
+#       - doc_validation_report.txt
+#       - target/reports/docs_validation/
+#     expire_in: 1 week
+#     when: always
+#   rules:
+#     - changes:
+#       - docs/**/*
+#       - .devtools/scripts/validate_docs.sh
+#       - .devtools/scripts/validate_frontmatter.py
+#       - .devtools/scripts/doc-overhaul/**/*
+#       - .devtools/config/markdownlint.json
 
-# Documentation quality report job (not run in CI, but available for manual execution)
-docs:quality-report:
-  stage: docs
-  image: node:latest
-  before_script:
-    - apt-get update && apt-get install -y python3 python3-pip pandoc jq
-    - pip3 install pyyaml
-  script:
-    - chmod +x .devtools/scripts/doc-overhaul/generate_report.sh
-    - chmod +x .devtools/scripts/doc-overhaul/comprehensive_test.sh
-    - bash .devtools/scripts/doc-overhaul/generate_report.sh
-  artifacts:
-    paths:
-      - target/reports/docs_validation/
-    expire_in: 2 weeks
-  when: manual
+# # Documentation quality report job (not run in CI, but available for manual execution)
+# docs:quality-report:
+#   stage: docs
+#   image: node:latest
+#   before_script:
+#     - apt-get update && apt-get install -y python3 python3-pip pandoc jq
+#     - pip3 install pyyaml
+#   script:
+#     - chmod +x .devtools/scripts/doc-overhaul/generate_report.sh
+#     - chmod +x .devtools/scripts/doc-overhaul/comprehensive_test.sh
+#     - bash .devtools/scripts/doc-overhaul/generate_report.sh
+#   artifacts:
+#     paths:
+#       - target/reports/docs_validation/
+#     expire_in: 2 weeks
+#   when: manual
 
-# Build release binaries
-build:
-  stage: build
-  image: rust:latest
-  needs:
-    - chef-cook
-    - generate-apis
-  script:
-    - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld jq
-    # Ensure generated files exist before continuing
-    - mkdir -p target/generated
-    - for api_dir in $(find target/generated -mindepth 1 -maxdepth 1 -type d -name "*_api" 2>/dev/null || echo ""); do
-    -   mkdir -p "$api_dir/src"
-    -   test -f "$api_dir/src/lib.rs" || echo "// Empty placeholder" > "$api_dir/src/lib.rs"
-    - done
-    # Build with pre-compiled dependencies
-    - cargo build --release
-  artifacts:
-    paths:
-      - target/release/navius
-      - target/generated/
-    expire_in: 1 week
-  rules:
-    - if: $CI_COMMIT_BRANCH == "master"
-    - if: $CI_COMMIT_TAG
+# # Build release binaries
+# build:
+#   stage: build
+#   image: rust:latest
+#   needs:
+#     - chef-cook
+#     - generate-apis
+#   script:
+#     - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld jq
+#     # Ensure generated files exist before continuing
+#     - mkdir -p target/generated
+#     - for api_dir in $(find target/generated -mindepth 1 -maxdepth 1 -type d -name "*_api" 2>/dev/null || echo ""); do
+#     -   mkdir -p "$api_dir/src"
+#     -   test -f "$api_dir/src/lib.rs" || echo "// Empty placeholder" > "$api_dir/src/lib.rs"
+#     - done
+#     # Build with pre-compiled dependencies
+#     - cargo build --release
+#   artifacts:
+#     paths:
+#       - target/release/navius
+#       - target/generated/
+#     expire_in: 1 week
+#   rules:
+#     - if: $CI_COMMIT_BRANCH == "master"
+#     - if: $CI_COMMIT_TAG
 
-# Only run the pipeline on main branch and merge requests
-workflow:
-  rules:
-    # - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    # - if: $CI_COMMIT_BRANCH == "master"
-    # - if: $CI_COMMIT_TAG
+# # Only run the pipeline on main branch and merge requests
+# workflow:
+#   rules:
+#     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+#     - if: $CI_COMMIT_BRANCH == "master"
+#     - if: $CI_COMMIT_TAG
+#     - if: $CI_COMMIT_BRANCH
 
-# Job to build and deploy documentation
-pages:
-  image: rust:latest
-  stage: docs
-  needs:
-    - chef-cook
-  script:
-    - apt-get update && apt-get install -y clang llvm-dev libclang-dev jq
-    - cargo install mdbook --version ${MDBOOK_VERSION}
-    - cd docs
-    - mdbook build
-    - cd ..
-    - mv target/book public  # GitLab Pages expects the content to be in a 'public' directory
-  artifacts:
-    paths:
-      - public
-  rules:
-    - if: $CI_COMMIT_BRANCH == "master"  # Only deploy on master branch
-  cache:
-    paths:
-      - .cargo
-      - target/ 
+# # Job to build and deploy documentation
+# pages:
+#   image: rust:latest
+#   stage: docs
+#   needs:
+#     - chef-cook
+#   script:
+#     - apt-get update && apt-get install -y clang llvm-dev libclang-dev jq
+#     - cargo install mdbook --version ${MDBOOK_VERSION}
+#     - cd docs
+#     - mdbook build
+#     - cd ..
+#     - mv target/book public  # GitLab Pages expects the content to be in a 'public' directory
+#   artifacts:
+#     paths:
+#       - public
+#   rules:
+#     - if: $CI_COMMIT_BRANCH == "master"  # Only deploy on master branch
+#   cache:
+#     paths:
+#       - .cargo
+#       - target/ 
