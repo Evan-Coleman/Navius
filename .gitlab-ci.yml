@@ -84,23 +84,16 @@ chef-cook:
 # Generate API clients in a separate job
 generate-apis:
   stage: generate
-  image: lukemathwalker/cargo-chef:latest-rust-1
+  image: openapitools/openapi-generator-cli:v7.12.0
   needs:
     - chef-cook
   script:
-    - apt-get update && apt-get install -y jq default-jre-headless wget unzip --no-install-recommends
-    # Install OpenAPI Generator
-    - mkdir -p /tmp/openapi
-    - cd /tmp/openapi
-    - wget https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/7.12.0/openapi-generator-cli-7.12.0.jar -O openapi-generator-cli.jar
-    - echo '#!/bin/bash' > /usr/local/bin/openapi-generator
-    - echo 'java -jar /tmp/openapi/openapi-generator-cli.jar "$@"' >> /usr/local/bin/openapi-generator
-    - chmod +x /usr/local/bin/openapi-generator
-    - cd -
-    # Verify OpenAPI Generator installation
-    - openapi-generator version
-    # Generate API clients - this must succeed
+    - apt-get update && apt-get install -y jq --no-install-recommends
+    # Create the basic structure
     - mkdir -p target/generated
+    # Copy over needed files from chef-cook stage
+    - cp -r .cargo target/ || true
+    # Generate API clients
     - chmod +x .devtools/scripts/regenerate_api.sh
     - echo "Generating API clients..."
     - ./.devtools/scripts/regenerate_api.sh

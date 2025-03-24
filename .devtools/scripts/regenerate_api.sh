@@ -11,6 +11,10 @@ set -e  # Exit immediately if a command exits with a non-zero status
 
 API_REGISTRY="config/api_registry.json"
 GENERATED_DIR="target/generated"
+SCHEMA_HASH_DIR="$GENERATED_DIR/.schema_hashes"
+
+# Create schema hash directory if it doesn't exist
+mkdir -p "$SCHEMA_HASH_DIR"
 
 # Function to display usage information
 show_usage() {
@@ -105,6 +109,27 @@ for API_NAME in "${APIS_TO_REGENERATE[@]}"; do
         continue
     fi
     
+    # Get the schema path
+    SCHEMA_PATH=$(jq -r ".apis[] | select(.name == \"$API_NAME\") | .schema_path" "$API_REGISTRY")
+    
+    # Check if schema exists
+    if [ ! -f "$SCHEMA_PATH" ]; then
+        echo "Warning: Schema file not found at $SCHEMA_PATH, skipping..."
+        continue
+    fi
+    
+    # Calculate hash of schema file
+    SCHEMA_HASH=$(sha256sum "$SCHEMA_PATH" | cut -d ' ' -f 1)
+    HASH_FILE="$SCHEMA_HASH_DIR/${API_NAME}.hash"
+    
+    # Check if regeneration is needed
+    if [ "$FORCE_REGENERATE" = "false" ] && [ -f "$HASH_FILE" ] && [ "$(cat "$HASH_FILE")" = "$SCHEMA_HASH" ] && [ -d "$GENERATED_DIR/${API_NAME}_api" ]; then
+        echo "Schema for $API_NAME hasn't changed, skipping regeneration."
+        echo "✓ Using cached version from previous build."
+        echo "----------------------------------------"
+        continue
+    fi
+    
     # Display the options being used
     echo "Using the following options from registry:"
     jq -r ".apis[] | select(.name == \"$API_NAME\") | \"  generate_models: \(.options.generate_models)\n  generate_api: \(.options.generate_api)\n  generate_handlers: \(.options.generate_handlers)\n  update_router: \(.options.update_router)\"" "$API_REGISTRY"
@@ -125,9 +150,12 @@ for API_NAME in "${APIS_TO_REGENERATE[@]}"; do
         echo "  exclude_models: [] (no models will be excluded)"
     fi
     
-    # Simply call add_api.sh with the API name to use registry configuration
+    # Call add_api.sh with the API name to use registry configuration
     echo "Regenerating $API_NAME using registry configuration"
     .devtools/scripts/add_api.sh "$API_NAME"
+    
+    # Save the schema hash for future comparison
+    echo "$SCHEMA_HASH" > "$HASH_FILE"
     
     echo "✅ Successfully regenerated $API_NAME"
     echo "----------------------------------------"
