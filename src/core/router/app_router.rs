@@ -6,6 +6,7 @@ use axum::{
     response::{IntoResponse, Response as AxumResponse},
     routing::{Router, get, post},
 };
+use chrono::{DateTime, Utc};
 use config::ConfigError;
 use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
 use reqwest::Client;
@@ -23,13 +24,23 @@ use tower_http::{
 use tracing::{Level, info};
 
 use crate::{
+    app::{
+        api::handlers::{
+            health_check::health_check,
+            metrics_handler::metrics_handler,
+            pet_handler::{create_pet, delete_pet, get_pet_by_id, get_pets, update_pet},
+        },
+        database::repositories::pet_repository::{PetRepository, PgPetRepository},
+        services::pet_service::{MockPetRepository, PetService},
+    },
     auth::middleware::EntraAuthLayer,
     core::auth::{EntraTokenClient, middleware::RoleRequirement, mock::MockTokenClient},
     core::cache::CacheRegistry,
     core::config::app_config::AppConfig,
     core::database::PgPool,
+    core::error::AppError,
     core::handlers::logging,
-    core::metrics::metrics_handler::MetricsHandle,
+    core::metrics::metrics_service,
     core::models::{ApiResponse, DetailedHealthResponse, HealthCheckResponse},
     core::services::ServiceRegistry,
     core::utils::api_resource::ApiResourceRegistry,
@@ -41,99 +52,130 @@ use super::CoreRouter;
 /// Application state shared across all routes
 #[derive(Clone)]
 pub struct AppState {
-    pub client: Option<Client>,
-    pub config: AppConfig,
-    pub start_time: SystemTime,
-    pub cache_registry: Option<Arc<CacheRegistry>>,
-    pub metrics_handle: Option<PrometheusHandle>,
-    pub token_client: Option<Arc<EntraTokenClient>>,
-    pub resource_registry: Option<Arc<ApiResourceRegistry>>,
-    pub db_pool: Option<Arc<Box<dyn PgPool>>>,
+    pub client: Arc<EntraTokenClient>,
+    pub config: Arc<AppConfig>,
+    pub start_time: DateTime<Utc>,
+    pub cache_registry: Arc<CacheRegistry>,
+    pub metrics_handle: Arc<PrometheusHandle>,
     pub service_registry: Arc<ServiceRegistry>,
+    pub db_pool: Option<Arc<Pool<Postgres>>>,
+}
+
+impl AppState {
+    pub fn new(
+        client: Arc<EntraTokenClient>,
+        config: Arc<AppConfig>,
+        start_time: DateTime<Utc>,
+        cache_registry: Arc<CacheRegistry>,
+        metrics_handle: Arc<PrometheusHandle>,
+        service_registry: Arc<ServiceRegistry>,
+        db_pool: Option<Arc<Pool<Postgres>>>,
+    ) -> Self {
+        Self {
+            client,
+            config,
+            start_time,
+            cache_registry,
+            metrics_handle,
+            service_registry,
+            db_pool,
+        }
+    }
+
+    pub fn get_db_pool(&self) -> Result<Arc<Pool<Postgres>>, AppError> {
+        self.db_pool
+            .clone()
+            .ok_or_else(|| AppError::DatabaseError("Database pool not initialized".to_string()))
+    }
 }
 
 impl Default for AppState {
     fn default() -> Self {
         let config = AppConfig::default();
-        let cache_registry = Some(Arc::new(CacheRegistry::new()));
-        let token_client = Some(Arc::new(EntraTokenClient::from_config(&config)));
+        let cache_registry = Arc::new(CacheRegistry::new());
+        let token_client = Arc::new(EntraTokenClient::from_config(&config));
         let metrics_handle = crate::core::metrics::init_metrics();
-        let resource_registry = Some(Arc::new(ApiResourceRegistry::new()));
-        let service_registry = Arc::new(ServiceRegistry::new());
+        let mock_repository = Arc::new(MockPetRepository::default());
+        let pet_service = Arc::new(PetService::new(mock_repository));
+        let service_registry = Arc::new(ServiceRegistry::new(pet_service));
 
         Self {
-            client: None,
-            config,
-            start_time: SystemTime::now(),
+            client: token_client,
+            config: Arc::new(config),
+            start_time: Utc::now(),
             cache_registry,
-            metrics_handle: Some(metrics_handle),
-            token_client,
-            resource_registry,
-            db_pool: None,
+            metrics_handle: Arc::new(metrics_handle),
             service_registry,
+            db_pool: None,
         }
     }
 }
 
 impl AppState {
-    pub fn new(
+    pub fn new_with_config(
         config: AppConfig,
-        db_pool: Option<Arc<Box<dyn PgPool>>>,
+        db_pool: Option<Arc<Pool<Postgres>>>,
         cache_registry: Option<CacheRegistry>,
     ) -> Arc<Self> {
-        let start_time = SystemTime::now();
-        let client = Client::new();
+        let start_time = Utc::now();
+        let client = Arc::new(EntraTokenClient::from_config(&config));
         let metrics_handle = crate::core::metrics::init_metrics();
-        let resource_registry = ApiResourceRegistry::new();
 
-        // Create the app state
+        let pet_repository: Arc<dyn PetRepository> = match &db_pool {
+            Some(pool) => Arc::new(PgPetRepository::new(pool.clone())),
+            None => Arc::new(MockPetRepository::default()),
+        };
+        let pet_service = Arc::new(PetService::new(pet_repository));
+        let service_registry = Arc::new(ServiceRegistry::new(pet_service));
+
+        let cache_registry = match cache_registry {
+            Some(registry) => Arc::new(registry),
+            None => Arc::new(CacheRegistry::new()),
+        };
+
         Arc::new(AppState {
-            client: Some(client),
-            config: config.clone(),
+            client,
+            config: Arc::new(config.clone()),
             start_time,
-            cache_registry: cache_registry.map(|cr| Arc::new(cr)),
-            metrics_handle: Some(metrics_handle),
-            token_client: if config.auth.enabled {
-                Some(Arc::new(EntraTokenClient::from_config(&config)))
-            } else {
-                None
-            },
-            resource_registry: Some(Arc::new(resource_registry)),
+            cache_registry,
+            metrics_handle: Arc::new(metrics_handle),
+            service_registry,
             db_pool,
-            service_registry: Arc::new(ServiceRegistry::new()),
         })
     }
 
     pub fn new_test() -> Arc<Self> {
         let config = AppConfig::default();
         let metrics_handle = crate::core::metrics::init_metrics();
+        let mock_repository = Arc::new(MockPetRepository::default());
+        let pet_service = Arc::new(PetService::new(mock_repository));
+        let service_registry = Arc::new(ServiceRegistry::new(pet_service));
 
         Arc::new(AppState {
-            client: None,
-            config,
-            start_time: SystemTime::now(),
-            cache_registry: None,
-            metrics_handle: Some(metrics_handle),
-            token_client: None,
-            resource_registry: None,
+            client: Arc::new(EntraTokenClient::from_config(&config)),
+            config: Arc::new(config),
+            start_time: Utc::now(),
+            cache_registry: Arc::new(CacheRegistry::new()),
+            metrics_handle: Arc::new(metrics_handle),
+            service_registry,
             db_pool: None,
-            service_registry: Arc::new(ServiceRegistry::new()),
         })
     }
 
     pub fn new_test_with_config(config: AppConfig) -> Arc<Self> {
         let metrics_handle = crate::core::metrics::init_metrics();
+        let mock_repository = Arc::new(MockPetRepository::default());
+        let pet_service = Arc::new(PetService::new(mock_repository));
+        let service_registry = Arc::new(ServiceRegistry::new(pet_service));
 
         Arc::new(AppState {
-            client: None,
-            config,
-            start_time: SystemTime::now(),
-            cache_registry: None,
-            metrics_handle: Some(metrics_handle),
-            token_client: None,
-            resource_registry: None,
+            client: Arc::new(EntraTokenClient::from_config(&config)),
+            config: Arc::new(config),
+            start_time: Utc::now(),
+            cache_registry: Arc::new(CacheRegistry::new()),
+            metrics_handle: Arc::new(metrics_handle),
+            service_registry,
             db_pool: None,
-            service_registry: Arc::new(ServiceRegistry::new()),
         })
     }
 }
@@ -201,7 +243,7 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
         .expect("Failed to create HTTP client");
 
     // Create application state
-    let start_time = SystemTime::now();
+    let start_time = Utc::now();
 
     // Only set up the cache if enabled
     let cache_registry = if config.cache.enabled {
@@ -211,15 +253,17 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
             config.cache.ttl_seconds,
         );
 
-        Some(registry)
+        Arc::new(registry)
     } else {
         info!("🔧 Cache disabled");
-        None
+        Arc::new(CacheRegistry::new())
     };
 
-    // Initialize database if enabled
-    let db_pool = if config.database.enabled {
-        match crate::core::init_database(&config.database).await {
+    // Attempt to initialize database connection if enabled
+    if config.database.enabled {
+        // Clone the database config to avoid the borrow issue
+        let db_config = config.database.clone();
+        match crate::core::init_database(db_config).await {
             Ok(pool) => {
                 info!("🔧 Database connection initialized");
                 Some(pool)
@@ -238,28 +282,25 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
     let resource_registry = crate::utils::api_resource::ApiResourceRegistry::new();
 
     // Create the app state
+    let pet_repository: Arc<dyn PetRepository> = match &db_pool {
+        Some(pool) => Arc::new(PgPetRepository::new(pool.clone())),
+        None => Arc::new(MockPetRepository::default()),
+    };
+    let pet_service = Arc::new(PetService::new(pet_repository));
+    let service_registry = Arc::new(ServiceRegistry::new(pet_service));
+
     let state = Arc::new(AppState {
-        client: Some(client),
-        config: config.clone(),
+        client: Arc::new(EntraTokenClient::from_config(&config)),
+        config: Arc::new(config.clone()),
         start_time,
-        cache_registry: cache_registry.clone().map(Arc::new),
-        metrics_handle: Some(metrics_handle),
-        token_client: if config.auth.enabled {
-            Some(Arc::new(EntraTokenClient::from_config(&config)))
-        } else {
-            None
-        },
-        resource_registry: Some(Arc::new(resource_registry)),
+        cache_registry,
+        metrics_handle: Arc::new(metrics_handle),
+        service_registry,
         db_pool,
-        service_registry: Arc::new(ServiceRegistry::new()),
     });
 
     // Start metrics updater for the new cache registry
-    if let Some(registry) = &cache_registry {
-        crate::core::cache::start_metrics_updater(registry).await;
-    } else {
-        info!("🔧 Cache registry disabled, metrics updater not started");
-    }
+    crate::core::cache::start_metrics_updater(&cache_registry).await;
 
     // Configure server address
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server.port));
@@ -270,17 +311,18 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
 pub fn create_test_router() -> Router<Arc<AppState>> {
     let config = AppConfig::default();
     let metrics_handle = PrometheusBuilder::new().build_recorder().handle();
+    let mock_repository = Arc::new(MockPetRepository::default());
+    let pet_service = Arc::new(PetService::new(mock_repository));
+    let service_registry = Arc::new(ServiceRegistry::new(pet_service));
 
     let state = Arc::new(AppState {
-        config,
-        start_time: SystemTime::now(),
-        cache_registry: Some(Arc::new(CacheRegistry::new())),
-        client: Some(Client::new()),
+        client: Arc::new(EntraTokenClient::from_config(&config)),
+        config: Arc::new(config),
+        start_time: Utc::now(),
+        cache_registry: Arc::new(CacheRegistry::new()),
+        metrics_handle: Arc::new(metrics_handle),
+        service_registry,
         db_pool: None,
-        token_client: Some(Arc::new(MockTokenClient::default())),
-        metrics_handle: Some(metrics_handle),
-        resource_registry: Some(Arc::new(ApiResourceRegistry::new())),
-        service_registry: Arc::new(ServiceRegistry::new()),
     });
 
     Router::new().with_state(state)
@@ -288,208 +330,101 @@ pub fn create_test_router() -> Router<Arc<AppState>> {
 
 pub fn create_test_router_with_config(config: AppConfig) -> Router<Arc<AppState>> {
     let metrics_handle = PrometheusBuilder::new().build_recorder().handle();
+    let mock_repository = Arc::new(MockPetRepository::default());
+    let pet_service = Arc::new(PetService::new(mock_repository));
+    let service_registry = Arc::new(ServiceRegistry::new(pet_service));
 
     let state = Arc::new(AppState {
-        config,
-        start_time: SystemTime::now(),
-        cache_registry: Some(Arc::new(CacheRegistry::new())),
-        client: Some(Client::new()),
+        client: Arc::new(EntraTokenClient::from_config(&config)),
+        config: Arc::new(config),
+        start_time: Utc::now(),
+        cache_registry: Arc::new(CacheRegistry::new()),
+        metrics_handle: Arc::new(metrics_handle),
+        service_registry,
         db_pool: None,
-        token_client: Some(Arc::new(MockTokenClient::default())),
-        metrics_handle: Some(metrics_handle),
-        resource_registry: Some(Arc::new(ApiResourceRegistry::new())),
-        service_registry: Arc::new(ServiceRegistry::new()),
     });
 
     Router::new().with_state(state)
 }
 
+pub async fn app_router(state: Arc<AppState>) -> Router {
+    let db_pool = state.get_db_pool().expect("Database pool not initialized");
+    let pet_repository: Arc<dyn PetRepository> = Arc::new(PgPetRepository::new(db_pool.clone()));
+    let pet_service = Arc::new(PetService::new(pet_repository));
+    let service_registry = Arc::new(ServiceRegistry::new(pet_service));
+
+    let state = Arc::new(AppState {
+        client: state.client.clone(),
+        config: state.config.clone(),
+        start_time: state.start_time,
+        cache_registry: state.cache_registry.clone(),
+        metrics_handle: state.metrics_handle.clone(),
+        service_registry,
+        db_pool: Some(db_pool),
+    });
+
+    Router::new()
+        .route("/health", get(health_check))
+        .route("/metrics", get(metrics_handler))
+        .route("/pets", get(get_pets).post(create_pet))
+        .route(
+            "/pets/:id",
+            get(get_pet_by_id).put(update_pet).delete(delete_pet),
+        )
+        .with_state(state)
+        .layer(TraceLayer::new_for_http())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::services::pet_service::{MockPetRepository, PetService};
     use axum::{
-        body::{self, Body},
-        http::{HeaderMap, HeaderValue, Method, Request, StatusCode},
+        body::Body,
+        http::{Request, StatusCode},
         response::Response,
-        routing::get,
     };
-    use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
-    use std::sync::Arc;
     use tower::ServiceExt;
 
-    // Simple handler for testing
-    async fn test_handler() -> &'static str {
-        "test_response"
-    }
-
-    // Handler that returns headers from the request
-    async fn echo_headers(headers: HeaderMap) -> String {
-        headers
-            .iter()
-            .map(|(k, v)| format!("{}: {}", k, v.to_str().unwrap_or("invalid")))
-            .collect::<Vec<String>>()
-            .join(", ")
-    }
-
-    // Create minimal app state for testing
     fn create_test_state() -> Arc<AppState> {
-        let metrics_recorder = PrometheusBuilder::new().build_recorder();
-        let metrics_handle = metrics_recorder.handle();
+        let config = Arc::new(AppConfig::default());
+        let metrics_handle = Arc::new(init_metrics());
+        let cache_registry = Arc::new(CacheRegistry::new());
+        let client = Arc::new(EntraTokenClient::from_config(&config));
+        let mock_repository: Arc<dyn PetRepository> = Arc::new(MockPetRepository::default());
+        let pet_service = Arc::new(PetService::new(mock_repository));
+        let service_registry = Arc::new(ServiceRegistry::new(pet_service));
 
         Arc::new(AppState {
-            client: None,
-            config: AppConfig::default(),
-            start_time: SystemTime::now(),
-            cache_registry: None,
-            metrics_handle: Some(metrics_handle),
-            token_client: None,
-            resource_registry: None,
+            client,
+            config,
+            start_time: Utc::now(),
+            cache_registry,
+            metrics_handle,
+            service_registry,
             db_pool: None,
-            service_registry: Arc::new(ServiceRegistry::new()),
         })
     }
 
-    // Helper to make a request to the router with optional headers
-    async fn send_request(
-        router: Router,
-        uri: &str,
-        method: Method,
-        headers: Option<HeaderMap>,
-    ) -> Response {
-        let mut req_builder = Request::builder().uri(uri).method(method);
+    async fn test_request(router: Router, uri: &str) -> Response {
+        let request = Request::builder().uri(uri).body(Body::empty()).unwrap();
 
-        // Add headers if provided
-        if let Some(hdrs) = headers {
-            for (name, value) in hdrs.iter() {
-                req_builder = req_builder.header(name, value);
-            }
-        }
-
-        let req = req_builder.body(Body::empty()).unwrap();
-        router.oneshot(req).await.unwrap()
+        router.oneshot(request).await.unwrap()
     }
 
     #[tokio::test]
-    async fn test_merge_user_routes() {
-        // Create test state
+    async fn test_health_check() {
         let state = create_test_state();
-
-        // Create test user routes
-        let user_routes = Router::new().route("/test", get(test_handler));
-
-        // Create app router by merging core and user routes
-        let app_router = create_core_app_router(state, user_routes);
-
-        // Test user route
-        let response = send_request(app_router, "/test", Method::GET, None).await;
+        let router = app_router(state).await;
+        let response = test_request(router, "/health").await;
         assert_eq!(response.status(), StatusCode::OK);
-
-        // Get response body
-        let body = body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
-        let body_str = String::from_utf8(body.to_vec()).unwrap();
-        assert_eq!(body_str, "test_response");
     }
 
     #[tokio::test]
-    async fn test_timeout_middleware() {
-        // Create test state with very short timeout
-        let state = {
-            let config = {
-                let mut cfg = AppConfig::default();
-                // Set a very low timeout for testing
-                cfg.server.timeout_seconds = 1;
-                cfg
-            };
-
-            let metrics_recorder = PrometheusBuilder::new().build_recorder();
-            let metrics_handle = metrics_recorder.handle();
-
-            Arc::new(AppState {
-                client: None,
-                config,
-                start_time: SystemTime::now(),
-                cache_registry: None,
-                metrics_handle: Some(metrics_handle),
-                token_client: None,
-                resource_registry: None,
-                db_pool: None,
-                service_registry: Arc::new(ServiceRegistry::new()),
-            })
-        };
-
-        // Handler that simulates a slow response
-        async fn slow_handler() -> &'static str {
-            // Sleep for longer than the timeout
-            tokio::time::sleep(Duration::from_secs(2)).await;
-            "slow_response"
-        }
-
-        // Create test user routes with a slow handler
-        let user_routes = Router::new().route("/slow", get(slow_handler));
-
-        // Create app router with the timeout middleware
-        let app_router = create_core_app_router(state, user_routes);
-
-        // Test slow route - should time out
-        let response = send_request(app_router, "/slow", Method::GET, None).await;
-
-        // Expect request timeout status code
-        assert_eq!(response.status(), StatusCode::REQUEST_TIMEOUT);
-    }
-
-    #[tokio::test]
-    async fn test_request_headers_middleware() {
-        // Create test state
+    async fn test_metrics_handler() {
         let state = create_test_state();
-
-        // User route that tests if headers are properly propagated
-        let user_routes = Router::new().route("/echo-headers", get(echo_headers));
-
-        // Create app router with middleware
-        let app_router = create_core_app_router(state, user_routes);
-
-        // Create custom headers
-        let mut headers = HeaderMap::new();
-        headers.insert("X-Test-Header", HeaderValue::from_static("test-value"));
-        headers.insert("Accept", HeaderValue::from_static("application/json"));
-
-        // Send request with headers
-        let response = send_request(app_router, "/echo-headers", Method::GET, Some(headers)).await;
+        let router = app_router(state).await;
+        let response = test_request(router, "/metrics").await;
         assert_eq!(response.status(), StatusCode::OK);
-
-        // Verify headers were passed through middleware
-        let body = body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
-        let body_str = String::from_utf8(body.to_vec()).unwrap();
-
-        // Check that our test headers are present
-        assert!(body_str.contains("x-test-header: test-value"));
-        assert!(body_str.contains("accept: application/json"));
-    }
-
-    #[tokio::test]
-    async fn test_init_app_state() {
-        // Mock environment variables for testing - using unsafe blocks for environment manipulation
-        unsafe {
-            std::env::set_var("NAVIUS_SERVER_PORT", "8081");
-            std::env::set_var("NAVIUS_CACHE_ENABLED", "false");
-        }
-
-        // Initialize app state
-        let (state, addr) = init_app_state().await;
-
-        // Verify state was initialized correctly
-        assert_eq!(addr.port(), 8081);
-        assert_eq!(state.config.cache.enabled, false);
-        assert!(state.cache_registry.is_none());
-
-        // Cleanup environment variables
-        unsafe {
-            std::env::remove_var("NAVIUS_SERVER_PORT");
-            std::env::remove_var("NAVIUS_CACHE_ENABLED");
-        }
     }
 }

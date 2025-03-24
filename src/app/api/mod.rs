@@ -25,7 +25,11 @@ use std::sync::Arc;
 // pub mod users;
 // pub mod products;
 // pub mod orders;
-pub mod pet;
+
+/// Internal Pet database core implementation
+pub mod pet_core;
+
+/// Alternative Pet database implementation
 pub mod pet_db;
 
 /// Example API implementations
@@ -44,14 +48,26 @@ pub mod examples;
 /// let app: Router<Arc<AppState>> = Router::new().nest("/api", routes()).with_state(state);
 /// ```
 pub fn routes() -> Router<Arc<AppState>> {
-    // Create a router with our example endpoints
-    Router::new()
-        .route("/pets/{id}", get(examples::pet::fetch_pet_handler))
-        .merge(pet::configure())
-        .merge(pet_db::configure())
+    let mut router = Router::new();
+
+    // Swagger Petstore example route
+    #[cfg(feature = "examples")]
+    {
+        router = router.route(
+            "/swagger-petstore/pets/{id}",
+            get(crate::examples::api::swagger_petstore::fetch_pet_handler),
+        );
+    }
+
+    // Core Pet DB implementations
+    router = router
+        .merge(pet_core::configure())
+        .merge(pet_db::configure());
 
     // Add your own routes below:
-    // .merge(users::routes())
-    // .merge(products::routes())
-    // .merge(orders::routes())
+    // router = router.merge(users::routes());
+    // router = router.merge(products::routes());
+    // router = router.merge(orders::routes());
+
+    router
 }

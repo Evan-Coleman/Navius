@@ -1,0 +1,179 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Error Fix Tracking Rule
+
+This rule helps track attempted error fixes during the codebase cleanup process. Before attempting to fix the same error multiple times, consult this document to avoid repeating unsuccessful approaches.
+
+## How to Use This Rule
+
+1. When encountering an error, check if it's already documented here
+2. If attempting a fix that fails, document the error and attempted fix
+3. When successfully fixing an error, document the solution◊
+4. Reference this document when working on similar errors
+
+## Critical Workflow Guidelines
+
+### Always Run with Full Features
+- **DO NOT** use `--no-default-features` to bypass errors
+- **ALWAYS** use `cargo run` without feature flags to see actual errors
+- Feature flag tricks hide real problems that need to be fixed
+- Running with reduced features may hide dependency-related errors
+- Fix the actual errors instead of working around them
+
+### Proper Debugging Steps
+1. Run `cargo build` or `cargo run` without any feature flags
+2. Document all errors in the error tracking table
+3. Fix the highest priority errors first (usually executor trait and database connection issues)
+4. Address type conversion issues between different models
+5. Fix metric handling issues with static lifetimes
+6. Rerun `cargo build` frequently to track progress
+
+### Error Count Tracking
+- IMPORTANT: The command `cargo build -v 2>&1 | grep "error:" | wc -l` is FLAWED and may underreport errors
+- For accurate error counts:
+  ```bash
+  # Get full error count
+  cargo build
+  # Get detailed error listing
+  cargo build -v
+  ```
+- Document error counts before and after each fix
+- Group similar errors and fix them together
+- Prioritize errors that are blocking key functionality
+- Current error count as of last check: ~70 errors with 9 warnings
+- Track both error count and warning count separately
+
+## Error Tracking Table
+
+| Error ID | Error Description | Failed Approaches | Successful Approach | Status |
+|----------|------------------|-------------------|---------------------|--------|
+| E001 | SQLx query not found in offline mode | • Adding to sqlx-data.json manually<br>• Running with `--offline` flag | Regenerating sqlx-data.json with actual database | Resolved |
+| E002 | Type mismatch between pet_service::Pet and pet_repository::Pet | • Creating conversion functions<br>• Using type aliases | Create consistent model in core and implement From/Into traits | Resolved |
+| E003 | Metrics handler lifetime issues with static strings | • Using String::from for keys<br>• Cloning strings before passing | Use Vec instead of HashMap for labels and properly dereference parameters with `*k` in macros | Resolved |
+| E004 | Missing imports in test files | • Adding imports one by one<br>• Using glob imports | Pending | Open |
+| E005 | Executor trait not implemented for &dyn PgPool | • Using as_ref()<br>• Trying to implement Executor manually | Use concrete PgPool type instead of trait object | In Progress |
+| E006 | Type mismatch between i32 and Uuid for pet IDs | • Converting i32 to string then to Uuid<br>• Using type aliases | Pending | Open |
+| E007 | Metrics handler static lifetime requirements | • Using String::to_owned for keys<br>• Using const strings | Use proper dereferencing with `*k` in macros; use Vec for labels instead of HashMap | Resolved |
+| E008 | Missing trait implementations for PetResponse | • Manual conversion functions<br>• Deriving From/Into | Pending | Open |
+| E009 | Missing App Error variants (ConfigurationError, AuthorizationError) | • Using different error types<br>• Mapping to existing variants | Add missing variants to AppError enum and update all match expressions | Resolved |
+| E010 | Bypassing errors with feature flags | • Using --no-default-features to hide errors<br>• Commenting out problematic code | NEVER bypass errors with feature flags; fix the root causes | Resolved |
+| E011 | Type mismatch between Arc<dyn PgPool> and Arc<PgPool> | • Using `.as_ref()` to get access to underlying pool<br>• Casting from one type to another | Update AppState and related code to use consistent concrete PgPool type instead of trait object | In Progress |
+| E012 | Lifetime issues in metrics handler functions | • Adding 'static to String values<br>• Trying to clone values | Fix by properly dereferencing lifetime parameters (`*k` instead of just `k`) and use Vec for labels | Resolved |
+| E013 | Option<Arc<CacheRegistry>> vs Arc<CacheRegistry> mismatches | • Using if-let statements with wrong types | Replace Option<Arc<CacheRegistry>> with Arc<CacheRegistry> for consistency | In Progress |
+| E014 | AppState has conflicting `new` implementations | • Adding different parameter lists | Use distinct function names or split implementation into separate files | Open |
+| E015 | Missing functions in cache_manager.rs | • Commenting out function calls<br>• Creating empty function shells | Implement proper functions with useful implementations | Resolved |
+
+## Common Errors and Solutions
+
+### SQLx Offline Mode Errors
+- **Symptoms**: `Error: error returned from database: relation "XXXX" does not exist`
+- **Failed Approaches**:
+  - Running with `--no-offline` only once
+  - Manually editing sqlx-data.json
+- **Working Approach**:
+  - Set `SQLX_OFFLINE=false`
+  - Run database migrations
+  - Run the application once to capture all queries
+  - Use `cargo sqlx prepare` to generate cache
+
+### Type Mismatches with Arc Wrappers
+- **Symptoms**: `expected struct Arc<Box<dyn Trait>>, found Box<dyn Trait>`
+- **Failed Approaches**:
+  - Adding `.clone()` to the inner Box
+  - Using `.into()` to try to convert
+- **Working Approach**:
+  - Explicitly wrap with `Arc::new(box_value)`
+  - Make sure to use consistent wrappers across modules
+
+### API Inconsistencies
+- **Symptoms**: Pet service different from Pet repository (pet_service::Pet vs pet_repository::Pet)
+- **Failed Approaches**: 
+  - Creating conversion functions between types
+  - Using type aliases
+- **Working Approach**:
+  - Create a consistent model in core
+  - Implement From/Into traits for conversion
+
+### Metrics Handler Lifetime Issues
+- **Symptoms**: `borrowed value does not live long enough` in metrics handler
+- **Failed Approaches**:
+  - Using String::from for metric names
+  - Cloning strings before passing to metrics macros
+- **Working Approach**:
+  - Use proper dereferencing with `*k` in macro calls
+  - Switch from HashMap to Vec for labels to avoid ownership issues
+  - Use simpler data structures when possible
+
+### Database Executor Issues
+- **Symptoms**: `the trait Executor<'_> is not implemented for &dyn PgPool`
+- **Failed Approaches**:
+  - Using as_ref() on pool
+  - Trying to implement Executor manually
+- **Working Approach**:
+  - Use concrete PgPool type instead of trait object
+  - Update AppState to use Option<Arc<PgPool>>
+  - Update service constructors to accept concrete pool type
+
+### ID Type Mismatches
+- **Symptoms**: `expected Uuid, found i32` in database queries
+- **Failed Approaches**:
+  - Converting i32 to string then to Uuid
+  - Using type aliases
+- **Working Approach**:
+  - Pending investigation
+  - Need to standardize ID types across the codebase
+
+### Bypassing Errors with Feature Flags (ANTI-PATTERN) 
+- **Symptoms**: Using `--no-default-features` to bypass compile errors
+- **Failed Approaches**:
+  - Running with fewer features to make compilation pass
+  - Excluding problematic modules with `#[cfg(feature = "...")]`
+- **Correct Approach**:
+  - Always use `cargo run` without feature flags to see actual errors
+  - Fix errors properly rather than bypassing them
+  - Address root causes instead of symptoms
+
+## Critical Areas to Monitor
+
+1. **Executor Trait Implementations**
+   - Ensure proper implementations for both sync and async variants
+   - Check parameter and return type consistency
+   - Use concrete types instead of trait objects for database pools
+
+2. **Repository Pattern Consistency**
+   - Repository should accept connection/pool and return domain objects
+   - Watch for mixing domain and database models
+   - Ensure proper trait bounds on generic parameters
+
+3. **Error Conversions**
+   - Errors must convert properly between layers
+   - Database errors → Domain errors → API responses
+   - Check for missing error variants
+
+4. **Module Organization**
+   - Core vs. App layer boundaries must be maintained
+   - Example code must be properly tagged
+   - Check for proper re-exports in mod.rs files
+
+5. **Lifetime Management**
+   - Watch for static lifetime requirements in metrics
+   - Ensure proper lifetime bounds on generic parameters
+   - Check for Send/Sync requirements in async code
+
+6. **Type Consistency**
+   - Standardize ID types (Uuid vs i32)
+   - Ensure consistent use of concrete types vs trait objects
+   - Maintain consistent model types across layers
+
+## Revision History
+
+| Date | Changes |
+|------|---------|
+| Initial | Created document with basic structure and examples |
+| Update 1 | Added new error patterns from test run: metrics lifetime issues, executor trait problems, and missing imports |
+| Update 2 | Added new error patterns: ID type mismatches, metrics static lifetime issues, and PetResponse trait implementations |
+| Update 3 | Updated with solutions for metrics handler lifetime issues (E003, E007, E012) using proper dereferencing and Vec instead of HashMap; updated error count to ~70 errors | 

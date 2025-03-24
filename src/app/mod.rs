@@ -2,9 +2,8 @@
 pub use crate::app::router::*;
 pub mod router;
 
-// Re-export key components from router module
-pub use router::create_router;
-pub use router::init;
+// Router has no init function - removing the incorrect import
+//pub use router::init;
 
 // Re-export AppState from core
 pub use crate::core::router::AppState;

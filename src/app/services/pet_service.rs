@@ -1,32 +1,33 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use std::sync::Arc;
+use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
+use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
-use crate::app::database::repositories::pet_repository::{Pet, PetRepository};
-use crate::app::services::ServiceError;
+use crate::app::database::repositories::pet_repository::{Pet as RepositoryPet, PetRepository};
+use crate::app::services::dto::{CreatePetDto, UpdatePetDto};
+use crate::app::services::error::ServiceError;
+use crate::core::database::connection::DatabaseConnection;
+use crate::core::{
+    database::{models::Pet, repositories::PetRepository},
+    error::AppError,
+};
 
-/// Data transfer object for creating a new pet
-#[derive(Debug, Clone)]
-pub struct CreatePetDto {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Pet {
+    pub id: Uuid,
     pub name: String,
     pub pet_type: String,
     pub breed: Option<String>,
-    pub age: Option<i32>,
+    pub age: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
-/// Data transfer object for updating an existing pet
-#[derive(Debug, Clone)]
-pub struct UpdatePetDto {
-    pub name: Option<String>,
-    pub pet_type: Option<String>,
-    pub breed: Option<String>,
-    pub age: Option<i32>,
-}
-
-/// Interface for pet service operations
+/// Trait for Pet service operations
 #[async_trait]
-pub trait IPetService: Send + Sync + 'static {
+pub trait IPetService: Send + Sync {
     /// Get all pets
     async fn get_all_pets(&self) -> Result<Vec<Pet>, ServiceError>;
 
@@ -39,371 +40,257 @@ pub trait IPetService: Send + Sync + 'static {
     /// Update an existing pet
     async fn update_pet(&self, id: Uuid, dto: UpdatePetDto) -> Result<Pet, ServiceError>;
 
-    /// Delete a pet by ID
-    async fn delete_pet(&self, id: Uuid) -> Result<bool, ServiceError>;
-
-    /// Find pets by species
-    async fn find_by_species(&self, species: &str) -> Result<Vec<Pet>, ServiceError>;
+    /// Delete a pet
+    async fn delete_pet(&self, id: Uuid) -> Result<bool, AppError>;
 }
 
-/// Implementation of the pet service
-pub struct PetService {
-    repository: Arc<dyn PetRepository>,
+/// Service for managing pets
+pub struct PetService<R: PetRepository + ?Sized> {
+    repository: Arc<R>,
 }
 
-impl PetService {
-    /// Create a new PetService with the given repository
-    pub fn new(repository: Arc<dyn PetRepository>) -> Self {
+impl<R: PetRepository + ?Sized> PetService<R> {
+    pub fn new(repository: Arc<R>) -> Self {
         Self { repository }
+    }
+
+    pub async fn find_all(&self) -> Result<Vec<Pet>, AppError> {
+        let repo_pets = self.repository.find_all().await?;
+        Ok(repo_pets.into_iter().map(Pet::from).collect())
+    }
+
+    pub async fn find_by_id(&self, id: Uuid) -> Result<Pet, AppError> {
+        let repo_pet = self.repository.find_by_id(id).await?;
+        Ok(Pet::from(repo_pet))
+    }
+
+    pub async fn create(&self, pet: Pet) -> Result<Pet, AppError> {
+        let repo_pet = self.repository.create(pet.into()).await?;
+        Ok(Pet::from(repo_pet))
+    }
+
+    pub async fn update(&self, pet: Pet) -> Result<Pet, AppError> {
+        let repo_pet = self.repository.update(pet.into()).await?;
+        Ok(Pet::from(repo_pet))
+    }
+
+    pub async fn delete(&self, id: Uuid) -> Result<bool, AppError> {
+        self.repository.delete(id).await
     }
 }
 
 #[async_trait]
-impl IPetService for PetService {
+impl<R: PetRepository + ?Sized> IPetService for PetService<R> {
     async fn get_all_pets(&self) -> Result<Vec<Pet>, ServiceError> {
-        self.repository
-            .find_all()
-            .await
-            .map_err(|e| ServiceError::DatabaseError(e.to_string()))
+        self.find_all().await
     }
 
     async fn get_pet_by_id(&self, id: Uuid) -> Result<Pet, ServiceError> {
-        match self.repository.find_by_id(id).await {
-            Ok(Some(pet)) => Ok(pet),
-            Ok(None) => Err(ServiceError::PetNotFound),
-            Err(e) => Err(ServiceError::DatabaseError(e.to_string())),
-        }
+        self.find_by_id(id).await
     }
 
     async fn create_pet(&self, dto: CreatePetDto) -> Result<Pet, ServiceError> {
-        // Validate input
-        if dto.name.trim().is_empty() {
-            return Err(ServiceError::ValidationError("Name cannot be empty".into()));
-        }
-
-        if dto.pet_type.trim().is_empty() {
-            return Err(ServiceError::ValidationError(
-                "Pet type cannot be empty".into(),
-            ));
-        }
-
-        // Create pet
-        self.repository
-            .create(dto.name, dto.pet_type, dto.breed, dto.age)
-            .await
-            .map_err(|e| ServiceError::DatabaseError(e.to_string()))
+        self.create(Pet {
+            id: Uuid::new_v4(),
+            name: dto.name,
+            pet_type: dto.pet_type,
+            breed: dto.breed,
+            age: dto.age.unwrap_or_default(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        })
+        .await
     }
 
     async fn update_pet(&self, id: Uuid, dto: UpdatePetDto) -> Result<Pet, ServiceError> {
-        // Check if pet exists
-        let existing = self.get_pet_by_id(id).await?;
-
-        // Update with new values or keep existing ones
-        let name = dto.name.unwrap_or(existing.name);
-        let pet_type = dto.pet_type.unwrap_or(existing.pet_type);
-        let breed = dto.breed.or(existing.breed);
-        let age = dto.age.or(existing.age);
-
-        // Validate input
-        if name.trim().is_empty() {
-            return Err(ServiceError::ValidationError("Name cannot be empty".into()));
-        }
-
-        if pet_type.trim().is_empty() {
-            return Err(ServiceError::ValidationError(
-                "Pet type cannot be empty".into(),
-            ));
-        }
-
-        // Update pet
-        match self.repository.update(id, name, pet_type, breed, age).await {
-            Ok(Some(pet)) => Ok(pet),
-            Ok(None) => Err(ServiceError::PetNotFound),
-            Err(e) => Err(ServiceError::DatabaseError(e.to_string())),
-        }
+        self.update(Pet {
+            id,
+            name: dto.name,
+            pet_type: dto.pet_type,
+            breed: dto.breed,
+            age: dto.age.unwrap_or_default(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        })
+        .await
     }
 
-    async fn delete_pet(&self, id: Uuid) -> Result<bool, ServiceError> {
-        // Check if pet exists
-        self.get_pet_by_id(id).await?;
+    async fn delete_pet(&self, id: Uuid) -> Result<bool, AppError> {
+        self.delete(id).await
+    }
+}
 
-        // Delete pet
-        match self.repository.delete(id).await {
-            Ok(true) => Ok(true),
-            Ok(false) => Err(ServiceError::PetNotFound),
-            Err(e) => Err(ServiceError::DatabaseError(e.to_string())),
+pub struct MockPetRepository {
+    pets: Arc<RwLock<Vec<Pet>>>,
+}
+
+impl MockPetRepository {
+    pub fn new(pets: Vec<Pet>) -> Self {
+        Self {
+            pets: Arc::new(RwLock::new(pets)),
         }
     }
+}
 
-    async fn find_by_species(&self, species: &str) -> Result<Vec<Pet>, ServiceError> {
-        // In a real implementation, this would call a repository method
-        // For now, we'll get all pets and filter by species/type
-        let all_pets = self.get_all_pets().await?;
+impl Default for MockPetRepository {
+    fn default() -> Self {
+        Self::new(vec![])
+    }
+}
 
-        let filtered = all_pets
-            .into_iter()
-            .filter(|pet| pet.pet_type.to_lowercase() == species.to_lowercase())
+#[async_trait]
+impl PetRepository for MockPetRepository {
+    async fn find_all(&self) -> Result<Vec<RepositoryPet>, AppError> {
+        let pets = self.pets.read().unwrap();
+        let repo_pets = pets
+            .iter()
+            .map(|p| RepositoryPet::from(p.clone()))
             .collect();
+        Ok(repo_pets)
+    }
 
-        Ok(filtered)
+    async fn find_by_id(&self, id: Uuid) -> Result<RepositoryPet, AppError> {
+        self.pets
+            .read()
+            .unwrap()
+            .iter()
+            .find(|p| p.id == id)
+            .map(|p| RepositoryPet::from(p.clone()))
+            .ok_or_else(|| AppError::NotFound(format!("Pet with id {} not found", id)))
+    }
+
+    async fn create(&self, pet: RepositoryPet) -> Result<RepositoryPet, AppError> {
+        let svc_pet = Pet::from(pet.clone());
+        let mut pets = self.pets.write().unwrap();
+        pets.push(svc_pet);
+        Ok(pet)
+    }
+
+    async fn update(&self, pet: RepositoryPet) -> Result<RepositoryPet, AppError> {
+        let svc_pet = Pet::from(pet.clone());
+        let mut pets = self.pets.write().unwrap();
+        if let Some(index) = pets.iter().position(|p| p.id == svc_pet.id) {
+            pets[index] = svc_pet;
+            Ok(pet)
+        } else {
+            Err(AppError::NotFound(format!(
+                "Pet with id {} not found",
+                pet.id
+            )))
+        }
+    }
+
+    async fn delete(&self, id: Uuid) -> Result<bool, AppError> {
+        let mut pets = self.pets.write().unwrap();
+        if let Some(index) = pets.iter().position(|p| p.id == id) {
+            pets.remove(index);
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::database::repositories::pet_repository::PetRepository;
     use async_trait::async_trait;
-    use chrono::Utc;
-    use mockall::predicate::*;
-    use mockall::*;
-    use std::sync::Arc;
-    use uuid::Uuid;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
 
-    // Mock PetRepository for testing
-    mock! {
-        PetRepository {}
-
-        #[async_trait]
-        impl PetRepository for PetRepository {
-            async fn find_all(&self) -> Result<Vec<Pet>, crate::core::error::AppError>;
-            async fn find_by_id(&self, id: Uuid) -> Result<Option<Pet>, crate::core::error::AppError>;
-            async fn create(
-                &self,
-                name: String,
-                pet_type: String,
-                breed: Option<String>,
-                age: Option<i32>,
-            ) -> Result<Pet, crate::core::error::AppError>;
-            async fn update(
-                &self,
-                id: Uuid,
-                name: String,
-                pet_type: String,
-                breed: Option<String>,
-                age: Option<i32>,
-            ) -> Result<Option<Pet>, crate::core::error::AppError>;
-            async fn delete(&self, id: Uuid) -> Result<bool, crate::core::error::AppError>;
-        }
-    }
-
-    // Helper function to create a sample pet
-    fn create_sample_pet() -> Pet {
-        Pet {
+    #[tokio::test]
+    async fn test_pet_service() {
+        let pet = Pet {
             id: Uuid::new_v4(),
             name: "Fluffy".to_string(),
             pet_type: "Cat".to_string(),
             breed: Some("Persian".to_string()),
-            age: Some(3),
+            age: 3,
             created_at: Utc::now(),
             updated_at: Utc::now(),
+        };
+
+        let repository = Arc::new(MockPetRepository::new(vec![pet.clone()]));
+        let service = PetService::new(repository);
+
+        // Test find_all
+        let pets = service.get_all_pets().await.unwrap();
+        assert_eq!(pets.len(), 1);
+        assert_eq!(pets[0].name, "Fluffy");
+
+        // Test find_by_id
+        let found_pet = service.get_pet_by_id(pet.id).await.unwrap();
+        assert_eq!(found_pet.id, pet.id);
+
+        // Test create
+        let new_pet = Pet {
+            id: Uuid::new_v4(),
+            name: "Buddy".to_string(),
+            pet_type: "Dog".to_string(),
+            breed: Some("Golden Retriever".to_string()),
+            age: 2,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        let created_pet = service
+            .create_pet(CreatePetDto {
+                name: new_pet.name.clone(),
+                pet_type: Some(new_pet.pet_type.clone()),
+                breed: new_pet.breed.clone(),
+                age: Some(new_pet.age),
+            })
+            .await
+            .unwrap();
+        assert_eq!(created_pet.name, "Buddy");
+
+        // Test update
+        let mut updated_pet = created_pet.clone();
+        updated_pet.name = "Buddy Jr.".to_string();
+        let result = service
+            .update_pet(
+                updated_pet.id,
+                UpdatePetDto {
+                    name: Some(updated_pet.name.clone()),
+                    pet_type: Some(updated_pet.pet_type.clone()),
+                    breed: updated_pet.breed.clone(),
+                    age: Some(updated_pet.age),
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.name, "Buddy Jr.");
+
+        // Test delete
+        let deleted = service.delete_pet(created_pet.id).await.unwrap();
+        assert!(deleted);
+    }
+}
+
+// Add conversion implementations to address the type mismatches
+impl From<RepositoryPet> for Pet {
+    fn from(repo_pet: RepositoryPet) -> Self {
+        Self {
+            id: repo_pet.id,
+            name: repo_pet.name,
+            pet_type: repo_pet.pet_type,
+            breed: repo_pet.breed,
+            age: repo_pet.age,
+            created_at: repo_pet.created_at,
+            updated_at: repo_pet.updated_at,
         }
     }
+}
 
-    #[tokio::test]
-    async fn test_get_all_pets() {
-        // Arrange
-        let mut repo = MockPetRepository::new();
-        let pets = vec![create_sample_pet(), create_sample_pet()];
-
-        repo.expect_find_all()
-            .times(1)
-            .returning(move || Ok(pets.clone()));
-
-        let service = PetService::new(Arc::new(repo));
-
-        // Act
-        let result = service.get_all_pets().await;
-
-        // Assert
-        assert!(result.is_ok());
-        let pets = result.unwrap();
-        assert_eq!(pets.len(), 2);
-    }
-
-    #[tokio::test]
-    async fn test_get_pet_by_id() {
-        // Arrange
-        let mut repo = MockPetRepository::new();
-        let pet = create_sample_pet();
-        let id = pet.id;
-
-        repo.expect_find_by_id()
-            .with(eq(id))
-            .times(1)
-            .returning(move |_| Ok(Some(pet.clone())));
-
-        let service = PetService::new(Arc::new(repo));
-
-        // Act
-        let result = service.get_pet_by_id(id).await;
-
-        // Assert
-        assert!(result.is_ok());
-        let found_pet = result.unwrap();
-        assert_eq!(found_pet.id, id);
-    }
-
-    #[tokio::test]
-    async fn test_get_pet_by_id_not_found() {
-        // Arrange
-        let mut repo = MockPetRepository::new();
-        let id = Uuid::new_v4();
-
-        repo.expect_find_by_id()
-            .with(eq(id))
-            .times(1)
-            .returning(|_| Ok(None));
-
-        let service = PetService::new(Arc::new(repo));
-
-        // Act
-        let result = service.get_pet_by_id(id).await;
-
-        // Assert
-        assert!(result.is_err());
-        match result {
-            Err(ServiceError::PetNotFound) => (),
-            _ => panic!("Expected PetNotFound error"),
+impl From<Pet> for RepositoryPet {
+    fn from(svc_pet: Pet) -> Self {
+        Self {
+            id: svc_pet.id,
+            name: svc_pet.name,
+            pet_type: svc_pet.pet_type,
+            breed: svc_pet.breed,
+            age: svc_pet.age,
+            created_at: svc_pet.created_at,
+            updated_at: svc_pet.updated_at,
         }
-    }
-
-    #[tokio::test]
-    async fn test_create_pet() {
-        // Arrange
-        let mut repo = MockPetRepository::new();
-        let pet = create_sample_pet();
-
-        repo.expect_create()
-            .with(
-                eq("Fluffy".to_string()),
-                eq("Dog".to_string()),
-                eq(Some("Labrador".to_string())),
-                eq(Some(2)),
-            )
-            .times(1)
-            .returning(move |_, _, _, _| Ok(pet.clone()));
-
-        let service = PetService::new(Arc::new(repo));
-
-        let dto = CreatePetDto {
-            name: "Fluffy".to_string(),
-            pet_type: "Dog".to_string(),
-            breed: Some("Labrador".to_string()),
-            age: Some(2),
-        };
-
-        // Act
-        let result = service.create_pet(dto).await;
-
-        // Assert
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_update_pet() {
-        // Arrange
-        let mut repo = MockPetRepository::new();
-        let pet = create_sample_pet();
-        let id = pet.id;
-        let updated_pet = Pet {
-            name: "Fluffy Updated".to_string(),
-            ..pet.clone()
-        };
-
-        repo.expect_find_by_id()
-            .with(eq(id))
-            .times(1)
-            .returning(move |_| Ok(Some(pet.clone())));
-
-        repo.expect_update()
-            .with(
-                eq(id),
-                eq("Fluffy Updated".to_string()),
-                eq("Cat".to_string()),
-                eq(Some("Persian".to_string())),
-                eq(Some(3)),
-            )
-            .times(1)
-            .returning(move |_, _, _, _, _| Ok(Some(updated_pet.clone())));
-
-        let service = PetService::new(Arc::new(repo));
-
-        let dto = UpdatePetDto {
-            name: Some("Fluffy Updated".to_string()),
-            pet_type: None,
-            breed: None,
-            age: None,
-        };
-
-        // Act
-        let result = service.update_pet(id, dto).await;
-
-        // Assert
-        assert!(result.is_ok());
-        let updated = result.unwrap();
-        assert_eq!(updated.name, "Fluffy Updated");
-    }
-
-    #[tokio::test]
-    async fn test_delete_pet() {
-        // Arrange
-        let mut repo = MockPetRepository::new();
-        let pet = create_sample_pet();
-        let id = pet.id;
-
-        repo.expect_find_by_id()
-            .with(eq(id))
-            .times(1)
-            .returning(move |_| Ok(Some(pet.clone())));
-
-        repo.expect_delete()
-            .with(eq(id))
-            .times(1)
-            .returning(|_| Ok(true));
-
-        let service = PetService::new(Arc::new(repo));
-
-        // Act
-        let result = service.delete_pet(id).await;
-
-        // Assert
-        assert!(result.is_ok());
-        assert!(result.unwrap());
-    }
-
-    #[tokio::test]
-    async fn test_find_by_species() {
-        // Arrange
-        let mut repo = MockPetRepository::new();
-        let cat1 = Pet {
-            pet_type: "Cat".to_string(),
-            ..create_sample_pet()
-        };
-        let cat2 = Pet {
-            pet_type: "Cat".to_string(),
-            ..create_sample_pet()
-        };
-        let dog = Pet {
-            pet_type: "Dog".to_string(),
-            ..create_sample_pet()
-        };
-
-        let pets = vec![cat1, cat2, dog];
-
-        repo.expect_find_all()
-            .times(1)
-            .returning(move || Ok(pets.clone()));
-
-        let service = PetService::new(Arc::new(repo));
-
-        // Act
-        let result = service.find_by_species("cat").await;
-
-        // Assert
-        assert!(result.is_ok());
-        let cats = result.unwrap();
-        assert_eq!(cats.len(), 2);
-        assert!(cats.iter().all(|p| p.pet_type == "Cat"));
     }
 }

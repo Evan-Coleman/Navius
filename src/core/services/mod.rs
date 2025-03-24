@@ -7,9 +7,11 @@
 use mock_it::Mock;
 
 pub mod error;
-pub mod user;
+pub mod health;
+pub mod metrics;
+pub mod pet;
 pub use error::ServiceError;
-pub use user::{IUserService, UserService};
+pub use pet::PetService as CorePetService;
 
 #[cfg(test)]
 mod tests;
@@ -20,6 +22,11 @@ pub type MockUserService = Mock<dyn IUserService, ()>;
 /// Type alias for service results
 pub type ServiceResult<T> = Result<T, ServiceError>;
 
+use crate::app::database::repositories::pet_repository::PetRepository;
+use crate::app::database::repositories::pet_repository::PgPetRepository;
+use crate::app::services::PetService as AppPetService;
+use crate::app::services::pet_service::PetService;
+use crate::core::database::connection::DatabaseConnection;
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -31,15 +38,24 @@ pub trait ServiceRegistryTrait {
 }
 
 /// Registry for managing application services
+#[derive(Clone)]
 pub struct ServiceRegistry {
-    services: RwLock<HashMap<String, Arc<dyn Any + Send + Sync>>>,
+    pub pet_service: Arc<dyn Any + Send + Sync>,
+    services: Arc<RwLock<HashMap<String, Arc<dyn Any + Send + Sync>>>>,
 }
 
 impl ServiceRegistry {
     /// Create a new service registry
-    pub fn new() -> Self {
+    pub fn new<R: PetRepository + 'static>(pet_service: Arc<PetService<R>>) -> Self {
+        let mut services = HashMap::new();
+        services.insert(
+            "pet_service".to_string(),
+            pet_service.clone() as Arc<dyn Any + Send + Sync>,
+        );
+
         Self {
-            services: RwLock::new(HashMap::new()),
+            pet_service: pet_service as Arc<dyn Any + Send + Sync>,
+            services: Arc::new(RwLock::new(services)),
         }
     }
 
@@ -60,16 +76,61 @@ impl ServiceRegistry {
     }
 
     /// Get a pet service
-    pub fn pet_service(
-        &self,
-    ) -> Option<Arc<dyn crate::app::services::pet_service::IPetService + Send + Sync>> {
-        self.get::<crate::app::services::pet_service::PetService>("pet_service")
-            .map(|svc| svc as Arc<dyn crate::app::services::pet_service::IPetService + Send + Sync>)
+    pub fn pet_service(&self) -> Option<Arc<dyn crate::app::services::IPetService + Send + Sync>> {
+        self.get::<dyn crate::app::services::IPetService + Send + Sync>("pet_service")
     }
 }
 
 impl Default for ServiceRegistry {
     fn default() -> Self {
-        Self::new()
+        panic!("ServiceRegistry must be initialized with required services")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::services::pet_service::MockPetRepository;
+
+    #[test]
+    fn test_service_registry_new() {
+        let mock_repository = Arc::new(MockPetRepository::default());
+        let pet_service = Arc::new(PetService::new(mock_repository));
+        let registry = ServiceRegistry::new(pet_service);
+        assert!(Arc::strong_count(&registry.pet_service) > 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "ServiceRegistry must be initialized with required services")]
+    fn test_service_registry_default_panics() {
+        let _registry = ServiceRegistry::default();
+    }
+}
+
+#[cfg(test)]
+pub mod mock;
+
+pub struct Services {
+    db_connection: Option<Arc<dyn DatabaseConnection>>,
+    pet_service: Option<Arc<dyn crate::app::services::IPetService + Send + Sync>>,
+}
+
+impl Services {
+    pub fn new(db_connection: Option<Arc<dyn DatabaseConnection>>) -> Self {
+        let pet_service = db_connection.as_ref().map(|conn| {
+            Arc::new(AppPetService::new(conn.clone()))
+                as Arc<dyn crate::app::services::IPetService + Send + Sync>
+        });
+
+        Self {
+            db_connection,
+            pet_service,
+        }
+    }
+
+    pub fn get_pet_service(
+        &self,
+    ) -> Option<Arc<dyn crate::app::services::IPetService + Send + Sync>> {
+        self.pet_service.clone()
     }
 }

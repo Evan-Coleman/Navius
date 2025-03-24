@@ -28,6 +28,11 @@ pub mod core;
 /// Application components that can be extended by users
 pub mod app;
 
+/// Examples that demonstrate how to use the framework
+/// These can be optionally included or removed
+#[cfg(feature = "examples")]
+pub mod examples;
+
 /// Caching functionality
 pub mod cache {
     pub use crate::core::cache::*;

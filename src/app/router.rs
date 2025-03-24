@@ -1,86 +1,31 @@
 use axum::{
-    Json,
-    extract::{Path, State},
-    routing::{Router, get, post},
+    Router,
+    routing::{delete, get, post, put},
 };
-use std::net::SocketAddr;
 use std::sync::Arc;
-use tracing::info;
 
-use crate::{
-    api,
-    core::auth::EntraAuthLayer,
-    core::router::{AppState, create_core_app_router, init_app_state},
-    handlers::examples::pet,
-};
+use crate::app::api::pet_core::{create_pet, delete_pet, get_pet, update_pet};
+use crate::core::database::connection::DatabaseConnection;
+use crate::core::services::Services;
+use config::Config;
 
-/// Create custom user routes that can be modified by developers
-fn create_user_routes(state: Arc<AppState>) -> Router {
-    // Define whether auth is enabled
-    let auth_enabled = state.config.auth.enabled;
+pub fn create_router(config: Config, db_connection: Option<Arc<dyn DatabaseConnection>>) -> Router {
+    let services = Arc::new(Services::new(db_connection));
 
-    // Create auth middleware for different access levels
-    let readonly_auth = EntraAuthLayer::from_app_config_require_read_only_role(&state.config);
-    let fullaccess_auth = EntraAuthLayer::from_app_config_require_full_access_role(&state.config);
-
-    // 1. PUBLIC ROUTES - available without authentication
-    let public_routes = Router::new()
-        .route("/pet/{id}", get(pet::fetch_pet_handler))
-        // Add more public routes here
-        .route("/hello", get(|| async { "Hello, World!" }))
-        // Include API routes
-        .merge(api::configure());
-
-    // 2. READ-ONLY ROUTES - requires basic authentication
-    let readonly_routes = Router::new()
-        .route("/pet/{id}", get(pet::fetch_pet_handler))
-        // Add more read-only routes here
-        ;
-
-    // 3. FULL ACCESS ROUTES - requires full access role
-    let fullaccess_routes = Router::new()
-        .route("/pet/{id}", get(pet::fetch_pet_handler))
-        // Add more full access routes here
-        ;
-
-    // Apply authentication layers if enabled
-    let (readonly_routes, fullaccess_routes) = if auth_enabled {
-        (
-            readonly_routes.layer(readonly_auth),
-            fullaccess_routes.layer(fullaccess_auth),
-        )
-    } else {
-        // No auth enabled
-        (readonly_routes, fullaccess_routes)
-    };
-
-    // Combine user-defined routes
     Router::new()
-        .merge(public_routes)
-        .nest("/read", readonly_routes)
-        .nest("/full", fullaccess_routes)
-        .with_state(state)
+        .route("/health", get(health_check))
+        .route("/metrics", get(metrics))
+        .route("/pets/{id}", get(get_pet))
+        .route("/pets", post(create_pet))
+        .route("/pets/{id}", put(update_pet))
+        .route("/pets/{id}", delete(delete_pet))
+        .with_state(services)
 }
 
-/// Create the application router by combining core routes with user routes
-pub fn create_router(state: Arc<AppState>) -> Router {
-    // Get user-defined routes
-    let user_routes = create_user_routes(state.clone());
-
-    // Create the core app router with user routes
-    create_core_app_router(state, user_routes)
+async fn health_check() -> &'static str {
+    "OK"
 }
 
-/// Initialize the application
-///
-/// Note: The Router returned here has type Router<Arc<AppState>>. When passing to the server
-/// in main.rs, it needs to be used with the appropriate serving method.
-pub async fn init() -> (Router, SocketAddr) {
-    // Initialize app state and get server address
-    let (state, addr) = init_app_state().await;
-
-    // Create router with app state
-    let app = create_router(state);
-
-    (app, addr)
+async fn metrics() -> String {
+    crate::core::metrics_endpoint_handler().await
 }

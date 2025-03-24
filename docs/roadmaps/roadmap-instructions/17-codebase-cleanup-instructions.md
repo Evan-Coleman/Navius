@@ -1,7 +1,75 @@
 # Codebase Cleanup Instructions
 
 ## Overview
-These instructions guide the process of cleaning up the codebase after implementing the Pet API Database Integration, fixing approximately 60 test errors and 32 build errors.
+These instructions guide the process of cleaning up the codebase after implementing the Pet API Database Integration. The HIGHEST PRIORITY is fixing the approximately 100 errors (up from 60 test errors and 32 build errors) to enable successful `cargo run`. Additional goals include removing the users service in favor of the petdb service, and properly tagging example code for optional removal.
+
+## CRITICAL PRIORITY: Fix Blocking Errors for cargo run
+
+### Error Assessment and Prioritization
+1. **Current Status**: ~100 errors currently blocking successful `cargo run`
+2. **Error Categories by Priority**:
+   - **Executor trait implementations** (HIGHEST): Fix all database connection issues first
+   - **Type/Trait Implementation Errors**: Focus on resolving Arc wrappers and type mismatches
+   - **SQLx Offline Mode Errors**: Ensure proper query caching
+   - **Import/Module Errors**: Fix module structure and visibility issues
+   - **Method Implementation Errors**: Address missing methods in key components
+
+### Daily Error Reduction Goals
+- Day 1: Fix all Executor trait implementation errors (focus on database connections)
+- Day 2: Fix Arc wrapper inconsistencies and service/repository type mismatches
+- Day 3: Fix remaining SQLx, import, and method errors
+- Final Goal: Zero errors when running `cargo run` by July 2, 2024
+
+### Immediate Action Steps
+1. **Track Error Count**:
+   ```bash
+   # Run and capture error count
+   cargo build -v 2>&1 | grep "error:" | wc -l
+   
+   # Categorize most common errors
+   cargo build -v 2>&1 | grep "error:" | sort | uniq -c | sort -nr | head -10
+   ```
+
+2. **Fix Database Executor Issues FIRST**:
+   ```rust
+   // Fix all instances where &dyn PgPool is used
+   // Change from:
+   pub fn new(pool: Arc<Box<dyn PgPool>>) -> Self {
+       Self { pool }
+   }
+   
+   // To:
+   pub fn new(pool: Arc<PgPool>) -> Self {
+       Self { pool }
+   }
+   
+   // Also fix in AppState
+   // Change from:
+   pub struct AppState {
+       pub db_pool: Option<Arc<Box<dyn PgPool>>>,
+   }
+   
+   // To:
+   pub struct AppState {
+       pub db_pool: Option<Arc<PgPool>>,
+   }
+   ```
+
+3. **Fix Arc Wrapper Inconsistencies**:
+   ```rust
+   // Ensure consistent wrapping
+   // Change from:
+   let service = Arc::new(Service::new(repository));
+   
+   // To:
+   let repository = Arc::new(Repository::new(pool.clone()));
+   let service = Arc::new(Service::new(Arc::new(repository)));
+   ```
+
+4. **Update Service Repository Mismatches**:
+   - Focus on pet_service::Pet vs pet_repository::Pet inconsistencies
+   - Implement From/Into traits for necessary conversions
+   - Consider creating a unified model in core that both can use
 
 ## Detailed Error Analysis
 
@@ -12,75 +80,225 @@ These instructions guide the process of cleaning up the codebase after implement
 - **Method Implementation Errors (4)**: Missing methods referenced in code
 - **General Syntax Errors (2)**: Miscellaneous compiler issues
 
-#### SQLx Offline Mode Errors
-| Error | Location | Root Cause | Dependencies | Status |
-| ----- | -------- | ---------- | ------------ | ------ |
-| `SQLX_OFFLINE=true` but there is no cached data for this query | src/core/database/repositories/mod.rs:76-90 | SQLx is in offline mode but query cache has not been generated | Need to run `cargo sqlx prepare` | Not fixed |
-| `SQLX_OFFLINE=true` but there is no cached data for this query | src/app/database/repositories/pet_repository.rs:81-88 | SQLx is in offline mode but query cache has not been generated | Need to run `cargo sqlx prepare` | Not fixed |
+### Files to Remove (Users Service)
+1. **Core Files**:
+   - `src/core/services/user.rs`
+   - `src/core/repository/user.rs`
+   - `src/core/models/user.rs`
 
-#### Import/Module Errors
-| Error | Location | Root Cause | Dependencies | Status |
-| ----- | -------- | ---------- | ------------ | ------ |
-| Unresolved imports `crate::core::metrics::MetricsHandle`, `crate::core::models::ApiResponse` | src/core/router/app_router.rs:33-34 | Imports reference non-existent items | Need to update module structure or fix imports | Not fixed |
-| Unresolved import `crate::models::User` | src/core/services/user.rs:15 | Import references non-existent item | Need to update import path or create missing model | Not fixed |
-| Cannot find trait `PgPool` in this scope | src/app/api/examples/users.rs:358 | Missing import for trait | Need to import `crate::database::PgPool` | Not fixed |
-| Ambiguous name `error` | src/app/api/examples/users.rs:18 | Multiple glob imports causing name conflict | Need to use specific imports | Not fixed |
+2. **App Files**:
+   - `src/app/api/examples/users.rs`
+   - `src/app/services/user_service.rs`
+   - `src/app/database/repositories/user_repository.rs`
 
-#### Type/Trait Implementation Errors
-| Error | Location | Root Cause | Dependencies | Status |
-| ----- | -------- | ---------- | ------------ | ------ |
-| Mismatched types: expected `Option<Arc<CacheRegistry>>`, found `Option<CacheRegistry>` | src/core/router/app_router.rs:245 | Type mismatch | Need to wrap in Arc | Not fixed |
-| Mismatched types: expected `Arc<EntraTokenClient>`, found `EntraTokenClient` | src/core/router/app_router.rs:248 | Type mismatch | Need to wrap in Arc | Not fixed |
-| Mismatched types: expected `Option<Pool<Postgres>>`, found `Option<Arc<Box<dyn PgPool>>>` | src/core/router/app_router.rs:253 | Type mismatch | Need to use consistent database pool types | Not fixed |
-| `query_str` does not live long enough | src/core/database/utils.rs:80 | Lifetime issue | Static reference required for query | Not fixed |
-| The parameter type `T` may not live long enough | src/core/database/utils.rs:80 | Missing lifetime constraint | Need to add 'static bound | Not fixed |
+3. **Test Files**:
+   - All test files related to user functionality
+   - Update test utilities that depend on user models
 
-#### Method Implementation Errors
-| Error | Location | Root Cause | Dependencies | Status |
-| ----- | -------- | ---------- | ------------ | ------ |
-| No method named `count_entries` found for reference `&Arc<CacheRegistry>` | src/core/handlers/health.rs:48 | Method doesn't exist or not accessible | Need to implement method or fix call | Not fixed |
-| No method named `get_stats` found for reference `&ResourceCache<T>` | src/core/cache/cache_manager.rs:230 | Method doesn't exist | Need to implement method | Not fixed |
-| No method named `register_resource` found for reference `&Arc<registry::ApiResourceRegistry>` | src/core/utils/api_resource/core.rs:39 | Method doesn't exist or incorrect receiver type | Need to implement method or fix call | Not fixed |
+4. **Documentation**:
+   - Remove user-related API documentation
+   - Update examples to use pet API instead
 
-### Test Errors Summary (~60 total)
-- **Import/Module Errors**: Similar to build errors but across test files
-- **Type Mismatch Errors**: Consistent with build errors, particularly Arc wrappers
-- **Missing Test Utilities**: MockTokenClient not implemented but referenced
-- **Missing Method Errors**: Methods called on test objects that don't exist
-- **SQLx Query Cache Errors**: Same as build errors
+### Example Code Organization
+1. **Files to Tag and Move**:
+   - `src/app/api/examples/pets.rs` -> `src/examples/api/pets.rs`
+   - `src/app/services/pet_service.rs` -> `src/examples/services/pet_service.rs`
+   - `src/app/database/repositories/pet_repository.rs` -> `src/examples/repositories/pet_repository.rs`
+   - All related test files
 
-#### Missing Mock Implementation Errors
-| Error | Location | Root Cause | Dependencies | Status |
-| ----- | -------- | ---------- | ------------ | ------ |
-| Failed to resolve: use of undeclared type `MockTokenClient` | src/core/reliability/test.rs:217 | Missing mock | Need to implement MockTokenClient | Not fixed |
-| Failed to resolve: use of undeclared type `MockTokenClient` | src/core/utils/api_resource/core.rs:536 | Missing mock | Need to implement MockTokenClient | Not fixed |
+2. **Example Code Tags**:
+   ```rust
+   /// @example
+   /// This file demonstrates a basic CRUD API implementation using the Navius framework.
+   /// It can be removed using the example removal script if not needed.
+   pub mod pets {
+       // ... code ...
+   }
+   ```
 
-#### Missing Method Errors in Tests
-| Error | Location | Root Cause | Dependencies | Status |
-| ----- | -------- | ---------- | ------------ | ------ |
-| No method named `status_code` found for struct `axum::Json<core::models::error::HealthCheckResponse>` | src/core/handlers/health.rs:103 | Method doesn't exist | Use different method to get status code | Not fixed |
-| No method named `status_code` found for struct `axum::Json<core::models::error::DetailedHealthResponse>` | src/core/handlers/health.rs:113 | Method doesn't exist | Use different method to get status code | Not fixed |
-
-## Root Causes
-
-1. **Incomplete SQLx Setup**: SQLx is configured to run in offline mode, but query cache hasn't been generated
-2. **Architectural Inconsistency**: Pet API implementation in both `/app` and `/core` directories
-3. **Module Structure Changes**: Imports refer to modules that may have moved or been renamed
-4. **Type System Issues**: Inconsistent use of Arc wrappers and trait bounds
-5. **Missing Mock Implementations**: Missing MockTokenClient for testing
-6. **Duplicate Types**: Multiple types with same name (e.g., ServiceError) causing ambiguity
-7. **Method Implementation Gaps**: Several called methods don't exist or are improperly accessed
+3. **Example Dependencies**:
+   In Cargo.toml:
+   ```toml
+   # @example_dependency
+   # Used only by the pet API example
+   petname = "1.0.0"
+   ```
 
 ## Detailed Implementation Steps
 
-### Step 1: Generate SQLx Query Cache
-Run the SQLx cache generation script to fix offline mode errors:
-```bash
-# Ensure database is properly configured
-./scripts/generate_sqlx_cache.sh
-```
+### Step 0: Fix Critical Blocking Errors (HIGHEST PRIORITY)
+1. **Fix Database Executor Issues**:
+   - Update all instances of `&dyn PgPool` to use concrete `PgPool` type
+   - Ensure consistent error handling for async database operations
+   - Fix lifetime parameters in database utility functions
+   - Update service constructors to use concrete pool types
 
-### Step 2: Fix Critical Type System Issues
+2. **Resolve Type Mismatches**:
+   ```rust
+   // Example: Fix model inconsistencies
+   // Add implementation in pet_repository.rs:
+   impl From<pet_repository::Pet> for pet_service::Pet {
+       fn from(repo_pet: pet_repository::Pet) -> Self {
+           Self {
+               id: repo_pet.id,
+               name: repo_pet.name,
+               status: repo_pet.status,
+               // map other fields as needed
+           }
+       }
+   }
+   
+   // Add reverse conversion
+   impl From<pet_service::Pet> for pet_repository::Pet {
+       fn from(svc_pet: pet_service::Pet) -> Self {
+           Self {
+               id: svc_pet.id,
+               name: svc_pet.name,
+               status: svc_pet.status,
+               // map other fields as needed
+           }
+       }
+   }
+   ```
+
+3. **Fix SQLx Offline Mode Errors**:
+   ```bash
+   # Generate proper SQLx cache
+   export SQLX_OFFLINE=false
+   cargo run --bin migration_runner
+   cargo sqlx prepare
+   ```
+
+4. **Update Module Structure and Imports**:
+   - Fix visibility issues in module hierarchies
+   - Ensure proper re-exports in all mod.rs files
+   - Replace glob imports with specific imports
+
+### Step 1: Remove Users Service (Lower Priority)
+1. **Remove Core User Files**:
+   ```bash
+   rm src/core/services/user.rs
+   rm src/core/repository/user.rs
+   rm src/core/models/user.rs
+   ```
+
+2. **Remove App User Files**:
+   ```bash
+   rm src/app/api/examples/users.rs
+   rm src/app/services/user_service.rs
+   rm src/app/database/repositories/user_repository.rs
+   ```
+
+3. **Update Module Declarations**:
+   - Remove user-related exports from mod.rs files
+   - Update re-exports in lib.rs
+
+4. **Clean Up Dependencies**:
+   - Remove user-related dependencies from Cargo.toml if no longer needed
+   - Update feature flags if necessary
+
+### Step 2: Tag and Organize Example Code (Lower Priority)
+1. **Add Example Tags**:
+   ```rust
+   // In source files:
+   /// @example
+   /// Description of what this example demonstrates
+   pub mod example_module {
+       // ... code ...
+   }
+
+   // In Cargo.toml:
+   # @example_dependency
+   dependency_name = "version"
+   ```
+
+2. **Move Example Code**:
+   ```bash
+   # Create examples directory structure
+   mkdir -p src/examples/{api,services,repositories,models}
+
+   # Move example files
+   mv src/app/api/examples/pets.rs src/examples/api/
+   mv src/app/services/pet_service.rs src/examples/services/
+   mv src/app/database/repositories/pet_repository.rs src/examples/repositories/
+   ```
+
+3. **Update Module Declarations**:
+   ```rust
+   // In src/examples/mod.rs
+   pub mod api;
+   pub mod services;
+   pub mod repositories;
+   pub mod models;
+
+   // In src/lib.rs
+   #[cfg(feature = "examples")]
+   pub mod examples;
+   ```
+
+4. **Update Import Paths**:
+   ```rust
+   // Old imports
+   use crate::app::api::examples::pets;
+
+   // New imports
+   #[cfg(feature = "examples")]
+   use crate::examples::api::pets;
+   ```
+
+### Step 3: Remove Legacy and Deprecated Code (Lower Priority)
+
+1. **Identify Deprecated Items**:
+   ```bash
+   # Find all files with deprecated attributes
+   grep -r "#\[deprecated" --include="*.rs" src/
+   
+   # Find all deprecated re-exports or imports
+   grep -r "deprecated" --include="*.rs" src/
+   ```
+
+2. **Remove Deprecated Functions**:
+   ```rust
+   // Remove functions like this:
+   #[deprecated(
+       since = "0.1.0",
+       note = "Use metrics_handler::init_metrics instead. This function will be removed in a future version."
+   )]
+   pub fn legacy_init_metrics() -> metrics_exporter_prometheus::PrometheusHandle {
+       metrics_handler::init_metrics()
+   }
+   ```
+
+3. **Update Import Statements**:
+   ```rust
+   // Change from:
+   use crate::core::metrics::legacy_init_metrics;
+   
+   // To:
+   use crate::core::metrics::metrics_handler::init_metrics;
+   ```
+
+4. **Update Function Calls**:
+   ```rust
+   // Change from:
+   let handle = legacy_init_metrics();
+   
+   // To:
+   let handle = init_metrics();
+   ```
+
+5. **Remove Re-Exports of Deprecated Functions**:
+   ```rust
+   // In mod.rs files, remove re-exports of deprecated functions
+   // Remove lines like:
+   pub use deprecated_module::deprecated_function;
+   ```
+
+6. **Document Rationale**:
+   Add comments to your commit and PRs explaining:
+   "Removed legacy and deprecated code as this is a greenfield project with no legacy constraints."
+
+### Step 4: Fix Critical Type System Issues (Medium Priority)
 1. **Fix Arc wrapper consistency**:
    ```rust
    // Example: In app_router.rs:245
@@ -88,12 +306,6 @@ Run the SQLx cache generation script to fix offline mode errors:
    cache_registry: cache_registry.clone(),
    // To:
    cache_registry: Some(Arc::new(cache_registry.clone())),
-   
-   // Example: In app_router.rs:248
-   // Change from:
-   Some(EntraTokenClient::from_config(&config))
-   // To:
-   Some(Arc::new(EntraTokenClient::from_config(&config)))
    ```
 
 2. **Fix lifetime issues in database/utils.rs**:
@@ -112,7 +324,85 @@ Run the SQLx cache generation script to fix offline mode errors:
    }
    ```
 
-### Step 3: Fix Module Structure and Imports
+3. **Resolve Pet API Confusion**:
+
+There is significant confusion between the Swagger Petstore example API and the internal Pet DB implementation:
+
+1. **Current Problem**:
+   - `/src/app/api/examples/pet.rs` - Swagger Petstore API (external API example)
+   - `/src/app/api/pet.rs` - Internal Pet DB API (local implementation)
+   - `/src/app/api/pet_db.rs` - Another Pet DB API (appears to be a duplicate/alternative implementation)
+   - These similar names and purposes cause confusion and maintenance issues
+
+2. **Rename and Clarify Files**:
+   ```bash
+   # Rename files to clearly indicate their purpose
+   mv src/app/api/examples/pet.rs src/app/api/examples/swagger_petstore.rs
+   mv src/app/api/pet.rs src/app/api/pet_core.rs
+   ```
+
+3. **Update Module Declarations**:
+   ```rust
+   // In src/app/api/examples/mod.rs
+   // Change from:
+   pub mod pet;
+   
+   // To:
+   /// @example
+   /// Swagger Petstore API example implementation
+   pub mod swagger_petstore;
+
+   // In src/app/api/mod.rs
+   // Change from:
+   pub mod pet;
+   pub mod pet_db;
+   
+   // To:
+   /// Internal Pet database core implementation
+   pub mod pet_core;
+   pub mod pet_db;
+   ```
+
+4. **Add Clear Documentation Headers**:
+   ```rust
+   // In swagger_petstore.rs:
+   /// @example
+   /// This file implements the Swagger Petstore API example.
+   /// It demonstrates how to integrate with an external API using the framework.
+   /// This is an EXAMPLE implementation and can be removed if not needed.
+
+   // In pet_core.rs:
+   /// This file implements the core Pet database API.
+   /// It provides the main functionality for managing pets in the application.
+   /// This is a CORE implementation and should not be removed.
+
+   // In pet_db.rs:
+   /// This file provides an alternative implementation of the Pet database API.
+   /// It will eventually replace the implementation in pet_core.rs.
+   /// This is a CORE implementation and should not be removed.
+   ```
+
+5. **Update Router Configuration**:
+   ```rust
+   // In src/app/api/mod.rs:
+   // Change from:
+   Router::new()
+       .route("/pets/{id}", get(examples::pet::fetch_pet_handler))
+       .merge(pet::configure())
+       .merge(pet_db::configure())
+   
+   // To:
+   Router::new()
+       .route("/swagger-petstore/pets/{id}", get(examples::swagger_petstore::fetch_pet_handler))
+       .merge(pet_core::configure()) // Consider updating route paths in this module
+       .merge(pet_db::configure())
+   ```
+
+6. **Consider Consolidating Implementations**:
+   - Evaluate if `pet.rs` and `pet_db.rs` can be consolidated
+   - If both are needed, add documentation explaining the differences and use cases
+
+### Step 5: Fix Module Structure and Imports (Medium Priority)
 1. **Resolve ambiguous imports**:
    ```rust
    // Instead of glob imports like:
@@ -130,47 +420,54 @@ Run the SQLx cache generation script to fix offline mode errors:
    use crate::database::PgPool;
    ```
 
-### Step 4: Implement Missing Components
-1. **Create or expose MockTokenClient**:
-   - The MockTokenClient has been created in src/core/auth/mock.rs
-   - Ensure it's properly exposed in the module structure
-
-2. **Implement missing methods**:
+### Step 6: Fix Example Pet API Repository (Lower Priority)
+1. **Update repository implementations**:
    ```rust
-   // Example: Implement count_entries for CacheRegistry
-   impl CacheRegistry {
-       pub fn count_entries(&self) -> usize {
-           // Implementation details
+   /// @example
+   /// Demonstrates a basic repository implementation using the PgPool trait.
+   impl PetRepository {
+       pub fn new(pool: Arc<Box<dyn PgPool>>) -> Self {
+           Self { pool }
        }
    }
    ```
 
-### Step 5: Fix Pet API Repository Duplication
-Decide on consistent location (recommend `/core` since it's a core feature):
-1. Remove duplicate implementation
-2. Update all imports and references
-3. Ensure consistent model usage
-
-### Step 6: Fix Test Issues
-1. Update test expectations to match current API:
-   ```rust
-   // Example: Instead of response.status_code()
-   assert_eq!(StatusCode::OK, 200);
-   ```
-
-2. Fix test setups that use missing components
+2. **Fix test setups that use missing components**
 
 ## Work Tracking and Review Process
 
 For each fix, follow this process:
-1. Make the fix
-2. Run cargo check to validate compilation
-3. Run tests for the specific module
-4. Update the status in the roadmap
+1. Record current error count before making changes
+2. Apply fixes systematically, focusing on one error category at a time
+3. After each significant fix, run `cargo check` to validate improvement
+4. Track error count reduction
+5. Consult error-tracking.mdc to avoid repeating failed approaches
+6. Update the error-tracking.mdc with new findings
 
 Critical review points where progress should be assessed:
-1. After SQLx cache generation
-2. After fixing major type system issues
-3. After resolving Pet API duplication
-4. After all build errors are fixed
-5. After all test errors are fixed 
+1. After fixing database executor issues
+2. After resolving Arc wrapper inconsistencies
+3. After fixing service/repository type mismatches
+4. After addressing SQLx offline mode errors
+5. When error count reaches zero for `cargo run`
+6. After all test errors are fixed
+
+## Error Tracking Workflow
+
+1. **Use error-tracking.mdc as Reference**:
+   - Check if current error is already documented
+   - Use documented successful approaches
+   - Avoid repeating failed approaches
+   - Add new errors and solutions to the tracking document
+
+2. **Monitor Critical Error Areas**:
+   - Executor trait implementations for database connections
+   - Repository pattern consistency
+   - Type consistency across modules
+   - Proper module organization and visibility
+
+3. **Document All Error Fixes**:
+   - Add successful fixes to error-tracking.mdc
+   - Include error symptoms and root causes
+   - Add working code examples
+   - Note any workarounds applied 

@@ -37,15 +37,10 @@ pub fn register_resource<T: ApiResource + 'static>(
     state: &Arc<AppState>,
     resource_type: Option<&str>,
 ) -> Result<(), String> {
-    // Skip if cache is disabled
-    let Some(registry) = &state.cache_registry else {
-        return Ok(());
-    };
-
     let resource_name = resource_type.unwrap_or_else(|| T::resource_type());
 
     // Register the resource type in the cache registry
-    match register_resource_cache::<T>(registry, resource_name) {
+    match register_resource_cache::<T>(&state.cache_registry, resource_name) {
         Ok(_) => {
             info!(
                 "✅ Registered resource type {} in cache registry",

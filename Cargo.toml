@@ -15,6 +15,11 @@ categories = ["web-programming", "asynchronous"]
 [package.metadata.sqlx]
 offline = true
 
+# Feature flags
+[features]
+default = ["examples"]  # Include examples by default
+examples = []           # Feature flag for including example code
+
 # Suppress specific warnings
 [lints.rust]
 dead_code = "allow"
@@ -82,9 +87,6 @@ test-context = "0.4.1"
 assert_matches = "1.5.0"
 once_cell = "1.21.1"
 mockall = "0.13.1"
-
-[features]
-production = []
 
 [build-dependencies]
 # Don't need full regex crate, just simple string manipulation

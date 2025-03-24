@@ -18,16 +18,18 @@
 //! to be customized or extended by users of the framework.
 
 use crate::app::database::repositories::pet_repository::PetRepository;
-use crate::app::services::pet_service::PetService;
-use crate::core::services::ServiceRegistryTrait;
 use std::any::Any;
 use std::sync::Arc;
 
+// Make these modules public so they can be imported by other modules
+pub mod dto;
 pub mod error;
 pub mod pet_service;
 
+// Re-export these types for convenience
+pub use dto::{CreatePetDto, UpdatePetDto};
 pub use error::ServiceError;
-pub use pet_service::{CreatePetDto, PetService as IPetService, UpdatePetDto};
+pub use pet_service::{IPetService, Pet, PetService};
 
 /// Default implementation of ServiceRegistry that can be used by applications
 pub struct DefaultServiceRegistry {
@@ -45,7 +47,8 @@ impl DefaultServiceRegistry {
     }
 }
 
-impl ServiceRegistryTrait for DefaultServiceRegistry {
+// Add missing trait implementation from the "server-info" rule
+impl crate::core::services::ServiceRegistryTrait for DefaultServiceRegistry {
     // Implement access methods
     fn pet_service(&self) -> &dyn Any {
         self.pet_service.as_ref()

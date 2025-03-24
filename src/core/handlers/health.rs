@@ -1,6 +1,7 @@
 use axum::{extract::State, http::StatusCode, response::Json};
 use chrono::Utc;
 use serde_json::{Value, json};
+use sqlx::{Pool, Postgres};
 use std::{collections::BTreeMap, sync::Arc, time::SystemTime};
 
 use crate::core::{
@@ -27,8 +28,10 @@ pub async fn detailed_health_handler(
 ) -> Json<DetailedHealthResponse> {
     let version = env!("CARGO_PKG_VERSION").to_string();
 
-    // Get uptime as a string
-    let uptime_secs = state.start_time.elapsed().unwrap_or_default().as_secs();
+    // Calculate uptime by comparing current time to start time
+    let now = Utc::now();
+    let uptime_duration = now.signed_duration_since(state.start_time);
+    let uptime_secs = uptime_duration.num_seconds() as u64;
     let uptime = format!("{}s", uptime_secs);
 
     // Check dependencies
@@ -40,16 +43,14 @@ pub async fn detailed_health_handler(
     }
 
     // Check cache if available
-    if let Some(cache_registry) = &state.cache_registry {
-        dependencies.push(DependencyStatus {
-            name: "Cache".to_string(),
-            status: "UP".to_string(),
-            details: Some(format!(
-                "Cache enabled with {} entries",
-                cache_registry.count_entries()
-            )),
-        });
-    }
+    dependencies.push(DependencyStatus {
+        name: "Cache".to_string(),
+        status: "UP".to_string(),
+        details: Some(format!(
+            "Cache enabled with {} entries",
+            state.cache_registry.count_entries()
+        )),
+    });
 
     // Determine overall status - if any dependency is down, the whole service is down
     let status = if dependencies.iter().any(|d| d.status != "UP") {
@@ -67,11 +68,17 @@ pub async fn detailed_health_handler(
 }
 
 /// Check database connection and return status
-async fn check_database_connection(pool: &Arc<Box<dyn PgPool>>) -> DependencyStatus {
-    match pool.ping().await {
+async fn check_database_connection(pool: &Arc<Pool<Postgres>>) -> DependencyStatus {
+    let start = std::time::Instant::now();
+
+    match pool.acquire().await {
         Ok(_) => {
             let mut details = BTreeMap::new();
             details.insert("status".to_string(), "Connected".to_string());
+            details.insert(
+                "response_time_ms".to_string(),
+                format!("{}", start.elapsed().as_millis()),
+            );
 
             DependencyStatus {
                 name: "Database".to_string(),

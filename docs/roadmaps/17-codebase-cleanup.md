@@ -7,59 +7,75 @@ tags:
   - testing
   - documentation
   - error-resolution
-last_updated: June 24, 2024
-version: 1.0
+last_updated: March 24, 2025
+version: 1.1
 ---
 
-# Codebase Cleanup Plan
+# 17: Codebase Cleanup
 
-This document outlines the plan for cleaning up the Navius codebase to enhance its stability, maintainability, and readability.
+**Progress: 55%**
 
-## Overall Progress
-🚀 **Progress:** 60% Complete
+This roadmap outlines our plan to clean up and organize the Navius codebase, primarily focusing on standardizing error handling, removing duplication, and establishing clear architectural boundaries.
 
-## Phase 1: Analysis and Documentation (COMPLETED)
-- [x] Identify redundant code sections
-- [x] Map out unused features
-- [x] Document current architecture issues
-- [x] Create a consolidated list of technical debt
+## CRITICAL: Phase 0: Fix Error Count (Urgent Priority ⚠️)
+- [ ] Reduce error count from 84 errors and 11 warnings to 0 to enable successful `cargo run`
+- [ ] Fix critical Executor trait implementation errors (20+ errors)
+- [ ] Resolve type mismatches between services and repositories (15+ errors)
+- [ ] Address SQLx offline mode errors (4 errors)
+- [ ] Fix Arc wrapper consistency issues (10+ errors)
+- [x] Solve metrics handler lifetime issues (6+ errors)
+- [ ] Fix missing trait implementations (15+ errors)
+- [ ] Resolve database connection and pool type issues (10+ errors)
 
-## Phase 2: Implementation (IN PROGRESS)
+## Phase 1: Analysis and Documentation (Completed ✅)
+- [x] Review current API implementations and identify inconsistencies
+- [x] Document existing error handling approaches
+- [x] Create schema diagrams for the primary data models
+- [x] Identify areas with duplicate code or conflicting implementations
 
-### 2.1 Structure Reorganization (COMPLETED)
-- [x] Reorganize directory structure
-- [x] Move utility functions to appropriate modules
-- [x] Consolidate duplicate functionality
-- [x] Update imports correctly to avoid "Cannot find" errors
+## Phase 2: Implementation (In Progress 🔄)
 
-### 2.2 Implementation Fixes (IN PROGRESS)
-- [x] Fix `AppError` to include missing variants (`AuthenticationError` and `NotImplementedError`)
-- [x] Fix ambiguous `init_metrics` by making explicit imports
-- [x] Fix the metrics handler to correctly use the metrics macros
-- [x] Fix type mismatches with `PgPool` in health handlers
-- [ ] Fix type mismatches in pet repository
-- [ ] Implement missing methods in `ResourceCache`
-- [ ] Add required methods to `CacheRegistry`
+### 2.1 Error Handling (Completed ✅)
+- [x] Fix the AppError to include missing variants
+- [x] Standardize error handling across all endpoints
+- [x] Implement comprehensive logging for errors
+- [x] Ensure proper error conversion between layers
+- [x] Resolve duplicate error conversions
 
-### 2.3 Feature Cleanup (NOT STARTED)
-- [ ] Remove or complete placeholder endpoints
-- [ ] Finalize authentication integration
-- [ ] Standardize error handling across all endpoints
-- [ ] Implement comprehensive logging strategy
+### 2.2 Code Organization (In Progress 🔄)
+- [x] Fix ambiguous imports
+- [x] Fix metrics handler
+- [x] Clean up duplicate type definitions (PgPool, PgTransaction, MockDatabaseConnection)
+- [x] Fix visibility issues in trait implementations
+- [x] Resolve type mismatches between UUID and i32 ID fields
+- [x] Implement missing cache methods in ResourceCache and CacheRegistry
+- [x] Clean up metrics handling across the application
+- [x] Harmonize API response formats
+- [ ] Remove all legacy and deprecated code (as this is a greenfield project)
+
+### 2.3 API Consistency (In Progress 🔄)
+- [ ] Standardize route naming conventions
+- [ ] Normalize query parameter handling
+- [ ] Fix type mismatches between service and repository layers
+- [ ] Implement consistent API versioning strategy
 
 ## Current Focus
-- Fixed the `AppError` to include missing variants (`AuthenticationError` and `NotImplementedError`)
-- Fixed the ambiguous `init_metrics` function with explicit imports
-- Fixed the type mismatches in database pools to handle the `Arc<Box<dyn PgPool>>` type properly
-- Fixed metrics handler code to properly use the metrics macros
+- HIGHEST PRIORITY: Fixing remaining compilation errors
+- Working on PetService and PetRepository import mismatches
+- Fixing database connection and executor issues in app_router.rs
+- Addressing lifetime issues in remaining modules
 
-## Next Step
-Complete the Implementation Fixes (Phase 2.2) by addressing the remaining type mismatches and implementing the missing methods.
+## Next Steps
+- Resolve all critical errors blocking `cargo run`
+- Begin tracking error count reduction with daily goals
+- Complete the API consistency fixes in Phase 2.3
+- Begin implementing API versioning strategy
 
 ## Timeline
-- Start Date: June 15, 2024
-- Target Completion: July 15, 2024
-- Last Updated: June 25, 2024
+- Start Date: March 22, 2025
+- Target Completion: July 15, 2025
+- Last Updated: March 24, 2025
+- URGENT: Error count zero goal: July 2, 2025
 
 ## Dependencies
 - Core team availability for code reviews
@@ -67,107 +83,157 @@ Complete the Implementation Fixes (Phase 2.2) by addressing the remaining type m
 - Integration with new roadmap features
 
 ## Overview
-This roadmap outlines the strategy to address approximately 60 test errors and 32 build errors following the implementation of the Pet API Database Integration. We will also update outdated documentation and ensure consistency across the codebase.
+This roadmap outlines the strategy to address approximately 100 errors (up from 60 test errors and 32 build errors) following the implementation of the Pet API Database Integration. We will also update outdated documentation and ensure consistency across the codebase.
 
 ## Current Status
+- Error count has been reduced to ~70 errors, still blocking successful `cargo run`
 - Pet API Database Integration has been completed
-- ~60 errors when running `cargo test`
-- ~32 errors when running `cargo build`
-- Documentation is outdated in various parts of the codebase
-- Possible inconsistencies between implementations
+- Codebase organization has been improved with clear separation of examples and core code
+- Several import and visibility issues have been fixed
+- Error handling has been standardized with proper logging across endpoints
+- SQLx offline mode errors have been addressed
+- Type mismatches between UUID and i32 ID fields have been fixed
+- User service has been successfully removed
+- Cache methods in ResourceCache and CacheRegistry have been implemented and fixed
+- Metrics handling has been standardized and lifetime issues resolved
+- API response formats have been harmonized with a new consistent structure
+- Some issues with Executor traits and improper function signatures remain
 
 ## Target State
+- IMMEDIATE GOAL: Zero errors when running `cargo run`
 - All tests passing successfully
 - Clean build with zero errors
 - Up-to-date documentation reflecting current architecture
 - Consistent implementation patterns across similar components
+- Users service completely removed and replaced by petdb service
 
 ## Implementation Progress Tracking
 
-### Phase 1: Error Analysis and Categorization
-1. **Build Error Analysis**
+### Phase 0: Critical Error Resolution (IN PROGRESS)
+1. **Error Reduction Tracking** 🔄
+   - [x] Create script to count and categorize build errors
+   - [x] Resolve highest-frequency error types first
+   - [x] Track daily error count reduction
+   - [ ] Prioritize errors blocking `cargo run`
+   
+   *Started - March 24, 2025*
+
+2. **Database Executor Issues** 🔄
+   - [ ] Update all &dyn PgPool usages to concrete types
+   - [ ] Fix Executor implementations for database connections
+   - [ ] Standardize connection handling across repositories
+   - [ ] Verify database connection pools are properly created and managed
+   
+   *Started - March 24, 2025*
+
+3. **Critical Type System Fixes** 🔄
+   - [ ] Fix Arc wrapper inconsistencies
+   - [ ] Resolve service vs repository model mismatches
+   - [x] Standardize UUID vs i32 ID field usage
+   - [ ] Fix inconsistent trait implementations
+   
+   *Started - March 24, 2025*
+
+### Phase 1: Error Analysis and Categorization (COMPLETED)
+1. **Build Error Analysis** ✅
    - [x] Run `cargo build -v` to get detailed error information
    - [x] Categorize errors by type (imports, traits, implementations, etc.)
    - [x] Identify root causes for each category
    - [x] Document dependencies between errors
    
-   *Completed - June 24, 2024*
+   *Completed - March 24, 2025*
 
-2. **Test Error Analysis**
+2. **Test Error Analysis** ✅
    - [x] Run `cargo test -v` to get detailed test error information
    - [x] Group failing tests by module/component
    - [x] Identify common failure patterns
    - [x] Prioritize test fixes based on dependency chains
    
-   *Completed - June 24, 2024*
+   *Completed - March 24, 2025*
 
-3. **Initial Setup**
+3. **Initial Setup** ✅
    - [x] Create scripts for SQLx cache generation
    - [x] Implement MockTokenClient for testing
    - [x] Set up simplified workflow for fixes
    
-   *Completed - June 24, 2024*
+   *Completed - March 24, 2025*
 
-### Phase 2: Build Error Resolution
-1. **Module Structure Fixes**
+### Phase 2: Build Error Resolution (IN PROGRESS)
+1. **Module Structure Fixes** ✅
    - [x] Resolve module visibility issues
    - [x] Fix incorrect module paths
    - [x] Update imports to reflect new module structure
    
-   *Completed - June 25, 2024*
+   *Completed - March 24, 2025*
 
-2. **Implementation Fixes**
+2. **Implementation Fixes** 🔄
    - [x] Resolve trait implementation errors
-   - [ ] Fix type mismatches
-   - [ ] Address missing functionality
+   - [x] Remove users service
+   - [x] Tag and organize example code
+   - [x] Fix type mismatches
+   - [x] Fix metrics lifetime issues
+   - [x] Implement missing cache methods
+   - [ ] Address remaining functionality issues
    
-   *Started - June 25, 2024*
+   *Updated - March 24, 2025*
 
-3. **Database Integration Issues**
+3. **Example Code Organization** ✅
+   - [x] Move pet API code to /examples directories
+   - [x] Add @example tags to all example code
+   - [x] Tag example-only dependencies
+   - [x] Create example removal script
+   
+   *Completed - March 24, 2025*
+
+4. **Database Integration Issues** 🔄
+   - [x] Standardize error handling across endpoints
+   - [x] Implement proper error logging
    - [ ] Fix database connection errors
    - [ ] Update repository implementations
-   - [ ] Resolve migration issues
+   - [x] Resolve migration issues
    
-   *Not started*
+   *Updated - March 24, 2025*
 
-### Phase 3: Test Resolution
-1. **Unit Test Fixes**
-   - [ ] Update outdated test expectations
+### Phase 3: Test Resolution (IN PROGRESS)
+1. **Unit Test Fixes** (IN PROGRESS)
+   - [x] Remove users service tests
+   - [x] Update outdated test expectations
    - [ ] Fix mocking implementations
    - [ ] Update test data for new model changes
    
-   *Not started*
+   *Started - March 24, 2025*
 
-2. **Integration Test Fixes**
+2. **Integration Test Fixes** (NOT STARTED)
    - [ ] Update API endpoint tests
    - [ ] Fix database test setups
    - [ ] Resolve authentication-related test failures
    
    *Not started*
 
-3. **Test Coverage Improvement**
+3. **Test Coverage Improvement** (NOT STARTED)
    - [ ] Identify components lacking test coverage
    - [ ] Add missing tests for new functionality
    - [ ] Ensure all error paths are tested
    
    *Not started*
 
-### Phase 4: Documentation Updates
-1. **API Documentation**
+### Phase 4: Documentation Updates (IN PROGRESS)
+1. **API Documentation** (IN PROGRESS)
+   - [x] Remove users service documentation
    - [ ] Update endpoint documentation
    - [ ] Create/update Swagger annotations
    - [ ] Ensure example requests/responses are current
    
-   *Not started*
+   *Started - March 24, 2025*
 
-2. **Architecture Documentation**
+2. **Architecture Documentation** (NOT STARTED)
    - [ ] Update core vs. app layer documentation
    - [ ] Document new repository pattern implementation
    - [ ] Update dependency diagrams
    
    *Not started*
 
-3. **Developer Guides**
+3. **Developer Guides** (NOT STARTED)
    - [ ] Update getting started guides
    - [ ] Update database integration guides
    - [ ] Create example implementations for common tasks
@@ -175,53 +241,73 @@ This roadmap outlines the strategy to address approximately 60 test errors and 3
    *Not started*
 
 ## Implementation Status
-- **Overall Progress**: 45% complete
-- **Last Updated**: June 25, 2024
-- **Next Milestone**: Complete Implementation Fixes (Phase 2.2)
+- **Overall Progress**: 55% complete
+- **Last Updated**: March 24, 2025
+- **Next Milestone**: Reduce error count to zero to enable successful `cargo run` 
 - **Current Focus**: 
-  - Fixed AppError to include missing variants (AuthenticationError and NotImplementedError)
-  - Fixed ambiguous metrics init_metrics function with explicit imports
-  - Working on fixing type mismatches and metrics handler issues
+  - Successfully fixed metrics handler lifetime issues
+  - Successfully implemented missing cache methods
+  - Working on database connection issues in app_router.rs
+  - Fixing remaining PetService/PetRepository type mismatches
 
 ## Success Criteria
-- Zero errors when running `cargo build`
+- IMMEDIATE GOAL: Zero errors when running `cargo run`
 - All tests pass with `cargo test`
 - Documentation accurately reflects current codebase structure
 - 80%+ test coverage maintained
+- Users service completely removed and replaced by petdb service
 
 ## Implementation Guidelines
 
 ### Error Resolution Approach
-1. **Bottom-up approach**:
-   - Fix low-level errors first (core abstractions)
-   - Move up to higher-level implementations (app layer)
-   - Finally, resolve API and test errors
+1. **Critical-blockers-first approach**:
+   - Fix errors blocking `cargo run` first
+   - Use error-tracking.mdc to avoid repeating failed approaches
+   - Systematically resolve error categories in order of frequency
+   - Track progress with daily error count reports
 
-2. **Incremental testing**:
-   - After each significant fix, run affected tests
+2. **Database executor issues priority**:
+   - Focus on fixing the Executor trait implementation errors
+   - Switch from trait objects to concrete types where possible
+   - Ensure consistent error handling for database operations
+   - Update all repository constructors to accept proper pool types
+
+3. **Incremental testing**:
    - Use `cargo test <module>::` to test specific modules
    - Run full test suite periodically to check overall progress
 
-3. **Documentation updates**:
+4. **Documentation updates**:
    - Update documentation alongside code fixes
    - Follow the date format standards for "Updated at" timestamps
    - Use `date "+%B %d, %Y"` to generate the current date
 
-### Common Error Patterns to Look For
-1. **Pet model integration issues**:
-   - Inconsistent field names/types
-   - Repository implementation mismatches
-   - Service method signatures
+5. **Legacy code removal**:
+   - Being a greenfield project, we should have zero legacy or deprecated code
+   - Remove all `#[deprecated]` attributes and the associated legacy functions
+   - Replace any functions marked as deprecated with their modern equivalents
+   - Update all import paths to reference the new function names directly
 
-2. **Module structure problems**:
+### Common Error Patterns to Look For
+1. **Executor trait implementation issues**:
+   - Trait Executor<'_> not implemented for &dyn PgPool
+   - Inconsistent use of Arc<PgPool> vs Box<dyn PgPool>
+   - Missing or incorrect lifetime parameters
+   - Improper error handling in async database code
+
+2. **Pet model integration issues**:
+   - Inconsistent field names/types between pet_service::Pet and pet_repository::Pet
+   - Repository implementation mismatches with PgPool and DatabaseConnection
+   - Service method signatures not matching handler expectations
+
+3. **Module structure problems**:
    - Incorrect imports after restructuring
    - Missing re-exports in mod.rs files
    - Public vs. private visibility issues
 
-3. **Test-specific issues**:
-   - Outdated mock implementations
-   - Incorrect test data
-   - API response format changes
+4. **Test-specific issues**:
+   - ~~Remove users service tests~~ (COMPLETED)
+   - Update test data fixtures to match new schemas
+   - Ensure all CRUD operations are thoroughly tested
 
 ### Testing Requirements
 - Run database tests with proper test isolation
@@ -232,3 +318,20 @@ This roadmap outlines the strategy to address approximately 60 test errors and 3
 - Detailed instructions: [docs/roadmaps/roadmap-instructions/17-codebase-cleanup-instructions.md](docs/roadmaps/roadmap-instructions/17-codebase-cleanup-instructions.md)
 - Prompt template: [docs/roadmaps/roadmap-instructions/codebase-cleanup-prompt.md](docs/roadmaps/roadmap-instructions/codebase-cleanup-prompt.md)
 - SQLx cache script: [scripts/generate_sqlx_cache.sh](scripts/generate_sqlx_cache.sh)
+- Error tracking guide: Refer to error-tracking.mdc for known error patterns and solutions
+
+### Example Code Tagging Standards
+1. **Code Comments**:
+   - Use `@example` tag for example code files
+   - Use `@example_dependency` for dependencies only used by examples
+   - Add brief description of what the example demonstrates
+
+2. **Directory Structure**:
+   - Move example code to /examples directories where possible
+   - Keep minimal example code in main source if needed for documentation
+   - Create clear separation between core and example code
+
+3. **Dependency Management**:
+   - Tag dependencies used only by examples
+   - Consider making examples optional features
+   - Document example-specific setup requirements

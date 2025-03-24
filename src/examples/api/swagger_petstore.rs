@@ -1,3 +1,7 @@
+/// @example
+/// This file implements the Swagger Petstore API example.
+/// It demonstrates how to integrate with an external API using the framework.
+/// This is an EXAMPLE implementation and can be removed if not needed.
 use axum::{
     Json,
     extract::{Path, State},

@@ -15,7 +15,9 @@ mod tests;
 
 #[cfg(test)]
 pub use connection::MockDatabaseConnection;
-pub use connection::{DatabaseConnection, init_database, ping_database};
+pub use connection::{
+    DatabaseConnection, DatabaseTransaction, PgDatabaseConnection, init_database,
+};
 pub use error::DatabaseError;
 pub use repository::EntityRepository;
 pub use transaction::Transaction;

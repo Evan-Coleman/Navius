@@ -1,9 +1,56 @@
 pub mod metrics_handler;
-mod metrics_service;
+pub mod metrics_service;
 
-// Re-export key components for easier access but avoid ambiguity
+// Import required external dependencies
+use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
+
+// Re-export key components for easier access
 pub use metrics_handler::{
-    MetricsHandle, export_metrics, increment_counter, record_histogram, update_gauge,
+    create_key, export_metrics, metrics_handler, try_get_counter, try_get_counter_with_labels,
+    try_get_gauge, try_get_gauge_with_labels, try_record_metrics,
 };
+pub use metrics_service::metrics_endpoint_handler;
 
-pub use metrics_service::{init_metrics, try_record_metrics};
+/// Initialize metrics with Prometheus for easy recording
+pub fn init_metrics() -> PrometheusHandle {
+    PrometheusBuilder::new()
+        .install_recorder()
+        .expect("Failed to install Prometheus recorder")
+}
+
+// Metric recording functions with static strings
+pub fn record_counter(name: &'static str, value: u64) {
+    metrics::counter!(name).increment(value);
+}
+
+pub fn record_gauge(name: &'static str, value: f64) {
+    metrics::gauge!(name).set(value);
+}
+
+pub fn record_histogram(name: &'static str, value: f64) {
+    metrics::histogram!(name).record(value);
+}
+
+pub fn record_counter_with_labels(
+    name: &'static str,
+    labels: &[(&'static str, &'static str)],
+    value: u64,
+) {
+    metrics::counter!(name, labels).increment(value);
+}
+
+pub fn record_gauge_with_labels(
+    name: &'static str,
+    labels: &[(&'static str, &'static str)],
+    value: f64,
+) {
+    metrics::gauge!(name, labels).set(value);
+}
+
+pub fn record_histogram_with_labels(
+    name: &'static str,
+    labels: &[(&'static str, &'static str)],
+    value: f64,
+) {
+    metrics::histogram!(name, labels).record(value);
+}

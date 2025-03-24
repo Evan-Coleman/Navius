@@ -4,13 +4,12 @@
 //! It follows the repository pattern where each entity type has its own repository.
 
 pub mod models;
-pub mod user;
+
+#[cfg(test)]
+pub mod mock;
 
 #[cfg(test)]
 mod tests;
-
-pub use models::User;
-pub use user::UserRepository;
 
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -55,7 +54,9 @@ impl BaseRepository {
     }
 
     /// Begin a transaction
-    pub async fn begin_transaction(&self) -> Result<Box<dyn PgTransaction>, AppError> {
+    pub async fn begin_transaction(
+        &self,
+    ) -> Result<Box<dyn crate::core::database::PgTransaction>, AppError> {
         self.db_pool.begin().await
     }
 }

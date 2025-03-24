@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, name, pet_type, breed, age, created_at, updated_at \n            FROM pets \n            ORDER BY name\n            ",
+  "query": "\n            SELECT id, name, pet_type, breed, age, created_at, updated_at\n            FROM pets\n            ",
   "describe": {
     "columns": [
       {
@@ -52,5 +52,5 @@
       false
     ]
   },
-  "hash": "5d703da96815b53681dd036268d0e94f046870bc885875a03a9d9c52dd7d5835"
+  "hash": "4d76ca80e77f0bb39368fa25ab83665f42555ea0f4353afd648f14a91bc3c034"
 }
