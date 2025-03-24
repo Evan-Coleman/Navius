@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::{
     app::services::error::ServiceError,
-    auth::models::TokenClaims,
+    core::auth::models::TokenClaims,
     core::router::AppState,
     database::PgPool,
     repository::models::UserRole,
@@ -329,14 +329,16 @@ async fn delete_user(
     // Delete user
     match user_service.delete_user(user_id).await {
         Ok(_) => Ok(StatusCode::NO_CONTENT),
-        Err(ServiceError::UserNotFound) => Err((
-            StatusCode::NOT_FOUND,
-            format!("User with ID {} not found", user_id),
-        )),
-        Err(e) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to delete user: {}", e),
-        )),
+        Err(err) => match err {
+            core::services::error::ServiceError::UserNotFound => Err((
+                StatusCode::NOT_FOUND,
+                format!("User with ID {} not found", user_id),
+            )),
+            _ => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to delete user: {}", err),
+            )),
+        },
     }
 }
 

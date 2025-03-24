@@ -83,6 +83,12 @@ pub enum AppError {
 
     #[error("Internal server error: {0}")]
     InternalServerError(String),
+
+    #[error("Authentication error: {0}")]
+    AuthenticationError(String),
+
+    #[error("Not implemented: {0}")]
+    NotImplementedError(String),
 }
 
 impl AppError {
@@ -102,6 +108,8 @@ impl AppError {
             AppError::ConfigError(_) => ErrorSeverity::High,
             AppError::IoError(_) => ErrorSeverity::High,
             AppError::InternalServerError(_) => ErrorSeverity::High,
+            AppError::AuthenticationError(_) => ErrorSeverity::Medium,
+            AppError::NotImplementedError(_) => ErrorSeverity::Medium,
         }
     }
 
@@ -121,6 +129,8 @@ impl AppError {
             AppError::CacheError(_) => "cache_error",
             AppError::ValidationError(_) => "validation_error",
             AppError::InternalServerError(_) => "internal_error",
+            AppError::AuthenticationError(_) => "authentication_error",
+            AppError::NotImplementedError(_) => "not_implemented",
         }
         .to_string()
     }
@@ -141,6 +151,8 @@ impl AppError {
             AppError::CacheError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::ValidationError(_) => StatusCode::UNPROCESSABLE_ENTITY,
             AppError::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::AuthenticationError(_) => StatusCode::UNAUTHORIZED,
+            AppError::NotImplementedError(_) => StatusCode::NOT_IMPLEMENTED,
         }
     }
 
@@ -231,6 +243,8 @@ impl From<crate::app::services::error::ServiceError> for AppError {
             ServiceError::EmailExists => Self::BadRequest("Email already exists".to_string()),
             ServiceError::ValidationError(msg) => Self::ValidationError(msg),
             ServiceError::DatabaseError(msg) => Self::DatabaseError(msg),
+            ServiceError::Validation(msg) => Self::ValidationError(msg),
+            _ => Self::InternalServerError(format!("Service error: {}", err)),
         }
     }
 }

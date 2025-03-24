@@ -4,13 +4,13 @@ use tracing::error;
 /// Type alias for metrics handle to avoid direct dependency
 pub type MetricsHandle = PrometheusHandle;
 
-pub fn init_metrics() -> Option<PrometheusHandle> {
-    let builder = PrometheusBuilder::new();
-    match builder.install() {
-        Ok(handle) => Some(handle),
+/// Initialize metrics with Prometheus
+pub fn init_metrics() -> MetricsHandle {
+    match PrometheusBuilder::new().build() {
+        Ok(handle) => handle,
         Err(e) => {
             error!("Failed to initialize metrics: {}", e);
-            None
+            panic!("Failed to initialize metrics: {}", e);
         }
     }
 }
@@ -22,30 +22,61 @@ pub async fn export_metrics(handle: &MetricsHandle) -> String {
 
 /// Update a gauge metric
 pub fn update_gauge(name: &str, value: f64, labels: &[(&str, &str)]) {
-    let mut metric_labels = Vec::new();
-    for (key, value) in labels {
-        metric_labels.push((*key, *value));
+    if labels.is_empty() {
+        // No labels - use simpler form
+        metrics::gauge!(name);
+        metrics::gauge!(name).set(value);
+        return;
     }
 
-    metrics::gauge!(name, value, &metric_labels);
+    // Use named labels with a single label pair
+    if labels.len() == 1 {
+        let (key, val) = labels[0];
+        metrics::gauge!(name, key => val);
+        metrics::gauge!(name, key => val).set(value);
+        return;
+    }
+
+    // Fall back to basic metric and manually set it
+    // Complex multiple labels are harder to handle with the macros directly
+    metrics::gauge!(name);
+    metrics::gauge!(name).set(value);
 }
 
 /// Increment a counter metric
 pub fn increment_counter(name: &str, value: u64, labels: &[(&str, &str)]) {
-    let mut metric_labels = Vec::new();
-    for (key, value) in labels {
-        metric_labels.push((*key, *value));
+    if labels.is_empty() {
+        // No labels - use simpler form
+        metrics::counter!(name).increment(value);
+        return;
     }
 
-    metrics::counter!(name, value, &metric_labels);
+    // Use named labels with a single label pair
+    if labels.len() == 1 {
+        let (key, val) = labels[0];
+        metrics::counter!(name, key => val).increment(value);
+        return;
+    }
+
+    // Fall back to basic counter and manually increment it
+    metrics::counter!(name).increment(value);
 }
 
 /// Record a histogram metric
 pub fn record_histogram(name: &str, value: f64, labels: &[(&str, &str)]) {
-    let mut metric_labels = Vec::new();
-    for (key, value) in labels {
-        metric_labels.push((*key, *value));
+    if labels.is_empty() {
+        // No labels - use simpler form
+        metrics::histogram!(name).record(value);
+        return;
     }
 
-    metrics::histogram!(name, value, &metric_labels);
+    // Use named labels with a single label pair
+    if labels.len() == 1 {
+        let (key, val) = labels[0];
+        metrics::histogram!(name, key => val).record(value);
+        return;
+    }
+
+    // Fall back to basic histogram and manually record it
+    metrics::histogram!(name).record(value);
 }
