@@ -17,10 +17,6 @@ variables:
       - .cargo/
       - target/
 
-# Include additional job configurations
-include:
-  - local: .devtools/gitlab/ci/mirror_to_github.yml
-
 stages:
   - test
   - lint
@@ -78,13 +74,40 @@ docs:
     - pip3 install pyyaml
   script:
     - chmod +x .devtools/scripts/validate_docs.sh
+    - chmod +x .devtools/scripts/doc-overhaul/comprehensive_test.sh
+    - chmod +x .devtools/scripts/doc-overhaul/generate_report.sh
+    - export CI_MODE=true
     - bash .devtools/scripts/validate_docs.sh
+  artifacts:
+    paths:
+      - doc_validation_report.txt
+      - target/reports/docs_validation/
+    expire_in: 1 week
+    when: always
   rules:
     - changes:
       - docs/**/*
       - .devtools/scripts/validate_docs.sh
-      - .devtools/config/markdownlint.json
       - .devtools/scripts/validate_frontmatter.py
+      - .devtools/scripts/doc-overhaul/**/*
+      - .devtools/config/markdownlint.json
+
+# Documentation quality report job (not run in CI, but available for manual execution)
+docs:quality-report:
+  stage: docs
+  image: node:latest
+  before_script:
+    - apt-get update && apt-get install -y python3 python3-pip pandoc
+    - pip3 install pyyaml
+  script:
+    - chmod +x .devtools/scripts/doc-overhaul/generate_report.sh
+    - chmod +x .devtools/scripts/doc-overhaul/comprehensive_test.sh
+    - bash .devtools/scripts/doc-overhaul/generate_report.sh
+  artifacts:
+    paths:
+      - target/reports/docs_validation/
+    expire_in: 2 weeks
+  when: manual
 
 # Build release binaries
 build:
