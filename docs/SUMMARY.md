@@ -1,6 +1,7 @@
 # Summary
 
 [Introduction](README.md)
+[License](LICENSE.md)
 
 # Getting Started
 - [Installation](getting-started/installation.md)

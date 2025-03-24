@@ -41,7 +41,7 @@ Navius is a modern, secure, and performant web framework built with Rust and Axu
 
 ## License
 
-Navius is licensed under the [Apache License 2.0](https://gitlab.com/ecoleman2/navius/-/blob/master/LICENSE)
+Navius is licensed under the [Apache License 2.0](LICENSE.md) ([view on GitLab](https://gitlab.com/ecoleman2/navius/-/blob/master/LICENSE))
 
 ## 📚 Documentation Sections
 
@@ -55,6 +55,7 @@ Quick start guides to get up and running with Navius:
 ### 🏛️ Architecture
 Explore the architectural foundations of Navius:
 
+- [Overview](architecture/README.md) - Introduction to Navius architecture
 - [Project Structure](architecture/project-structure.md) - Overview of the project organization
 - [Module Dependencies](architecture/module-dependencies.md) - How modules interact with each other
 - [Spring Boot Migration](architecture/spring-boot-migration.md) - Guide for migrating from Spring Boot
@@ -62,40 +63,97 @@ Explore the architectural foundations of Navius:
 ### 🛠️ Guides
 Practical guides for using Navius:
 
-- [Development Guides](guides/development/) - Development workflow and practices
-- [Feature Guides](guides/features/) - Implementing specific features
-- [Deployment Guides](guides/deployment/) - Deploying Navius applications
-- [PostgreSQL Integration](guides/postgresql_integration.md) - Working with PostgreSQL
-- [Deployment Guide](guides/deployment.md) - Comprehensive deployment information
+- [Overview](guides/README.md) - Introduction to Navius guides
+
+- [Development](guides/development/README.md) - Development workflow and practices
+  - [Development Workflow](guides/development/development-workflow.md) - Day-to-day development process
+  - [Testing Guide](guides/development/testing-guide.md) - How to test Navius applications
+  - [Debugging Guide](guides/development/debugging-guide.md) - Debugging your applications
+  - [IDE Setup](guides/development/ide-setup.md) - Setting up your development environment
+  - [Git Workflow](guides/development/git-workflow.md) - Version control practices
+
+- [Features](guides/features/README.md) - Implementing specific features
+  - [Authentication](guides/features/authentication.md) - Implementing authentication
+  - [API Integration](guides/features/api-integration.md) - Integrating with external APIs
+  - [PostgreSQL Integration](guides/features/postgresql-integration.md) - Working with PostgreSQL in features
+  - [Redis Caching](guides/features/caching.md) - Implementing caching strategies
+  - [WebSocket Support](guides/features/websocket-support.md) - Real-time communication
+
+- [Deployment](guides/deployment/README.md) - Deploying Navius applications
+  - [Production Deployment](guides/deployment/production-deployment.md) - Deploying to production
+  - [Docker Deployment](guides/deployment/docker-deployment.md) - Working with Docker
+  - [AWS Deployment](guides/deployment/aws-deployment.md) - Deploying to AWS
+  - [Kubernetes Deployment](guides/deployment/kubernetes-deployment.md) - Deploying to Kubernetes
+
+- [PostgreSQL Integration](guides/postgresql_integration.md) - Comprehensive PostgreSQL integration
+- [Deployment Guide](guides/deployment.md) - General deployment information
 
 ### 📖 Reference
 Technical reference documentation:
 
-- [API Reference](reference/api/) - API documentation
-- [Architecture](reference/architecture/) - Architecture patterns and principles
-- [Configuration](reference/configuration/) - Configuration options and settings
-- [Patterns](reference/patterns/) - Common design patterns
-- [Standards](reference/standards/) - Code and documentation standards
+- [Overview](reference/README.md) - Introduction to reference documentation
+
+- [API](reference/api/README.md) - API documentation
+  - [API Resources](reference/api/api-resource.md) - Core API resources
+  - [Authentication API](reference/api/authentication-api.md) - Authentication endpoints
+  - [Database API](reference/api/database-api.md) - Database interaction APIs
+
+- [Architecture](reference/architecture/README.md) - Architecture patterns and principles
+  - [Principles](reference/architecture/principles.md) - Architectural principles
+  - [Project Structure](reference/architecture/project-structure-recommendations.md) - Recommended structure
+  - [Directory Organization](reference/architecture/directory-organization.md) - How directories are organized
+  - [Component Architecture](reference/architecture/component-architecture.md) - Component design
+
+- [Configuration](reference/configuration/README.md) - Configuration options and settings
+  - [Environment Variables](reference/configuration/environment-variables.md) - Environment configuration
+  - [Application Config](reference/configuration/application-config.md) - Application settings
+  - [Logging Config](reference/configuration/logging-config.md) - Logging configuration
+  - [Security Config](reference/configuration/security-config.md) - Security settings
+
+- [Patterns](reference/patterns/README.md) - Common design patterns
+  - [API Resource Pattern](reference/patterns/api-resource-pattern.md) - API design patterns
+  - [Import Patterns](reference/patterns/import-patterns.md) - Module import patterns
+  - [Error Handling](reference/patterns/error-handling-patterns.md) - Error handling approaches
+  - [Testing Patterns](reference/patterns/testing-patterns.md) - Testing best practices
+
+- [Standards](reference/standards/README.md) - Code and documentation standards
+  - [Naming Conventions](reference/standards/naming-conventions.md) - Naming guidelines
+  - [Code Style](reference/standards/code-style.md) - Code formatting standards
+  - [Generated Code](reference/standards/generated-code-standards.md) - Generated code guidelines
+  - [Security Standards](reference/standards/security-standards.md) - Security best practices
+  - [Documentation Standards](reference/standards/documentation-standards.md) - Documentation guidelines
 
 ### 🗺️ Roadmaps
 Project roadmaps and future plans:
 
+- [Overview](roadmaps/README.md) - Introduction to project roadmaps
+- [Template for Updating](roadmaps/template-for-updating.md) - How to update roadmaps
 - [Dependency Injection](roadmaps/01-dependency-injection.md) - DI implementation roadmap
 - [Database Integration](roadmaps/02-database-integration.md) - Database features roadmap
 - [Testing Framework](roadmaps/03-testing-framework.md) - Testing capabilities roadmap
 - [AWS Integration](roadmaps/04-aws-integration.md) - AWS services integration
 - [Data Validation](roadmaps/05-data-validation.md) - Input validation roadmap
-- [View All Roadmaps](roadmaps/) - Complete list of project roadmaps
+- [Resilience Patterns](roadmaps/06-resilience-patterns.md) - Fault tolerance features
+- [Enhanced Caching](roadmaps/07-enhanced-caching.md) - Advanced caching strategies
+- [API Versioning](roadmaps/08-api-versioning.md) - API evolution approach
+- [Metrics & Observability](roadmaps/09-metrics-observability.md) - Monitoring capabilities
+- [Declarative Features](roadmaps/09-declarative-features.md) - Configuration-driven features
+- [Developer Experience](roadmaps/10-developer-experience.md) - Improving DX
+- [Security Features](roadmaps/11-security-features.md) - Security enhancements
+- [Document Overhaul](roadmaps/12_document_overhaul.md) - Documentation improvements
 
 ### 🤝 Contributing
 Guidelines for contributors:
 
+- [Overview](contributing/README.md) - Introduction to contributing
 - [Contributing Guide](contributing/contribution-guide.md) - How to contribute
 - [Code of Conduct](contributing/code-of-conduct.md) - Community guidelines
 - [Development Process](contributing/development-process.md) - Development workflow
 - [Testing Guidelines](contributing/testing-guidelines.md) - Writing tests
 - [Onboarding](contributing/onboarding.md) - Getting started as a contributor
 - [IDE Setup](contributing/ide-setup.md) - Setting up your development environment
+- [Testing Prompt](contributing/testing-prompt.md) - Testing guidelines
+- [Test Implementation Template](contributing/test-implementation-template.md) - Templates for tests
 
 ## 🔍 Documentation Search
 
