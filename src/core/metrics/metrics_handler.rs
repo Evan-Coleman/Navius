@@ -7,12 +7,13 @@ pub type MetricsHandle = PrometheusHandle;
 /// Initialize metrics with Prometheus
 pub fn init_metrics() -> MetricsHandle {
     match PrometheusBuilder::new().build() {
-        Ok((recorder, exporter)) => {
-            // Install the recorder globally
-            metrics::set_recorder(recorder).expect("Failed to set global metrics recorder");
-
-            // Return the handle
-            PrometheusHandle::new()
+        Ok((recorder, handle)) => {
+            // Install the recorder
+            if let Err(e) = metrics::set_global_recorder(recorder) {
+                error!("Failed to set global metrics recorder: {}", e);
+                panic!("Failed to set global metrics recorder: {}", e);
+            }
+            handle
         }
         Err(e) => {
             error!("Failed to initialize metrics: {}", e);
@@ -30,17 +31,14 @@ pub async fn export_metrics(handle: &MetricsHandle) -> String {
 pub fn update_gauge(name: &str, value: f64, labels: &[(&str, &str)]) {
     if labels.is_empty() {
         // Basic metric without labels
-        let metric_name = name.to_string();
-        metrics::gauge!(&metric_name).set(value);
+        metrics::gauge!(name).set(value);
     } else if labels.len() == 1 {
         // Single label case
-        let metric_name = name.to_string();
-        let (key, val) = (labels[0].0.to_string(), labels[0].1.to_string());
-        metrics::gauge!(&metric_name, &key => &val).set(value);
+        let (key, val) = labels[0];
+        metrics::gauge!(name, key => val).set(value);
     } else {
-        // Multiple labels - just use the base name
-        let metric_name = name.to_string();
-        metrics::gauge!(&metric_name).set(value);
+        // Multiple labels - just use the base name for now
+        metrics::gauge!(name).set(value);
     }
 }
 
@@ -48,17 +46,14 @@ pub fn update_gauge(name: &str, value: f64, labels: &[(&str, &str)]) {
 pub fn increment_counter(name: &str, value: u64, labels: &[(&str, &str)]) {
     if labels.is_empty() {
         // Basic metric without labels
-        let metric_name = name.to_string();
-        metrics::counter!(&metric_name).increment(value);
+        metrics::counter!(name).increment(value);
     } else if labels.len() == 1 {
         // Single label case
-        let metric_name = name.to_string();
-        let (key, val) = (labels[0].0.to_string(), labels[0].1.to_string());
-        metrics::counter!(&metric_name, &key => &val).increment(value);
+        let (key, val) = labels[0];
+        metrics::counter!(name, key => val).increment(value);
     } else {
-        // Multiple labels - just use the base name
-        let metric_name = name.to_string();
-        metrics::counter!(&metric_name).increment(value);
+        // Multiple labels - just use the base name for now
+        metrics::counter!(name).increment(value);
     }
 }
 
@@ -66,16 +61,13 @@ pub fn increment_counter(name: &str, value: u64, labels: &[(&str, &str)]) {
 pub fn record_histogram(name: &str, value: f64, labels: &[(&str, &str)]) {
     if labels.is_empty() {
         // Basic metric without labels
-        let metric_name = name.to_string();
-        metrics::histogram!(&metric_name).record(value);
+        metrics::histogram!(name).record(value);
     } else if labels.len() == 1 {
         // Single label case
-        let metric_name = name.to_string();
-        let (key, val) = (labels[0].0.to_string(), labels[0].1.to_string());
-        metrics::histogram!(&metric_name, &key => &val).record(value);
+        let (key, val) = labels[0];
+        metrics::histogram!(name, key => val).record(value);
     } else {
-        // Multiple labels - just use the base name
-        let metric_name = name.to_string();
-        metrics::histogram!(&metric_name).record(value);
+        // Multiple labels - just use the base name for now
+        metrics::histogram!(name).record(value);
     }
 }

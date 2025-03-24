@@ -57,10 +57,7 @@ impl Default for AppState {
         let config = AppConfig::default();
         let cache_registry = Some(Arc::new(CacheRegistry::new()));
         let token_client = Some(Arc::new(EntraTokenClient::from_config(&config)));
-        let metrics_handle = PrometheusBuilder::new()
-            .build_recorder()
-            .expect("Failed to create Prometheus recorder");
-        let prometheus_handle = metrics_handle.handle();
+        let metrics_handle = crate::core::metrics::init_metrics();
         let resource_registry = Some(Arc::new(ApiResourceRegistry::new()));
         let service_registry = Arc::new(ServiceRegistry::new());
 
@@ -69,7 +66,7 @@ impl Default for AppState {
             config,
             start_time: SystemTime::now(),
             cache_registry,
-            metrics_handle: Some(prometheus_handle),
+            metrics_handle: Some(metrics_handle),
             token_client,
             resource_registry,
             db_pool: None,
@@ -81,8 +78,8 @@ impl Default for AppState {
 impl AppState {
     pub fn new(
         config: AppConfig,
-        db_pool: Option<Pool<Postgres>>,
-        cache_registry: Option<Arc<CacheRegistry>>,
+        db_pool: Option<Arc<Box<dyn PgPool>>>,
+        cache_registry: Option<CacheRegistry>,
     ) -> Arc<Self> {
         let start_time = SystemTime::now();
         let client = Client::new();
@@ -94,7 +91,7 @@ impl AppState {
             client: Some(client),
             config: config.clone(),
             start_time,
-            cache_registry: Some(Arc::new(cache_registry.clone())),
+            cache_registry: cache_registry.map(|cr| Arc::new(cr)),
             metrics_handle: Some(metrics_handle),
             token_client: if config.auth.enabled {
                 Some(Arc::new(EntraTokenClient::from_config(&config)))

@@ -4,6 +4,7 @@ use serde_json::{Value, json};
 use std::{collections::BTreeMap, sync::Arc, time::SystemTime};
 
 use crate::core::{
+    database::PgPool,
     models::{DependencyStatus, DetailedHealthResponse, HealthCheckResponse},
     router::AppState,
 };
@@ -66,8 +67,8 @@ pub async fn detailed_health_handler(
 }
 
 /// Check database connection and return status
-async fn check_database_connection(pool: &sqlx::Pool<sqlx::Postgres>) -> DependencyStatus {
-    match sqlx::query("SELECT 1").execute(pool).await {
+async fn check_database_connection(pool: &Arc<Box<dyn PgPool>>) -> DependencyStatus {
+    match pool.ping().await {
         Ok(_) => {
             let mut details = BTreeMap::new();
             details.insert("status".to_string(), "Connected".to_string());
