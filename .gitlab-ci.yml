@@ -21,7 +21,12 @@ variables:
 .rust-setup:
   before_script:
     - apt-get update
-    - apt-get install -y clang llvm-dev libclang-dev
+    - apt-get install -y clang llvm-dev libclang-dev lld
+    # Set linker to use clang directly instead of lld
+    - mkdir -p .cargo
+    - echo '[target.x86_64-unknown-linux-gnu]' > .cargo/config.toml
+    - echo 'linker = "clang"' >> .cargo/config.toml
+    - echo 'rustflags = ["-C", "link-arg=-fuse-ld=gold"]' >> .cargo/config.toml
 
 stages:
   - test
