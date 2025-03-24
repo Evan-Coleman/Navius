@@ -82,7 +82,7 @@ This roadmap outlines the implementation of a hybrid approach to API model manag
 
 ### Phase 3: Migration and Testing
 1. **Migrate Existing Generated Models**
-   - [ ] Generate and commit initial model versions
+   - [ ] Generate initial model versions
    - [ ] Update import paths throughout codebase
    - [ ] Fix any broken references
    - [ ] Ensure tests pass with in-repo models
