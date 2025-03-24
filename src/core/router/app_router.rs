@@ -23,15 +23,14 @@ use tower_http::{
 use tracing::{Level, info};
 
 use crate::{
-    core::auth::{
-        EntraAuthLayer, EntraTokenClient,
-        middleware::{EntraAuthConfig, RoleRequirement},
-    },
+    auth::middleware::EntraAuthLayer,
+    core::auth::{EntraTokenClient, middleware::RoleRequirement, mock::MockTokenClient},
     core::cache::CacheRegistry,
     core::config::app_config::AppConfig,
+    core::database::PgPool,
+    core::handlers::health::{ApiResponse, DetailedHealthResponse, HealthCheckResponse},
     core::handlers::logging,
-    core::metrics::MetricsHandle,
-    core::models::{ApiResponse, DetailedHealthResponse, HealthCheckResponse},
+    core::metrics::metrics_handler::MetricsHandle,
     core::services::ServiceRegistry,
     core::utils::api_resource::ApiResourceRegistry,
     reliability,
@@ -49,7 +48,7 @@ pub struct AppState {
     pub metrics_handle: Option<PrometheusHandle>,
     pub token_client: Option<Arc<EntraTokenClient>>,
     pub resource_registry: Option<Arc<ApiResourceRegistry>>,
-    pub db_pool: Option<Pool<Postgres>>,
+    pub db_pool: Option<Arc<Box<dyn PgPool>>>,
     pub service_registry: Arc<ServiceRegistry>,
 }
 
@@ -58,18 +57,22 @@ impl Default for AppState {
         let config = AppConfig::default();
         let cache_registry = Some(Arc::new(CacheRegistry::new()));
         let token_client = Some(Arc::new(EntraTokenClient::from_config(&config)));
+        let metrics_handle = PrometheusBuilder::new()
+            .build_recorder()
+            .expect("Failed to create Prometheus recorder");
+        let prometheus_handle = metrics_handle.handle();
+        let resource_registry = Some(Arc::new(ApiResourceRegistry::new()));
         let service_registry = Arc::new(ServiceRegistry::new());
-        let db_pool = None;
 
         Self {
             client: None,
             config,
             start_time: SystemTime::now(),
             cache_registry,
-            metrics_handle: None,
+            metrics_handle: Some(prometheus_handle),
             token_client,
-            resource_registry: None,
-            db_pool,
+            resource_registry,
+            db_pool: None,
             service_registry,
         }
     }
@@ -91,7 +94,7 @@ impl AppState {
             client: Some(client),
             config: config.clone(),
             start_time,
-            cache_registry: cache_registry.clone(),
+            cache_registry: Some(Arc::new(cache_registry.clone())),
             metrics_handle: Some(metrics_handle),
             token_client: if config.auth.enabled {
                 Some(Arc::new(EntraTokenClient::from_config(&config)))
@@ -242,10 +245,10 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
         client: Some(client),
         config: config.clone(),
         start_time,
-        cache_registry: cache_registry.clone(),
+        cache_registry: cache_registry.clone().map(Arc::new),
         metrics_handle: Some(metrics_handle),
         token_client: if config.auth.enabled {
-            Some(EntraTokenClient::from_config(&config))
+            Some(Arc::new(EntraTokenClient::from_config(&config)))
         } else {
             None
         },
@@ -404,14 +407,14 @@ mod tests {
             };
 
             let metrics_recorder = PrometheusBuilder::new().build_recorder();
-            let metrics_handle: PrometheusHandle = metrics_recorder.handle();
+            let metrics_handle = metrics_recorder.handle();
 
             Arc::new(AppState {
                 client: None,
                 config,
                 start_time: SystemTime::now(),
                 cache_registry: None,
-                metrics_handle,
+                metrics_handle: Some(metrics_handle),
                 token_client: None,
                 resource_registry: None,
                 db_pool: None,

@@ -441,10 +441,25 @@ impl CacheRegistry {
     pub fn new() -> Self {
         Self {
             caches: Arc::new(RwLock::new(HashMap::new())),
-            enabled: true,
-            ttl_seconds: 3600,
-            max_capacity: 100,
+            enabled: false,
+            ttl_seconds: 300,
+            max_capacity: 1000,
             creation_time: SystemTime::now(),
+        }
+    }
+
+    /// Count the total number of cache entries across all resource caches
+    pub fn count_entries(&self) -> usize {
+        if !self.enabled {
+            return 0;
+        }
+
+        match self.caches.read() {
+            Ok(caches) => caches.len(),
+            Err(_) => {
+                warn!("Failed to read cache registry for entry count");
+                0
+            }
         }
     }
 }

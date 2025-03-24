@@ -14,7 +14,6 @@ categories = ["web-programming", "asynchronous"]
 # SQLx offline mode configuration
 [package.metadata.sqlx]
 offline = true
-offline_dir = "src/app/database/.sqlx"
 
 # Suppress specific warnings
 [lints.rust]

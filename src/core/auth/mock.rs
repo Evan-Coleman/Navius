@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::core::{
     auth::{
-        client::{TokenClient, TokenValidationResult},
+        interfaces::{TokenClient, TokenValidationResult},
         models::{JwtClaims, TokenResponse, UserProfile},
     },
     error::AppError,

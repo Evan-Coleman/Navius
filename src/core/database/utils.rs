@@ -70,14 +70,17 @@ pub async fn exists<T>(
     value: T,
 ) -> Result<bool, sqlx::Error>
 where
-    T: sqlx::Type<Postgres> + sqlx::Encode<'static, Postgres> + Send,
+    T: sqlx::Type<Postgres> + sqlx::Encode<'static, Postgres> + Send + 'static,
 {
     let query_str = format!(
         "SELECT EXISTS(SELECT 1 FROM {} WHERE {} = $1)",
         table, column
     );
 
-    sqlx::query_scalar::<_, bool>(&query_str)
+    // Convert to a static str
+    let query_static = Box::leak(query_str.into_boxed_str());
+
+    sqlx::query_scalar::<_, bool>(query_static)
         .bind(value)
         .fetch_one(pool)
         .await

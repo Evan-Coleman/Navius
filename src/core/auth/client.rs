@@ -2,12 +2,19 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
-use oauth2::{AuthUrl, ClientId, ClientSecret, Scope, TokenResponse, TokenUrl, basic::BasicClient};
+use async_trait::async_trait;
+use oauth2::{
+    AuthUrl, ClientId, ClientSecret, Scope, TokenResponse as OAuth2TokenResponse, TokenUrl,
+    basic::BasicClient,
+};
 use reqwest::Client;
 use tracing::{debug, error, info};
 
+use crate::core::auth::interfaces::{TokenClient, TokenValidationResult};
+use crate::core::auth::models::{JwtClaims, TokenResponse, UserProfile};
 use crate::core::config::app_config::AppConfig;
 use crate::core::config::constants;
+use crate::core::error::AppError;
 
 /// Token cache entry
 struct TokenCacheEntry {
@@ -191,6 +198,39 @@ impl EntraTokenClient {
             .default_headers(headers)
             .build()
             .map_err(|e| format!("Failed to build client: {}", e))
+    }
+}
+
+#[async_trait]
+impl TokenClient for EntraTokenClient {
+    async fn get_token(&self, username: &str, password: &str) -> Result<TokenResponse, AppError> {
+        // For now, just return an error since this implementation doesn't support
+        // username/password auth flow - it uses client credentials
+        Err(AppError::NotImplementedError(
+            "Username/password auth flow not implemented for EntraTokenClient".to_string(),
+        ))
+    }
+
+    async fn validate_token(&self, _token: &str) -> Result<TokenValidationResult, AppError> {
+        // This client is for acquiring tokens, not validating them
+        // In a real implementation, we would call the Entra ID token validation endpoint
+        Err(AppError::NotImplementedError(
+            "Token validation not implemented for EntraTokenClient".to_string(),
+        ))
+    }
+
+    async fn refresh_token(&self, _refresh_token: &str) -> Result<TokenResponse, AppError> {
+        // This client uses client credentials flow which doesn't use refresh tokens
+        Err(AppError::NotImplementedError(
+            "Refresh token flow not implemented for EntraTokenClient".to_string(),
+        ))
+    }
+
+    async fn get_user_profile(&self, _token: &str) -> Result<UserProfile, AppError> {
+        // This implementation doesn't support fetching user profiles
+        Err(AppError::NotImplementedError(
+            "User profile retrieval not implemented for EntraTokenClient".to_string(),
+        ))
     }
 }
 

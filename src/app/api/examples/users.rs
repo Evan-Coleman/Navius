@@ -11,11 +11,13 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::{
+    app::services::error::ServiceError,
+    auth::models::TokenClaims,
     core::router::AppState,
+    database::PgPool,
     repository::models::UserRole,
     services::{
         IUserService,
-        error::ServiceError,
         user::{CreateUserDto, UpdateUserDto},
     },
 };

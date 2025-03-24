@@ -22,9 +22,22 @@ if [ -z "$DATABASE_URL" ]; then
     fi
 fi
 
+# Clean up any existing .sqlx directory to ensure fresh cache
+if [ -d ".sqlx" ]; then
+    echo "Cleaning existing SQLx query cache..."
+    rm -rf .sqlx
+fi
+
 # Generate query cache
 echo "Generating SQLx query cache..."
-cargo sqlx prepare --merged -- --all-targets --all-features
+cargo sqlx prepare -- --all-targets --all-features
 
-echo "SQLx query cache generation complete!"
-echo "You can now build and test the project with SQLX_OFFLINE=true" 
+# Verify the cache was created
+if [ -d ".sqlx" ]; then
+    echo "SQLx query cache generation complete!"
+    echo "You can now build and test the project with SQLX_OFFLINE=true"
+    echo "Query cache stored at: $(pwd)/.sqlx"
+else
+    echo "Error: Failed to generate SQLx query cache"
+    exit 1
+fi 
