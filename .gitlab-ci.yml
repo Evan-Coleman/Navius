@@ -8,8 +8,10 @@ variables:
   MDBOOK_VERSION: "0.4.36"
   # Add cargo build optimizations for CI
   CARGO_BUILD_JOBS: 4  # Parallel compilation jobs - adjust based on CI runner specs
-  RUSTFLAGS: "-C target-cpu=native"  # Optimize for CI machine
+  RUSTFLAGS: "-C target-cpu=native -C opt-level=2"  # Optimize for CI machine
   RUST_BACKTRACE: 1  # Better error reporting
+  # Enable incremental compilation for faster builds
+  CARGO_INCREMENTAL: 1
 
 # Define a cache template
 .cargo-cache:
@@ -26,6 +28,7 @@ variables:
 stages:
   - prepare
   - cook
+  - generate
   - test
   - lint
   - coverage
@@ -53,9 +56,40 @@ chef-cook:
   needs:
     - chef-prepare
   script:
-    - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld jq
-    # Install Java and OpenAPI Generator
-    - apt-get install -y default-jre-headless wget unzip
+    - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld --no-install-recommends
+    # Set up linker configuration for faster linking
+    - mkdir -p .cargo
+    - echo '[target.x86_64-unknown-linux-gnu]' > .cargo/config.toml
+    - echo 'linker = "clang"' >> .cargo/config.toml
+    - echo 'rustflags = ["-C", "link-arg=-fuse-ld=gold"]' >> .cargo/config.toml
+    # Cook the dependencies
+    - cargo chef cook --recipe-path recipe.json --release
+    # Create basic directory structure
+    - mkdir -p target/generated
+  artifacts:
+    paths:
+      - target/
+      - .cargo/
+    expire_in: 1 day
+  cache:
+    key:
+      files:
+        - recipe.json
+        - Cargo.lock
+    paths:
+      - target/
+      - .cargo/
+    policy: pull-push
+
+# Generate API clients in a separate job
+generate-apis:
+  stage: generate
+  image: lukemathwalker/cargo-chef:latest-rust-1
+  needs:
+    - chef-cook
+  script:
+    - apt-get update && apt-get install -y jq default-jre-headless wget unzip --no-install-recommends
+    # Install OpenAPI Generator
     - mkdir -p /tmp/openapi
     - cd /tmp/openapi
     - wget https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/7.12.0/openapi-generator-cli-7.12.0.jar -O openapi-generator-cli.jar
@@ -65,41 +99,31 @@ chef-cook:
     - cd -
     # Verify OpenAPI Generator installation
     - openapi-generator version
-    # Set up linker configuration
-    - mkdir -p .cargo
-    - echo '[target.x86_64-unknown-linux-gnu]' > .cargo/config.toml
-    - echo 'linker = "clang"' >> .cargo/config.toml
-    - echo 'rustflags = ["-C", "link-arg=-fuse-ld=gold"]' >> .cargo/config.toml
-    # Cook the dependencies
-    - cargo chef cook --recipe-path recipe.json
     # Generate API clients - this must succeed
     - mkdir -p target/generated
     - chmod +x .devtools/scripts/regenerate_api.sh
     - echo "Generating API clients..."
-    - cat .devtools/scripts/regenerate_api.sh | grep -n "jq" || true
-    - ls -la .devtools/scripts/
     - ./.devtools/scripts/regenerate_api.sh
-    # Verify the generated files exist
-    - mkdir -p src/../target/generated/petstore_api/src
-    - test -f src/../target/generated/petstore_api/src/lib.rs || echo "Creating empty lib.rs to prevent compilation failures"
-    - test -f src/../target/generated/petstore_api/src/lib.rs || mkdir -p src/../target/generated/petstore_api/src
-    - test -f src/../target/generated/petstore_api/src/lib.rs || echo "// Empty placeholder" > src/../target/generated/petstore_api/src/lib.rs
+    # Ensure the generated directory exists (without depending on specific APIs)
+    - mkdir -p src/../target/generated
+    # Create empty lib.rs in case no APIs were generated to prevent compilation failures
+    - for api_dir in $(find target/generated -mindepth 1 -maxdepth 1 -type d -name "*_api" 2>/dev/null || echo ""); do
+    -   mkdir -p "$api_dir/src"
+    -   test -f "$api_dir/src/lib.rs" || echo "// Empty placeholder" > "$api_dir/src/lib.rs"
+    - done
     - ls -la target/generated || true
-    - find target/generated -type f || true
+    - find target/generated -type f -name "*.rs" | wc -l
   artifacts:
     paths:
-      - target/
-      - .cargo/
       - target/generated/
     expire_in: 1 day
   cache:
-    key:
+    key: 
       files:
-        - recipe.json
+        - config/api_registry.json
     paths:
-      - target/
-      - .cargo/
       - target/generated/
+    policy: pull-push
 
 # Basic test job
 test:
@@ -107,13 +131,17 @@ test:
   image: rust:latest
   needs:
     - chef-cook
+    - generate-apis
   script:
     - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld jq
     - rustc --version
     - cargo --version
     # Ensure generated files exist before continuing
-    - mkdir -p src/../target/generated/petstore_api/src
-    - test -f src/../target/generated/petstore_api/src/lib.rs || echo "// Empty placeholder" > src/../target/generated/petstore_api/src/lib.rs
+    - mkdir -p target/generated
+    - for api_dir in $(find target/generated -mindepth 1 -maxdepth 1 -type d -name "*_api" 2>/dev/null || echo ""); do
+    -   mkdir -p "$api_dir/src"
+    -   test -f "$api_dir/src/lib.rs" || echo "// Empty placeholder" > "$api_dir/src/lib.rs"
+    - done
     # Now run tests with pre-built dependencies
     - cargo test --all-features
   artifacts:
@@ -128,6 +156,7 @@ lint:
   image: rust:latest
   needs:
     - chef-cook
+    - generate-apis
   script:
     - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld jq
     - rustup component add rustfmt clippy
@@ -140,6 +169,7 @@ coverage:
   image: rust:latest
   needs:
     - chef-cook
+    - generate-apis
   script:
     - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld jq
     - bash .devtools/scripts/coverage.sh
@@ -205,11 +235,15 @@ build:
   image: rust:latest
   needs:
     - chef-cook
+    - generate-apis
   script:
     - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld jq
     # Ensure generated files exist before continuing
-    - mkdir -p src/../target/generated/petstore_api/src
-    - test -f src/../target/generated/petstore_api/src/lib.rs || echo "// Empty placeholder" > src/../target/generated/petstore_api/src/lib.rs
+    - mkdir -p target/generated
+    - for api_dir in $(find target/generated -mindepth 1 -maxdepth 1 -type d -name "*_api" 2>/dev/null || echo ""); do
+    -   mkdir -p "$api_dir/src"
+    -   test -f "$api_dir/src/lib.rs" || echo "// Empty placeholder" > "$api_dir/src/lib.rs"
+    - done
     # Build with pre-compiled dependencies
     - cargo build --release
   artifacts:
