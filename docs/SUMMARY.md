@@ -1,0 +1,66 @@
+# Summary
+
+[Introduction](README.md)
+
+# Getting Started
+- [Installation](getting-started/installation.md)
+- [Development Setup](getting-started/development-setup.md)
+- [First Steps](getting-started/first-steps.md)
+
+# Guides
+- [Development](guides/development/README.md)
+  - [Development Workflow](guides/development/development-workflow.md)
+  - [Testing Guide](guides/development/testing-guide.md)
+  - [Debugging Guide](guides/development/debugging-guide.md)
+  - [IDE Setup](guides/development/ide-setup.md)
+  - [Git Workflow](guides/development/git-workflow.md)
+
+- [Features](guides/features/README.md)
+  - [Authentication](guides/features/authentication.md)
+  - [API Integration](guides/features/api-integration.md)
+  - [PostgreSQL Integration](guides/features/postgresql-integration.md)
+  - [Redis Caching](guides/features/caching.md)
+  - [WebSocket Support](guides/features/websocket-support.md)
+
+- [Deployment](guides/deployment/README.md)
+  - [Production Deployment](guides/deployment/production-deployment.md)
+  - [Docker Deployment](guides/deployment/docker-deployment.md)
+  - [AWS Deployment](guides/deployment/aws-deployment.md)
+  - [Kubernetes Deployment](guides/deployment/kubernetes-deployment.md)
+
+# Reference
+- [API](reference/api/README.md)
+  - [API Resources](reference/api/api-resource.md)
+  - [Authentication API](reference/api/authentication-api.md)
+  - [Database API](reference/api/database-api.md)
+
+- [Architecture](reference/architecture/README.md)
+  - [Principles](reference/architecture/principles.md)
+  - [Project Structure](reference/architecture/project-structure-recommendations.md)
+  - [Directory Organization](reference/architecture/directory-organization.md)
+  - [Component Architecture](reference/architecture/component-architecture.md)
+
+- [Patterns](reference/patterns/README.md)
+  - [API Resource Pattern](reference/patterns/api-resource-pattern.md)
+  - [Import Patterns](reference/patterns/import-patterns.md)
+  - [Error Handling](reference/patterns/error-handling-patterns.md)
+  - [Testing Patterns](reference/patterns/testing-patterns.md)
+
+- [Standards](reference/standards/README.md)
+  - [Naming Conventions](reference/standards/naming-conventions.md)
+  - [Code Style](reference/standards/code-style.md)
+  - [Generated Code](reference/standards/generated-code-standards.md)
+  - [Security Standards](reference/standards/security-standards.md)
+  - [Documentation Standards](reference/standards/documentation-standards.md)
+
+- [Configuration](reference/configuration/README.md)
+  - [Environment Variables](reference/configuration/environment-variables.md)
+  - [Application Config](reference/configuration/application-config.md)
+  - [Logging Config](reference/configuration/logging-config.md)
+  - [Security Config](reference/configuration/security-config.md)
+
+# Contributing
+- [Contributing Guide](contributing/contribution-guide.md)
+- [Code of Conduct](contributing/code-of-conduct.md)
+- [Development Process](contributing/development-process.md)
+- [Testing Guidelines](contributing/testing-guidelines.md) 

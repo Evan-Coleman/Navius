@@ -1,75 +1,123 @@
 ---
-title: Navius Reference Documentation
-description: Technical reference documentation for the Navius framework
+title: Reference Documentation
+description: "Technical reference documentation for Navius, including API specifications, architectural patterns, coding standards, and configuration guides"
 category: reference
 tags:
   - reference
   - api
   - architecture
   - standards
+  - patterns
+  - configuration
+  - security
 related:
   - ../guides/README.md
-  - ../getting-started/README.md
+  - ../guides/development/README.md
+  - ../guides/features/README.md
 last_updated: March 23, 2025
 version: 1.0
 ---
 
 # Navius Reference Documentation
 
-## Overview
-This section provides comprehensive technical reference documentation for the Navius framework. These reference documents offer detailed specifications, architecture information, and standards documentation.
+This section provides detailed technical reference documentation for the Navius framework. It serves as the authoritative source for API specifications, architectural patterns, coding standards, and configuration options.
 
-## Architecture Reference
+## Quick Reference
 
-### Core Architecture
-- [Architectural Principles](architecture/principles.md) - Fundamental design principles guiding Navius
-- [Directory Organization](architecture/directory-organization.md) - Detailed explanation of the project directory structure
-- [Project Structure](architecture/project-structure.md) - Overview of the project's architecture
+- [API Documentation](api/README.md) - Complete API reference
+- [Architecture Guide](architecture/principles.md) - Core architectural principles
+- [Coding Standards](standards/README.md) - Development standards and conventions
+- [Configuration Reference](configuration/README.md) - Configuration options and environment variables
 
-## API Reference
+## Documentation Sections
 
-- [API Overview](api/README.md) - Introduction to the Navius API
-- API Resources - Documentation for each API resource
-- API Patterns - Common API design patterns
+### API Reference
+Comprehensive documentation for Navius APIs and integrations.
 
-## Configuration Reference
+- [API Resource Pattern](patterns/api-resource-pattern.md) - Core API resource abstraction
+- [API Resource Guide](api/api-resource-guide.md) - Implementing API resources
+- [API Resource Reference](api/api-resource.md) - API resource specifications
+- [Authentication API](api/authentication-api.md) - Authentication endpoints
+- [Database API](api/database-api.md) - Database operations
 
-- [Environment Variables](configuration/environment-variables.md) - Comprehensive list of environment variables
-- Configuration Files - Documentation for configuration file formats
-- Runtime Configuration - How Navius loads and applies configuration
+### Architecture
+Core architectural concepts and patterns.
 
-## Standards Reference
+- [Architectural Principles](architecture/principles.md) - Core design principles
+- [Project Structure](architecture/project-structure-recommendations.md) - Recommended project organization
+- [Directory Organization](architecture/directory-organization.md) - Directory structure guide
+- [Component Architecture](architecture/component-architecture.md) - Component design patterns
 
-- [Naming Conventions](standards/naming-conventions.md) - Standards for naming various components
-- [Error Handling](standards/error-handling.md) - Error handling patterns and practices
-- [Coding Standards](standards/coding-standards.md) - General coding standards
-- [Documentation Standards](standards/documentation-standards.md) - Standards for documentation
-- [Testing Standards](standards/testing-standards.md) - Standards for testing
+### Patterns and Best Practices
+Common patterns and recommended approaches.
 
-## Type Reference
+- [API Resource Pattern](patterns/api-resource-pattern.md) - API abstraction pattern
+- [Import Patterns](patterns/import-patterns.md) - Module import guidelines
+- [Error Handling Patterns](patterns/error-handling-patterns.md) - Error management
+- [Testing Patterns](patterns/testing-patterns.md) - Testing strategies
 
-- Core Types - Documentation for core data types
-- Utility Types - Documentation for utility data types
-- Database Types - Documentation for database-related types
+### Standards and Conventions
+Development standards and coding conventions.
 
-## Module Reference
+- [Naming Conventions](standards/naming-conventions.md) - Naming guidelines
+- [Code Style](standards/code-style.md) - Code formatting standards
+- [Generated Code](standards/generated-code-standards.md) - Working with generated code
+- [Security Standards](standards/security-standards.md) - Security requirements
+- [Documentation Standards](standards/documentation-standards.md) - Documentation guidelines
 
-- Core Module - Documentation for the core module
-- API Module - Documentation for the API module
-- Database Module - Documentation for the database module
-- Authentication Module - Documentation for the authentication module
-- Middleware Module - Documentation for middleware components
+### Configuration
+Configuration options and environment setup.
 
-## How to Use This Reference
+- [Environment Variables](configuration/environment-variables.md) - Environment configuration
+- [Application Config](configuration/application-config.md) - Application settings
+- [Logging Config](configuration/logging-config.md) - Logging configuration
+- [Security Config](configuration/security-config.md) - Security settings
 
-The reference documentation is organized by topic. You can:
+## Using the Reference Documentation
 
-1. Browse the sections above to find specific reference documentation
-2. Use the search functionality to find specific information
-3. Cross-reference with guides for more process-oriented documentation
+This reference documentation is organized to help you:
 
-## Related Sections
+1. **Find Information Quickly**
+   - Use the quick reference links above
+   - Navigate through specific sections
+   - Search for specific topics
 
-- [Getting Started](../getting-started/README.md) - Introductory guides
-- [Guides](../guides/README.md) - Process-oriented guides
-- [Contributing](../contributing/README.md) - Contribution guidelines 
+2. **Understand Patterns**
+   - Review architectural principles
+   - Learn common patterns
+   - Follow best practices
+
+3. **Implement Features**
+   - Reference API specifications
+   - Follow coding standards
+   - Configure components properly
+
+4. **Maintain Code Quality**
+   - Apply coding standards
+   - Follow security guidelines
+   - Use recommended patterns
+
+## Related Resources
+
+- [Development Guides](../guides/development/README.md) - Development workflow and practices
+- [Feature Guides](../guides/features/README.md) - Feature implementation guides
+- [Deployment Guides](../guides/deployment/README.md) - Deployment instructions
+- [Getting Started](../getting-started/README.md) - Quick start guides
+
+## Contributing to Reference Documentation
+
+When contributing to the reference documentation:
+
+1. Follow the [Documentation Standards](standards/documentation-standards.md)
+2. Include clear code examples
+3. Keep information up-to-date
+4. Cross-reference related documents
+
+## Need Help?
+
+If you need help understanding the reference documentation:
+
+1. Check the examples in each document
+2. Review related guides in the [Guides](../guides/README.md) section
+3. Join our [Discord Community](https://discord.gg/navius) for assistance
+4. Open an issue on our [GitHub repository](https://github.com/navius/navius) 

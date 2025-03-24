@@ -1,70 +1,138 @@
 ---
 title: Getting Started with Navius
-description: Quick start guides for setting up and using the Navius framework
+description: "Quick start guides for getting up and running with Navius, including installation, development setup, and first steps in building applications"
 category: getting-started
 tags:
+  - getting-started
   - installation
   - setup
   - quickstart
+  - development
+  - tutorial
 related:
-  - ../guides/README.md
-  - ../reference/README.md
+  - ../guides/development/README.md
+  - ../reference/architecture/principles.md
+  - ../guides/features/README.md
 last_updated: March 23, 2025
 version: 1.0
 ---
 
 # Getting Started with Navius
 
-## Overview
-This section provides quick-start guides to help new users begin working with the Navius framework. These guides are designed to take you from installation to building your first application.
+Welcome to Navius! This section will help you get up and running quickly with the Navius framework. Follow these guides in sequence to set up your development environment and build your first Navius application.
 
-## Getting Started Guides
+## Quick Start
 
-### Core Setup
-
-- [Installation](installation.md) - Installing the Navius framework
-- [Development Setup](development-setup.md) - Setting up your development environment
-- [Project Structure](project-structure.md) - Understanding the structure of a Navius project
-
-### First Steps
-
-- [First Application](first-application.md) - Building your first Navius application
-- [Basic Concepts](basic-concepts.md) - Understanding key Navius concepts
-- [Hello World API](hello-world-api.md) - Creating a simple API endpoint
-
-### Next Steps
-
-- [Database Setup](database-setup.md) - Setting up and connecting to a database
-- [Authentication Setup](authentication-setup.md) - Adding basic authentication
-- [API Resources](api-resources.md) - Creating your first API resources
-
-## Recommended Learning Path
-
-For the best learning experience, we recommend following these guides in order:
-
-1. [Installation](installation.md)
-2. [Development Setup](development-setup.md)
-3. [First Application](first-application.md)
-4. [Basic Concepts](basic-concepts.md)
-5. [Project Structure](project-structure.md)
-6. [Hello World API](hello-world-api.md)
-7. [Database Setup](database-setup.md)
-8. [Authentication Setup](authentication-setup.md)
-9. [API Resources](api-resources.md)
-
-After completing these guides, you'll be ready to explore more advanced topics in the [Guides](../guides/README.md) section.
+1. [Installation](installation.md) - Install Navius and its dependencies
+2. [Development Setup](development-setup.md) - Set up your development environment
+3. [First Steps](first-steps.md) - Create your first Navius application
 
 ## Prerequisites
 
-Before starting with Navius, you should have:
+Before you begin, ensure you have:
 
-- Basic knowledge of Rust programming
-- Familiarity with command-line tools
-- Understanding of web development concepts (HTTP, REST, etc.)
-- A code editor or IDE (VS Code, IntelliJ, etc.)
+- Rust installed (1.75.0 or later)
+- A code editor (VS Code recommended)
+- Basic knowledge of:
+  - Rust programming language
+  - Web development concepts
+  - Command line usage
 
-## Related Sections
+## Installation Options
 
-- [Development Guides](../guides/development/README.md) - More detailed development guides
-- [Feature Guides](../guides/features/README.md) - Guides for implementing specific features
-- [Reference Documentation](../reference/README.md) - Technical reference information 
+Choose your installation method:
+
+### Using Cargo
+```bash
+cargo install navius
+```
+
+### From Source
+```bash
+git clone https://github.com/navius/navius.git
+cd navius
+cargo install --path .
+```
+
+## Development Environment
+
+We recommend:
+
+1. **IDE Setup**
+   - Visual Studio Code with rust-analyzer
+   - Recommended extensions listed in [Development Setup](development-setup.md)
+
+2. **Tools**
+   - Git for version control
+   - Docker for containerization
+   - PostgreSQL for database
+   - Redis for caching
+
+## Learning Path
+
+After completing the getting started guides, we recommend:
+
+1. **Core Concepts**
+   - Review [Architecture Principles](../reference/architecture/principles.md)
+   - Understand [Project Structure](../reference/architecture/project-structure-recommendations.md)
+
+2. **Essential Features**
+   - Implement [Database Access](../guides/features/postgresql-integration.md)
+   - Add [Authentication](../guides/features/authentication.md)
+   - Set up [Caching](../guides/features/caching.md)
+
+3. **Development Practices**
+   - Follow [Development Workflow](../guides/development/development-workflow.md)
+   - Learn [Testing Practices](../guides/development/testing-guide.md)
+
+## Common Tasks
+
+Quick reference for common tasks:
+
+### Create a New Project
+```bash
+navius new my-project
+cd my-project
+cargo run
+```
+
+### Run Development Server
+```bash
+./run_dev.sh
+```
+
+### Run Tests
+```bash
+cargo test
+```
+
+### Generate Documentation
+```bash
+cargo doc --no-deps --open
+```
+
+## Next Steps
+
+After completing these getting started guides:
+
+1. Explore [Feature Guides](../guides/features/README.md) for implementing specific functionality
+2. Review [Development Guides](../guides/development/README.md) for best practices
+3. Consult [Reference Documentation](../reference/README.md) for detailed specifications
+4. Check [Deployment Guides](../guides/deployment/README.md) for production deployment
+
+## Need Help?
+
+If you encounter issues while getting started:
+
+1. Check the troubleshooting section in each guide
+2. Review our [Common Issues](../reference/troubleshooting/common-issues.md) documentation
+3. Join our [Discord Community](https://discord.gg/navius) for real-time help
+4. Open an issue on our [GitHub repository](https://github.com/navius/navius)
+
+## Contributing
+
+We welcome contributions! If you find issues or have suggestions:
+
+1. Read our [Contributing Guide](../contributing/contribution-guide.md)
+2. Follow our [Code of Conduct](../contributing/code-of-conduct.md)
+3. Submit issues or pull requests on [GitHub](https://github.com/navius/navius) 
