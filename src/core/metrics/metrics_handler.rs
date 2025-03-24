@@ -7,7 +7,13 @@ pub type MetricsHandle = PrometheusHandle;
 /// Initialize metrics with Prometheus
 pub fn init_metrics() -> MetricsHandle {
     match PrometheusBuilder::new().build() {
-        Ok(handle) => handle,
+        Ok((recorder, exporter)) => {
+            // Install the recorder globally
+            metrics::set_recorder(recorder).expect("Failed to set global metrics recorder");
+
+            // Return the handle
+            PrometheusHandle::new()
+        }
         Err(e) => {
             error!("Failed to initialize metrics: {}", e);
             panic!("Failed to initialize metrics: {}", e);
@@ -23,60 +29,53 @@ pub async fn export_metrics(handle: &MetricsHandle) -> String {
 /// Update a gauge metric
 pub fn update_gauge(name: &str, value: f64, labels: &[(&str, &str)]) {
     if labels.is_empty() {
-        // No labels - use simpler form
-        metrics::gauge!(name);
-        metrics::gauge!(name).set(value);
-        return;
+        // Basic metric without labels
+        let metric_name = name.to_string();
+        metrics::gauge!(&metric_name).set(value);
+    } else if labels.len() == 1 {
+        // Single label case
+        let metric_name = name.to_string();
+        let (key, val) = (labels[0].0.to_string(), labels[0].1.to_string());
+        metrics::gauge!(&metric_name, &key => &val).set(value);
+    } else {
+        // Multiple labels - just use the base name
+        let metric_name = name.to_string();
+        metrics::gauge!(&metric_name).set(value);
     }
-
-    // Use named labels with a single label pair
-    if labels.len() == 1 {
-        let (key, val) = labels[0];
-        metrics::gauge!(name, key => val);
-        metrics::gauge!(name, key => val).set(value);
-        return;
-    }
-
-    // Fall back to basic metric and manually set it
-    // Complex multiple labels are harder to handle with the macros directly
-    metrics::gauge!(name);
-    metrics::gauge!(name).set(value);
 }
 
 /// Increment a counter metric
 pub fn increment_counter(name: &str, value: u64, labels: &[(&str, &str)]) {
     if labels.is_empty() {
-        // No labels - use simpler form
-        metrics::counter!(name).increment(value);
-        return;
+        // Basic metric without labels
+        let metric_name = name.to_string();
+        metrics::counter!(&metric_name).increment(value);
+    } else if labels.len() == 1 {
+        // Single label case
+        let metric_name = name.to_string();
+        let (key, val) = (labels[0].0.to_string(), labels[0].1.to_string());
+        metrics::counter!(&metric_name, &key => &val).increment(value);
+    } else {
+        // Multiple labels - just use the base name
+        let metric_name = name.to_string();
+        metrics::counter!(&metric_name).increment(value);
     }
-
-    // Use named labels with a single label pair
-    if labels.len() == 1 {
-        let (key, val) = labels[0];
-        metrics::counter!(name, key => val).increment(value);
-        return;
-    }
-
-    // Fall back to basic counter and manually increment it
-    metrics::counter!(name).increment(value);
 }
 
 /// Record a histogram metric
 pub fn record_histogram(name: &str, value: f64, labels: &[(&str, &str)]) {
     if labels.is_empty() {
-        // No labels - use simpler form
-        metrics::histogram!(name).record(value);
-        return;
+        // Basic metric without labels
+        let metric_name = name.to_string();
+        metrics::histogram!(&metric_name).record(value);
+    } else if labels.len() == 1 {
+        // Single label case
+        let metric_name = name.to_string();
+        let (key, val) = (labels[0].0.to_string(), labels[0].1.to_string());
+        metrics::histogram!(&metric_name, &key => &val).record(value);
+    } else {
+        // Multiple labels - just use the base name
+        let metric_name = name.to_string();
+        metrics::histogram!(&metric_name).record(value);
     }
-
-    // Use named labels with a single label pair
-    if labels.len() == 1 {
-        let (key, val) = labels[0];
-        metrics::histogram!(name, key => val).record(value);
-        return;
-    }
-
-    // Fall back to basic histogram and manually record it
-    metrics::histogram!(name).record(value);
 }

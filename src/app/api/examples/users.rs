@@ -130,8 +130,8 @@ pub fn configure() -> Router<Arc<AppState>> {
 }
 
 /// Map service errors to HTTP status codes
-fn map_service_error(err: core::services::error::ServiceError) -> (StatusCode, String) {
-    use crate::core::services::error::ServiceError;
+fn map_service_error(err: crate::services::error::ServiceError) -> (StatusCode, String) {
+    use crate::services::error::ServiceError;
 
     match err {
         ServiceError::UserNotFound => (StatusCode::NOT_FOUND, "User not found".to_string()),
@@ -330,7 +330,7 @@ async fn delete_user(
     match user_service.delete_user(user_id).await {
         Ok(_) => Ok(StatusCode::NO_CONTENT),
         Err(err) => match err {
-            core::services::error::ServiceError::UserNotFound => Err((
+            crate::services::error::ServiceError::UserNotFound => Err((
                 StatusCode::NOT_FOUND,
                 format!("User with ID {} not found", user_id),
             )),
