@@ -122,6 +122,34 @@ pub enum PermissionRequirement {
     None,
 }
 
+/// Role enum representing predefined roles
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Role {
+    /// Administrator role
+    Admin,
+    /// Read-only role
+    ReadOnly,
+    /// Full access role
+    FullAccess,
+    /// Custom role
+    Custom,
+}
+
+/// Permission enum representing predefined permissions
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Permission {
+    /// Read permission
+    Read,
+    /// Write permission
+    Write,
+    /// Delete permission
+    Delete,
+    /// Admin permission
+    Admin,
+    /// Custom permission
+    Custom,
+}
+
 /// Configuration for Entra authentication middleware
 #[derive(Debug, Clone)]
 pub struct EntraAuthConfig {
@@ -885,6 +913,31 @@ impl PermissionRequirement {
             PermissionRequirement::Any(perms) => perms.iter().any(|p| permissions.contains(p)),
             PermissionRequirement::All(perms) => perms.iter().all(|p| permissions.contains(p)),
         }
+    }
+}
+
+/// Helper function to create auth middleware with any role
+pub fn auth_middleware(roles: Vec<String>) -> EntraAuthLayer {
+    EntraAuthLayer::require_any_role(roles)
+}
+
+/// Helper function to require authentication without specific roles
+pub fn require_auth() -> EntraAuthLayer {
+    EntraAuthLayer::default()
+}
+
+/// Helper function to require specific roles
+pub fn require_roles(roles: Vec<String>) -> EntraAuthLayer {
+    EntraAuthLayer::require_any_role(roles)
+}
+
+/// Helper function to convert a string to a Role enum
+pub fn role_from_string(role: &str) -> Role {
+    match role.to_lowercase().as_str() {
+        "admin" => Role::Admin,
+        "readonly" => Role::ReadOnly,
+        "fullaccess" => Role::FullAccess,
+        _ => Role::Custom,
     }
 }
 

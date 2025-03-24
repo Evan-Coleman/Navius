@@ -44,3 +44,24 @@ pub struct UserProfile {
     /// Optional URL to user's profile picture
     pub picture: Option<String>,
 }
+
+/// Token claims for authentication
+#[derive(Debug, Clone)]
+pub struct TokenClaims {
+    /// Subject (user identifier)
+    pub sub: String,
+    /// Token issuer
+    pub iss: String,
+    /// Token audience
+    pub aud: String,
+    /// Expiration time
+    pub exp: i64,
+    /// Not before time
+    pub nbf: i64,
+    /// Issued at time
+    pub iat: i64,
+    /// JWT ID
+    pub jti: String,
+    /// User roles
+    pub roles: Vec<String>,
+}

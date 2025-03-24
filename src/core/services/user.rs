@@ -9,10 +9,9 @@ use uuid::Uuid;
 use crate::{
     core::{
         error::AppError,
-        repository::{Repository, models::UserRole},
+        repository::{Repository, models::User, models::UserRole},
     },
     core_service_error::{ServiceError, ServiceResult},
-    models::User,
 };
 
 /// User creation data transfer object

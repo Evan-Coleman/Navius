@@ -67,3 +67,43 @@ pub struct ActuatorEntry {
     pub url: String,
     pub value: String,
 }
+
+/// Generic API response structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiResponse<T> {
+    /// Response status code
+    pub code: u16,
+    /// Response message
+    pub message: String,
+    /// Response data
+    pub data: Option<T>,
+}
+
+impl<T> ApiResponse<T> {
+    /// Create a new API response
+    pub fn new(code: u16, message: String, data: Option<T>) -> Self {
+        Self {
+            code,
+            message,
+            data,
+        }
+    }
+
+    /// Create a success response
+    pub fn success(data: T) -> Self {
+        Self {
+            code: 200,
+            message: "Success".to_string(),
+            data: Some(data),
+        }
+    }
+
+    /// Create an error response
+    pub fn error(code: u16, message: String) -> Self {
+        Self {
+            code,
+            message,
+            data: None,
+        }
+    }
+}
