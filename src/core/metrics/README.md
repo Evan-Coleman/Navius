@@ -29,13 +29,13 @@ You can record custom metrics using the metrics crate:
 use metrics::{counter, gauge, histogram};
 
 // Increment a counter
-counter!("api_requests_total", 1, "endpoint" => "pets");
+counter!("api_requests_total", 1, "endpoint" => "resources");
 
 // Set a gauge value
-gauge!("cache_size", 42.0, "type" => "pet");
+gauge!("cache_size", 42.0, "type" => "resource");
 
 // Record a histogram value
-histogram!("request_duration_seconds", 0.157, "endpoint" => "pets");
+histogram!("request_duration_seconds", 0.157, "endpoint" => "resources");
 ```
 
 ### Exposing Metrics Endpoint

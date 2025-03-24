@@ -1,12 +1,19 @@
 use axum::{
     extract::State,
-    routing::{Router, get},
+    routing::{Router, get, post},
 };
-use std::sync::Arc;
+use metrics_exporter_prometheus::PrometheusBuilder;
+use std::{sync::Arc, time::SystemTime};
 
-use crate::{
-    core::auth::EntraAuthLayer,
-    core::handlers::{self, actuator, docs, health},
+use crate::core::{
+    auth::EntraAuthLayer,
+    config::app_config::AppConfig,
+    handlers::{
+        self, actuator, docs,
+        health::{detailed_health_handler, health_handler},
+    },
+    models::{DetailedHealthResponse, HealthCheckResponse},
+    services::ServiceRegistry,
 };
 
 use super::AppState;
@@ -24,11 +31,11 @@ impl CoreRouter {
         let admin_auth = EntraAuthLayer::from_app_config_require_admin_role(&state.config);
 
         // Public core routes - accessible without authentication
-        let public_routes = Router::new().route("/health", get(health::health_check));
+        let public_routes = Router::new().route("/health", get(health_handler));
 
         // Actuator routes - for metrics, health checks, docs, and admin functions
         let actuator_routes = Router::new()
-            .route("/health", get(health::detailed_health_check))
+            .route("/health", get(detailed_health_handler))
             .route("/info", get(actuator::info))
             .route("/docs", get(docs::swagger_ui_handler))
             .route("/docs/{*file}", get(docs::openapi_spec_handler));
@@ -52,9 +59,8 @@ impl CoreRouter {
 mod tests {
     use super::*;
     use crate::{
-        core::{auth::EntraTokenClient, config::app_config::AppConfig},
+        core::{auth::EntraTokenClient, utils::api_resource::ApiResourceRegistry},
         models::{DetailedHealthResponse, HealthCheckResponse},
-        utils::api_resource::ApiResourceRegistry,
     };
     use axum::{
         Router,
@@ -62,7 +68,6 @@ mod tests {
         http::{Method, Request, StatusCode},
         response::Response,
     };
-    use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
     use reqwest::Client;
     use std::{sync::Arc, time::SystemTime};
     use tower::ServiceExt;
@@ -73,17 +78,18 @@ mod tests {
         config.auth.enabled = auth_enabled;
 
         let metrics_recorder = PrometheusBuilder::new().build_recorder();
-        let metrics_handle: PrometheusHandle = metrics_recorder.handle();
+        let metrics_handle = metrics_recorder.handle();
 
         Arc::new(AppState {
-            client: Client::new(),
+            client: None,
             config,
             start_time: SystemTime::now(),
             cache_registry: None,
-            metrics_handle,
+            metrics_handle: Some(metrics_handle),
             token_client: None,
-            resource_registry: ApiResourceRegistry::new(),
+            resource_registry: None,
             db_pool: None,
+            service_registry: Arc::new(ServiceRegistry::new()),
         })
     }
 

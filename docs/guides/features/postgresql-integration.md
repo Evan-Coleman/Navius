@@ -252,10 +252,10 @@ impl Repository<User, Uuid> for UserRepository {
 
 ### 5. Create Migrations
 
-Create a migrations folder with SQL migrations:
+Create migrations in the app database folder:
 
 ```sql
--- migrations/001_create_users_table.sql
+-- src/app/database/migrations/001_create_users_table.sql
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY,
     username VARCHAR(255) NOT NULL UNIQUE,
@@ -277,11 +277,11 @@ Add a function to run migrations during server startup:
 
 ```rust
 pub async fn run_migrations(pool: &SqlxPgPool) -> Result<(), AppError> {
-    sqlx::migrate!("./migrations")
+    sqlx::migrate!("./src/app/database/migrations")
         .run(pool)
         .await
         .map_err(|e| AppError::DatabaseError(format!("Migration failed: {}", e)))?;
-        
+
     tracing::info!("Database migrations completed successfully");
     Ok(())
 }
@@ -323,7 +323,7 @@ mod tests {
             .expect("Failed to connect to test database");
             
         // Run migrations
-        sqlx::migrate!("./migrations")
+        sqlx::migrate!("./src/app/database/migrations")
             .run(&pool)
             .await
             .expect("Failed to run migrations");

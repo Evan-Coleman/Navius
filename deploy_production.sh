@@ -109,7 +109,7 @@ if [ "$SKIP_MIGRATIONS" != "true" ]; then
     
     # Set a timeout for migrations to prevent hanging
     echo "Running migrations with ${MIGRATION_TIMEOUT}s timeout..."
-    timeout $MIGRATION_TIMEOUT sqlx migrate run
+    timeout $MIGRATION_TIMEOUT sqlx migrate run --source src/app/database/migrations
     
     if [ $? -ne 0 ]; then
         echo "Error: Database migrations failed."

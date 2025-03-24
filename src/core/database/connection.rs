@@ -35,7 +35,7 @@ impl PgDatabaseConnection {
             .map_err(|e| DatabaseError::ConnectionFailed(e.to_string()))?;
 
         // Run migrations if needed
-        sqlx::migrate!("./migrations")
+        sqlx::migrate!("./src/app/database/migrations")
             .run(&pool)
             .await
             .map_err(|e| DatabaseError::MigrationFailed(e.to_string()))?;

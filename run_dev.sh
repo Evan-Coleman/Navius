@@ -201,7 +201,7 @@ fi
 # Run database migrations if enabled
 if [ "$RUN_MIGRATIONS" = true ]; then
     echo "Running database migrations..."
-    if [ -d "migrations" ]; then
+    if [ -d "src/app/database/migrations" ]; then
         # Check for sqlx CLI
         if command -v sqlx &> /dev/null; then
             echo "Using sqlx to run migrations..."
@@ -212,7 +212,7 @@ if [ "$RUN_MIGRATIONS" = true ]; then
             fi
             
             MIGRATION_START_TIME=$(date +%s)
-            sqlx migrate run
+            sqlx migrate run --source src/app/database/migrations
             
             if [ $? -ne 0 ]; then
                 echo "Error: Database migrations failed."
@@ -228,7 +228,7 @@ if [ "$RUN_MIGRATIONS" = true ]; then
             exit 1
         fi
     else
-        echo "Error: migrations directory not found."
+        echo "Error: migrations directory not found in src/app/database/migrations."
         exit 1
     fi
 fi

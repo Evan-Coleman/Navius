@@ -25,6 +25,8 @@ use std::sync::Arc;
 // pub mod users;
 // pub mod products;
 // pub mod orders;
+pub mod pet;
+pub mod pet_db;
 
 /// Example API implementations
 pub mod examples;
@@ -43,7 +45,10 @@ pub mod examples;
 /// ```
 pub fn routes() -> Router<Arc<AppState>> {
     // Create a router with our example endpoints
-    Router::new().route("/pets/{id}", get(examples::pet::fetch_pet_handler))
+    Router::new()
+        .route("/pets/{id}", get(examples::pet::fetch_pet_handler))
+        .merge(pet::configure())
+        .merge(pet_db::configure())
 
     // Add your own routes below:
     // .merge(users::routes())

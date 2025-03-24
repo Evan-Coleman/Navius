@@ -1,7 +1,7 @@
 use metrics::{counter, gauge};
 use moka::future::Cache;
 use serde::{Deserialize, Serialize};
-use std::any::Any;
+use std::any::{Any, type_name};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -12,9 +12,10 @@ use std::sync::{
 use std::thread_local;
 use std::time::{Duration, SystemTime};
 use tokio::time::interval;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 // Import ApiResource trait
+use crate::core::error::AppError;
 use crate::core::utils::api_resource::ApiResource;
 
 /// Generic cache for any resource type that implements ApiResource
@@ -38,16 +39,16 @@ pub struct CacheRegistry {
     pub creation_time: SystemTime,
 }
 
-/// Cache statistics
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Cache statistics for a resource type
+#[derive(Debug)]
 pub struct CacheStats {
-    pub resource_type: String,
-    pub uptime_seconds: u64,
-    pub size: u64,
-    pub active_entries: u64,
-    pub entries_created: u64,
+    /// Number of items in the cache
+    pub size: usize,
+    /// Number of cache hits
     pub hits: u64,
+    /// Number of cache misses
     pub misses: u64,
+    /// Cache hit ratio (hits / total)
     pub hit_ratio: f64,
 }
 
@@ -221,122 +222,24 @@ pub fn get_resource_cache<T: ApiResource + 'static>(
     }
 }
 
-/// Get cache statistics with metrics data
-pub fn get_cache_stats_with_metrics(
-    registry: &CacheRegistry,
-    resource_type: &str,
-    metrics_text: &str,
+/// Get cache statistics with metrics for a specific resource type
+pub fn get_cache_stats_with_metrics<T: Any>(
+    cache_box: &Box<dyn Any + Send + Sync>,
 ) -> Option<CacheStats> {
-    if !registry.enabled {
-        return None;
-    }
-
-    // Calculate uptime
-    let uptime_seconds = SystemTime::now()
-        .duration_since(registry.creation_time)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-
-    // Try to get the actual cache size directly from the cache
-    let mut actual_size = 0;
-    let caches = match registry.caches.read() {
-        Ok(caches) => caches,
-        Err(_) => {
-            debug!("Failed to acquire read lock on cache registry for stats");
-            return None;
-        }
-    };
-
-    // Look for the cache by resource type
-    if let Some(cache_box) = caches.get(resource_type) {
-        // Try some common resource types by using downcast_ref
-        // This is a bit of a hack, but it's the most direct way to get the entry count
-        // without an abstraction layer that covers all potential cache types
-        if let Some(pet_cache) =
-            cache_box.downcast_ref::<ResourceCache<crate::generated_apis::Upet>>()
-        {
-            actual_size = pet_cache.cache.entry_count();
-            debug!(
-                "Found pet cache size for {}: {}",
-                resource_type, actual_size
-            );
-        }
-        // Add other resource types as needed
-        // if let Some(...) = cache_box.downcast_ref::<ResourceCache<OtherType>>() { ... }
-    }
-
-    // Parse metrics text to extract hit and miss counts for this resource type
-    let mut hits = 0;
-    let mut misses = 0;
-    let mut entries_created = 0;
-    let mut size = 0;
-    let mut active_entries = 0;
-
-    // Construct the metric name with label that we're looking for
-    let metric_label = format!("resource_type=\"{}\"", resource_type);
-
-    for line in metrics_text.lines() {
-        // Skip comment lines and empty lines
-        if line.starts_with('#') || line.trim().is_empty() {
-            continue;
-        }
-
-        // Process only lines with our resource type
-        if !line.contains(&metric_label) {
-            continue;
-        }
-
-        // Extract the metric value (should be the second item when split by whitespace)
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() < 2 {
-            continue;
-        }
-
-        let value = match parts[1].parse::<u64>() {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-
-        // Update the appropriate counter based on metric name
-        if line.contains("cache_hits_total") {
-            hits = value;
-        } else if line.contains("cache_misses_total") {
-            misses = value;
-        } else if line.contains("cache_entries_created") {
-            entries_created = value;
-        } else if line.contains("cache_current_size") {
-            // We'll use the actual size from the cache instead
-            if actual_size == 0 {
-                size = value; // Fallback to metrics if actual size not available
-            }
-        } else if line.contains("cache_active_entries") {
-            active_entries = value;
-        }
-    }
-
-    // Use the direct cache size if available, otherwise use metrics
-    if actual_size > 0 {
-        size = actual_size;
-    }
-
-    // Calculate hit ratio
-    let hit_ratio = if hits + misses > 0 {
-        (hits as f64 / (hits + misses) as f64) * 100.0
+    if let Some(resource_cache) = cache_box.downcast_ref::<ResourceCache<T>>() {
+        let stats = resource_cache.get_stats();
+        info!(
+            "Cache stats for {}: size={}, hits={}, misses={}, hit_ratio={:.2}%",
+            type_name::<T>(),
+            stats.size,
+            stats.hits,
+            stats.misses,
+            stats.hit_ratio
+        );
+        Some(stats)
     } else {
-        0.0
-    };
-
-    // Return the stats object with all the collected metrics
-    Some(CacheStats {
-        resource_type: resource_type.to_string(),
-        uptime_seconds,
-        size,
-        active_entries,
-        entries_created,
-        hits,
-        misses,
-        hit_ratio,
-    })
+        None
+    }
 }
 
 // Helper function to see if the last fetch was from cache
@@ -494,37 +397,13 @@ pub async fn start_metrics_updater(registry: &CacheRegistry) {
             };
 
             for (resource_type, cache_box) in caches.iter() {
-                // Try to get the actual entry count from the cache
-
-                // This is a bit of a hack, but it gets the actual cache size
-                // Try to downcast to a known resource type
-                if let Some(pet_cache) =
-                    cache_box.downcast_ref::<ResourceCache<crate::generated_apis::Upet>>()
-                {
-                    let current_size = pet_cache.cache.entry_count();
-
-                    // Update the metrics with the real cache size
-                    gauge!("cache_current_size", "resource_type" => resource_type.to_string())
-                        .set(current_size as f64);
-
-                    // Get active entries from the atomic counter
-                    let active_entries = pet_cache.active_entries.load(Ordering::Relaxed);
-                    gauge!("cache_active_entries", "resource_type" => resource_type.to_string())
-                        .set(active_entries as f64);
-
-                    debug!(
-                        "📊 Cache metrics updated for {} - size: {}, active: {}",
-                        resource_type, current_size, active_entries
-                    );
-                } else {
-                    // If we can't get the actual size, set to 0 to avoid showing incorrect data
-                    gauge!("cache_current_size", "resource_type" => resource_type.to_string())
-                        .set(0.0);
-                    debug!(
-                        "📊 Cache metrics reset to 0 for {} (couldn't get actual size)",
-                        resource_type
-                    );
-                }
+                // Since we can't know the concrete type, we'll rely on the active_entries counter
+                // and reset the size metric to avoid showing stale data
+                gauge!("cache_current_size", "resource_type" => resource_type.to_string()).set(0.0);
+                debug!(
+                    "📊 Cache metrics reset for {} (size metric reset for abstraction)",
+                    resource_type
+                );
             }
         }
     });
@@ -556,6 +435,24 @@ pub async fn start_metrics_updater(registry: &CacheRegistry) {
     }
 
     info!("📈 Cache metrics updater started for all resource types");
+}
+
+impl CacheRegistry {
+    pub fn new() -> Self {
+        Self {
+            caches: Arc::new(RwLock::new(HashMap::new())),
+            enabled: true,
+            ttl_seconds: 3600,
+            max_capacity: 100,
+            creation_time: SystemTime::now(),
+        }
+    }
+}
+
+impl Default for CacheRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]

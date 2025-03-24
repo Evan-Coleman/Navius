@@ -59,8 +59,10 @@ src/
 │   ├── environment.rs  # Environment configuration
 │   └── loader.rs       # Configuration loading
 ├── db/                 # Database interactions
-│   ├── connection.rs   # Connection management
-│   ├── migrations/     # Schema migrations
+│   ├── database/
+│   │   ├── connection.rs   # Database connection manager
+│   │   ├── migrations/     # Schema migrations
+│   │   └── models/         # Database models
 │   ├── repositories/   # Data access
 │   └── models/         # Database models
 ├── api/                # API definitions

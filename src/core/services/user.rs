@@ -7,9 +7,12 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::{
-    core::error::AppError,
-    repository::{Repository, User, models::UserRole},
-    services::error::{ServiceError, ServiceResult},
+    core::{
+        error::AppError,
+        repository::{Repository, models::UserRole},
+    },
+    core_service_error::{ServiceError, ServiceResult},
+    models::User,
 };
 
 /// User creation data transfer object

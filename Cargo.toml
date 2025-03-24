@@ -11,6 +11,11 @@ readme = "README.md"
 keywords = ["api", "backend", "axum", "enterprise", "framework"]
 categories = ["web-programming", "asynchronous"]
 
+# SQLx offline mode configuration
+[package.metadata.sqlx]
+offline = true
+offline_dir = "src/app/database/.sqlx"
+
 # Suppress specific warnings
 [lints.rust]
 dead_code = "allow"
@@ -77,6 +82,7 @@ fake = { version = "4.2.0", features = ["derive", "chrono", "uuid"] }
 test-context = "0.4.1"
 assert_matches = "1.5.0"
 once_cell = "1.21.1"
+mockall = "0.13.1"
 
 [features]
 production = []

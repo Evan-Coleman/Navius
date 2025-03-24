@@ -157,7 +157,7 @@ where
                 }
                 Err(err) => {
                     let err = err.into();
-                    let app_err = AppError::InternalError(format!("{}", err));
+                    let app_err = AppError::internal_server_error(format!("{}", err));
                     let status = app_err.status_code();
                     let duration = start.elapsed();
 

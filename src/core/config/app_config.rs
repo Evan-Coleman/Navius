@@ -51,10 +51,27 @@ impl Default for DatabaseConfig {
 }
 
 /// API configuration
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiConfig {
-    pub petstore_url: String,
+    /// Base URL for the API
+    pub base_url: String,
+    /// API key for authentication
     pub api_key: Option<String>,
+    /// API version
+    pub version: String,
+    /// API timeout in seconds
+    pub timeout_seconds: u64,
+}
+
+impl Default for ApiConfig {
+    fn default() -> Self {
+        Self {
+            base_url: String::from("http://localhost:8080"),
+            api_key: None,
+            version: String::from("v1"),
+            timeout_seconds: 30,
+        }
+    }
 }
 
 /// Entra ID (Azure AD) authentication configuration
@@ -654,11 +671,6 @@ impl AppConfig {
         Duration::from_secs(self.cache.ttl_seconds)
     }
 
-    /// Get the full Petstore API URL
-    pub fn petstore_api_url(&self) -> String {
-        self.api.petstore_url.trim_end_matches('/').to_string()
-    }
-
     /// Get the OpenAPI spec file path
     pub fn openapi_spec_path(&self) -> String {
         // Hardcoded directory + filename from config
@@ -670,6 +682,15 @@ impl AppConfig {
         // URL is derived from the filename, and includes the /actuator prefix
         // since docs routes are mounted under /actuator
         format!("/actuator/docs/{}", self.openapi.spec_file)
+    }
+
+    /// Get the petstore API URL
+    pub fn petstore_api_url(&self) -> String {
+        self.api.base_url.clone()
+    }
+
+    pub fn api_url(&self) -> &str {
+        &self.api.base_url
     }
 }
 

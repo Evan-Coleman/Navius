@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \n                id, \n                name, \n                pet_type, \n                breed, \n                age, \n                created_at, \n                updated_at\n            FROM pets\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "pet_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "breed",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "age",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "6f51f820cb5ea7115199273a6f49d1bb50973e32907966dcc221cf1260e3fad7"
+}

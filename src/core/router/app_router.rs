@@ -1,13 +1,15 @@
 use axum::{
-    body::Body,
-    extract::{ConnectInfo, State},
-    http::Request,
+    body::{self, Body},
+    extract::{ConnectInfo, Extension, Request as AxumRequest, State},
+    http::{HeaderMap, Method, Request, Response, StatusCode, Uri},
     middleware::{self, Next},
-    response::{IntoResponse, Response},
+    response::{IntoResponse, Response as AxumResponse},
     routing::{Router, get, post},
 };
-use metrics_exporter_prometheus::PrometheusHandle;
+use config::ConfigError;
+use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
 use reqwest::Client;
+use sqlx::{Pool, Postgres};
 use std::{
     net::SocketAddr,
     sync::Arc,
@@ -25,64 +27,114 @@ use crate::{
         EntraAuthLayer, EntraTokenClient,
         middleware::{EntraAuthConfig, RoleRequirement},
     },
+    core::cache::CacheRegistry,
     core::config::app_config::AppConfig,
     core::handlers::logging,
-    models::{ApiResponse, DetailedHealthResponse, HealthCheckResponse},
+    core::metrics::MetricsHandle,
+    core::models::{ApiResponse, DetailedHealthResponse, HealthCheckResponse},
+    core::services::ServiceRegistry,
+    core::utils::api_resource::ApiResourceRegistry,
     reliability,
 };
 
 use super::CoreRouter;
 
 /// Application state shared across all routes
+#[derive(Clone)]
 pub struct AppState {
-    pub client: Client,
+    pub client: Option<Client>,
     pub config: AppConfig,
     pub start_time: SystemTime,
-    pub cache_registry: Option<crate::core::cache::CacheRegistry>,
-    pub metrics_handle: PrometheusHandle,
-    pub token_client: Option<EntraTokenClient>,
-    pub resource_registry: crate::utils::api_resource::ApiResourceRegistry,
-    pub db_pool: Option<Arc<Box<dyn crate::core::database::PgPool>>>,
+    pub cache_registry: Option<Arc<CacheRegistry>>,
+    pub metrics_handle: Option<PrometheusHandle>,
+    pub token_client: Option<Arc<EntraTokenClient>>,
+    pub resource_registry: Option<Arc<ApiResourceRegistry>>,
+    pub db_pool: Option<Pool<Postgres>>,
+    pub service_registry: Arc<ServiceRegistry>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
-        // Load default configuration
-        let config = crate::core::config::app_config::AppConfig {
-            server: Default::default(),
-            api: Default::default(),
-            auth: Default::default(),
-            logging: Default::default(),
-            reliability: Default::default(),
-            openapi: Default::default(),
-            cache: Default::default(),
-            database: Default::default(),
-            environment: Default::default(),
-            endpoint_security: Default::default(),
-        };
-
-        // Create HTTP client with default timeout
-        let client = Client::builder()
-            .timeout(Duration::from_secs(30))
-            .build()
-            .expect("Failed to create default HTTP client");
-
-        // Get default metrics handle
-        let metrics_handle = crate::core::metrics::init_metrics();
-
-        // Create resource registry
-        let resource_registry = crate::utils::api_resource::ApiResourceRegistry::new();
+        let config = AppConfig::default();
+        let cache_registry = Some(Arc::new(CacheRegistry::new()));
+        let token_client = Some(Arc::new(EntraTokenClient::from_config(&config)));
+        let service_registry = Arc::new(ServiceRegistry::new());
+        let db_pool = None;
 
         Self {
-            client,
+            client: None,
+            config,
+            start_time: SystemTime::now(),
+            cache_registry,
+            metrics_handle: None,
+            token_client,
+            resource_registry: None,
+            db_pool,
+            service_registry,
+        }
+    }
+}
+
+impl AppState {
+    pub fn new(
+        config: AppConfig,
+        db_pool: Option<Pool<Postgres>>,
+        cache_registry: Option<Arc<CacheRegistry>>,
+    ) -> Arc<Self> {
+        let start_time = SystemTime::now();
+        let client = Client::new();
+        let metrics_handle = crate::core::metrics::init_metrics();
+        let resource_registry = ApiResourceRegistry::new();
+
+        // Create the app state
+        Arc::new(AppState {
+            client: Some(client),
+            config: config.clone(),
+            start_time,
+            cache_registry: cache_registry.clone(),
+            metrics_handle: Some(metrics_handle),
+            token_client: if config.auth.enabled {
+                Some(Arc::new(EntraTokenClient::from_config(&config)))
+            } else {
+                None
+            },
+            resource_registry: Some(Arc::new(resource_registry)),
+            db_pool,
+            service_registry: Arc::new(ServiceRegistry::new()),
+        })
+    }
+
+    pub fn new_test() -> Arc<Self> {
+        let config = AppConfig::default();
+        let metrics_handle = crate::core::metrics::init_metrics();
+
+        Arc::new(AppState {
+            client: None,
             config,
             start_time: SystemTime::now(),
             cache_registry: None,
-            metrics_handle,
+            metrics_handle: Some(metrics_handle),
             token_client: None,
-            resource_registry,
+            resource_registry: None,
             db_pool: None,
-        }
+            service_registry: Arc::new(ServiceRegistry::new()),
+        })
+    }
+
+    pub fn new_test_with_config(config: AppConfig) -> Arc<Self> {
+        let metrics_handle = crate::core::metrics::init_metrics();
+
+        Arc::new(AppState {
+            client: None,
+            config,
+            start_time: SystemTime::now(),
+            cache_registry: None,
+            metrics_handle: Some(metrics_handle),
+            token_client: None,
+            resource_registry: None,
+            db_pool: None,
+            service_registry: Arc::new(ServiceRegistry::new()),
+        })
     }
 }
 
@@ -187,32 +239,20 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
 
     // Create the app state
     let state = Arc::new(AppState {
-        client,
+        client: Some(client),
         config: config.clone(),
         start_time,
         cache_registry: cache_registry.clone(),
-        metrics_handle,
+        metrics_handle: Some(metrics_handle),
         token_client: if config.auth.enabled {
             Some(EntraTokenClient::from_config(&config))
         } else {
             None
         },
-        resource_registry,
+        resource_registry: Some(Arc::new(resource_registry)),
         db_pool,
+        service_registry: Arc::new(ServiceRegistry::new()),
     });
-
-    // Register pet resources in the cache registry
-    if let Some(_registry) = &cache_registry {
-        // Register the Upet resource type with the cache
-        use crate::core::utils::api_resource::{ApiResource, register_resource};
-        use crate::generated_apis::Upet;
-
-        // Make sure the pet resource type is registered with the cache
-        match register_resource::<Upet>(&state, None) {
-            Ok(_) => info!("✅ Successfully registered pet resource type in cache registry"),
-            Err(e) => info!("⚠️ Failed to register pet resource: {}", e),
-        }
-    }
 
     // Start metrics updater for the new cache registry
     if let Some(registry) = &cache_registry {
@@ -225,6 +265,43 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server.port));
 
     (state, addr)
+}
+
+pub fn create_test_router() -> Router<Arc<AppState>> {
+    let config = AppConfig::default();
+    let metrics_handle = PrometheusBuilder::new().build_recorder().handle();
+
+    let state = Arc::new(AppState {
+        config,
+        start_time: SystemTime::now(),
+        cache_registry: Some(Arc::new(CacheRegistry::new())),
+        client: Some(Client::new()),
+        db_pool: None,
+        token_client: Some(Arc::new(MockTokenClient::default())),
+        metrics_handle: Some(metrics_handle),
+        resource_registry: Some(Arc::new(ApiResourceRegistry::new())),
+        service_registry: Arc::new(ServiceRegistry::new()),
+    });
+
+    Router::new().with_state(state)
+}
+
+pub fn create_test_router_with_config(config: AppConfig) -> Router<Arc<AppState>> {
+    let metrics_handle = PrometheusBuilder::new().build_recorder().handle();
+
+    let state = Arc::new(AppState {
+        config,
+        start_time: SystemTime::now(),
+        cache_registry: Some(Arc::new(CacheRegistry::new())),
+        client: Some(Client::new()),
+        db_pool: None,
+        token_client: Some(Arc::new(MockTokenClient::default())),
+        metrics_handle: Some(metrics_handle),
+        resource_registry: Some(Arc::new(ApiResourceRegistry::new())),
+        service_registry: Arc::new(ServiceRegistry::new()),
+    });
+
+    Router::new().with_state(state)
 }
 
 #[cfg(test)]
@@ -256,19 +333,19 @@ mod tests {
 
     // Create minimal app state for testing
     fn create_test_state() -> Arc<AppState> {
-        let config = AppConfig::default();
         let metrics_recorder = PrometheusBuilder::new().build_recorder();
-        let metrics_handle: PrometheusHandle = metrics_recorder.handle();
+        let metrics_handle = metrics_recorder.handle();
 
         Arc::new(AppState {
-            client: Client::new(),
-            config,
+            client: None,
+            config: AppConfig::default(),
             start_time: SystemTime::now(),
             cache_registry: None,
-            metrics_handle,
+            metrics_handle: Some(metrics_handle),
             token_client: None,
-            resource_registry: crate::utils::api_resource::ApiResourceRegistry::new(),
+            resource_registry: None,
             db_pool: None,
+            service_registry: Arc::new(ServiceRegistry::new()),
         })
     }
 
@@ -330,14 +407,15 @@ mod tests {
             let metrics_handle: PrometheusHandle = metrics_recorder.handle();
 
             Arc::new(AppState {
-                client: Client::new(),
+                client: None,
                 config,
                 start_time: SystemTime::now(),
                 cache_registry: None,
                 metrics_handle,
                 token_client: None,
-                resource_registry: crate::utils::api_resource::ApiResourceRegistry::new(),
+                resource_registry: None,
                 db_pool: None,
+                service_registry: Arc::new(ServiceRegistry::new()),
             })
         };
 

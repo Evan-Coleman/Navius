@@ -1,6 +1,7 @@
 use axum::{
     Json,
     extract::{Path, State},
+    http::StatusCode,
 };
 use std::sync::Arc;
 use tracing::info;
@@ -14,6 +15,20 @@ use crate::core::{
     },
 };
 use crate::generated_apis::Upet;
+
+// Add conversion from (StatusCode, String) to AppError
+impl From<(StatusCode, String)> for AppError {
+    fn from((status, message): (StatusCode, String)) -> Self {
+        match status {
+            StatusCode::NOT_FOUND => Self::NotFound(message),
+            StatusCode::BAD_REQUEST => Self::BadRequest(message),
+            StatusCode::UNAUTHORIZED => Self::Unauthorized(message),
+            StatusCode::FORBIDDEN => Self::Forbidden(message),
+            StatusCode::INTERNAL_SERVER_ERROR => Self::InternalServerError(message),
+            _ => Self::ExternalServiceError(format!("Status: {}, Message: {}", status, message)),
+        }
+    }
+}
 
 // Implement the ApiResource trait for our model
 impl ApiResource for Upet {
@@ -51,8 +66,14 @@ pub async fn fetch_pet_handler(
         Box::pin(async move {
             let url = format!("{}/pet/{}", state.config.petstore_api_url(), id);
 
-            // Create a closure that returns the actual request future
-            let fetch_fn = || async { state.client.get(&url).send().await };
+            // Prepare the client to make a request
+            let client = state.client.as_ref().ok_or_else(|| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "HTTP client not available".to_string(),
+                )
+            })?;
+            let fetch_fn = || async { client.get(&url).send().await };
 
             // Make the API call using the common logger/handler
             api_logger::api_call("Petstore", &url, fetch_fn, "Pet", id).await
@@ -92,9 +113,15 @@ pub async fn fetch_pet_handler(
 async fn fetch_pet(state: &Arc<AppState>, id: i64) -> Result<Upet> {
     let url = format!("{}/pet/{}", state.config.petstore_api_url(), id);
 
-    // Create a closure that returns the actual request future
-    let fetch_fn = || async { state.client.get(&url).send().await };
+    // Prepare the client to make a request
+    let client = state.client.as_ref().ok_or_else(|| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "HTTP client not available".to_string(),
+        )
+    })?;
 
     // Make the API call using the common logger/handler
+    let fetch_fn = || async { client.get(&url).send().await };
     api_logger::api_call("Petstore", &url, fetch_fn, "Pet", id).await
 }

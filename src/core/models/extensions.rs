@@ -19,6 +19,7 @@
 //! and error handling guidelines when creating new models.
 
 use crate::core::error::Result;
+use std::collections::BTreeMap;
 
 // Add your custom models below
 // Example:
@@ -54,3 +55,15 @@ pub trait UserModel {
 //         Ok(())
 //     }
 // }
+
+pub trait IntoDetails {
+    fn into_details(self) -> BTreeMap<String, String>;
+}
+
+impl<T: ToString> IntoDetails for T {
+    fn into_details(self) -> BTreeMap<String, String> {
+        let mut details = BTreeMap::new();
+        details.insert("message".to_string(), self.to_string());
+        details
+    }
+}

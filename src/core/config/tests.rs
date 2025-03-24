@@ -51,7 +51,9 @@ fn test_default_api_config() {
     let api = ApiConfig::default();
 
     // Default values
-    assert_eq!(api.petstore_url, "");
+    assert_eq!(api.base_url, "http://localhost:8080");
+    assert_eq!(api.version, "v1");
+    assert_eq!(api.timeout_seconds, 30);
     assert_eq!(api.api_key, None);
 }
 
@@ -167,22 +169,6 @@ fn test_cache_ttl() {
 }
 
 #[test]
-fn test_petstore_api_url() {
-    let config = AppConfig {
-        api: ApiConfig {
-            petstore_url: "https://petstore.example.com/api/v1".to_string(),
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
-    assert_eq!(
-        config.petstore_api_url(),
-        "https://petstore.example.com/api/v1"
-    );
-}
-
-#[test]
 fn test_openapi_spec_path() {
     let config = AppConfig {
         openapi: OpenApiConfig {
@@ -248,4 +234,19 @@ fn test_config_validation_and_defaults() {
     // Validate helper methods
     assert_eq!(config.server_addr(), "localhost:8080");
     assert_eq!(config.cache_ttl(), Duration::from_secs(3600));
+}
+
+#[test]
+fn test_api_url() {
+    let config = AppConfig {
+        api: ApiConfig {
+            base_url: "https://api.example.com".to_string(),
+            version: "v1".to_string(),
+            timeout_seconds: 30,
+            api_key: None,
+        },
+        ..Default::default()
+    };
+
+    assert_eq!(config.api_url(), "https://api.example.com");
 }

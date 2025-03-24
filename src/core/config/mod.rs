@@ -31,20 +31,9 @@ impl Default for AppConfig {
                 max_retries: 3,
                 protocol: "http".to_string(),
             },
-            api: ApiConfig {
-                petstore_url: String::from("https://petstore3.swagger.io/api/v3"),
-                api_key: None,
-            },
-            logging: LoggingConfig {
-                level: String::from("info"),
-                format: String::from("json"),
-            },
-            cache: CacheConfig {
-                enabled: true,
-                max_capacity: 100,
-                ttl_seconds: 3600,
-                reconnect_interval_seconds: 30,
-            },
+            api: ApiConfig::default(),
+            logging: LoggingConfig::default(),
+            cache: CacheConfig::default(),
             database: DatabaseConfig::default(),
             auth: AuthConfig::default(),
             reliability: ReliabilityConfig::default(),

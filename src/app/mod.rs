@@ -35,3 +35,6 @@ pub mod config;
 
 /// User-facing caching functionality
 pub mod cache;
+
+/// User-facing database functionality
+pub mod database;

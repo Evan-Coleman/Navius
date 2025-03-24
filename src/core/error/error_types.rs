@@ -43,7 +43,7 @@ impl fmt::Display for ErrorSeverity {
 }
 
 /// Application error types
-#[derive(Error, Debug)]
+#[derive(Debug, Error)]
 pub enum AppError {
     #[error("Configuration error: {0}")]
     ConfigError(#[from] ConfigError),
@@ -82,7 +82,7 @@ pub enum AppError {
     ValidationError(String),
 
     #[error("Internal server error: {0}")]
-    InternalError(String),
+    InternalServerError(String),
 }
 
 impl AppError {
@@ -101,7 +101,7 @@ impl AppError {
             AppError::DatabaseError(_) => ErrorSeverity::High,
             AppError::ConfigError(_) => ErrorSeverity::High,
             AppError::IoError(_) => ErrorSeverity::High,
-            AppError::InternalError(_) => ErrorSeverity::High,
+            AppError::InternalServerError(_) => ErrorSeverity::High,
         }
     }
 
@@ -120,7 +120,7 @@ impl AppError {
             AppError::DatabaseError(_) => "database_error",
             AppError::CacheError(_) => "cache_error",
             AppError::ValidationError(_) => "validation_error",
-            AppError::InternalError(_) => "internal_error",
+            AppError::InternalServerError(_) => "internal_error",
         }
         .to_string()
     }
@@ -140,8 +140,36 @@ impl AppError {
             AppError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::CacheError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::ValidationError(_) => StatusCode::UNPROCESSABLE_ENTITY,
-            AppError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
+    }
+
+    pub fn bad_request(message: impl Into<String>) -> Self {
+        Self::BadRequest(message.into())
+    }
+
+    pub fn internal_server_error(message: impl Into<String>) -> Self {
+        Self::InternalServerError(message.into())
+    }
+
+    pub fn not_found(message: impl Into<String>) -> Self {
+        Self::NotFound(message.into())
+    }
+
+    pub fn validation_error(message: impl Into<String>) -> Self {
+        Self::ValidationError(message.into())
+    }
+
+    pub fn database_error(message: impl Into<String>) -> Self {
+        Self::DatabaseError(message.into())
+    }
+
+    pub fn unauthorized(message: impl Into<String>) -> Self {
+        Self::Unauthorized(message.into())
+    }
+
+    pub fn forbidden(message: impl Into<String>) -> Self {
+        Self::Forbidden(message.into())
     }
 }
 
@@ -192,6 +220,21 @@ impl IntoResponse for AppError {
     }
 }
 
+impl From<crate::app::services::error::ServiceError> for AppError {
+    fn from(err: crate::app::services::error::ServiceError) -> Self {
+        use crate::app::services::error::ServiceError;
+
+        match err {
+            ServiceError::PetNotFound => Self::NotFound("Pet not found".to_string()),
+            ServiceError::UserNotFound => Self::NotFound("User not found".to_string()),
+            ServiceError::UsernameExists => Self::BadRequest("Username already exists".to_string()),
+            ServiceError::EmailExists => Self::BadRequest("Email already exists".to_string()),
+            ServiceError::ValidationError(msg) => Self::ValidationError(msg),
+            ServiceError::DatabaseError(msg) => Self::DatabaseError(msg),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -234,7 +277,7 @@ mod tests {
             ErrorSeverity::High
         );
         assert_eq!(
-            AppError::InternalError("test".into()).severity(),
+            AppError::InternalServerError("test".into()).severity(),
             ErrorSeverity::High
         );
     }
@@ -286,7 +329,7 @@ mod tests {
             StatusCode::UNPROCESSABLE_ENTITY
         );
         assert_eq!(
-            AppError::InternalError("test".into()).status_code(),
+            AppError::InternalServerError("test".into()).status_code(),
             StatusCode::INTERNAL_SERVER_ERROR
         );
     }

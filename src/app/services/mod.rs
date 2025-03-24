@@ -17,42 +17,43 @@
 //! This module contains all the service implementations that are intended
 //! to be customized or extended by users of the framework.
 
-// Add your service modules here:
-// pub mod notification;
-// pub mod analytics;
-// pub mod reporting;
+use crate::app::database::repositories::pet_repository::PetRepository;
+use crate::app::services::pet_service::PetService;
+use crate::core::services::ServiceRegistryTrait;
+use std::any::Any;
+use std::sync::Arc;
 
-/// Service registry for application services
-///
-/// This trait represents a collection of application services that can be used
-/// for dependency injection throughout the application.
-pub trait ServiceRegistry: Send + Sync {
-    // Define methods to access your services
-    // fn notification_service(&self) -> &dyn NotificationService;
-    // fn analytics_service(&self) -> &dyn AnalyticsService;
-    // fn reporting_service(&self) -> &dyn ReportingService;
-}
+pub mod error;
+pub mod pet_service;
+
+pub use error::ServiceError;
+pub use pet_service::{CreatePetDto, PetService as IPetService, UpdatePetDto};
 
 /// Default implementation of ServiceRegistry that can be used by applications
 pub struct DefaultServiceRegistry {
     // service fields go here
+    pet_service: Arc<dyn Any + Send + Sync>,
 }
 
 impl DefaultServiceRegistry {
     /// Create a new DefaultServiceRegistry with all required services
-    pub fn new() -> Self {
+    pub fn new(pet_repository: Arc<dyn PetRepository>) -> Self {
         Self {
             // Initialize your services here
+            pet_service: Arc::new(PetService::new(pet_repository)) as Arc<dyn Any + Send + Sync>,
         }
     }
 }
 
-impl ServiceRegistry for DefaultServiceRegistry {
+impl ServiceRegistryTrait for DefaultServiceRegistry {
     // Implement access methods
+    fn pet_service(&self) -> &dyn Any {
+        self.pet_service.as_ref()
+    }
 }
 
 impl Default for DefaultServiceRegistry {
     fn default() -> Self {
-        Self::new()
+        panic!("DefaultServiceRegistry requires dependencies to be initialized")
     }
 }

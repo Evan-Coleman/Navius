@@ -1,8 +1,3 @@
-//! User API endpoints
-//!
-//! This module provides API endpoints for user management.
-
-use axum::debug_handler;
 use axum::{
     Router,
     extract::{Json, Path, Query, State},
@@ -149,7 +144,7 @@ fn map_service_error(err: ServiceError) -> (StatusCode, String) {
 }
 
 /// Get all users
-#[debug_handler]
+#[axum::debug_handler]
 async fn get_all_users(
     State(state): State<Arc<AppState>>,
     Query(params): Query<HashMap<String, String>>,
@@ -191,7 +186,7 @@ async fn get_all_users(
 }
 
 /// Get a user by ID
-#[debug_handler]
+#[axum::debug_handler]
 async fn get_user(
     State(state): State<Arc<AppState>>,
     Path(id_str): Path<String>,
@@ -218,7 +213,7 @@ async fn get_user(
 }
 
 /// Create a new user
-#[debug_handler]
+#[axum::debug_handler]
 async fn create_user(
     State(state): State<Arc<AppState>>,
     Json(request): Json<CreateUserRequest>,
@@ -263,7 +258,7 @@ async fn create_user(
 }
 
 /// Update a user
-#[debug_handler]
+#[axum::debug_handler]
 async fn update_user(
     State(state): State<Arc<AppState>>,
     Path(id_str): Path<String>,
@@ -315,7 +310,7 @@ async fn update_user(
 }
 
 /// Delete a user
-#[debug_handler]
+#[axum::debug_handler]
 async fn delete_user(
     Path(id): Path<String>,
     State(state): State<Arc<AppState>>,
@@ -357,7 +352,10 @@ fn get_user_service(state: Arc<AppState>) -> Result<Arc<dyn IUserService>, (Stat
     };
 
     // Create user repository
-    let user_repo = Arc::new(crate::repository::UserRepository::new(db_pool));
+    let user_repo = Arc::new(crate::repository::UserRepository::new(Arc::new(Box::new(
+        db_pool.clone(),
+    )
+        as Box<dyn PgPool>)));
 
     // Create user service
     let user_service = Arc::new(crate::services::UserService::new(user_repo));

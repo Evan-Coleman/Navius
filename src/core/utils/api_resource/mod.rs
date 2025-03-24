@@ -107,14 +107,15 @@ mod tests {
         let metrics_handle = metrics_recorder.handle();
 
         Arc::new(AppState {
-            client: Client::new(),
             config: AppConfig::default(),
             start_time: SystemTime::now(),
-            cache_registry,
-            metrics_handle,
-            token_client: None,
-            resource_registry: ApiResourceRegistry::new(),
+            cache_registry: Some(Arc::new(cache_registry)),
+            client: Some(Client::new()),
             db_pool: None,
+            token_client: Some(Arc::new(MockTokenClient::default())),
+            metrics_handle: Some(metrics_handle),
+            resource_registry: Some(Arc::new(ApiResourceRegistry::new())),
+            service_registry: Arc::new(ServiceRegistry::new()),
         })
     }
 

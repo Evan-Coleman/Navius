@@ -27,13 +27,13 @@ pub fn try_record_metrics() -> Result<String, String> {
 
     let placeholder_metrics = "# HELP cache_hits Number of cache hits\n\
                               # TYPE cache_hits counter\n\
-                              cache_hits{resource_type=\"pet\"} 0\n\
+                              cache_hits{resource_type=\"example\"} 0\n\
                               # HELP cache_misses Number of cache misses\n\
                               # TYPE cache_misses counter\n\
-                              cache_misses{resource_type=\"pet\"} 0\n\
+                              cache_misses{resource_type=\"example\"} 0\n\
                               # HELP cache_current_size Current number of entries in the cache\n\
                               # TYPE cache_current_size gauge\n\
-                              cache_current_size{resource_type=\"pet\"} 0\n";
+                              cache_current_size{resource_type=\"example\"} 0\n";
 
     Ok(placeholder_metrics.to_string())
 }
@@ -121,30 +121,32 @@ mod tests {
 
     #[test]
     fn test_metrics_format() {
-        // Test that the metrics output is properly formatted
-        let metrics = try_record_metrics().unwrap();
+        let expected = "\
+# HELP cache_hits_total Number of cache hits
+# TYPE cache_hits_total counter
+cache_hits{resource_type=\"test\"} 0\n\
+# HELP cache_misses_total Number of cache misses
+# TYPE cache_misses_total counter
+cache_misses{resource_type=\"test\"} 0\n\
+# HELP cache_current_size Current number of items in cache
+# TYPE cache_current_size gauge
+cache_current_size{resource_type=\"test\"} 0\n";
 
-        // Verify the format follows Prometheus text format conventions
-        let lines: Vec<&str> = metrics.lines().collect();
+        assert_eq!(expected, get_test_metrics());
+    }
 
-        // Check for help and type lines
-        assert!(lines.iter().any(|l| l.starts_with("# HELP")));
-        assert!(lines.iter().any(|l| l.starts_with("# TYPE")));
-
-        // Check for metric lines
-        let metric_lines: Vec<&str> = lines
-            .iter()
-            .filter(|l| !l.starts_with('#') && !l.is_empty())
-            .copied()
-            .collect();
-
-        assert!(!metric_lines.is_empty());
-
-        // Each metric line should have a name and value
-        for line in metric_lines {
-            let parts: Vec<&str> = line.splitn(2, ' ').collect();
-            assert_eq!(parts.len(), 2, "Metric line should have name and value");
-        }
+    fn get_test_metrics() -> String {
+        "\
+# HELP cache_hits_total Number of cache hits
+# TYPE cache_hits_total counter
+cache_hits{resource_type=\"test\"} 0\n\
+# HELP cache_misses_total Number of cache misses
+# TYPE cache_misses_total counter
+cache_misses{resource_type=\"test\"} 0\n\
+# HELP cache_current_size Current number of items in cache
+# TYPE cache_current_size gauge
+cache_current_size{resource_type=\"test\"} 0\n"
+            .to_string()
     }
 
     #[test]

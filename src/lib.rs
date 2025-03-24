@@ -60,8 +60,8 @@ pub mod handlers {
 
 /// Data models and schemas
 pub mod models {
+    pub use crate::core::models::error::*;
     pub use crate::core::models::extensions::*;
-    pub use crate::core::models::*;
 }
 
 /// Repository module for data access
@@ -73,6 +73,11 @@ pub mod repository {
 pub mod services {
     pub use crate::app::services::*;
     pub use crate::core::services::*;
+}
+
+/// Database module
+pub mod database {
+    pub use crate::core::database::*;
 }
 
 /// Generated API clients
@@ -105,3 +110,10 @@ pub mod mockable {
     /// Marker trait for types that can be mocked externally
     pub trait MockExtern {}
 }
+
+pub use crate::app::api::*;
+pub use crate::app::services::error as app_service_error;
+pub use crate::core::error::*;
+pub use crate::core::models::*;
+pub use crate::core::services::error as core_service_error;
+pub use crate::core::services::*;

@@ -5,7 +5,10 @@
 
 pub mod connection;
 pub mod error;
-mod transaction;
+pub mod repositories;
+pub mod repository;
+pub mod transaction;
+pub mod utils;
 
 #[cfg(test)]
 mod tests;
@@ -14,7 +17,9 @@ mod tests;
 pub use connection::MockDatabaseConnection;
 pub use connection::{DatabaseConnection, init_database, ping_database};
 pub use error::DatabaseError;
+pub use repository::EntityRepository;
 pub use transaction::Transaction;
+pub use utils::{db_error_message, exists, generate_uuid, with_transaction};
 
 use crate::core::error::AppError;
 use async_trait::async_trait;

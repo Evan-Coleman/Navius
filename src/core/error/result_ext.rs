@@ -39,7 +39,7 @@ where
     fn internal_err(self) -> Result<T> {
         self.map_err(|e| {
             error!("Internal error: {}", e);
-            AppError::InternalError(e.to_string())
+            AppError::InternalServerError(e.to_string())
         })
     }
 
@@ -92,7 +92,7 @@ where
         self.map_err(|e| {
             let msg = format!("{}: {}", context, e);
             error!("{}", msg);
-            AppError::InternalError(msg)
+            AppError::InternalServerError(msg)
         })
     }
 }
@@ -114,8 +114,8 @@ impl StatusCodeExt for StatusCode {
             StatusCode::TOO_MANY_REQUESTS => AppError::RateLimited(msg),
             StatusCode::UNPROCESSABLE_ENTITY => AppError::ValidationError(msg),
             StatusCode::BAD_GATEWAY => AppError::ExternalServiceError(msg),
-            _ if self.is_server_error() => AppError::InternalError(msg),
-            _ => AppError::InternalError(format!(
+            _ if self.is_server_error() => AppError::InternalServerError(msg),
+            _ => AppError::InternalServerError(format!(
                 "Unexpected status code {}: {}",
                 self.as_u16(),
                 msg
@@ -141,10 +141,10 @@ mod tests {
         let app_result = result.internal_err();
 
         match app_result {
-            Err(AppError::InternalError(msg)) => {
+            Err(AppError::InternalServerError(msg)) => {
                 assert!(msg.contains("test error"));
             }
-            _ => panic!("Expected InternalError variant"),
+            _ => panic!("Expected InternalServerError variant"),
         }
     }
 
@@ -219,11 +219,11 @@ mod tests {
         let app_result = result.context("Context information");
 
         match app_result {
-            Err(AppError::InternalError(msg)) => {
+            Err(AppError::InternalServerError(msg)) => {
                 assert!(msg.contains("Context information"));
                 assert!(msg.contains("test error"));
             }
-            _ => panic!("Expected InternalError variant with context"),
+            _ => panic!("Expected InternalServerError variant with context"),
         }
     }
 
@@ -254,11 +254,11 @@ mod tests {
         let app_result = result.context("");
 
         match app_result {
-            Err(AppError::InternalError(msg)) => {
+            Err(AppError::InternalServerError(msg)) => {
                 assert!(msg.contains("test error"));
                 assert!(msg.starts_with(": test error"));
             }
-            _ => panic!("Expected InternalError variant"),
+            _ => panic!("Expected InternalServerError variant"),
         }
     }
 
@@ -268,12 +268,12 @@ mod tests {
         let app_result = result.context("First context").context("Second context");
 
         match app_result {
-            Err(AppError::InternalError(msg)) => {
+            Err(AppError::InternalServerError(msg)) => {
                 assert!(msg.contains("Second context"));
                 assert!(msg.contains("First context"));
                 assert!(msg.contains("test error"));
             }
-            _ => panic!("Expected InternalError variant"),
+            _ => panic!("Expected InternalServerError variant"),
         }
     }
 
@@ -302,12 +302,12 @@ mod tests {
             ),
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                AppError::InternalError("test".into()),
+                AppError::InternalServerError("test".into()),
             ),
             // Test unknown status code
             (
                 StatusCode::SWITCHING_PROTOCOLS,
-                AppError::InternalError(format!(
+                AppError::InternalServerError(format!(
                     "Unexpected status code {}: test",
                     StatusCode::SWITCHING_PROTOCOLS.as_u16()
                 )),
@@ -333,7 +333,7 @@ mod tests {
 
         assert!(matches!(error1, AppError::BadRequest(msg) if msg == "string error"));
         assert!(matches!(error2, AppError::NotFound(msg) if msg == "str error"));
-        assert!(matches!(error3, AppError::InternalError(msg) if msg == "custom error"));
+        assert!(matches!(error3, AppError::InternalServerError(msg) if msg == "custom error"));
     }
 
     // Helper struct for testing Display trait

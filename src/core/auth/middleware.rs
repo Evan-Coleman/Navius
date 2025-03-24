@@ -95,7 +95,7 @@ impl EntraClaims {
 }
 
 /// Role requirements for authorization
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RoleRequirement {
     /// Any of the listed roles is sufficient
     Any(Vec<String>),
@@ -103,10 +103,16 @@ pub enum RoleRequirement {
     All(Vec<String>),
     /// No roles required (authentication only)
     None,
+    /// Admin role
+    Admin,
+    /// Read-only role
+    ReadOnly,
+    /// Full access role
+    FullAccess,
 }
 
 /// Permission (scope) requirements for authorization
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PermissionRequirement {
     /// Any of the listed permissions is sufficient
     Any(Vec<String>),
@@ -141,6 +147,12 @@ pub struct EntraAuthConfig {
     pub debug_validation: bool,
     /// Default issuer URL formats
     pub issuer_url_formats: Vec<String>,
+    /// Admin roles
+    pub admin_roles: Vec<String>,
+    /// Read-only roles
+    pub read_only_roles: Vec<String>,
+    /// Full access roles
+    pub full_access_roles: Vec<String>,
 }
 
 /// OpenID Connect configuration response
@@ -193,6 +205,9 @@ impl Default for EntraAuthConfig {
             jwks_cache: Arc::new(Mutex::new(None)),
             debug_validation,
             issuer_url_formats,
+            admin_roles: Vec::new(),
+            read_only_roles: Vec::new(),
+            full_access_roles: Vec::new(),
         }
     }
 }
@@ -232,6 +247,9 @@ impl EntraAuthConfig {
             jwks_cache: Arc::new(Mutex::new(None)),
             debug_validation,
             issuer_url_formats,
+            admin_roles: Vec::new(),
+            read_only_roles: Vec::new(),
+            full_access_roles: Vec::new(),
         }
     }
 
@@ -274,6 +292,9 @@ impl EntraAuthConfig {
             jwks_cache: Arc::new(Mutex::new(None)),
             debug_validation,
             issuer_url_formats,
+            admin_roles: config.auth.entra.admin_roles.clone(),
+            read_only_roles: config.auth.entra.read_only_roles.clone(),
+            full_access_roles: config.auth.entra.full_access_roles.clone(),
         }
     }
 
@@ -475,6 +496,7 @@ fn create_decoding_key(jwk: &Jwk) -> Result<DecodingKey, AuthError> {
 fn validate_claims(claims: &EntraClaims, config: &EntraAuthConfig) -> Result<(), AuthError> {
     // Authorization based on roles
     match &config.required_roles {
+        RoleRequirement::None => Ok(()),
         RoleRequirement::Any(required_roles) => {
             if required_roles.is_empty() {
                 return Ok(());
@@ -507,7 +529,41 @@ fn validate_claims(claims: &EntraClaims, config: &EntraAuthConfig) -> Result<(),
 
             Ok(())
         }
-        RoleRequirement::None => Ok(()),
+        RoleRequirement::Admin => {
+            if claims.roles.iter().any(|r| config.admin_roles.contains(r)) {
+                Ok(())
+            } else {
+                Err(AuthError::AccessDenied(
+                    "Access denied: User does not have admin role".to_string(),
+                ))
+            }
+        }
+        RoleRequirement::ReadOnly => {
+            if claims.roles.iter().any(|r| {
+                config.admin_roles.contains(r)
+                    || config.read_only_roles.contains(r)
+                    || config.full_access_roles.contains(r)
+            }) {
+                Ok(())
+            } else {
+                Err(AuthError::AccessDenied(
+                    "Access denied: User does not have read access".to_string(),
+                ))
+            }
+        }
+        RoleRequirement::FullAccess => {
+            if claims
+                .roles
+                .iter()
+                .any(|r| config.admin_roles.contains(r) || config.full_access_roles.contains(r))
+            {
+                Ok(())
+            } else {
+                Err(AuthError::AccessDenied(
+                    "Access denied: User does not have full access".to_string(),
+                ))
+            }
+        }
     }
 }
 
@@ -712,7 +768,7 @@ async fn validate_token_wrapper(
             nbf: 0,
             iat: constants::timestamps::JAN_1_2021, // 2021-01-01
             sub: "debug_subject".to_string(),
-            roles: vec!["admin".to_string(), "pet-manager".to_string()],
+            roles: vec!["admin".to_string(), "resource-manager".to_string()],
             appid: Some("debug_app_id".to_string()),
             app_id_uri: Some("debug_app_id_uri".to_string()),
             scp: Some("api-access".to_string()),
@@ -787,6 +843,49 @@ async fn validate_token_wrapper(
     req.extensions_mut().insert(token_data.claims);
 
     Ok(req)
+}
+
+impl RoleRequirement {
+    pub fn from_str(s: &str) -> Result<Self, String> {
+        match s {
+            "admin" => Ok(RoleRequirement::Admin),
+            "read" => Ok(RoleRequirement::ReadOnly),
+            "full" => Ok(RoleRequirement::FullAccess),
+            "none" => Ok(RoleRequirement::None),
+            _ => Err(format!("Invalid role requirement: {}", s)),
+        }
+    }
+
+    pub fn matches(&self, roles: &[String], config: &EntraAuthConfig) -> bool {
+        match self {
+            RoleRequirement::None => true,
+            RoleRequirement::Any(required_roles) => {
+                required_roles.iter().any(|r| roles.contains(r))
+            }
+            RoleRequirement::All(required_roles) => {
+                required_roles.iter().all(|r| roles.contains(r))
+            }
+            RoleRequirement::Admin => roles.iter().any(|r| config.admin_roles.contains(r)),
+            RoleRequirement::ReadOnly => roles.iter().any(|r| {
+                config.admin_roles.contains(r)
+                    || config.read_only_roles.contains(r)
+                    || config.full_access_roles.contains(r)
+            }),
+            RoleRequirement::FullAccess => roles
+                .iter()
+                .any(|r| config.admin_roles.contains(r) || config.full_access_roles.contains(r)),
+        }
+    }
+}
+
+impl PermissionRequirement {
+    fn matches(&self, _roles: &[String], permissions: &[String]) -> bool {
+        match self {
+            PermissionRequirement::None => true,
+            PermissionRequirement::Any(perms) => perms.iter().any(|p| permissions.contains(p)),
+            PermissionRequirement::All(perms) => perms.iter().all(|p| permissions.contains(p)),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1134,5 +1233,60 @@ mod tests {
         assert!(scopes.contains(&"read".to_string()));
         assert!(scopes.contains(&"write".to_string()));
         assert!(scopes.contains(&"delete".to_string()));
+    }
+
+    #[test]
+    fn test_role_requirement_from_str() {
+        assert_eq!(
+            RoleRequirement::from_str("admin").unwrap(),
+            RoleRequirement::Admin
+        );
+        assert_eq!(
+            RoleRequirement::from_str("read").unwrap(),
+            RoleRequirement::ReadOnly
+        );
+        assert_eq!(
+            RoleRequirement::from_str("full").unwrap(),
+            RoleRequirement::FullAccess
+        );
+    }
+
+    #[test]
+    fn test_role_requirement_matches() {
+        let admin_roles = vec!["admin".to_string(), "system-admin".to_string()];
+        let read_roles = vec!["reader".to_string(), "viewer".to_string()];
+        let full_roles = vec!["editor".to_string(), "manager".to_string()];
+
+        let config = EntraAuthConfig {
+            tenant_id: "test-tenant".to_string(),
+            client_id: "test-client".to_string(),
+            audience: "test-audience".to_string(),
+            validate_token: true,
+            required_roles: vec![],
+            required_permissions: vec![],
+            client: None,
+            jwks_uri: "https://test.com/.well-known/jwks.json".to_string(),
+            jwks_cache: None,
+            debug_validation: false,
+            issuer_url_formats: vec!["https://test.com/{tenant}/v2.0".to_string()],
+            admin_roles: admin_roles.clone(),
+            read_only_roles: read_roles.clone(),
+            full_access_roles: full_roles.clone(),
+        };
+
+        // Test admin requirement
+        assert!(RoleRequirement::Admin.matches(&admin_roles, &config));
+        assert!(!RoleRequirement::Admin.matches(&read_roles, &config));
+        assert!(!RoleRequirement::Admin.matches(&full_roles, &config));
+
+        // Test read-only requirement
+        assert!(RoleRequirement::ReadOnly.matches(&read_roles, &config));
+        assert!(RoleRequirement::ReadOnly.matches(&admin_roles, &config));
+        assert!(RoleRequirement::ReadOnly.matches(&full_roles, &config));
+
+        // Test full access requirement
+        assert!(RoleRequirement::FullAccess.matches(&full_roles, &config));
+        assert!(RoleRequirement::FullAccess.matches(&admin_roles, &config));
+        assert!(!RoleRequirement::FullAccess.matches(&read_roles, &config));
     }
 }

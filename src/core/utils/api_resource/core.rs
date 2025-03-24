@@ -5,34 +5,39 @@ use axum::{
 use metrics::{counter, gauge};
 use serde::{Serialize, de::DeserializeOwned};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::{any::Any, fmt::Debug, sync::Arc};
+use std::{
+    any::Any,
+    fmt::{Debug, Display},
+    sync::Arc,
+};
 use tracing::{debug, info, warn};
 
 use crate::{
     core::{router::AppState, utils::api_logger},
     error::{AppError, Result},
-    generated_apis::Upet,
+    utils::api_resource::ApiResourceRegistry,
 };
 
-/// Trait for API resources that can be cached and retrieved
-///
-/// This trait represents an API resource entity that can be uniquely
-/// identified, serialized/deserialized, and has metadata about its type.
-pub trait ApiResource:
-    Any + Clone + Debug + DeserializeOwned + Send + Serialize + Sync + 'static
-{
-    /// The ID type of the resource (e.g., i64, String)
-    type Id: ToString + Clone + Send + Sync + 'static;
+/// Trait for API resources that can be cached and managed
+pub trait ApiResource: Clone + Send + Sync + 'static {
+    /// The type used for resource identification
+    type Id: Display + Clone;
 
-    /// The string representation of the resource type (e.g., "pet", "user")
-    ///
-    /// This is used for cache keys, metrics, and logging
+    /// The string representation of the resource type (e.g., "user", "account")
     fn resource_type() -> &'static str;
 
-    /// The API name used for logging (e.g., "Petstore")
-    ///
-    /// This helps identify which external API a resource comes from
+    /// The API name used for logging (e.g., "UserService", "AccountAPI")
     fn api_name() -> &'static str;
+}
+
+/// Type alias for boxed future results
+pub type BoxFuture<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
+
+/// Register a resource type with the registry
+pub fn register_resource<R: ApiResource + 'static>(registry: &Option<Arc<ApiResourceRegistry>>) {
+    if let Some(registry) = registry {
+        registry.register_resource::<R>();
+    }
 }
 
 /// Options for configuring the API handler's behavior
@@ -161,8 +166,8 @@ where
                     .await
                     {
                         Ok(resource) => {
-                            // Remove the generic logging here as it's redundant with pet_handler
-                            // The fetch_pet_handler will log with more specific info
+                            // Remove the generic logging here as it's redundant with resource handler
+                            // The fetch_resource_handler will log with more specific info
                             return Ok(Json(resource));
                         }
                         Err(e) => {
@@ -448,63 +453,17 @@ where
     }
 
     Err(last_error.unwrap_or_else(|| {
-        AppError::InternalError(format!(
-            "Unknown error fetching {} with ID {}",
+        AppError::InternalServerError(format!(
+            "Could not generate URL for resource {}: {}",
             R::resource_type(),
             id.to_string()
         ))
     }))
 }
 
-// Specialized implementations for our specific cache
-
-/// Convert a cached Upet to the specific resource type
-fn convert_cached_resource<R: ApiResource>(cached: Upet) -> Option<R> {
-    // For pet resources, we can just clone the cached item
-    if std::any::TypeId::of::<R>() == std::any::TypeId::of::<Upet>() {
-        // SAFETY: We've verified the types match
-        let boxed: Box<dyn Any> = Box::new(cached);
-        let resource = boxed.downcast::<Upet>().ok()?;
-
-        // SAFETY: We've verified R is Upet above
-        let resource_any: Box<dyn Any> = Box::new(*resource);
-        match resource_any.downcast::<R>() {
-            Ok(typed) => Some(*typed),
-            Err(_) => None,
-        }
-    } else {
-        // For other resource types, we would need custom conversion
-        // This is a placeholder for future resource types
-        None
-    }
-}
-
-/// Convert a resource to a cache value
-fn convert_to_cache_value<R: ApiResource>(resource: &R) -> Option<Upet> {
-    // For Upet resources, we can just clone
-    if std::any::TypeId::of::<R>() == std::any::TypeId::of::<Upet>() {
-        // SAFETY: We've verified the types match
-        let boxed: Box<dyn Any> = Box::new(resource.clone());
-        match boxed.downcast::<Upet>() {
-            Ok(pet) => Some(*pet),
-            Err(_) => None,
-        }
-    } else {
-        // For other resource types, we would need custom conversion
-        // This is a placeholder for future resource types
-        None
-    }
-}
-
-/// Convert an ID to a cache key (for backward compatibility)
-fn to_cache_key<R: ApiResource>(id: &R::Id) -> Option<i64> {
-    id.to_string().parse::<i64>().ok()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::utils::api_resource::registry::ApiResourceRegistry;
     use axum::body::Body;
     use axum::http::{Request, Response, StatusCode};
     use axum::routing::get;
@@ -516,21 +475,21 @@ mod tests {
 
     // Mock API resource for testing
     #[derive(Debug, Clone, Serialize, Deserialize)]
-    struct MockPet {
+    struct MockResource {
         id: i64,
         name: String,
         status: String,
     }
 
-    impl ApiResource for MockPet {
+    impl ApiResource for MockResource {
         type Id = i64;
 
         fn resource_type() -> &'static str {
-            "pet"
+            "mock_resource"
         }
 
         fn api_name() -> &'static str {
-            "PetStore"
+            "MockService"
         }
     }
 
@@ -569,38 +528,39 @@ mod tests {
         let metrics_handle = metrics_recorder.handle();
 
         let app_state = Arc::new(AppState {
-            client: reqwest::Client::new(),
             config: crate::core::config::app_config::AppConfig::default(),
             start_time: std::time::SystemTime::now(),
-            cache_registry: None,
-            metrics_handle,
-            token_client: None,
-            resource_registry: ApiResourceRegistry::new(),
+            cache_registry: Some(Arc::new(CacheRegistry::new())),
+            client: Some(reqwest::Client::new()),
             db_pool: None,
+            token_client: Some(Arc::new(MockTokenClient::default())),
+            metrics_handle: Some(metrics_handle),
+            resource_registry: Some(Arc::new(ApiResourceRegistry::new())),
+            service_registry: Arc::new(ServiceRegistry::new()),
         });
 
         // Create a counter to track how many times the fetch function is called
         let call_count = Arc::new(AtomicUsize::new(0));
         let call_count_clone = call_count.clone();
 
-        // Create a fetch function that returns a mock pet
+        // Create a fetch function that returns a mock resource
         let fetch_fn = move |_state: &Arc<AppState>, id: i64| {
             call_count_clone.fetch_add(1, Ordering::SeqCst);
-            let pet = MockPet {
+            let resource = MockResource {
                 id,
-                name: format!("Pet {}", id),
+                name: format!("Resource {}", id),
                 status: "available".to_string(),
             };
-            async move { Ok(pet) }
+            async move { Ok(resource) }
         };
 
         // Create the handler with default options
         let handler = create_api_handler(fetch_fn, ApiHandlerOptions::default());
 
-        // Set up a router with the handler
+        // Create a router with the handler
         let app = axum::Router::new()
             .route(
-                "/pets/{id}",
+                "/resources/{id}",
                 get(
                     |state: State<Arc<AppState>>, path: Path<String>| async move {
                         handler(state, path).await
@@ -611,27 +571,25 @@ mod tests {
 
         // Create a test request
         let request = Request::builder()
-            .uri("/pets/123")
-            .method("GET")
+            .uri("/resources/123")
             .body(Body::empty())
             .unwrap();
 
-        // Send the request to the router
+        // Process the request
         let response = app.oneshot(request).await.unwrap();
 
         // Check the response
         assert_eq!(response.status(), StatusCode::OK);
 
-        // Extract and parse the body
-        let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
-        let pet: MockPet = serde_json::from_slice(&body_bytes).unwrap();
+        // Get the response body
+        let body = response.into_body();
+        let body_bytes = hyper::body::to_bytes(body).await.unwrap();
+        let resource: MockResource = serde_json::from_slice(&body_bytes).unwrap();
 
-        // Verify the pet data
-        assert_eq!(pet.id, 123);
-        assert_eq!(pet.name, "Pet 123");
-        assert_eq!(pet.status, "available");
+        // Verify the resource data
+        assert_eq!(resource.id, 123);
+        assert_eq!(resource.name, "Resource 123");
+        assert_eq!(resource.status, "available");
 
         // Verify the fetch function was called exactly once
         assert_eq!(call_count.load(Ordering::SeqCst), 1);
@@ -641,14 +599,15 @@ mod tests {
     async fn test_fetch_with_retry_success_first_try() {
         // Create sample app state
         let app_state = Arc::new(AppState {
-            client: reqwest::Client::new(),
             config: crate::core::config::app_config::AppConfig::default(),
             start_time: std::time::SystemTime::now(),
-            cache_registry: None,
-            metrics_handle: PrometheusBuilder::new().build_recorder().handle(),
-            token_client: None,
-            resource_registry: ApiResourceRegistry::new(),
+            cache_registry: Some(Arc::new(CacheRegistry::new())),
+            client: Some(reqwest::Client::new()),
             db_pool: None,
+            token_client: Some(Arc::new(MockTokenClient::default())),
+            metrics_handle: Some(PrometheusBuilder::new().build_recorder().handle()),
+            resource_registry: Some(Arc::new(ApiResourceRegistry::new())),
+            service_registry: Arc::new(ServiceRegistry::new()),
         });
 
         // Create a counter to track how many times the fetch function is called
@@ -658,12 +617,12 @@ mod tests {
         // Create a fetch function that succeeds on first try
         let fetch_fn = move |_: &Arc<AppState>, id: i64| {
             let _count = call_count_clone.fetch_add(1, Ordering::SeqCst);
-            let pet = MockPet {
+            let resource = MockResource {
                 id,
-                name: format!("Pet {}", id),
+                name: format!("Resource {}", id),
                 status: "available".to_string(),
             };
-            async move { Ok(pet) }
+            async move { Ok(resource) }
         };
 
         // Call fetch_with_retry
@@ -671,8 +630,8 @@ mod tests {
 
         // Verify success
         assert!(result.is_ok());
-        let pet = result.unwrap();
-        assert_eq!(pet.id, 123);
+        let resource = result.unwrap();
+        assert_eq!(resource.id, 123);
 
         // Verify the fetch function was called exactly once
         assert_eq!(call_count.load(Ordering::SeqCst), 1);
@@ -682,14 +641,15 @@ mod tests {
     async fn test_fetch_with_retry_success_after_retries() {
         // Create sample app state
         let app_state = Arc::new(AppState {
-            client: reqwest::Client::new(),
             config: crate::core::config::app_config::AppConfig::default(),
             start_time: std::time::SystemTime::now(),
-            cache_registry: None,
-            metrics_handle: PrometheusBuilder::new().build_recorder().handle(),
-            token_client: None,
-            resource_registry: ApiResourceRegistry::new(),
+            cache_registry: Some(Arc::new(CacheRegistry::new())),
+            client: Some(reqwest::Client::new()),
             db_pool: None,
+            token_client: Some(Arc::new(MockTokenClient::default())),
+            metrics_handle: Some(PrometheusBuilder::new().build_recorder().handle()),
+            resource_registry: Some(Arc::new(ApiResourceRegistry::new())),
+            service_registry: Arc::new(ServiceRegistry::new()),
         });
 
         // Create a counter to track how many times the fetch function is called
@@ -700,21 +660,21 @@ mod tests {
         let fetch_fn = move |_: &Arc<AppState>, id: i64| {
             let count = call_count_clone.fetch_add(1, Ordering::SeqCst);
 
-            let future: BoxFuture<'static, Result<MockPet>> = if count < 2 {
+            let future: BoxFuture<'static, Result<MockResource>> = if count < 2 {
                 // First two calls fail
                 Box::pin(async move {
-                    Err(AppError::InternalError(
+                    Err(AppError::InternalServerError(
                         "Simulated failure for testing".to_string(),
                     ))
                 })
             } else {
                 // Third call succeeds
-                let pet = MockPet {
+                let resource = MockResource {
                     id,
-                    name: format!("Pet {}", id),
+                    name: format!("Resource {}", id),
                     status: "available".to_string(),
                 };
-                Box::pin(async move { Ok(pet) })
+                Box::pin(async move { Ok(resource) })
             };
 
             future
@@ -725,8 +685,8 @@ mod tests {
 
         // Verify success
         assert!(result.is_ok());
-        let pet = result.unwrap();
-        assert_eq!(pet.id, 123);
+        let resource = result.unwrap();
+        assert_eq!(resource.id, 123);
 
         // Verify the fetch function was called exactly three times
         assert_eq!(call_count.load(Ordering::SeqCst), 3);
@@ -736,14 +696,15 @@ mod tests {
     async fn test_fetch_with_retry_all_failures() {
         // Create sample app state
         let app_state = Arc::new(AppState {
-            client: reqwest::Client::new(),
             config: crate::core::config::app_config::AppConfig::default(),
             start_time: std::time::SystemTime::now(),
-            cache_registry: None,
-            metrics_handle: PrometheusBuilder::new().build_recorder().handle(),
-            token_client: None,
-            resource_registry: ApiResourceRegistry::new(),
+            cache_registry: Some(Arc::new(CacheRegistry::new())),
+            client: Some(reqwest::Client::new()),
             db_pool: None,
+            token_client: Some(Arc::new(MockTokenClient::default())),
+            metrics_handle: Some(PrometheusBuilder::new().build_recorder().handle()),
+            resource_registry: Some(Arc::new(ApiResourceRegistry::new())),
+            service_registry: Arc::new(ServiceRegistry::new()),
         });
 
         // Create a counter to track how many times the fetch function is called
@@ -754,14 +715,15 @@ mod tests {
         let fetch_fn = move |_: &Arc<AppState>, _id: i64| {
             call_count_clone.fetch_add(1, Ordering::SeqCst);
             async move {
-                Err(AppError::InternalError(
+                Err(AppError::InternalServerError(
                     "Simulated failure for testing".to_string(),
                 ))
             }
         };
 
         // Call fetch_with_retry with 2 max retries
-        let result: Result<MockPet> = fetch_with_retry(&app_state, &123, &fetch_fn, 2, true).await;
+        let result: Result<MockResource> =
+            fetch_with_retry(&app_state, &123, &fetch_fn, 2, true).await;
 
         // Verify failure
         assert!(result.is_err());
