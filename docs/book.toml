@@ -1,0 +1,58 @@
+[book]
+title = "Navius Documentation"
+authors = ["Navius Team"]
+description = "Comprehensive documentation for the Navius framework"
+language = "en"
+multilingual = false
+src = "."
+
+[preprocessor.frontmatter]
+# Keep front matter from appearing in HTML output
+strip = true 
+# Use these fields from front matter
+title = true
+description = true 
+# These are fields to extract but not render
+ignored_fields = ["tags", "category", "related", "last_updated", "version"]
+
+[preprocessor.template]
+
+[preprocessor.index]
+
+[build]
+build-dir = "../target/book"
+create-missing = false
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
+git-repository-url = "https://gitlab.com/ecoleman2/navius"
+git-repository-icon = "fa-gitlab"
+site-url = "/navius/"
+home-url = "/navius/"
+additional-css = ["theme/custom.css"]
+additional-js = ["theme/custom.js"]
+
+[output.html.search]
+enable = true
+limit-results = 30
+teaser-word-count = 30
+use-boolean-and = true
+boost-title = 2
+boost-hierarchy = 1
+boost-paragraph = 1
+expand = true
+heading-split-level = 3
+
+[output.html.fold]
+enable = true
+level = 1
+
+[output.html.playground]
+editable = false
+
+[output.html.print]
+enable = true
+
+[output.html.front-matter-template]
+hide = true 

@@ -141,18 +141,27 @@ async fn get_user(
 
 ## 📚 Documentation
 
-- [Installation Guide](docs/installation.md)
-- [Developer Guide](docs/DEVELOPMENT.md)
-- [Project Structure](docs/project_structure.md)
-- [API Integration](docs/API_INTEGRATION.md)
-- [API Resource Abstraction](docs/api_resource_guide.md)
-- [Authentication](docs/authentication.md)
-- [PostgreSQL Integration](docs/postgresql_integration.md)
-- [Security Guide](docs/security.md)
-- [Testing Guide](docs/testing_guide.md)
-- [Deployment Guide](docs/deployment.md)
-- [Migration from Spring Boot](docs/spring-boot-migration.md)
-- [Roadmaps](docs/roadmaps/)
+The documentation is available in two forms:
+
+### Online Documentation
+The latest documentation is automatically deployed to GitLab Pages and can be accessed at:
+- https://[organization].gitlab.io/navius/
+
+### Local Development
+To work with documentation locally:
+
+```bash
+# Install mdBook
+make docs-deps
+
+# Build the documentation
+make docs-build
+
+# Serve documentation locally with live reload
+make docs-serve
+```
+
+The documentation source files are located in the `/docs` directory. The built documentation is automatically deployed through our CI/CD pipeline and should not be committed to the repository.
 
 ## 🔄 Migration from Spring Boot
 

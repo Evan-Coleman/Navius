@@ -1,0 +1,61 @@
+/* Basic styles for Navius documentation */
+:root {
+    --sidebar-width: 300px;
+    --content-max-width: 750px;
+}
+
+/* Hide front matter */
+.frontmatter,
+.content > div:first-child > p:first-child,
+main > p:first-of-type:not(:only-of-type):not(:only-child) {
+    display: none !important;
+}
+
+/* Hide front matter block that appears before headings */
+main > p:first-child + h1,
+main > p:first-child {
+    display: none !important;
+}
+
+/* Target YAML-like content at the beginning of pages */
+main > *:first-child:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(div):not(ul):not(ol):not(blockquote):not(pre) {
+    display: none !important;
+}
+
+/* Improve readability */
+.content {
+    max-width: var(--content-max-width);
+    margin: 0 auto;
+    padding: 0 15px;
+}
+
+/* Code block styling */
+pre {
+    padding: 1em;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+/* Table styling */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1em 0;
+}
+
+th, td {
+    padding: 8px;
+    border: 1px solid #ddd;
+}
+
+/* Print styles */
+@media print {
+    .sidebar {
+        display: none;
+    }
+    
+    .content {
+        margin: 0;
+        max-width: none;
+    }
+} 

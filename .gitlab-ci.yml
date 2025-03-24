@@ -5,6 +5,7 @@ variables:
   CARGO_TERM_COLOR: always
   # Optimize CI builds with sparse registry
   CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+  MDBOOK_VERSION: "0.4.36"
 
 # Define a cache template
 .cargo-cache:
@@ -104,4 +105,25 @@ workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "main"
-    - if: $CI_COMMIT_TAG 
+    - if: $CI_COMMIT_TAG
+
+# Job to build and deploy documentation
+pages:
+  image: rust:latest
+  stage: docs
+  before_script:
+    - cargo install mdbook --version ${MDBOOK_VERSION}
+  script:
+    - cd docs
+    - mdbook build
+    - cd ..
+    - mv target/book public  # GitLab Pages expects the content to be in a 'public' directory
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH  # Only deploy on main branch
+  cache:
+    paths:
+      - .cargo
+      - target/ 
