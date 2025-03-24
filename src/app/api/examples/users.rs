@@ -130,14 +130,14 @@ pub fn configure() -> Router<Arc<AppState>> {
 }
 
 /// Map service errors to HTTP status codes
-fn map_service_error(err: ServiceError) -> (StatusCode, String) {
+fn map_service_error(err: core::services::error::ServiceError) -> (StatusCode, String) {
+    use crate::core::services::error::ServiceError;
+
     match err {
         ServiceError::UserNotFound => (StatusCode::NOT_FOUND, "User not found".to_string()),
-        ServiceError::UsernameExists => {
-            (StatusCode::CONFLICT, "Username already exists".to_string())
-        }
-        ServiceError::EmailExists => (StatusCode::CONFLICT, "Email already exists".to_string()),
+        ServiceError::Repository(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
         ServiceError::Validation(msg) => (StatusCode::BAD_REQUEST, msg),
+        ServiceError::Other(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
         _ => (
             StatusCode::INTERNAL_SERVER_ERROR,
             "Internal server error".to_string(),
