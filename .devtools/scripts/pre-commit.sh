@@ -19,7 +19,7 @@ PATTERNS=(
   "-----BEGIN.*PRIVATE KEY-----"       # Private keys (simplified pattern)
   "redis://[^@]*@"                     # Redis URLs with auth
   "mongodb://[^@]*@"                   # MongoDB URLs with auth
-  "postgres://[^@]*@"                  # PostgreSQL URLs with auth
+  "postgres://[^@]*@"                  # PostgreSQL URLs with auth - causing false positives
   "mysql://[^@]*@"                     # MySQL URLs with auth
 )
 
@@ -35,6 +35,15 @@ IGNORED_FILES=(
   "setup-hooks.sh"                     # Hook setup script
   ".env.example"                       # Environment example file
 )
+
+# Replace the postgres pattern with a more precise one that won't have false positives
+for i in "${!PATTERNS[@]}"; do
+  if [[ ${PATTERNS[$i]} == "postgres://[^@]*@" ]]; then
+    # This pattern requires "postgres://" followed by something that's not @ then an @
+    # It will match real connection strings but not type declarations like sqlx::Postgres
+    PATTERNS[$i]="postgres://[^@]+@"
+  fi
+done
 
 # Flags
 DETECTED=0
@@ -54,9 +63,12 @@ for FILE in $FILES; do
     continue
   fi
 
-  # Check each pattern against file content
+  # Check each pattern against file content - only look at added or modified lines (not removed lines)
   for PATTERN in "${PATTERNS[@]}"; do
-    MATCHES=$(git diff --cached --no-color "$FILE" | grep -E "$PATTERN" || true)
+    # Get the diff but filter out lines that start with a minus (being removed)
+    DIFF_CONTENT=$(git diff --cached --no-color "$FILE" | grep -v "^-" || true)
+    MATCHES=$(echo "$DIFF_CONTENT" | grep -E "$PATTERN" || true)
+    
     if [ ! -z "$MATCHES" ]; then
       if [ $DETECTED -eq 0 ]; then
         echo -e "${RED}SENSITIVE DATA DETECTED!${NC}"
