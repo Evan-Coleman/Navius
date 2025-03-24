@@ -17,6 +17,12 @@ variables:
       - .cargo/
       - target/
 
+# Define common setup for Rust jobs
+.rust-setup:
+  before_script:
+    - apt-get update
+    - apt-get install -y clang llvm-dev libclang-dev
+
 stages:
   - test
   - lint
@@ -28,7 +34,9 @@ stages:
 # Basic test job
 test:
   stage: test
-  extends: .cargo-cache
+  extends: 
+    - .cargo-cache
+    - .rust-setup
   script:
     - rustc --version
     - cargo --version
@@ -41,7 +49,9 @@ test:
 # Linting job (formatting and clippy)
 lint:
   stage: lint
-  extends: .cargo-cache
+  extends: 
+    - .cargo-cache
+    - .rust-setup
   script:
     - rustup component add rustfmt clippy
     - cargo fmt -- --check
@@ -50,7 +60,9 @@ lint:
 # Code coverage job
 coverage:
   stage: coverage
-  extends: .cargo-cache
+  extends: 
+    - .cargo-cache
+    - .rust-setup
   script:
     - bash .devtools/scripts/coverage.sh
   artifacts:
@@ -112,7 +124,9 @@ docs:quality-report:
 # Build release binaries
 build:
   stage: build
-  extends: .cargo-cache
+  extends: 
+    - .cargo-cache
+    - .rust-setup
   script:
     - cargo build --release
   artifacts:
@@ -134,8 +148,12 @@ workflow:
 # Job to build and deploy documentation
 pages:
   image: rust:latest
+  extends:
+    - .rust-setup
   stage: docs
   before_script:
+    - apt-get update
+    - apt-get install -y clang llvm-dev libclang-dev
     - cargo install mdbook --version ${MDBOOK_VERSION}
   script:
     - cd docs
