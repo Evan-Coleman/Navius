@@ -13,7 +13,7 @@ use crate::core::{
         api_resource::{ApiHandlerOptions, ApiResource, create_api_handler},
     },
 };
-use crate::generated_apis::petstore_api::models::Upet;
+use crate::generated_apis::Upet;
 
 // Implement the ApiResource trait for our model
 impl ApiResource for Upet {

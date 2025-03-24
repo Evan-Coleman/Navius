@@ -252,8 +252,8 @@ pub fn get_cache_stats_with_metrics(
         // Try some common resource types by using downcast_ref
         // This is a bit of a hack, but it's the most direct way to get the entry count
         // without an abstraction layer that covers all potential cache types
-        if let Some(pet_cache) = cache_box
-            .downcast_ref::<ResourceCache<crate::generated_apis::petstore_api::models::Upet>>()
+        if let Some(pet_cache) =
+            cache_box.downcast_ref::<ResourceCache<crate::generated_apis::Upet>>()
         {
             actual_size = pet_cache.cache.entry_count();
             debug!(
@@ -498,7 +498,9 @@ pub async fn start_metrics_updater(registry: &CacheRegistry) {
 
                 // This is a bit of a hack, but it gets the actual cache size
                 // Try to downcast to a known resource type
-                if let Some(pet_cache) = cache_box.downcast_ref::<ResourceCache<crate::generated_apis::petstore_api::models::Upet>>() {
+                if let Some(pet_cache) =
+                    cache_box.downcast_ref::<ResourceCache<crate::generated_apis::Upet>>()
+                {
                     let current_size = pet_cache.cache.entry_count();
 
                     // Update the metrics with the real cache size
@@ -516,7 +518,8 @@ pub async fn start_metrics_updater(registry: &CacheRegistry) {
                     );
                 } else {
                     // If we can't get the actual size, set to 0 to avoid showing incorrect data
-                    gauge!("cache_current_size", "resource_type" => resource_type.to_string()).set(0.0);
+                    gauge!("cache_current_size", "resource_type" => resource_type.to_string())
+                        .set(0.0);
                     debug!(
                         "📊 Cache metrics reset to 0 for {} (couldn't get actual size)",
                         resource_type
