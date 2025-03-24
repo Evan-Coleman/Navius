@@ -98,14 +98,14 @@ if [ "$GENERATE_MODELS" != "true" ] && [ "$GENERATE_API" != "true" ] && [ "$GENE
         --arg api "$GENERATE_API" \
         --arg handlers "$GENERATE_HANDLERS" \
         --arg router "$UPDATE_ROUTER" \
-        --arg include "$INCLUDE_MODELS" \
+        --arg incl_val "$INCLUDE_MODELS" \
         --arg exclude "$EXCLUDE_MODELS" \
         '{
             generate_models: ($models == "true"),
             generate_api: ($api == "true"),
             generate_handlers: ($handlers == "true"),
             update_router: ($router == "true"),
-            include_models: (if $include == "" then [] else $include | split(",") end),
+            include_models: (if $incl_val == "" then [] else $incl_val | split(",") end),
             exclude_models: (if $exclude == "" then [] else $exclude | split(",") end)
         }')
     
@@ -441,14 +441,14 @@ OPTIONS_JSON=$(jq -n \
     --arg api "$GENERATE_API" \
     --arg handlers "$GENERATE_HANDLERS" \
     --arg router "$UPDATE_ROUTER" \
-    --arg include "$INCLUDE_MODELS" \
+    --arg incl_val "$INCLUDE_MODELS" \
     --arg exclude "$EXCLUDE_MODELS" \
     '{
         generate_models: ($models == "true"),
         generate_api: ($api == "true"),
         generate_handlers: ($handlers == "true"),
         update_router: ($router == "true"),
-        include_models: (if $include == "" then [] else $include | split(",") end),
+        include_models: (if $incl_val == "" then [] else $incl_val | split(",") end),
         exclude_models: (if $exclude == "" then [] else $exclude | split(",") end)
     }')
 
