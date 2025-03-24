@@ -10,11 +10,11 @@ get {
   auth: bearer
 }
 
+auth:bearer {
+  token: {{access_token_set_by_collection_script}}
+}
+
 assert {
   res.status: 200
   res.body: isArray()
 }
-
-auth:bearer {
-  token: {{access_token_set_by_collection_script}}
-} 

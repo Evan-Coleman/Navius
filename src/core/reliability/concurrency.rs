@@ -114,6 +114,10 @@ pub struct ConcurrencyLimitService<S> {
     tracker: Arc<Mutex<ConcurrencyTracker>>,
 }
 
+/// Type alias for the future response type to reduce complexity
+type FutureResponse<ResBody> =
+    BoxFuture<'static, Result<Response<ResBody>, Box<dyn std::error::Error + Send + Sync>>>;
+
 impl<S, ReqBody, ResBody> Service<axum::http::Request<ReqBody>> for ConcurrencyLimitService<S>
 where
     S: Service<axum::http::Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
@@ -220,9 +224,7 @@ enum InnerFuture<S, ReqBody, ResBody> {
     Pending {
         service: S,
         request: axum::http::Request<ReqBody>,
-        future: Option<
-            BoxFuture<'static, Result<Response<ResBody>, Box<dyn std::error::Error + Send + Sync>>>,
-        >,
+        future: Option<FutureResponse<ResBody>>,
     },
     /// Request was rejected due to concurrency limit
     Rejected,

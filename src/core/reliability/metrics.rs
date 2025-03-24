@@ -220,6 +220,12 @@ impl<S> Layer<S> for ReliabilityMetricsLayer {
     }
 }
 
+impl Default for ReliabilityMetricsLayer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Service that collects reliability metrics
 #[derive(Clone)]
 pub struct ReliabilityMetricsService<S> {

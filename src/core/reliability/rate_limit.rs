@@ -180,7 +180,7 @@ pub struct RateLimitService<S> {
 }
 
 /// Rate limit exceeded error response
-fn rate_limit_exceeded<T>() -> Response {
+fn rate_limit_exceeded() -> Response {
     (
         StatusCode::TOO_MANY_REQUESTS,
         "Rate limit exceeded. Please try again later.",

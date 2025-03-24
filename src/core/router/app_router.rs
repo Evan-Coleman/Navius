@@ -204,8 +204,8 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
     // Register pet resources in the cache registry
     if let Some(_registry) = &cache_registry {
         // Register the Upet resource type with the cache
-        use crate::generated_apis::petstore_api::models::Upet;
         use crate::core::utils::api_resource::{ApiResource, register_resource};
+        use crate::generated_apis::petstore_api::models::Upet;
 
         // Make sure the pet resource type is registered with the cache
         match register_resource::<Upet>(&state, None) {

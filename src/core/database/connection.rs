@@ -403,6 +403,12 @@ impl MockTransaction {
     }
 }
 
+impl Default for MockTransaction {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl PgTransaction for MockTransaction {
     async fn commit(self: Box<Self>) -> Result<(), AppError> {

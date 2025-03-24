@@ -70,3 +70,9 @@ impl Drop for Transaction {
         }
     }
 }
+
+impl Default for Transaction {
+    fn default() -> Self {
+        Self::new()
+    }
+}

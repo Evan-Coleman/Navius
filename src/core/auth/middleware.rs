@@ -162,10 +162,9 @@ impl Default for EntraAuthConfig {
             .parse::<bool>()
             .unwrap_or(false);
         let audience = std::env::var(constants::auth::env_vars::AUDIENCE).unwrap_or_else(|_| {
-            format!(
-                "{}",
-                constants::auth::urls::DEFAULT_AUDIENCE_FORMAT.replace("{}", &client_id)
-            )
+            constants::auth::urls::DEFAULT_AUDIENCE_FORMAT
+                .replace("{}", &client_id)
+                .to_string()
         });
 
         // Ensure tenant_id is not empty
@@ -177,10 +176,7 @@ impl Default for EntraAuthConfig {
         };
 
         // Use the direct JWKS endpoint
-        let jwks_uri = format!(
-            "{}",
-            app_config::default_jwks_uri_format().replace("{}", &tenant_id)
-        );
+        let jwks_uri = app_config::default_jwks_uri_format().replace("{}", &tenant_id);
 
         // Get default issuer URL formats
         let issuer_url_formats = app_config::default_issuer_url_formats();
@@ -219,7 +215,7 @@ impl EntraAuthConfig {
 
         // Use the direct JWKS endpoint - use app_config defaults
         let jwks_uri_format = app_config::default_jwks_uri_format();
-        let jwks_uri = format!("{}", jwks_uri_format.replace("{}", &tenant_id));
+        let jwks_uri = jwks_uri_format.replace("{}", &tenant_id).to_string();
 
         // Get default issuer URL formats
         let issuer_url_formats = app_config::default_issuer_url_formats();
@@ -245,10 +241,9 @@ impl EntraAuthConfig {
         let client_id = config.auth.entra.client_id.clone();
         let debug_validation = config.auth.debug;
         let audience = if config.auth.entra.audience.is_empty() {
-            format!(
-                "{}",
-                constants::auth::urls::DEFAULT_AUDIENCE_FORMAT.replace("{}", &client_id)
-            )
+            constants::auth::urls::DEFAULT_AUDIENCE_FORMAT
+                .replace("{}", &client_id)
+                .to_string()
         } else {
             config.auth.entra.audience.clone()
         };
@@ -262,10 +257,7 @@ impl EntraAuthConfig {
         };
 
         // Use the direct JWKS endpoint
-        let jwks_uri = format!(
-            "{}",
-            config.auth.entra.jwks_uri_format.replace("{}", &tenant_id)
-        );
+        let jwks_uri = config.auth.entra.jwks_uri_format.replace("{}", &tenant_id);
 
         // Get issuer URL formats from config
         let issuer_url_formats = config.auth.entra.issuer_url_formats.clone();
@@ -384,9 +376,9 @@ fn extract_token(headers: &HeaderMap) -> Result<String, AuthError> {
         // Very basic Base64URL validation - more thorough validation happens later
         for c in part.chars() {
             if !(c.is_alphanumeric() || c == '_' || c == '-' || c == '=') {
-                return Err(AuthError::ValidationFailed(format!(
-                    "Invalid JWT token: contains non-base64url characters"
-                )));
+                return Err(AuthError::ValidationFailed(
+                    "Invalid JWT token: contains non-base64url characters".to_string(),
+                ));
             }
         }
     }
@@ -562,19 +554,12 @@ fn validate_permissions(claims: &EntraClaims, config: &EntraAuthConfig) -> Resul
 }
 
 /// Middleware layer for Entra ID authentication
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct EntraAuthLayer {
     config: EntraAuthConfig,
 }
 
 impl EntraAuthLayer {
-    /// Create a new EntraAuthLayer with default configuration
-    pub fn default() -> Self {
-        Self {
-            config: EntraAuthConfig::default(),
-        }
-    }
-
     /// Create a new EntraAuthLayer from AppConfig
     pub fn from_app_config(config: &AppConfig) -> Self {
         Self {

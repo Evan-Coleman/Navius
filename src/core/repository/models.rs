@@ -58,31 +58,26 @@ impl User {
 }
 
 /// User role
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum UserRole {
     /// Administrator with full access
     Admin,
 
     /// Regular user with limited access
+    #[default]
     User,
 
     /// Read-only user
     ReadOnly,
 }
 
-impl ToString for UserRole {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for UserRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            UserRole::Admin => "admin".to_string(),
-            UserRole::User => "user".to_string(),
-            UserRole::ReadOnly => "readonly".to_string(),
+            UserRole::Admin => write!(f, "admin"),
+            UserRole::User => write!(f, "user"),
+            UserRole::ReadOnly => write!(f, "readonly"),
         }
-    }
-}
-
-impl Default for UserRole {
-    fn default() -> Self {
-        UserRole::User
     }
 }
 

@@ -3,8 +3,8 @@ use std::fmt::Debug;
 use std::sync::{Arc, RwLock};
 use tracing::{debug, info};
 
-use crate::core::router::AppState;
 use crate::core::models::DependencyStatus;
+use crate::core::router::AppState;
 use crate::core::utils::api_resource::ApiResource;
 
 /// Type for a health check function
@@ -123,20 +123,31 @@ impl ApiResourceRegistry {
 
     /// Run health checks for all registered resources
     pub async fn run_all_health_checks(&self, state: &Arc<AppState>) -> Vec<DependencyStatus> {
-        let resources = match self.resources.read() {
-            Ok(resources) => resources,
-            Err(_) => {
-                debug!("Failed to acquire read lock on resource registry");
-                return Vec::new();
-            }
+        // Collect futures for health checks while holding the lock
+        let futures = {
+            let resources = match self.resources.read() {
+                Ok(resources) => resources,
+                Err(_) => {
+                    debug!("Failed to acquire read lock on resource registry");
+                    return Vec::new();
+                }
+            };
+
+            // Create futures but don't await them yet
+            resources
+                .iter()
+                .map(|(_, registration)| {
+                    let health_check = &registration.health_check_fn;
+                    health_check(state)
+                })
+                .collect::<Vec<_>>()
+            // Lock is dropped here when the block ends
         };
 
+        // Now await all futures without holding the lock
         let mut results = Vec::new();
-
-        for (_, registration) in resources.iter() {
-            let health_check = &registration.health_check_fn;
-            let status = health_check(state).await;
-            results.push(status);
+        for future in futures {
+            results.push(future.await);
         }
 
         results

@@ -68,7 +68,7 @@ pub async fn openapi_spec_handler(
         return (
             StatusCode::FORBIDDEN,
             [(header::CONTENT_TYPE, "text/plain")],
-            format!("Access denied. Only the OpenAPI specification file is accessible."),
+            "Access denied. Only the OpenAPI specification file is accessible.".to_string(),
         );
     }
 

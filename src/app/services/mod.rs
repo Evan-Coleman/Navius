@@ -50,3 +50,9 @@ impl DefaultServiceRegistry {
 impl ServiceRegistry for DefaultServiceRegistry {
     // Implement access methods
 }
+
+impl Default for DefaultServiceRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}

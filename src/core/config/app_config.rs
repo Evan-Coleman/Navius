@@ -164,7 +164,7 @@ fn default_log_format() -> String {
 }
 
 /// Reliability configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ReliabilityConfig {
     /// Retry configuration
     #[serde(default)]
@@ -293,18 +293,6 @@ pub struct ConcurrencyConfig {
     /// Maximum number of concurrent requests
     #[serde(default = "default_max_concurrency")]
     pub max_concurrent_requests: u32,
-}
-
-impl Default for ReliabilityConfig {
-    fn default() -> Self {
-        Self {
-            retry: RetryConfig::default(),
-            circuit_breaker: CircuitBreakerConfig::default(),
-            rate_limit: RateLimitConfig::default(),
-            timeout: TimeoutConfig::default(),
-            concurrency: ConcurrencyConfig::default(),
-        }
-    }
 }
 
 impl Default for RetryConfig {
@@ -485,19 +473,13 @@ fn default_openapi_spec_file() -> String {
 }
 
 /// Environment type
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum EnvironmentType {
+    #[default]
     Development,
     Testing,
     Staging,
     Production,
-}
-
-impl Default for EnvironmentType {
-    fn default() -> Self {
-        // Default to development for safety
-        EnvironmentType::Development
-    }
 }
 
 impl std::fmt::Display for EnvironmentType {
