@@ -54,6 +54,17 @@ chef-cook:
     - chef-prepare
   script:
     - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld jq
+    # Install Java and OpenAPI Generator
+    - apt-get install -y default-jre-headless wget unzip
+    - mkdir -p /tmp/openapi
+    - cd /tmp/openapi
+    - wget https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/6.6.0/openapi-generator-cli-6.6.0.jar -O openapi-generator-cli.jar
+    - echo '#!/bin/bash' > /usr/local/bin/openapi-generator
+    - echo 'java -jar /tmp/openapi/openapi-generator-cli.jar "$@"' >> /usr/local/bin/openapi-generator
+    - chmod +x /usr/local/bin/openapi-generator
+    - cd -
+    # Verify OpenAPI Generator installation
+    - openapi-generator version
     # Set up linker configuration
     - mkdir -p .cargo
     - echo '[target.x86_64-unknown-linux-gnu]' > .cargo/config.toml
