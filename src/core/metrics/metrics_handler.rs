@@ -33,10 +33,16 @@ pub fn record_gauge_with_labels(name: &str, labels: &[(&str, String)], value: f6
     let key = create_key(name);
 
     if !labels.is_empty() {
-        // Clone the key for each iteration to avoid lifetime issues
-        for (k, v) in labels {
+        // Create owned data for each iteration to avoid lifetime issues
+        let labels_owned: Vec<(String, String)> = labels
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect();
+
+        for (k, v) in labels_owned {
             let key_clone = key.clone();
-            metrics::gauge!(key_clone, *k => v.as_str()).set(value);
+            // Use String::clone to ensure strings have 'static lifetime
+            metrics::gauge!(key_clone, k.clone() => v.clone()).set(value);
         }
     } else {
         gauge!(key).set(value);
@@ -54,10 +60,16 @@ pub fn record_counter_with_labels(name: &str, labels: &[(&str, String)], value: 
     let key = create_key(name);
 
     if !labels.is_empty() {
-        // Clone the key for each iteration to avoid lifetime issues
-        for (k, v) in labels {
+        // Create owned data for each iteration to avoid lifetime issues
+        let labels_owned: Vec<(String, String)> = labels
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect();
+
+        for (k, v) in labels_owned {
             let key_clone = key.clone();
-            metrics::counter!(key_clone, *k => v.as_str()).increment(value);
+            // Use String::clone to ensure strings have 'static lifetime
+            metrics::counter!(key_clone, k.clone() => v.clone()).increment(value);
         }
     } else {
         counter!(key).increment(value);
@@ -75,10 +87,16 @@ pub fn record_histogram_with_labels(name: &str, labels: &[(&str, String)], value
     let key = create_key(name);
 
     if !labels.is_empty() {
-        // Clone the key for each iteration to avoid lifetime issues
-        for (k, v) in labels {
+        // Create owned data for each iteration to avoid lifetime issues
+        let labels_owned: Vec<(String, String)> = labels
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect();
+
+        for (k, v) in labels_owned {
             let key_clone = key.clone();
-            metrics::histogram!(key_clone, *k => v.as_str()).record(value);
+            // Use String::clone to ensure strings have 'static lifetime
+            metrics::histogram!(key_clone, k.clone() => v.clone()).record(value);
         }
     } else {
         histogram!(key).record(value);

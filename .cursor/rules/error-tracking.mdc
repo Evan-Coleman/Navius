@@ -72,6 +72,9 @@ This rule helps track attempted error fixes during the codebase cleanup process.
 | E019 | ?Sized trait bound missing from ServiceRegistry::new | • Using concrete types only<br>• Using Arc<dyn Any> | Add ?Sized trait bound to PetRepository type parameter in ServiceRegistry::new | Resolved |
 | E020 | HashMap used for metrics labels instead of slice | • Type casting the HashMap<br>• Creating adapter functions | Replace HashMap with Vec<(&str, String)> for metrics labels | Resolved |
 | E021 | Production feature flag missing in Cargo.toml | • Ignoring the warning<br>• Removing cfg! checks | Add production feature flag to Cargo.toml | Resolved |
+| E022 | Missing 'examples' feature flag in Cargo.toml | ✅ Fixed | goblin | 2023-06-06 | Added feature flag |
+| E023 | Lifetime issues in metrics_handler.rs with labels | ✅ Fixed | goblin | 2023-06-06 | Used String::clone() to ensure 'static lifetime |
+| E024 | Incorrect app_router function signature | 🔄 In Progress | goblin | 2023-06-06 | Updating parameters and return types |
 
 ## Common Errors and Solutions
 

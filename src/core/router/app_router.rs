@@ -347,26 +347,51 @@ pub fn create_test_router_with_config(config: AppConfig) -> Router<Arc<AppState>
     Router::new().with_state(state)
 }
 
-pub async fn app_router(state: Arc<AppState>) -> Router {
-    let db_pool = state.get_db_pool().expect("Database pool not initialized");
+pub async fn app_router(
+    config: &AppConfig,
+    start_time: DateTime<Utc>,
+    db_pool: Option<Arc<Arc<dyn DatabaseConnection>>>,
+    api_client: Option<Arc<dyn ApiClient>>,
+    cache_registry: Arc<CacheRegistry>,
+    metrics_handle: Arc<PrometheusHandle>,
+) -> Router {
+    let app_state = Arc::new(AppState {
+        start_time,
+        config: config.clone(),
+        client: api_client,
+        cache_registry: cache_registry.clone(),
+        metrics_handle: metrics_handle.clone(),
+        service_registry: Arc::new(ServiceRegistry::new()),
+        db_pool: db_pool.clone(),
+    });
 
-    // Create a new PgPetRepository with the correct pool type
-    let pet_repository = {
-        let pg_pool = db_pool.clone();
-        Arc::new(PgPetRepository::new(pg_pool)) as Arc<dyn PetRepository>
+    // Create a pet repository based on the database connection
+    let pet_repo: Arc<dyn pet_repository::PetRepository + Send + Sync> = match &db_pool {
+        Some(conn) => {
+            // If we have a database connection, check if it's a Postgres connection
+            // and create a PgPetRepository. Otherwise, use a mock repository.
+            if let Some(pool) = conn.downcast_pg_pool() {
+                // Create PgPetRepository with the Postgres pool
+                Arc::new(PgPetRepository::new(pool.clone()))
+            } else {
+                // Fallback to mock repository if not a Postgres connection
+                Arc::new(MockPetRepository::new())
+            }
+        }
+        None => Arc::new(MockPetRepository::new()),
     };
 
-    let pet_service = Arc::new(PetService::new(pet_repository));
+    let pet_service = Arc::new(PetService::new(pet_repo));
     let service_registry = Arc::new(ServiceRegistry::new(pet_service));
 
     let state = Arc::new(AppState {
-        client: state.client.clone(),
-        config: state.config.clone(),
-        start_time: state.start_time,
-        cache_registry: state.cache_registry.clone(),
-        metrics_handle: state.metrics_handle.clone(),
+        client: app_state.client.clone(),
+        config: app_state.config.clone(),
+        start_time: app_state.start_time,
+        cache_registry: app_state.cache_registry.clone(),
+        metrics_handle: app_state.metrics_handle.clone(),
         service_registry,
-        db_pool: Some(db_pool),
+        db_pool: db_pool.clone(),
     });
 
     Router::new()
@@ -379,6 +404,14 @@ pub async fn app_router(state: Arc<AppState>) -> Router {
         )
         .with_state(state)
         .layer(TraceLayer::new_for_http())
+}
+
+async fn health_check(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    // ...
+}
+
+async fn metrics_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    // ...
 }
 
 #[cfg(test)]

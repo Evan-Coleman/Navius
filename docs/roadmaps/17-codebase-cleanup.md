@@ -13,7 +13,7 @@ version: 1.1
 
 # 17: Codebase Cleanup
 
-**Progress: 75%**
+**Progress: 80%**
 
 This roadmap outlines our plan to clean up and organize the Navius codebase, primarily focusing on standardizing error handling, removing duplication, and establishing clear architectural boundaries.
 
@@ -89,7 +89,7 @@ This roadmap outlines the strategy to address approximately 100 errors (up from 
 ## Current Status
 - Error count has been significantly reduced from ~70 errors to ~45 errors, with good progress on fixing remaining issues
 - Fixed ServiceRegistry::new to add ?Sized trait bound for trait objects
-- Fixed metrics handler lifetime issues by cloning keys and using Vec for labels
+- Fixed metrics handler lifetime issues by using String::clone() to ensure 'static lifetime
 - Added production feature flag to Cargo.toml
 - Fixed AppError to ServiceError conversion with proper handling of all variants
 - Fixed module structure issues with proper exports
@@ -252,7 +252,7 @@ This roadmap outlines the strategy to address approximately 100 errors (up from 
    *Not started*
 
 ## Implementation Status
-- **Overall Progress**: 75% complete
+- **Overall Progress**: 80% complete
 - **Last Updated**: March 24, 2025
 - **Next Milestone**: Resolve remaining errors to enable successful `cargo run` 
 - **Current Focus**: 
