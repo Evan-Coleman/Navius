@@ -45,7 +45,7 @@ use std::time::Duration;
 use axum::http::Request;
 use axum::http::StatusCode;
 use axum::response::Response;
-use futures::future::BoxFuture;
+use futures::future::{self, BoxFuture, Ready};
 use futures::{FutureExt, TryFutureExt};
 use tower::{Layer, Service};
 use tracing::{debug, info, warn};
@@ -54,9 +54,24 @@ use rand::SeedableRng;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
+use crate::core::config::app_config::RetryConfig as AppConfigRetryConfig;
 use crate::core::error::AppError;
+use crate::core::error::error_types::Result;
+use crate::core::error::{ErrorResponse, ErrorType};
 use tower::ServiceBuilder;
-use tower::retry::{ExponentialBackoff, RetryLayer};
+use tower::retry::Policy;
+use tower::retry::RetryLayer as TowerRetryLayer;
+use tower::retry::backoff::ExponentialBackoff as TowerExponentialBackoff;
+use tower::util::Either;
+use tower_http::classify::{ServerErrorsAsFailures, SharedClassifier};
+
+// Define the Error type that's used in the Policy implementation
+type Error = Box<dyn std::error::Error + Send + Sync>;
+
+// Helper for creating Ready futures
+fn ready<T>(value: T) -> Ready<T> {
+    future::ready(value)
+}
 
 /// Type alias for our configured retry layer using Tower's RetryLayer
 /// with a custom [RetryPolicy] implementation.
@@ -64,39 +79,63 @@ pub type RetryLayer = tower::retry::RetryLayer<RetryPolicy>;
 
 /// Custom retry policy determining which requests should be retried
 /// based on HTTP status codes and service errors.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct RetryPolicy {
-    /// HTTP status codes that should trigger automatic retries
-    /// Example: 500, 502, 503, 504
-    status_codes: Vec<StatusCode>,
+    max_attempts: u32,
+    retry_status_codes: Vec<u16>,
+    backoff: TowerExponentialBackoff,
 }
 
-impl<E> tower::retry::Policy<Request<axum::body::Body>, Response<axum::body::Body>, E>
-    for RetryPolicy
-where
-    E: std::fmt::Debug,
-{
-    type Future = futures::future::Ready<Self>;
-
-    fn retry(
-        &self,
-        req: &Request<axum::body::Body>,
-        result: Result<&Response<axum::body::Body>, &E>,
-    ) -> Option<Self::Future> {
-        match result {
-            // Retry on configured status codes
-            Ok(response) if self.status_codes.contains(&response.status()) => {
-                Some(futures::future::ready(self.clone()))
-            }
-            // Retry on any service errors
-            Err(_) => Some(futures::future::ready(self.clone())),
-            // Don't retry successful responses
-            _ => None,
+impl RetryPolicy {
+    pub fn new() -> Self {
+        Self {
+            max_attempts: 3,
+            retry_status_codes: vec![500, 502, 503, 504],
+            backoff: TowerExponentialBackoff::from_millis(100),
         }
     }
 
-    fn clone_request(&self, req: &Request<axum::body::Body>) -> Option<Request<axum::body::Body>> {
-        Some(req.clone())
+    pub fn with_max_attempts(mut self, max_attempts: u32) -> Self {
+        self.max_attempts = max_attempts;
+        self
+    }
+
+    pub fn with_status_codes(mut self, status_codes: Vec<u16>) -> Self {
+        self.retry_status_codes = status_codes;
+        self
+    }
+
+    pub fn with_backoff(mut self, backoff: TowerExponentialBackoff) -> Self {
+        self.backoff = backoff;
+        self
+    }
+}
+
+impl<B> Policy<Request<B>, Response<axum::body::Body>, Error> for RetryPolicy {
+    type Future = Either<Ready<Self::RetryAction>, Ready<Self::RetryAction>>;
+
+    fn retry(
+        &self,
+        req: &Request<B>,
+        result: Result<&Response<B>, &Error>,
+    ) -> Option<Self::Future> {
+        match result {
+            Ok(response) => {
+                if self
+                    .retry_status_codes
+                    .contains(&response.status().as_u16())
+                {
+                    Some(Either::A(ready(RetryAction::Retry)))
+                } else {
+                    None
+                }
+            }
+            Err(_) => Some(Either::B(ready(RetryAction::Retry))),
+        }
+    }
+
+    fn clone_request(&self, req: &Request<B>) -> Option<Request<B>> {
+        Some(req.try_clone().ok()?)
     }
 }
 
@@ -126,22 +165,18 @@ impl RetryConfig {
     /// Create a Tower layer with the configured retry policy
     pub fn layer(&self) -> RetryLayer {
         let policy = RetryPolicy {
-            status_codes: self.retry_status_codes.clone(),
-        };
-
-        // Configure backoff strategy
-        let backoff = if self.use_exponential_backoff {
-            ExponentialBackoff::new(self.base_delay)
+            max_attempts: self.max_attempts as u32,
+            retry_status_codes: self
+                .retry_status_codes
+                .iter()
+                .map(|&s| s.as_u16())
+                .collect(),
+            backoff: TowerExponentialBackoff::new(self.base_delay)
                 .max_delay(self.max_delay)
-                .factor(2) // Double delay each attempt
-        } else {
-            ExponentialBackoff::constant(self.base_delay).max_delay(self.max_delay)
+                .factor(2),
         };
 
-        // Build the retry layer
-        RetryLayer::new(policy)
-            .with_backoff(backoff)
-            .max_retries(self.max_attempts)
+        RetryLayer::new(policy).max_retries(self.max_attempts)
     }
 
     /// Validate the retry configuration
@@ -182,5 +217,55 @@ impl Default for RetryConfig {
                 StatusCode::TOO_MANY_REQUESTS,
             ],
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct RetryError {
+    pub attempts: u32,
+}
+
+impl std::fmt::Display for RetryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Request failed after {} retry attempts", self.attempts)
+    }
+}
+
+impl std::error::Error for RetryError {}
+
+pub fn build_retry_policy(config: &RetryConfig) -> Result<RetryPolicy> {
+    if !config.enabled {
+        return Err(AppError::ConfigurationError(
+            "Retry policy is not enabled".to_string(),
+        ));
+    }
+
+    let mut policy = RetryPolicy::new()
+        .with_max_attempts(config.max_attempts as u32)
+        .with_status_codes(
+            config
+                .retry_status_codes
+                .iter()
+                .map(|&s| s.as_u16())
+                .collect(),
+        );
+
+    let backoff = if config.use_exponential_backoff {
+        TowerExponentialBackoff::from_millis(config.base_delay)
+            .max_delay(Duration::from_millis(config.max_delay))
+    } else {
+        TowerExponentialBackoff::from_millis(config.base_delay)
+            .factor(1.0)
+            .max_delay(Duration::from_millis(config.max_delay))
+    };
+
+    policy = policy.with_backoff(backoff);
+
+    Ok(policy)
+}
+
+impl From<RetryError> for AppError {
+    fn from(err: RetryError) -> Self {
+        AppError::internal_server_error(format!("Request failed after {} retries", err.attempts))
     }
 }

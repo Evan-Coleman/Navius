@@ -21,8 +21,8 @@ pub enum AuthError {
     #[error("Rate limit exceeded: {0}")]
     RateLimited(String),
 
-    #[error("Circuit breaker open: {0}")]
-    CircuitOpen(String),
+    #[error("Circuit breaker open")]
+    CircuitOpen,
 
     #[error("Provider error: {0}")]
     ProviderError(String),
@@ -52,8 +52,15 @@ impl From<serde_json::Error> for AuthError {
     }
 }
 
-impl From<watch::error::SendError<CircuitState>> for AuthError {
-    fn from(e: watch::error::SendError<CircuitState>) -> Self {
-        AuthError::InternalError(format!("Circuit state update failed: {}", e))
+impl From<watch::error::SendError<common::CircuitState>> for AuthError {
+    fn from(_e: watch::error::SendError<common::CircuitState>) -> Self {
+        AuthError::InternalError("Failed to update circuit breaker state".to_string())
     }
 }
+
+use crate::core::auth::providers::common;
+use crate::core::{AppError, error::ErrorType};
+use crate::reliability::circuit_breaker::CircuitState;
+use reqwest::Error as ReqwestError;
+use serde_json::Error as SerdeError;
+use tokio::sync::watch;

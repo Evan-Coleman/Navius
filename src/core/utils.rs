@@ -9,10 +9,12 @@ use crate::core::error::Result;
 // User-extensible modules
 pub mod api_logger;
 pub mod api_resource;
+pub mod request_id;
 
 // Export specific items
 pub use api_logger::{RequestLogger, log_request, log_response};
 pub use api_resource::{ApiHandlerOptions, ApiResource, ApiResourceRegistry, create_api_handler};
+pub use request_id::get_req_id;
 
 // Add your custom utilities below
 // Example:

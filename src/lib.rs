@@ -110,7 +110,7 @@ pub mod core {
     pub mod utils;
 
     // Re-export key components for easier access
-    pub use self::auth::{EntraAuthLayer, EntraTokenClient};
+    pub use self::auth::middleware::EntraAuthLayer;
     pub use self::cache::ResourceCache;
     pub use self::cache::cache_manager::{CacheRegistry, get_resource_cache, init_cache_registry};
     pub use self::config::app_config::{AppConfig, load_config};
@@ -121,6 +121,7 @@ pub mod core {
     pub use self::utils::api_resource::{
         ApiHandlerOptions, ApiResource, ApiResourceRegistry, create_api_handler,
     };
+    pub use crate::core::auth::TokenClient;
 
     // Export specific items from modules to avoid name conflicts
     pub use self::core_logger as logger;

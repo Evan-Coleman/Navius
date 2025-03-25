@@ -54,12 +54,25 @@ impl Default for ApiConfig {
 }
 
 /// Authentication configuration
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthConfig {
+    #[serde(default)]
+    pub enabled: bool,
     pub default_provider: String,
     pub providers: HashMap<String, ProviderConfig>,
     #[serde(default)]
     pub debug: bool,
+}
+
+impl Default for AuthConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            default_provider: String::new(),
+            providers: HashMap::new(),
+            debug: false,
+        }
+    }
 }
 
 /// Logging configuration
@@ -646,53 +659,83 @@ pub fn load_config() -> Result<AppConfig, ConfigError> {
 
     // Validate critical configuration values
     if app_config.auth.enabled {
-        // Check roles configuration - panic if no roles are configured
-        if app_config.auth.entra.admin_roles.is_empty() {
-            panic!("No admin roles configured. Please specify admin_roles in configuration.");
-        }
+        // Get the default provider config
+        let default_provider = app_config.auth.default_provider.clone();
+        if let Some(provider_config) = app_config.auth.providers.get(&default_provider) {
+            // Check roles configuration - panic if no roles are configured
+            if provider_config
+                .role_mappings
+                .get("admin")
+                .unwrap_or(&Vec::new())
+                .is_empty()
+            {
+                panic!("No admin roles configured. Please specify admin_roles in configuration.");
+            }
 
-        if app_config.auth.entra.read_only_roles.is_empty() {
-            panic!(
-                "No read-only roles configured. Please specify read_only_roles in configuration."
-            );
-        }
+            if provider_config
+                .role_mappings
+                .get("read_only")
+                .unwrap_or(&Vec::new())
+                .is_empty()
+            {
+                panic!(
+                    "No read-only roles configured. Please specify read_only_roles in configuration."
+                );
+            }
 
-        if app_config.auth.entra.full_access_roles.is_empty() {
-            panic!(
-                "No full access roles configured. Please specify full_access_roles in configuration."
-            );
+            if provider_config
+                .role_mappings
+                .get("full_access")
+                .unwrap_or(&Vec::new())
+                .is_empty()
+            {
+                panic!(
+                    "No full access roles configured. Please specify full_access_roles in configuration."
+                );
+            }
         }
     }
 
-    // Manually set Entra ID configuration from environment variables if they exist
+    // Manually set provider configuration from environment variables if they exist
     // This ensures the environment variables are properly mapped to the configuration
-    if let Ok(tenant_id) = env::var(constants::auth::env_vars::TENANT_ID) {
-        if !tenant_id.is_empty() {
-            app_config.auth.entra.tenant_id = tenant_id;
+    let default_provider = app_config.auth.default_provider.clone();
+    if let Some(provider_config) = app_config.auth.providers.get_mut(&default_provider) {
+        if let Ok(tenant_id) = env::var(constants::auth::env_vars::TENANT_ID) {
+            if !tenant_id.is_empty() {
+                provider_config.provider_specific.insert(
+                    "tenant_id".to_string(),
+                    serde_yaml::Value::String(tenant_id),
+                );
+            }
         }
-    }
 
-    if let Ok(client_id) = env::var(constants::auth::env_vars::CLIENT_ID) {
-        if !client_id.is_empty() {
-            app_config.auth.entra.client_id = client_id;
+        if let Ok(client_id) = env::var(constants::auth::env_vars::CLIENT_ID) {
+            if !client_id.is_empty() {
+                provider_config.client_id = client_id;
+            }
         }
-    }
 
-    if let Ok(audience) = env::var(constants::auth::env_vars::AUDIENCE) {
-        if !audience.is_empty() {
-            app_config.auth.entra.audience = audience;
+        if let Ok(audience) = env::var(constants::auth::env_vars::AUDIENCE) {
+            if !audience.is_empty() {
+                provider_config.audience = audience;
+            }
         }
-    }
 
-    if let Ok(scope) = env::var(constants::auth::env_vars::SCOPE) {
-        if !scope.is_empty() {
-            app_config.auth.entra.scope = scope;
+        if let Ok(scope) = env::var(constants::auth::env_vars::SCOPE) {
+            if !scope.is_empty() {
+                provider_config
+                    .provider_specific
+                    .insert("scope".to_string(), serde_yaml::Value::String(scope));
+            }
         }
-    }
 
-    if let Ok(token_url) = env::var(constants::auth::env_vars::TOKEN_URL) {
-        if !token_url.is_empty() {
-            app_config.auth.entra.token_url = token_url;
+        if let Ok(token_url) = env::var(constants::auth::env_vars::TOKEN_URL) {
+            if !token_url.is_empty() {
+                provider_config.provider_specific.insert(
+                    "token_url".to_string(),
+                    serde_yaml::Value::String(token_url),
+                );
+            }
         }
     }
 
@@ -709,7 +752,10 @@ fn default_reconnect_interval() -> u64 {
     30
 }
 
-#[derive(Debug, Clone, Deserialize)]
+// Define the missing RoleMappings type
+pub type RoleMappings = HashMap<String, Vec<String>>;
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ProviderConfig {
     pub enabled: bool,
     pub client_id: String,

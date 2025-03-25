@@ -24,6 +24,17 @@ pub struct ErrorResponse {
     pub details: Option<String>,
 }
 
+impl ErrorResponse {
+    pub fn new(error_type: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            code: 500, // Default to internal server error
+            message: message.into(),
+            error_type: error_type.into(),
+            details: None,
+        }
+    }
+}
+
 // Error severity levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorSeverity {

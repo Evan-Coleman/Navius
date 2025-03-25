@@ -18,8 +18,9 @@ use tower::{Layer, Service};
 use tracing::{debug, error, info};
 
 use crate::core::auth::providers;
-use crate::core::auth::{AuthError, StandardClaims, providers::OAuthProvider};
-use crate::core::auth_providers;
+use crate::core::auth::providers::common::ProviderConfig;
+use crate::core::auth::providers::common::ProviderRegistry;
+use crate::core::auth::{AuthError as CoreAuthError, StandardClaims, providers::OAuthProvider};
 use crate::core::config::app_config;
 use crate::core::config::app_config::AppConfig;
 use crate::core::config::constants;
@@ -156,34 +157,16 @@ pub enum Permission {
 /// Configuration for Entra authentication middleware
 #[derive(Debug, Clone)]
 pub struct EntraAuthConfig {
-    /// Entra tenant ID
-    pub tenant_id: String,
-    /// Client ID of our application
-    pub client_id: String,
-    /// Expected audience value
-    pub audience: String,
-    /// Whether to validate the token (disable for debugging)
+    required_roles: RoleRequirement,
+    required_permissions: PermissionRequirement,
+    client: Client,
+    jwks_uri: String,
+    jwks_cache: Arc<Mutex<Option<JwksCacheEntry>>>,
+    debug_validation: bool,
+    issuer_url_formats: Vec<String>,
+    role_mappings: HashMap<String, Vec<String>>,
     pub validate_token: bool,
-    /// Required roles for authorization
-    pub required_roles: RoleRequirement,
-    /// Required permissions (scopes) for authorization
-    pub required_permissions: PermissionRequirement,
-    /// HTTP client
-    pub client: Client,
-    /// JWKS URI for token validation
-    pub jwks_uri: String,
-    /// JWKS cache
-    pub jwks_cache: Arc<Mutex<Option<JwksCacheEntry>>>,
-    /// Debug mode - skips signature validation
-    pub debug_validation: bool,
-    /// Default issuer URL formats
-    pub issuer_url_formats: Vec<String>,
-    /// Admin roles
-    pub admin_roles: Vec<String>,
-    /// Read-only roles
-    pub read_only_roles: Vec<String>,
-    /// Full access roles
-    pub full_access_roles: Vec<String>,
+    pub tenant_id: String,
 }
 
 /// OpenID Connect configuration response
@@ -197,125 +180,30 @@ struct OpenIdConfiguration {
 
 impl Default for EntraAuthConfig {
     fn default() -> Self {
-        // Get configuration from environment variables
-        let tenant_id = std::env::var(constants::auth::env_vars::TENANT_ID).unwrap_or_default();
-        let client_id = std::env::var(constants::auth::env_vars::CLIENT_ID).unwrap_or_default();
-        let debug_validation = std::env::var(constants::auth::env_vars::DEBUG_AUTH)
-            .unwrap_or_else(|_| "false".to_string())
-            .parse::<bool>()
-            .unwrap_or(false);
-        let audience = std::env::var(constants::auth::env_vars::AUDIENCE).unwrap_or_else(|_| {
-            constants::auth::urls::DEFAULT_AUDIENCE_FORMAT
-                .replace("{}", &client_id)
-                .to_string()
-        });
-
-        // Ensure tenant_id is not empty
-        let tenant_id = if tenant_id.is_empty() {
-            // Use a placeholder to avoid URL formatting issues
-            "tenant-id-placeholder".to_string()
-        } else {
-            tenant_id
-        };
-
-        // Use the direct JWKS endpoint
-        let jwks_uri = app_config::default_jwks_uri_format().replace("{}", &tenant_id);
-
-        // Get default issuer URL formats
-        let issuer_url_formats = app_config::default_issuer_url_formats();
-
         Self {
-            tenant_id: tenant_id.clone(),
-            client_id: client_id.clone(),
-            audience,
-            validate_token: true,
             required_roles: RoleRequirement::None,
             required_permissions: PermissionRequirement::None,
             client: Client::new(),
-            jwks_uri,
+            jwks_uri: String::new(),
             jwks_cache: Arc::new(Mutex::new(None)),
-            debug_validation,
-            issuer_url_formats,
-            admin_roles: Vec::new(),
-            read_only_roles: Vec::new(),
-            full_access_roles: Vec::new(),
+            debug_validation: false,
+            issuer_url_formats: Vec::new(),
+            role_mappings: HashMap::new(),
+            validate_token: true,
+            tenant_id: String::new(),
         }
     }
 }
 
 impl EntraAuthConfig {
     /// Create a new EntraAuthConfig
-    pub fn new(
-        tenant_id: String,
-        client_id: String,
-        audience: String,
-        debug_validation: bool,
-    ) -> Self {
-        // Ensure tenant_id is not empty
-        let tenant_id = if tenant_id.is_empty() {
-            // Use a placeholder to avoid URL formatting issues
-            "tenant-id-placeholder".to_string()
-        } else {
-            tenant_id
-        };
-
-        // Use the direct JWKS endpoint - use app_config defaults
-        let jwks_uri_format = app_config::default_jwks_uri_format();
-        let jwks_uri = jwks_uri_format.replace("{}", &tenant_id).to_string();
-
-        // Get default issuer URL formats
-        let issuer_url_formats = app_config::default_issuer_url_formats();
-
-        Self {
-            tenant_id: tenant_id.clone(),
-            client_id: client_id.clone(),
-            audience,
-            validate_token: true,
-            required_roles: RoleRequirement::None,
-            required_permissions: PermissionRequirement::None,
-            client: Client::new(),
-            jwks_uri,
-            jwks_cache: Arc::new(Mutex::new(None)),
-            debug_validation,
-            issuer_url_formats,
-            admin_roles: Vec::new(),
-            read_only_roles: Vec::new(),
-            full_access_roles: Vec::new(),
-        }
-    }
-
-    /// Create a new EntraAuthConfig from AppConfig
-    pub fn from_app_config(config: &AppConfig) -> Self {
-        let tenant_id = config.auth.entra.tenant_id.clone();
-        let client_id = config.auth.entra.client_id.clone();
+    pub fn new(config: &AppConfig, provider_config: &app_config::ProviderConfig) -> Self {
         let debug_validation = config.auth.debug;
-        let audience = if config.auth.entra.audience.is_empty() {
-            constants::auth::urls::DEFAULT_AUDIENCE_FORMAT
-                .replace("{}", &client_id)
-                .to_string()
-        } else {
-            config.auth.entra.audience.clone()
-        };
-
-        // Ensure tenant_id is not empty
-        let tenant_id = if tenant_id.is_empty() {
-            // Use a placeholder to avoid URL formatting issues
-            "tenant-id-placeholder".to_string()
-        } else {
-            tenant_id
-        };
-
-        // Use the direct JWKS endpoint
-        let jwks_uri = config.auth.entra.jwks_uri_format.replace("{}", &tenant_id);
-
-        // Get issuer URL formats from config
-        let issuer_url_formats = config.auth.entra.issuer_url_formats.clone();
+        let common_config = ProviderConfig::from_app_config(provider_config);
+        let jwks_uri = common_config.jwks_uri.clone();
+        let issuer_url_formats = vec![common_config.issuer.clone()];
 
         Self {
-            tenant_id: tenant_id.clone(),
-            client_id,
-            audience,
-            validate_token: true,
             required_roles: RoleRequirement::None,
             required_permissions: PermissionRequirement::None,
             client: Client::new(),
@@ -323,9 +211,9 @@ impl EntraAuthConfig {
             jwks_cache: Arc::new(Mutex::new(None)),
             debug_validation,
             issuer_url_formats,
-            admin_roles: config.auth.entra.admin_roles.clone(),
-            read_only_roles: config.auth.entra.read_only_roles.clone(),
-            full_access_roles: config.auth.entra.full_access_roles.clone(),
+            role_mappings: common_config.role_mappings.clone(),
+            validate_token: true,
+            tenant_id: common_config.tenant_id.clone(),
         }
     }
 
@@ -561,7 +449,11 @@ fn validate_claims(claims: &EntraClaims, config: &EntraAuthConfig) -> Result<(),
             Ok(())
         }
         RoleRequirement::Admin => {
-            if claims.roles.iter().any(|r| config.admin_roles.contains(r)) {
+            if claims
+                .roles
+                .iter()
+                .any(|r| config.role_mappings.contains_key(r))
+            {
                 Ok(())
             } else {
                 Err(AuthError::AccessDenied(
@@ -570,11 +462,11 @@ fn validate_claims(claims: &EntraClaims, config: &EntraAuthConfig) -> Result<(),
             }
         }
         RoleRequirement::ReadOnly => {
-            if claims.roles.iter().any(|r| {
-                config.admin_roles.contains(r)
-                    || config.read_only_roles.contains(r)
-                    || config.full_access_roles.contains(r)
-            }) {
+            if claims
+                .roles
+                .iter()
+                .any(|r| config.role_mappings.contains_key(r))
+            {
                 Ok(())
             } else {
                 Err(AuthError::AccessDenied(
@@ -586,7 +478,7 @@ fn validate_claims(claims: &EntraClaims, config: &EntraAuthConfig) -> Result<(),
             if claims
                 .roles
                 .iter()
-                .any(|r| config.admin_roles.contains(r) || config.full_access_roles.contains(r))
+                .any(|r| config.role_mappings.contains_key(r))
             {
                 Ok(())
             } else {
@@ -650,7 +542,7 @@ impl EntraAuthLayer {
     /// Create a new EntraAuthLayer from AppConfig
     pub fn from_app_config(config: &AppConfig) -> Self {
         Self {
-            config: EntraAuthConfig::from_app_config(config),
+            config: EntraAuthConfig::default(),
         }
     }
 
@@ -691,12 +583,18 @@ impl EntraAuthLayer {
 
     /// Create a new auth layer from app config with added role requirements
     pub fn from_app_config_with_roles(config: &AppConfig, roles: RoleRequirement) -> Self {
-        Self::new(EntraAuthConfig::from_app_config(config).with_role_requirement(roles))
+        Self::new(EntraAuthConfig::default().with_role_requirement(roles))
     }
 
     /// Create a new auth layer from app config requiring any of the given roles
     pub fn from_app_config_require_any_role(config: &AppConfig, roles: Vec<String>) -> Self {
-        Self::from_app_config_with_roles(config, RoleRequirement::Any(roles))
+        let provider_config = config
+            .auth
+            .providers
+            .get(&config.auth.default_provider)
+            .expect("Default provider not found in configuration");
+
+        Self::new(config).with_role_requirement(RoleRequirement::Any(roles))
     }
 
     /// Create a new auth layer from app config requiring all of the specified roles
@@ -705,18 +603,59 @@ impl EntraAuthLayer {
     }
 
     /// Create a new auth layer from app config requiring any of the admin roles
-    pub fn from_app_config_require_admin_role(config: &AppConfig) -> Self {
-        Self::from_app_config_require_any_role(config, config.auth.entra.admin_roles.clone())
+    pub fn from_app_config_require_admin(config: &AppConfig) -> Self {
+        let provider_config = config
+            .auth
+            .providers
+            .get(&config.auth.default_provider)
+            .expect("Default provider not found in configuration");
+
+        let admin_roles = provider_config
+            .role_mappings
+            .get("admin")
+            .cloned()
+            .unwrap_or_default();
+
+        Self::from_app_config_require_any_role(config, admin_roles)
     }
 
     /// Create a new auth layer from app config requiring any of the read-only roles
-    pub fn from_app_config_require_read_only_role(config: &AppConfig) -> Self {
-        Self::from_app_config_require_any_role(config, config.auth.entra.read_only_roles.clone())
+    pub fn from_app_config_require_read_only(config: &AppConfig) -> Self {
+        let provider_config = config
+            .auth
+            .providers
+            .get(&config.auth.default_provider)
+            .expect("Default provider not found in configuration");
+
+        let read_only_roles = provider_config
+            .role_mappings
+            .get("read_only")
+            .cloned()
+            .unwrap_or_default();
+
+        Self::from_app_config_require_any_role(config, read_only_roles)
     }
 
     /// Create a new auth layer from app config requiring any of the full access roles
-    pub fn from_app_config_require_full_access_role(config: &AppConfig) -> Self {
-        Self::from_app_config_require_any_role(config, config.auth.entra.full_access_roles.clone())
+    pub fn from_app_config_require_full_access(config: &AppConfig) -> Self {
+        let provider_config = config
+            .auth
+            .providers
+            .get(&config.auth.default_provider)
+            .expect("Default provider not found in configuration");
+
+        let full_access_roles = provider_config
+            .role_mappings
+            .get("full_access")
+            .cloned()
+            .unwrap_or_default();
+
+        Self::from_app_config_require_any_role(config, full_access_roles)
+    }
+
+    /// Create a new auth layer with the given role requirement
+    pub fn with_role_requirement(self, role_requirement: RoleRequirement) -> Self {
+        Self::new(self.config.with_role_requirement(role_requirement))
     }
 }
 
@@ -793,7 +732,7 @@ async fn validate_token_wrapper(
         // and just accept any token format
         let mut req = req;
         let claims = EntraClaims {
-            aud: config.audience.clone(),
+            aud: config.issuer_url_formats[0].clone(),
             exp: constants::timestamps::YEAR_2100, // Year 2100
             iss: "debug_issuer".to_string(),
             nbf: 0,
@@ -833,13 +772,13 @@ async fn validate_token_wrapper(
     // Set up validation
     let mut validation = Validation::new(Algorithm::RS256);
     validation.validate_exp = true;
-    validation.set_audience(&[&config.audience]);
+    validation.set_audience(&[&config.issuer_url_formats[0]]);
     validation.set_required_spec_claims(&["exp", "iss", "sub", "aud"]);
 
     // Set up issuer validation with multiple accepted issuers
     let mut issuers = Vec::new();
     for format in &config.issuer_url_formats {
-        issuers.push(format.replace("{}", &config.tenant_id));
+        issuers.push(format.replace("{}", &config.role_mappings.tenant_id));
     }
     validation.set_issuer(&issuers);
 
@@ -854,9 +793,10 @@ async fn validate_token_wrapper(
                     "Base64 decoding error - token may be malformed or corrupted"
                 }
                 jsonwebtoken::errors::ErrorKind::ExpiredSignature => "Token has expired",
-                jsonwebtoken::errors::ErrorKind::InvalidAudience => {
-                    &format!("Invalid audience, expected: {}", config.audience)
-                }
+                jsonwebtoken::errors::ErrorKind::InvalidAudience => &format!(
+                    "Invalid audience, expected: {}",
+                    config.issuer_url_formats[0]
+                ),
                 jsonwebtoken::errors::ErrorKind::InvalidIssuer => "Invalid issuer",
                 _ => "Token validation failed",
             };
@@ -896,15 +836,11 @@ impl RoleRequirement {
             RoleRequirement::All(required_roles) => {
                 required_roles.iter().all(|r| roles.contains(r))
             }
-            RoleRequirement::Admin => roles.iter().any(|r| config.admin_roles.contains(r)),
-            RoleRequirement::ReadOnly => roles.iter().any(|r| {
-                config.admin_roles.contains(r)
-                    || config.read_only_roles.contains(r)
-                    || config.full_access_roles.contains(r)
-            }),
-            RoleRequirement::FullAccess => roles
-                .iter()
-                .any(|r| config.admin_roles.contains(r) || config.full_access_roles.contains(r)),
+            RoleRequirement::Admin => roles.iter().any(|r| config.role_mappings.contains_key(r)),
+            RoleRequirement::ReadOnly => roles.iter().any(|r| config.role_mappings.contains_key(r)),
+            RoleRequirement::FullAccess => {
+                roles.iter().any(|r| config.role_mappings.contains_key(r))
+            }
         }
     }
 }
@@ -948,18 +884,81 @@ pub fn role_from_string(role: &str) -> Role {
 mod tests {
     use super::*;
     use crate::core::auth::providers::mock::MockProvider;
+    use crate::core::config::app_config::{AppConfig, ProviderConfig};
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use serde_json::json;
     use std::time::{Duration, SystemTime};
 
     #[test]
+    fn test_default_config() {
+        let config = EntraAuthConfig::default();
+        assert_eq!(config.required_roles, RoleRequirement::None);
+        assert_eq!(config.required_permissions, PermissionRequirement::None);
+        assert!(config.jwks_uri.is_empty());
+        assert!(config.issuer_url_formats.is_empty());
+        assert!(config.role_mappings.is_empty());
+    }
+
+    #[test]
+    fn test_config_from_app_config() {
+        let mut app_config = AppConfig::default();
+        let mut provider_config = ProviderConfig {
+            enabled: true,
+            client_id: "test-client".to_string(),
+            jwks_uri: "https://test.jwks".to_string(),
+            issuer_url: "https://test.issuer".to_string(),
+            audience: "test-audience".to_string(),
+            role_mappings: HashMap::new(),
+            provider_specific: HashMap::new(),
+        };
+
+        let mut role_mappings = HashMap::new();
+        role_mappings.insert("admin".to_string(), vec!["Admin".to_string()]);
+        role_mappings.insert("read_only".to_string(), vec!["Reader".to_string()]);
+        provider_config.role_mappings = role_mappings;
+
+        app_config
+            .auth
+            .providers
+            .insert("test-provider".to_string(), provider_config.clone());
+        app_config.auth.default_provider = "test-provider".to_string();
+
+        let config = EntraAuthConfig::new(&app_config, &provider_config);
+
+        // Verify configuration was applied
+        assert_eq!(config.jwks_uri, "https://test.jwks");
+        assert_eq!(config.issuer_url_formats, vec!["https://test.issuer"]);
+        assert!(config.role_mappings.contains_key("admin"));
+        assert!(config.role_mappings.contains_key("read_only"));
+    }
+
+    #[test]
+    fn test_role_requirement() {
+        let mut config = EntraAuthConfig::default();
+        let roles = vec!["admin".to_string()];
+        config = config.with_role_requirement(RoleRequirement::Any(roles));
+        assert!(matches!(config.required_roles, RoleRequirement::Any(_)));
+    }
+
+    #[test]
+    fn test_permission_requirement() {
+        let mut config = EntraAuthConfig::default();
+        let permissions = vec!["read".to_string()];
+        config = config.with_permission_requirement(PermissionRequirement::Any(permissions));
+        assert!(matches!(
+            config.required_permissions,
+            PermissionRequirement::Any(_)
+        ));
+    }
+
+    #[test]
     fn test_auth_config_default() {
         let config = EntraAuthConfig::default();
 
         // Check default values - get the actual value from the config
-        let actual_tenant_id = config.tenant_id.clone();
-        assert_eq!(config.tenant_id, actual_tenant_id);
+        let actual_tenant_id = config.role_mappings.tenant_id.clone();
+        assert_eq!(config.role_mappings.tenant_id, actual_tenant_id);
 
         // Client ID may be picked up from environment - just check it's either empty
         // or has sufficient length to be a UUID
@@ -967,7 +966,7 @@ mod tests {
         assert!(client_id_valid);
 
         // Check audience format
-        assert!(config.audience.starts_with("api://"));
+        assert!(config.issuer_url_formats[0].starts_with("api://"));
         assert!(config.validate_token);
         assert_eq!(
             format!("{:?}", config.required_roles),
@@ -991,9 +990,9 @@ mod tests {
         let config = EntraAuthConfig::from_app_config(&app_config);
 
         // Verify configuration was applied
-        assert_eq!(config.tenant_id, "test-tenant");
+        assert_eq!(config.role_mappings.tenant_id, "test-tenant");
         assert_eq!(config.client_id, "test-client");
-        assert_eq!(config.audience, "test-audience");
+        assert_eq!(config.issuer_url_formats[0], "test-audience");
     }
 
     #[test]
@@ -1207,6 +1206,7 @@ mod tests {
     fn test_auth_layer_creation() {
         // Test default layer creation
         let layer = EntraAuthLayer::default();
+        let actual_tenant_id = layer.config.role_mappings.tenant_id.clone();
         let actual_tenant_id = layer.config.tenant_id.clone();
         assert_eq!(layer.config.tenant_id, actual_tenant_id);
 
@@ -1438,4 +1438,13 @@ impl<'a> AuthMiddlewareBuilder<'a> {
             permission_requirement: perm_req.clone(),
         })
     }
+}
+
+// Add the missing AuthMiddleware struct
+#[derive(Clone)]
+struct AuthMiddleware<S> {
+    inner: S,
+    provider: Arc<dyn OAuthProvider>,
+    role_requirement: RoleRequirement,
+    permission_requirement: PermissionRequirement,
 }

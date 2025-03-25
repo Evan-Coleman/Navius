@@ -6,7 +6,7 @@
 //! - Rate limiting
 //! - Concurrency control
 //! - Request timeouts
-
+pub use circuit_breaker::CircuitBreakerError;
 pub mod circuit_breaker;
 pub mod concurrency;
 pub mod metrics;
@@ -53,59 +53,76 @@ mod tests {
 }
 
 // Re-export key components
-pub use circuit_breaker::CircuitBreakerConfig;
-pub use concurrency::ConcurrencyLimitConfig;
-pub use rate_limit::RateLimitConfig;
-pub use retry::RetryConfig;
+pub use circuit_breaker::CircuitBreakerConfig as CbConfig;
+pub use concurrency::ConcurrencyLimitLayer;
+pub use rate_limit::RateLimitLayer;
+pub use retry::RetryConfig as ReliabilityRetryConfig;
 
+use crate::core::reliability::rate_limit::{ConcurrencyLimitError, RateLimitError, RetryError};
+use crate::core::reliability::retry::RetryLayer;
 use axum::Router;
 use axum::body::HttpBody;
+use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
 use tower::{BoxError, Layer, Service, ServiceBuilder};
 use tower_http::timeout::TimeoutLayer;
+use tracing::error;
 use tracing::{info, warn};
 
 use crate::core::config::app_config::{
     CircuitBreakerConfig, ConcurrencyConfig, RateLimitConfig, ReliabilityConfig, RetryConfig,
     TimeoutConfig,
 };
+use crate::core::error::AppError;
 use crate::core::error::{ErrorResponse, ErrorType};
 use crate::core::router::AppState;
+use crate::core::utils::request_id;
 use crate::core::utils::request_id::get_req_id;
+use tower::retry::backoff::ExponentialBackoff;
 
 /// Apply reliability middleware to the router based on configuration
-pub fn apply_reliability(
-    router: Router<Arc<AppState>>,
-    config: &ReliabilityConfig,
-) -> Result<Router<Arc<AppState>>, AppError> {
+pub fn apply_reliability(mut router: Router, config: &ReliabilityConfig) -> Result<Router> {
     let mut service_builder = ServiceBuilder::new();
 
-    // Configure timeout layer
-    if let Some(layer) = build_timeout_layer(&config.timeout)? {
-        service_builder = service_builder.layer(layer);
+    // Add timeout layer if enabled
+    if config.timeout.enabled {
+        let layer = build_timeout_layer(&config.timeout)?;
+        if let Some(layer) = layer {
+            service_builder = service_builder.layer(layer);
+        }
     }
 
-    // Configure circuit breaker
-    if let Some(layer) = build_circuit_breaker_layer(&config.circuit_breaker)? {
-        service_builder = service_builder.layer(layer);
+    // Add circuit breaker if enabled
+    if config.circuit_breaker.enabled {
+        let layer = build_circuit_breaker_layer(&config.circuit_breaker)?;
+        if let Some(layer) = layer {
+            service_builder = service_builder.layer(layer);
+        }
     }
 
-    // Configure rate limiting
-    if let Some(layer) = build_rate_limit_layer(&config.rate_limit)? {
-        service_builder = service_builder.layer(layer);
+    // Add rate limiting if enabled
+    if config.rate_limit.enabled {
+        let layer = build_rate_limit_layer(&config.rate_limit)?;
+        if let Some(layer) = layer {
+            service_builder = service_builder.layer(layer);
+        }
     }
 
-    // Configure concurrency limits
-    if let Some(layer) = build_concurrency_layer(&config.concurrency)? {
-        service_builder = service_builder.layer(layer);
+    // Add concurrency limiting if enabled
+    if config.concurrency.enabled {
+        let layer = build_concurrency_layer(&config.concurrency)?;
+        if let Some(layer) = layer {
+            service_builder = service_builder.layer(layer);
+        }
     }
 
-    Ok(router.layer(service_builder))
+    // Apply all middleware layers at once
+    Ok(router.layer(service_builder.into_inner()))
 }
 
 /// Build the retry layer based on configuration
-fn build_retry_layer(config: &RetryConfig) -> Result<Option<RetryLayer>, AppError> {
+fn build_retry_layer(config: &RetryConfig) -> Result<Option<RetryLayer<RetryPolicy>>, AppError> {
     if !config.enabled {
         info!("Request retries are disabled");
         return Ok(None);
@@ -113,17 +130,15 @@ fn build_retry_layer(config: &RetryConfig) -> Result<Option<RetryLayer>, AppErro
 
     // Validate retry configuration
     if config.max_attempts < 1 {
-        return Err(AppError::new(ErrorResponse::new(
-            ErrorType::ConfigurationError,
-            "Retry max_attempts must be at least 1".to_string(),
-        )));
+        return Err(AppError::validation_error(
+            "Retry max_attempts must be at least 1",
+        ));
     }
 
     if config.base_delay_ms == 0 {
-        return Err(AppError::new(ErrorResponse::new(
-            ErrorType::ConfigurationError,
-            "Retry base_delay_ms must be greater than 0".to_string(),
-        )));
+        return Err(AppError::validation_error(
+            "Retry base_delay_ms must be greater than 0",
+        ));
     }
 
     info!(
@@ -131,13 +146,8 @@ fn build_retry_layer(config: &RetryConfig) -> Result<Option<RetryLayer>, AppErro
         config.max_attempts, config.base_delay_ms, config.use_exponential_backoff
     );
 
-    Ok(Some(RetryLayer::new(
-        config.max_attempts,
-        Duration::from_millis(config.base_delay_ms),
-        Duration::from_millis(config.max_delay_ms),
-        config.use_exponential_backoff,
-        config.retry_status_codes.clone(),
-    )))
+    let retry_policy = RetryPolicy::new(config.max_attempts);
+    Ok(Some(RetryLayer::new(retry_policy)))
 }
 
 /// Build the circuit breaker layer based on configuration
@@ -185,10 +195,9 @@ fn build_rate_limit_layer(
     }
 
     if config.requests_per_window == 0 {
-        return Err(AppError::new(ErrorResponse::new(
-            ErrorType::ConfigurationError,
-            "Invalid rate limit configuration: requests_per_window cannot be zero".to_string(),
-        )));
+        return Err(AppError::validation_error(
+            "Invalid rate limit configuration: requests_per_window cannot be zero",
+        ));
     }
 
     info!(
@@ -206,46 +215,19 @@ fn build_rate_limit_layer(
 /// Build the timeout layer based on configuration
 fn build_timeout_layer(config: &TimeoutConfig) -> Result<Option<TimeoutLayer>, AppError> {
     if !config.enabled {
-        info!("Request timeouts are disabled");
         return Ok(None);
     }
 
-    // Validate timeout configuration
-    if config.timeout_seconds == 0 {
-        return Err(AppError::new(ErrorResponse::new(
-            ErrorType::ConfigurationError,
-            "Timeout seconds must be greater than 0".to_string(),
-        )));
+    let timeout_secs = config.timeout_seconds;
+    if timeout_secs == 0 {
+        return Err(AppError::validation_error(
+            "Timeout must be greater than 0 seconds",
+        ));
     }
 
-    if config.timeout_seconds > MAX_TIMEOUT_SECONDS {
-        return Err(AppError::new(ErrorResponse::new(
-            ErrorType::ConfigurationError,
-            format!(
-                "Timeout exceeds maximum allowed duration of {} seconds",
-                MAX_TIMEOUT_SECONDS
-            ),
-        )));
-    }
-
-    info!("Configuring request timeouts: {}s", config.timeout_seconds);
-    let timeout = Duration::from_secs(config.timeout_seconds);
-
-    Ok(Some(TimeoutLayer::new(timeout).on_timeout(|| async {
-        let error = ErrorResponse::new(ErrorType::RequestTimeout, "Request timed out".to_string())
-            .with_request_id(get_req_id())
-            .with_details(json!({"timeout_seconds": config.timeout_seconds}));
-
-        // Log with structured logging
-        warn!(
-            error_code = error.error.code,
-            error_message = error.error.message,
-            timeout_seconds = config.timeout_seconds,
-            "Request timeout occurred"
-        );
-
-        error.into_response()
-    })))
+    let timeout = Duration::from_secs(timeout_secs);
+    let layer = TimeoutLayer::new(timeout);
+    Ok(Some(layer))
 }
 
 /// Build the concurrency layer based on configuration
@@ -258,19 +240,15 @@ fn build_concurrency_layer(
     }
 
     if config.max_concurrent_requests == 0 {
-        return Err(AppError::new(ErrorResponse::new(
-            ErrorType::ConfigurationError,
-            "Concurrency limit must be greater than 0".to_string(),
-        )));
+        return Err(AppError::validation_error(
+            "Concurrency limit must be greater than 0",
+        ));
     }
 
     if config.max_concurrent_requests > MAX_CONCURRENT_REQUESTS {
-        return Err(AppError::new(ErrorResponse::new(
-            ErrorType::ConfigurationError,
-            format!(
-                "Concurrency limit exceeds maximum allowed value of {}",
-                MAX_CONCURRENT_REQUESTS
-            ),
+        return Err(AppError::validation_error(format!(
+            "Concurrency limit exceeds maximum allowed value of {}",
+            MAX_CONCURRENT_REQUESTS
         )));
     }
 
@@ -514,101 +492,54 @@ mod tests {
 // Update circuit breaker error handling
 impl From<circuit_breaker::CircuitBreakerError> for AppError {
     fn from(err: circuit_breaker::CircuitBreakerError) -> Self {
-        let error_response = ErrorResponse::new(
-            ErrorType::CircuitBreakerOpen,
+        let mut error_response = ErrorResponse::new(
+            "CIRCUIT_BREAKER_OPEN".to_string(),
             "Service temporarily unavailable. Please try again later.".to_string(),
-        )
-        .with_request_id(get_req_id())
-        .with_details(json!({
-            "reset_in_seconds": err.reset_in.as_secs(),
-            "failure_rate": format!("{:.2}%", err.failure_rate),
-            "suggested_retry_after": err.reset_in.as_secs()
-        }));
-
-        // Structured logging with failure analysis
-        error!(
-            error_code = error_response.error.code,
-            error_message = error_response.error.message,
-            reset_in_seconds = err.reset_in.as_secs(),
-            failure_rate = format!("{:.2}%", err.failure_rate),
-            window_seconds = err.window_seconds,
-            "Circuit breaker activated",
         );
-
-        AppError::new(error_response)
+        error_response.details = Some(
+            serde_json::to_string(&json!({
+                "reset_timeout": err.reset_timeout.as_secs(),
+                "failure_rate": err.failure_rate
+            }))
+            .unwrap(),
+        );
+        AppError::internal_server_error(error_response.message.clone())
     }
 }
 
 // Enhanced error conversion with request context
 impl From<rate_limit::RateLimitError> for AppError {
     fn from(err: rate_limit::RateLimitError) -> Self {
-        let error_response =
-            ErrorResponse::new(ErrorType::TooManyRequests, "Too many requests".to_string())
-                .with_request_id(get_req_id())
-                .with_details(json!({
-                    "retry_after_seconds": err.retry_after.as_secs(),
-                    "limit": err.limit
-                }));
-
-        warn!(
-            error_code = error_response.error.code,
-            error_message = error_response.error.message,
-            retry_after_seconds = err.retry_after.as_secs(),
-            limit = err.limit,
-            "Rate limit exceeded"
+        let mut error_response = ErrorResponse::new(
+            "TOO_MANY_REQUESTS".to_string(),
+            "Too many requests".to_string(),
         );
-
-        AppError::new(error_response)
+        error_response.details = Some(
+            serde_json::to_string(&json!({
+                "retry_after": err.retry_after.as_secs(),
+                "rate_limit": err.rate_limit,
+                "window_duration": err.window_duration.as_secs()
+            }))
+            .unwrap(),
+        );
+        AppError::RateLimited(error_response.message.clone())
     }
 }
 
-// Add masked error logging for sensitive data
-impl From<concurrency::ConcurrencyLimitError> for AppError {
-    fn from(err: concurrency::ConcurrencyLimitError) -> Self {
-        let error_response = ErrorResponse::new(
-            ErrorType::TooManyRequests,
-            "Server busy, try again later".to_string(),
-        )
-        .with_request_id(get_req_id())
-        .with_details(json!({
-            "current_connections": err.current_connections,
-            "max_connections": err.max_connections
-        }));
-
-        warn!(
-            error_code = error_response.error.code,
-            error_message = error_response.error.message,
-            current_connections = err.current_connections,
-            max_connections = err.max_connections,
-            request_id = %error_response.request_id.unwrap_or_default(),
-            "Concurrency limit reached"
-        );
-
-        AppError::new(error_response)
+// Fix ConcurrencyLimitError implementation
+impl From<ConcurrencyLimitError> for AppError {
+    fn from(err: ConcurrencyLimitError) -> Self {
+        AppError::internal_server_error(format!(
+            "Concurrency limit of {} exceeded",
+            err.max_connections
+        ))
     }
 }
 
-// Add retry error handling
-impl From<retry::RetryError> for AppError {
-    fn from(err: retry::RetryError) -> Self {
-        let error_response = ErrorResponse::new(
-            ErrorType::ServiceUnavailable,
-            "Service temporarily unavailable".to_string(),
-        )
-        .with_details(json!({
-            "attempts": err.attempts,
-            "final_status": err.final_status.as_u16()
-        }));
-
-        error!(
-            error_code = error_response.error.code,
-            error_message = error_response.error.message,
-            attempts = err.attempts,
-            final_status = err.final_status.as_u16(),
-            "Request retries exhausted"
-        );
-
-        AppError::new(error_response)
+// Fix RetryError implementation
+impl From<RetryError> for AppError {
+    fn from(err: RetryError) -> Self {
+        AppError::internal_server_error(format!("Request failed after {} retries", err.attempts))
     }
 }
 

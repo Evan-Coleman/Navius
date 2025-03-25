@@ -384,28 +384,25 @@ pub struct CircuitBreakerService<S> {
 
 /// Add this error type definition
 #[derive(Debug)]
-pub enum CircuitBreakerError {
-    CircuitOpen,
-    ServiceError(Box<dyn StdError + Send + Sync>),
+pub struct CircuitBreakerError {
+    pub reset_timeout: Duration,
+    pub failure_rate: f32,
 }
 
 impl fmt::Display for CircuitBreakerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            CircuitBreakerError::CircuitOpen => {
-                write!(f, "Circuit is open, requests are not allowed")
-            }
-            CircuitBreakerError::ServiceError(e) => write!(f, "Service error: {}", e),
-        }
+        write!(
+            f,
+            "Circuit breaker is open. Failure rate: {:.2}%, reset in: {}s",
+            self.failure_rate * 100.0,
+            self.reset_timeout.as_secs()
+        )
     }
 }
 
 impl StdError for CircuitBreakerError {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
-        match self {
-            CircuitBreakerError::CircuitOpen => None,
-            CircuitBreakerError::ServiceError(e) => Some(e.as_ref()),
-        }
+        None
     }
 }
 
@@ -430,7 +427,10 @@ where
                 debug!("Circuit breaker moving from OPEN to HALF_OPEN state");
             } else {
                 // Circuit is still open, request should be rejected
-                return Poll::Ready(Err(Box::new(CircuitBreakerError::CircuitOpen) as _));
+                return Poll::Ready(Err(Box::new(CircuitBreakerError {
+                    reset_timeout: state.reset_timeout,
+                    failure_rate: state.calculate_failure_percentage(),
+                }) as _));
             }
         }
 
@@ -444,9 +444,10 @@ where
         if state.state == CircuitState::Open {
             if !state.check_transition_to_half_open() {
                 debug!("Circuit breaker is OPEN, failing request fast");
-                return futures::future::ready(
-                    Err(Box::new(CircuitBreakerError::CircuitOpen) as _),
-                )
+                return futures::future::ready(Err(Box::new(CircuitBreakerError {
+                    reset_timeout: state.reset_timeout,
+                    failure_rate: state.calculate_failure_percentage(),
+                }) as _))
                 .boxed();
             }
 
@@ -538,4 +539,11 @@ where
             Poll::Pending => Poll::Pending,
         }
     }
+}
+
+/// Add missing config type
+#[derive(Debug, Clone)]
+pub struct CircuitBreakerConfig {
+    pub failure_threshold: u32,
+    pub reset_timeout_secs: u64,
 }

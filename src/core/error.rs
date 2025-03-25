@@ -12,3 +12,17 @@ pub use result_ext::{ResultExt, StatusCodeExt};
 
 // Re-export macro
 pub use crate::log_at_level;
+
+// Add missing error type
+#[derive(Debug)]
+pub enum ErrorType {
+    Transient,
+    Permanent,
+    Validation,
+    Authentication,
+    ConfigurationError,
+    CircuitBreakerOpen,
+    TooManyRequests,
+    RequestTimeout,
+    ServiceUnavailable,
+}

@@ -6,7 +6,7 @@ use metrics_exporter_prometheus::PrometheusBuilder;
 use std::{sync::Arc, time::SystemTime};
 
 use crate::core::{
-    auth::EntraAuthLayer,
+    auth::middleware::EntraAuthLayer,
     config::app_config::AppConfig,
     handlers::{
         self, core_actuator, core_docs,
@@ -27,7 +27,7 @@ impl CoreRouter {
         let auth_enabled = state.config.auth.enabled;
 
         // Create auth middleware for admin access
-        let admin_auth = EntraAuthLayer::from_app_config_require_admin_role(&state.config);
+        let admin_auth = EntraAuthLayer::from_app_config_require_admin(&state.config);
 
         // Public core routes - accessible without authentication
         let public_routes = Router::new().route("/health", get(health_handler));

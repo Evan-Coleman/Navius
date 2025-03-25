@@ -1,4 +1,7 @@
 //! Authentication and authorization data models.
+pub use super::RoleMappings;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// JWT claims structure for authenticated tokens
 #[derive(Debug, Clone)]
@@ -64,4 +67,26 @@ pub struct TokenClaims {
     pub jti: String,
     /// User roles
     pub roles: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StandardClaims {
+    pub sub: String,
+    pub aud: String,
+    pub exp: i64,
+    pub iat: i64,
+    pub iss: String,
+    pub scope: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoleMappings {
+    pub entra: HashMap<String, String>,
+    pub google: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct JwksCacheEntry {
+    pub keys: Vec<jsonwebtoken::jwk::Jwk>,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
 }
