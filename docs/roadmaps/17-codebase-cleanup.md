@@ -13,7 +13,7 @@ version: 1.1
 
 # 17: Codebase Cleanup
 
-**Progress: 70%**
+**Progress: 75%**
 
 This roadmap outlines our plan to clean up and organize the Navius codebase, primarily focusing on standardizing error handling, removing duplication, and establishing clear architectural boundaries.
 
@@ -61,9 +61,10 @@ This roadmap outlines our plan to clean up and organize the Navius codebase, pri
 
 ## Current Focus
 - HIGHEST PRIORITY: Fixing remaining compilation errors
-- Fixed AppError to ServiceError conversion issues
-- Fixed module structure and import path issues
-- Addressing type mismatches in core functions and database handling
+- Fixed ServiceRegistry::new to add ?Sized trait bound
+- Fixed metrics handler lifetime issues
+- Added production feature flag to Cargo.toml
+- Fixed type conversion issues in app_router.rs
 
 ## Next Steps
 - Resolve remaining database connection and executor issues
@@ -86,7 +87,10 @@ This roadmap outlines our plan to clean up and organize the Navius codebase, pri
 This roadmap outlines the strategy to address approximately 100 errors (up from 60 test errors and 32 build errors) following the implementation of the Pet API Database Integration. We will also update outdated documentation and ensure consistency across the codebase.
 
 ## Current Status
-- Error count has been significantly reduced from ~70 errors to only 6 errors, though still blocking successful `cargo run`
+- Error count has been significantly reduced from ~70 errors to ~45 errors, with good progress on fixing remaining issues
+- Fixed ServiceRegistry::new to add ?Sized trait bound for trait objects
+- Fixed metrics handler lifetime issues by cloning keys and using Vec for labels
+- Added production feature flag to Cargo.toml
 - Fixed AppError to ServiceError conversion with proper handling of all variants
 - Fixed module structure issues with proper exports
 - Resolved import path conflicts and visibility issues
@@ -134,8 +138,9 @@ This roadmap outlines the strategy to address approximately 100 errors (up from 
    - [x] Resolve service vs repository model mismatches
    - [x] Standardize UUID vs i32 ID field usage
    - [x] Fix inconsistent trait implementations
+   - [x] Add ?Sized trait bounds for trait objects
    
-   *Started - March 24, 2025*
+   *Updated - March 24, 2025*
 
 ### Phase 1: Error Analysis and Categorization (COMPLETED)
 1. **Build Error Analysis** ✅
@@ -178,6 +183,7 @@ This roadmap outlines the strategy to address approximately 100 errors (up from 
    - [x] Fix metrics lifetime issues
    - [x] Implement missing cache methods
    - [x] Fix service and repository type conversion errors
+   - [x] Fix trait bounds for trait objects
    - [ ] Address remaining functionality issues
    
    *Updated - March 24, 2025*
@@ -246,14 +252,16 @@ This roadmap outlines the strategy to address approximately 100 errors (up from 
    *Not started*
 
 ## Implementation Status
-- **Overall Progress**: 70% complete
+- **Overall Progress**: 75% complete
 - **Last Updated**: March 24, 2025
 - **Next Milestone**: Resolve remaining errors to enable successful `cargo run` 
 - **Current Focus**: 
+  - Successfully fixed ServiceRegistry::new by adding ?Sized trait bound
+  - Fixed metrics handler lifetime issues with key cloning
+  - Added production feature flag to Cargo.toml
   - Successfully fixed AppError to ServiceError conversion issues
   - Successfully resolved module structure and import path issues
   - Fixed type mismatches between service and repository layers
-  - Working on database connection and executor issues
 
 ## Success Criteria
 - IMMEDIATE GOAL: Zero errors when running `cargo run`

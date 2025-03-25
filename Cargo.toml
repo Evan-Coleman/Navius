@@ -19,6 +19,7 @@ offline = true
 [features]
 default = ["examples"]  # Include examples by default
 examples = []           # Feature flag for including example code
+production = []         # Feature flag for production builds
 
 # Suppress specific warnings
 [lints.rust]

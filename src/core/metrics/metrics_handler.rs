@@ -33,10 +33,10 @@ pub fn record_gauge_with_labels(name: &str, labels: &[(&str, String)], value: f6
     let key = create_key(name);
 
     if !labels.is_empty() {
-        // Use metrics directly with string literals for the metric name
-        // This avoids lifetime issues with string references
+        // Clone the key for each iteration to avoid lifetime issues
         for (k, v) in labels {
-            metrics::gauge!(key, *k => v.as_str()).set(value);
+            let key_clone = key.clone();
+            metrics::gauge!(key_clone, *k => v.as_str()).set(value);
         }
     } else {
         gauge!(key).set(value);
@@ -54,10 +54,10 @@ pub fn record_counter_with_labels(name: &str, labels: &[(&str, String)], value: 
     let key = create_key(name);
 
     if !labels.is_empty() {
-        // Use metrics directly with string literals for the metric name
-        // This avoids lifetime issues with string references
+        // Clone the key for each iteration to avoid lifetime issues
         for (k, v) in labels {
-            metrics::counter!(key, *k => v.as_str()).increment(value);
+            let key_clone = key.clone();
+            metrics::counter!(key_clone, *k => v.as_str()).increment(value);
         }
     } else {
         counter!(key).increment(value);
@@ -75,10 +75,10 @@ pub fn record_histogram_with_labels(name: &str, labels: &[(&str, String)], value
     let key = create_key(name);
 
     if !labels.is_empty() {
-        // Use metrics directly with string literals for the metric name
-        // This avoids lifetime issues with string references
+        // Clone the key for each iteration to avoid lifetime issues
         for (k, v) in labels {
-            metrics::histogram!(key, *k => v.as_str()).record(value);
+            let key_clone = key.clone();
+            metrics::histogram!(key_clone, *k => v.as_str()).record(value);
         }
     } else {
         histogram!(key).record(value);

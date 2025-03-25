@@ -485,8 +485,8 @@ impl<T: ApiResource> ResourceCache<T> {
     /// Get cache statistics
     pub fn get_stats(&self) -> CacheStats {
         let resource_type = self.resource_type.clone();
-        let mut labels = HashMap::new();
-        labels.insert("resource_type", resource_type.to_string());
+        let mut labels = Vec::new();
+        labels.push(("resource_type", resource_type.to_string()));
 
         let hits = crate::core::metrics::metrics_handler::try_get_counter_with_labels(
             "cache_hits",
@@ -697,8 +697,8 @@ impl CacheRegistry {
         // Collect basic stats for each cache - we can't get detailed stats due to type erasure
         for (resource_type, _) in caches.iter() {
             // Get metrics from the metrics system
-            let mut labels = HashMap::new();
-            labels.insert("resource_type", resource_type.clone());
+            let mut labels = Vec::new();
+            labels.push(("resource_type", resource_type.clone()));
 
             let hits = crate::core::metrics::metrics_handler::try_get_counter_with_labels(
                 "cache_hits",

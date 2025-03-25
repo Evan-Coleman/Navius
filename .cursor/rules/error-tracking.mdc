@@ -44,7 +44,7 @@ This rule helps track attempted error fixes during the codebase cleanup process.
 - Document error counts before and after each fix
 - Group similar errors and fix them together
 - Prioritize errors that are blocking key functionality
-- Current error count as of last check: ~70 errors with 9 warnings
+- Current error count as of last check: 48 errors with 10 warnings
 - Track both error count and warning count separately
 
 ## Error Tracking Table
@@ -69,6 +69,9 @@ This rule helps track attempted error fixes during the codebase cleanup process.
 | E016 | ServiceError to AppError missing From variants | • Using a match expression with incomplete cases<br>• Creating helper functions | Implement all error variants in From<AppError> for ServiceError | Resolved |
 | E017 | Pet module/models missing in database exports | • Changing import paths<br>• Using fully qualified paths | Create proper mod.rs files and export all required modules | Resolved |
 | E018 | Type mismatch between AppError and ServiceError in returns | • Ignoring with .map_err()<br>• Manual conversions | Add .map_err(ServiceError::from) to properly convert errors | Resolved |
+| E019 | ?Sized trait bound missing from ServiceRegistry::new | • Using concrete types only<br>• Using Arc<dyn Any> | Add ?Sized trait bound to PetRepository type parameter in ServiceRegistry::new | Resolved |
+| E020 | HashMap used for metrics labels instead of slice | • Type casting the HashMap<br>• Creating adapter functions | Replace HashMap with Vec<(&str, String)> for metrics labels | Resolved |
+| E021 | Production feature flag missing in Cargo.toml | • Ignoring the warning<br>• Removing cfg! checks | Add production feature flag to Cargo.toml | Resolved |
 
 ## Common Errors and Solutions
 
@@ -110,6 +113,7 @@ This rule helps track attempted error fixes during the codebase cleanup process.
   - Use proper dereferencing with `*k` in macro calls
   - Switch from HashMap to Vec for labels to avoid ownership issues
   - Use simpler data structures when possible
+  - Clone the key for each iteration in the for loop
 
 ### Database Executor Issues
 - **Symptoms**: `the trait Executor<'_> is not implemented for &dyn PgPool`
@@ -150,6 +154,16 @@ This rule helps track attempted error fixes during the codebase cleanup process.
   - Use .map_err(ServiceError::from) for error conversion
   - Ensure all AppError variants have a corresponding ServiceError conversion
 
+### Trait Bounds Issues
+- **Symptoms**: `the size for values of type 'dyn PetRepository' cannot be known at compilation time`
+- **Failed Approaches**:
+  - Using concrete types instead of trait objects
+  - Adding Sized bounds to trait objects
+- **Working Approach**:
+  - Add ?Sized bound to trait parameters that use trait objects
+  - Fix in both type declarations and function signatures
+  - Remember to fix in all related functions and structs
+
 ### Bypassing Errors with Feature Flags (ANTI-PATTERN) 
 - **Symptoms**: Using `--no-default-features` to bypass compile errors
 - **Failed Approaches**:
@@ -171,6 +185,7 @@ This rule helps track attempted error fixes during the codebase cleanup process.
    - Repository should accept connection/pool and return domain objects
    - Watch for mixing domain and database models
    - Ensure proper trait bounds on generic parameters
+   - Add ?Sized bounds for trait objects
 
 3. **Error Conversions**
    - Errors must convert properly between layers
@@ -186,6 +201,7 @@ This rule helps track attempted error fixes during the codebase cleanup process.
    - Watch for static lifetime requirements in metrics
    - Ensure proper lifetime bounds on generic parameters
    - Check for Send/Sync requirements in async code
+   - Clone values to avoid lifetime issues
 
 6. **Type Consistency**
    - Standardize ID types (Uuid vs i32)
@@ -200,4 +216,5 @@ This rule helps track attempted error fixes during the codebase cleanup process.
 | Update 1 | Added new error patterns from test run: metrics lifetime issues, executor trait problems, and missing imports |
 | Update 2 | Added new error patterns: ID type mismatches, metrics static lifetime issues, and PetResponse trait implementations |
 | Update 3 | Updated with solutions for metrics handler lifetime issues (E003, E007, E012) using proper dereferencing and Vec instead of HashMap; updated error count to ~70 errors |
-| Update 4 | Updated with progress on fixing ServiceError to AppError conversions (E016), module exports (E017), and type mismatches (E018); error count reduced to 6 errors | 
+| Update 4 | Updated with progress on fixing ServiceError to AppError conversions (E016), module exports (E017), and type mismatches (E018); error count reduced to 60 errors | 
+| Update 5 | Added new entries for ?Sized trait bounds (E019), metrics label type issues (E020), and production feature flag (E021); error count reduced to ~45 errors | 

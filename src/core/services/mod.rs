@@ -46,7 +46,7 @@ pub struct ServiceRegistry {
 
 impl ServiceRegistry {
     /// Create a new service registry
-    pub fn new<R: PetRepository + 'static>(pet_service: Arc<PetService<R>>) -> Self {
+    pub fn new<R: PetRepository + 'static + ?Sized>(pet_service: Arc<PetService<R>>) -> Self {
         let mut services = HashMap::new();
         services.insert(
             "pet_service".to_string(),

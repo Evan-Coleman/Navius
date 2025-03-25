@@ -122,10 +122,7 @@ impl AppState {
         let metrics_handle = crate::core::metrics::init_metrics();
 
         let pet_repository: Arc<dyn PetRepository> = match &db_pool {
-            Some(pool) => {
-                let pg_pool: &Arc<Pool<Postgres>> = pool;
-                Arc::new(PgPetRepository::new(pg_pool.clone()))
-            }
+            Some(pool) => Arc::new(PgPetRepository::new(pool.clone())),
             None => Arc::new(MockPetRepository::default()),
         };
         let pet_service = Arc::new(PetService::new(pet_repository));
@@ -286,10 +283,7 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
 
     // Create the app state
     let pet_repository: Arc<dyn PetRepository> = match &db_pool {
-        Some(pool) => {
-            let pg_pool: &Arc<Pool<Postgres>> = pool;
-            Arc::new(PgPetRepository::new(pg_pool.clone()))
-        }
+        Some(pool) => Arc::new(PgPetRepository::new(pool.clone())),
         None => Arc::new(MockPetRepository::default()),
     };
     let pet_service = Arc::new(PetService::new(pet_repository));
@@ -355,7 +349,13 @@ pub fn create_test_router_with_config(config: AppConfig) -> Router<Arc<AppState>
 
 pub async fn app_router(state: Arc<AppState>) -> Router {
     let db_pool = state.get_db_pool().expect("Database pool not initialized");
-    let pet_repository: Arc<dyn PetRepository> = Arc::new(PgPetRepository::new(db_pool.clone()));
+
+    // Create a new PgPetRepository with the correct pool type
+    let pet_repository = {
+        let pg_pool = db_pool.clone();
+        Arc::new(PgPetRepository::new(pg_pool)) as Arc<dyn PetRepository>
+    };
+
     let pet_service = Arc::new(PetService::new(pet_repository));
     let service_registry = Arc::new(ServiceRegistry::new(pet_service));
 
