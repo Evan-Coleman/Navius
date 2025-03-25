@@ -401,7 +401,7 @@ pub async fn start_metrics_updater(registry: &CacheRegistry) {
                 }
             };
 
-            for (resource_type, cache_box) in caches.iter() {
+            for (resource_type, _cache_box) in caches.iter() {
                 // Since we can't know the concrete type, we'll rely on the active_entries counter
                 // and reset the size metric to avoid showing stale data
                 gauge!("cache_current_size", "resource_type" => resource_type.to_string()).set(0.0);
@@ -556,7 +556,7 @@ impl CacheRegistry {
             }
         };
 
-        if let Some(cache) = caches.get(resource_type) {
+        if let Some(_cache) = caches.get(resource_type) {
             // We need to handle this dynamically since we can't know the type T at compile time
             // Use a dispatcher pattern to call the correct invalidate method
 
@@ -1102,7 +1102,7 @@ fn get_additional_cache_stats() -> HashMap<String, CacheStats> {
 
 // Get cache stats for a specific resource type from registry or metrics
 fn get_stats_for_cached_type(
-    cache_registry: &CacheRegistry,
+    _cache_registry: &CacheRegistry,
     resource_type: &str,
 ) -> Option<CacheStats> {
     // Skip the direct cache access and fall back to metrics

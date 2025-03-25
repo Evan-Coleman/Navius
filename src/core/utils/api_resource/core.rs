@@ -170,41 +170,47 @@ where
                         debug!("Cache key: {}", cache_key);
                     }
 
-                    // Define fetch function
-                    let state_clone = state.clone();
-                    let id_clone = id.clone();
-                    let fetch_fn_clone = fetch_fn.clone();
-                    let options_clone = options.clone();
-                    let fetch_closure = move || {
-                        let state = state_clone.clone();
-                        let id = id_clone.clone();
-                        let fetch_fn = fetch_fn_clone.clone();
-                        let options = options_clone.clone();
+                    // Skip cache handling if cache is not enabled
+                    if !options.use_cache {
+                        debug!("Skipping cache - caching is disabled for this resource");
+                        // Continue to fetch resource directly
+                    } else {
+                        // Try to fetch from cache
+                        let cache_key = cache_key.clone();
+                        let state_clone = state.clone();
+                        let id_clone = id.clone();
+                        let fetch_fn_clone = fetch_fn.clone();
+                        let _options = options.clone();
 
-                        Box::pin(async move {
-                            // This way we avoid infinite recursion in case fetch() calls get() internally
-                            let resource = fetch_fn(&state, id).await.map_err(|e| e.to_string())?;
+                        let fetch_closure = move || {
+                            let state = state_clone.clone();
+                            let id = id_clone.clone();
+                            let fetch_fn = fetch_fn_clone.clone();
+                            let _options = _options.clone();
 
-                            Ok(resource)
-                        })
-                    };
-
-                    // Try to fetch from cache
-                    match registry
-                        .get_or_fetch::<R, _, futures::future::BoxFuture<'_, Result<R, String>>>(
-                            cache_key,
-                            fetch_closure,
-                        )
-                        .await
-                    {
-                        Ok(resource) => {
-                            if options.detailed_logging {
-                                debug!("Found in cache!");
+                            async move {
+                                // This way we avoid infinite recursion in case fetch() calls get() internally
+                                match fetch_fn(&state, id).await {
+                                    Ok(resource) => Ok(resource),
+                                    Err(e) => Err(e.to_string()),
+                                }
                             }
-                            return Ok(Json(resource));
-                        }
-                        Err(err) => {
-                            error!("Error getting resource from cache: {}", err);
+                        };
+
+                        match registry
+                            .get_or_fetch::<R, _, _>(cache_key, fetch_closure)
+                            .await
+                        {
+                            Ok(resource) => {
+                                if options.detailed_logging {
+                                    debug!("Found in cache!");
+                                }
+                                return Ok(Json(resource));
+                            }
+                            Err(err) => {
+                                error!("Error getting resource from cache: {}", err);
+                                // Continue to fetch resource directly
+                            }
                         }
                     }
                 }

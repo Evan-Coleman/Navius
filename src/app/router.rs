@@ -11,12 +11,12 @@ use config::Config;
 ///
 /// This function provides a Spring Boot-like developer experience
 /// where you can easily configure and extend the application.
-pub fn create_router(config: Config) -> Router {
+pub fn create_router(_config: Config) -> Router {
     // Convert from config to AppConfig
     let app_config = crate::core::config::app_config::AppConfig::default();
 
     // Create a basic app state to use with the router
-    let app_state = Arc::new(AppState::default());
+    let _app_state = Arc::new(AppState::default());
 
     // Create a router using the builder pattern
     let router = RouterBuilder::new()

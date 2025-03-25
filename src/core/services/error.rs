@@ -10,6 +10,8 @@ pub enum ServiceError {
     NotFound(String),
     /// Resource conflict errors
     Conflict(String),
+    /// Repository/database errors
+    Repository(String),
     /// Other service errors
     Other(String),
 }
@@ -20,6 +22,7 @@ impl fmt::Display for ServiceError {
             ServiceError::Validation(msg) => write!(f, "Validation error: {}", msg),
             ServiceError::NotFound(msg) => write!(f, "Not found: {}", msg),
             ServiceError::Conflict(msg) => write!(f, "Conflict: {}", msg),
+            ServiceError::Repository(msg) => write!(f, "Repository error: {}", msg),
             ServiceError::Other(msg) => write!(f, "Service error: {}", msg),
         }
     }

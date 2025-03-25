@@ -30,15 +30,10 @@ pub use utils::api_resource::{
     ApiHandlerOptions, ApiResource, ApiResourceRegistry, create_api_handler,
 };
 
-pub use auth::*;
-pub use cache::*;
-pub use config::*;
-pub use handlers::*;
-pub use metrics::*;
-pub use models::*;
-pub use router::*;
-pub use services::*;
-pub use utils::*;
+// Export specific items from modules to avoid name conflicts
+pub use handlers::health as handlers_health;
+pub use services::health as services_health;
+pub use utils::log_request as utils_log_request;
 
 mod handler_utils {
     use crate::core::error::AppError;

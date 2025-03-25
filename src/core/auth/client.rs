@@ -205,7 +205,7 @@ impl EntraTokenClient {
 
 #[async_trait]
 impl TokenClient for EntraTokenClient {
-    async fn get_token(&self, username: &str, password: &str) -> Result<TokenResponse, AppError> {
+    async fn get_token(&self, _username: &str, _password: &str) -> Result<TokenResponse, AppError> {
         // For now, just return an error since this implementation doesn't support
         // username/password auth flow - it uses client credentials
         Err(AppError::NotImplementedError(

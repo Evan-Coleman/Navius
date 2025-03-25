@@ -269,6 +269,9 @@ impl From<CoreServiceError> for AppError {
             CoreServiceError::Other(msg) => Self::InternalServerError(msg),
             CoreServiceError::NotFound(msg) => Self::NotFoundError(msg),
             CoreServiceError::Conflict(msg) => Self::ConflictError(msg),
+            CoreServiceError::Repository(msg) => {
+                Self::InternalServerError(format!("Repository error: {}", msg))
+            }
         }
     }
 }

@@ -50,7 +50,7 @@ pub async fn detailed_health_handler(
         details: Some(format!(
             "Cache {}",
             match &state.cache_registry {
-                Some(registry) => format!("enabled"),
+                Some(_registry) => format!("enabled"),
                 None => format!("disabled"),
             }
         )),
