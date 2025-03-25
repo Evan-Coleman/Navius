@@ -4,8 +4,6 @@ use axum::{
 };
 use std::sync::Arc;
 
-// Pet-related imports removed for stability
-use crate::core::database::PgPool;
 use crate::core::router::app_router::AppState;
 use config::Config;
 

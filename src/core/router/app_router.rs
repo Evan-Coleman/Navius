@@ -34,7 +34,6 @@ use crate::{
     core::auth::{EntraTokenClient, middleware::RoleRequirement, mock::MockTokenClient},
     core::cache::CacheRegistry,
     core::config::app_config::AppConfig,
-    core::database::PgPool,
     core::error::AppError,
     core::handlers::logging,
     core::metrics::metrics_service,
@@ -250,25 +249,6 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
         Arc::new(CacheRegistry::new())
     };
 
-    // Attempt to initialize database connection if enabled
-    let db_pool = if config.database.enabled {
-        // Clone the database config to avoid the borrow issue
-        let db_config = config.database.clone();
-        match crate::core::database::create_connection_pool(&db_config).await {
-            Ok(pool) => {
-                info!("🔧 Database connection initialized");
-                Some(Arc::new(pool))
-            }
-            Err(e) => {
-                tracing::error!("❌ Failed to initialize database: {}", e);
-                None
-            }
-        }
-    } else {
-        info!("🔧 Database disabled");
-        None
-    };
-
     // Create API resource registry
     let _resource_registry = crate::utils::api_resource::ApiResourceRegistry::new();
 
@@ -292,7 +272,6 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
             ));
             ServiceRegistry::new(empty_pool)
         }),
-        db_pool,
     });
 
     // Start metrics updater for the new cache registry

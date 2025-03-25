@@ -80,11 +80,6 @@ pub mod services {
     pub use crate::core::services::*;
 }
 
-/// Database module
-pub mod database {
-    pub use crate::core::database::*;
-}
-
 /// Generated API clients
 #[path = "generated_apis.rs"]
 pub mod generated_apis;
@@ -117,7 +112,6 @@ pub mod mockable {
 }
 
 pub use crate::app::api::*;
-pub use crate::app::services::error as app_service_error;
 pub use crate::core::error::*;
 pub use crate::core::models::*;
 pub use crate::core::services::error as core_service_error;

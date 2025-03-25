@@ -17,9 +17,6 @@ pub mod services;
 /// User-facing metrics functionality
 pub mod metrics;
 
-/// User-facing repositories
-pub mod repository;
-
 /// User-facing authentication functionality
 pub mod auth;
 
@@ -34,6 +31,3 @@ pub mod config;
 
 /// User-facing caching functionality
 pub mod cache;
-
-/// User-facing database functionality
-pub mod database;

@@ -3,11 +3,8 @@
 //! This module provides services that implement business logic.
 //! Services use repositories to interact with data and implement business rules.
 
-use crate::core::config::app_config::DatabaseConfig;
-use crate::core::database::PgPool;
 use crate::core::error::AppError;
 use reqwest::Client;
-use sqlx::{Pool, Postgres};
 use std::any::Any;
 use std::sync::Arc;
 
@@ -31,12 +28,6 @@ pub struct ServiceRegistry {
 }
 
 impl ServiceRegistry {
-    /// Create a new service registry
-    pub fn new(db_pool: Arc<Pool<Postgres>>) -> Self {
-        // Pet service initialization removed for stability
-        Self {}
-    }
-
     #[cfg(test)]
     pub fn new_with_services() -> Self {
         // Pet service parameter removed for stability

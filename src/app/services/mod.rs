@@ -21,11 +21,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-// Make these modules public so they can be imported by other modules
-pub mod dto;
-pub mod error;
-// pub mod pet_service; // Pet service removed for stability
-
 // Re-export these types for convenience
 // Pet DTOs removed for stability
 pub use error::ServiceError;

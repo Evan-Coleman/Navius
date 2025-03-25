@@ -1,4 +1,3 @@
-use crate::core::database::PgPool;
 use crate::core::error::AppError;
 use std::sync::Arc;
 

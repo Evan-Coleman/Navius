@@ -14,7 +14,6 @@ pub mod metrics;
 pub mod middleware;
 pub mod models;
 pub mod reliability;
-pub mod repository;
 pub mod router;
 pub mod services;
 pub mod utils;

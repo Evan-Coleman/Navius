@@ -1,5 +1,4 @@
 use crate::app;
-use crate::app::services::error::ServiceError as AppServiceError;
 use crate::core::services::error::ServiceError as CoreServiceError;
 use axum::{
     Json,
