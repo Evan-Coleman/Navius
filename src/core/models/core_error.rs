@@ -68,9 +68,9 @@ pub struct ActuatorEntry {
     pub value: String,
 }
 
-/// Generic API response structure
+/// Generic API response structure (simple version)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApiResponse<T> {
+pub struct SimpleApiResponse<T> {
     /// Response status code
     pub code: u16,
     /// Response message
@@ -79,7 +79,7 @@ pub struct ApiResponse<T> {
     pub data: Option<T>,
 }
 
-impl<T> ApiResponse<T> {
+impl<T> SimpleApiResponse<T> {
     /// Create a new API response
     pub fn new(code: u16, message: String, data: Option<T>) -> Self {
         Self {

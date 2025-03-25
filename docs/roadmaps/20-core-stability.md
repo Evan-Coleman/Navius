@@ -8,8 +8,8 @@ tags:
   - developer-experience
   - spring-boot
   - ease-of-use
-last_updated: March 24, 2025
-version: 1.4
+last_updated: June 5, 2025
+version: 1.5
 ---
 
 # Core Stability Roadmap
@@ -23,6 +23,7 @@ The codebase has been improved with several key fixes:
 - ✅ Fixed service error handling and repository errors
 - ✅ Fixed cache registry implementation for optional Arc references
 - ✅ Fixed API resource fetch_closure implementation
+- ✅ Standardized core file naming with core_* prefix
 - ⚠️ Some module imports need cleanup and organization
 - ⚠️ Health endpoints need enhancement to match Spring Boot's format
 - ⚠️ Documentation is still missing
@@ -43,18 +44,18 @@ A stable application with:
 
 ### Phase 1: Fix Build Errors and Core Structure
 1. **Core Naming Standardization (HIGH PRIORITY)**
-   - [ ] Create consistent naming pattern for core files with `core_` prefix
-     - Rename generic files like `router.rs` to `core_router.rs` to avoid conflicts
-     - Rename `router/app_router.rs` to `router/core_app_router.rs`
-     - Rename model files like `models/response.rs` to `models/core_response.rs`
-     - Rename handler files like `handlers/health.rs` to `handlers/core_health.rs`
-     - Rename utility files like `utils/api_client.rs` to `utils/core_api_client.rs`
-   - [ ] Update all imports and references to reflect new naming pattern
-   - [ ] Remove old non-prefixed files (backward compatibility is not needed)
+   - [x] Create consistent naming pattern for core files with `core_` prefix
+     - [x] Rename generic files like `router.rs` to `core_router.rs` to avoid conflicts
+     - [x] Rename `router/app_router.rs` to `router/core_app_router.rs`
+     - [x] Rename model files like `models/response.rs` to `models/core_response.rs`
+     - [x] Rename handler files like `handlers/health.rs` to `handlers/core_health.rs`
+     - [x] Rename utility files like `utils/api_client.rs` to `utils/core_api_client.rs`
+   - [x] Update all imports and references to reflect new naming pattern
+   - [x] Remove old non-prefixed files (backward compatibility is not needed)
    - [ ] Create user-extensible "shadow" files in app directory for customization
    - [ ] Document naming conventions and extension points
    
-   *Updated at: June 14, 2024*
+   *Updated at: June 5, 2025*
 
 2. **Router Module Fixes**
    - [x] Create missing `app_router.rs` file in the core router module
@@ -162,8 +163,8 @@ A stable application with:
 - **Module Organization**: All module declarations should be centralized in lib.rs without using mod.rs files to reduce file clutter and simplify the codebase structure.
 
 ## Implementation Status
-- **Overall Progress**: 30% complete
-- **Last Updated**: March 24, 2025
+- **Overall Progress**: 40% complete
+- **Last Updated**: June 5, 2025
 - **Next Milestone**: Finish module structure cleanup and enhance health endpoints
 - **Current Focus**: Health endpoint enhancement and examples module
 

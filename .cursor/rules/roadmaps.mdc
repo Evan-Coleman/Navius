@@ -1,12 +1,13 @@
 ---
 description: When working with files in the docs/roadmaps folder.
-globs: 
+globs: /docs/roadmaps
 alwaysApply: true
 ---
 ## When being asked to implement something in a roadmap follow these instructions. Also, always add the ##PROMPT_ENHANCER to requests.
 
 # First Steps
  - Read the [template-for-updating.md](mdc:docs/roadmaps/template-for-updating.md) file to understand the format and steps to take in the process.
+ - Let us know that you are adding enhancements from this rule file.
 
 # Second Steps
  - If asked to work on a specific roadmap and specific step please work through the implementation slowly and carefully

@@ -65,8 +65,8 @@ pub mod handlers {
 
 /// Data models and schemas
 pub mod models {
-    pub use crate::core::models::error::*;
-    pub use crate::core::models::extensions::*;
+    pub use crate::core::models::core_error::*;
+    pub use crate::core::models::core_extensions::*;
 }
 
 /// Service module for business logic

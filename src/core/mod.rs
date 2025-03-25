@@ -7,11 +7,11 @@ pub mod api;
 pub mod auth;
 pub mod cache;
 pub mod config;
+pub mod core_logger;
+pub mod core_middleware;
 pub mod error;
 pub mod handlers;
-pub mod logger;
 pub mod metrics;
-pub mod middleware;
 pub mod models;
 pub mod reliability;
 pub mod router;
@@ -31,13 +31,15 @@ pub use utils::api_resource::{
 };
 
 // Export specific items from modules to avoid name conflicts
+pub use core_logger as logger;
+pub use core_middleware as middleware;
 pub use handlers::core_health as handlers_health;
 pub use services::health as services_health;
 pub use utils::log_request as utils_log_request;
 
 mod handler_utils {
+    use crate::core::core_middleware::auth::{AuthError, TokenError};
     use crate::core::error::AppError;
-    use crate::core::middleware::auth::{AuthError, TokenError};
 
     pub fn map_auth_error(err: AuthError) -> AppError {
         match err {

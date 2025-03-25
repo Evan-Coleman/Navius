@@ -5,13 +5,13 @@
 pub mod core_health;
 
 // Debug and management actuator endpoints
-pub mod actuator;
+pub mod core_actuator;
 
 // API documentation handlers
-pub mod docs;
+pub mod core_docs;
 
 // Logging middleware
-pub mod logging;
+pub mod core_logging;
 
 // Re-export key handlers for easier access
-pub use self::{actuator::*, core_health::*, docs::*, logging::*};
+pub use self::{core_actuator::*, core_docs::*, core_health::*, core_logging::*};

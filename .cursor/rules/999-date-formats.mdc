@@ -1,11 +1,12 @@
 ---
-description: When generating content with dates (like "Updated at" timestamps), use the formats configured in `config/default.yaml` under the `date_formats` section.
+description: If writing any dates, timestamps or similar reference this rule.
 globs:
 alwaysApply: true
 ---
 
 # Date Formatting Rule
 
+When generating content with dates (like "Updated at" timestamps), use the formats configured in `config/default.yaml` under the `date_formats` section.
 
 ## System Date Verification
 

@@ -9,9 +9,8 @@ use crate::core::{
     auth::EntraAuthLayer,
     config::app_config::AppConfig,
     handlers::{
-        self, actuator,
+        self, core_actuator, core_docs,
         core_health::{detailed_health_handler, health_handler},
-        docs,
     },
     models::{DetailedHealthResponse, HealthCheckResponse},
 };
@@ -36,9 +35,9 @@ impl CoreRouter {
         // Actuator routes - for metrics, health checks, docs, and admin functions
         let actuator_routes = Router::new()
             .route("/health", get(detailed_health_handler))
-            .route("/info", get(actuator::info))
-            .route("/docs", get(docs::swagger_ui_handler))
-            .route("/docs/{*file}", get(docs::openapi_spec_handler));
+            .route("/info", get(core_actuator::info))
+            .route("/docs", get(core_docs::swagger_ui_handler))
+            .route("/docs/{*file}", get(core_docs::openapi_spec_handler));
 
         // Apply authentication layers if enabled
         let actuator_routes = if auth_enabled {
