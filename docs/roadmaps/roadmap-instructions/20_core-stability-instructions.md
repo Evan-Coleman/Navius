@@ -4,7 +4,43 @@ This document provides detailed instructions for implementing the Core Stability
 
 ## Phase 1: Fix Build Errors and Core Structure
 
-### 1. Router Module Fixes
+### 1. Core Naming Standardization
+
+#### Step 1.1: Create consistent naming pattern for core files
+1. Create a detailed inventory of all files in the `src/core` directory
+2. Identify files that might conflict with common user-defined filenames:
+   - `router.rs` → `core_router.rs` 
+   - `app.rs` → `core_app.rs`
+   - `handler.rs` → `core_handler.rs`
+   - `model.rs` → `core_model.rs`
+   - `error.rs` → `core_error.rs`
+   - Any other files that users would commonly create
+
+#### Step 1.2: Rename files with unclear names
+1. Identify files with unclear names (like `@core.rs`)
+2. Determine their actual functionality by examining code
+3. Rename with descriptive names that reflect their purpose
+4. Example: `@core.rs` might become `core_resource_manager.rs` if it manages resources
+
+#### Step 1.3: Update imports and references
+1. For each renamed file, identify all import statements across the codebase
+2. Update all references to use the new file names
+3. Update all module declarations in `mod.rs` files
+4. Test building the application after each major rename to catch errors early
+
+#### Step 1.4: Create user-extensible files
+1. For each core file that has user-extensible functionality, create a corresponding template in the `src/app` directory
+2. Make these templates clearly import and use the core functionality
+3. Add clear documentation comments explaining extension points
+4. Example: `src/app/router.rs` could be a template that imports `src/core/core_router.rs` and shows how to add custom routes
+
+#### Step 1.5: Document naming conventions
+1. Create a markdown file explaining the naming conventions
+2. Clearly describe which files are for core functionality vs. user extensions
+3. Document how users should extend functionality without modifying core files
+4. Add examples of proper usage
+
+### 2. Router Module Fixes
 
 #### Step 1.1: Create app_router.rs file with Spring Boot-like design
 1. Create a new file at `src/core/router/app_router.rs`

@@ -46,21 +46,42 @@ public class SimpleHealthController {
 ### Navius (Rust)
 
 ```rust
-// In src/app/router.rs or similar
+// In src/app/router.rs - User's custom router implementation
+use navius::core::core_router::{Router, get};
+use navius::core::core_response::IntoResponse;
+use axum::Json;
+use serde_json::json;
+
+// Define your custom router configuration
 pub fn configure_routes(router: &mut Router) {
     router.route("/health", get(health_handler));
 }
 
+// Your custom health endpoint implementation
 async fn health_handler() -> impl IntoResponse {
     Json(json!({ "status": "UP" }))
+}
+
+// Register your routes in main.rs
+fn main() {
+    NaviusApp::new()
+        .with_default_config()
+        .with_routes(configure_routes)
+        .run();
 }
 ```
 
 ### Extending the Health Endpoint in Navius
 
 ```rust
+// In src/app/health.rs - User's custom health implementation
+use navius::core::core_router::{Router, get};
+use navius::core::core_response::IntoResponse;
+use axum::Json;
+use serde_json::json;
+
 // Custom health implementation with more details
-async fn custom_health_handler() -> impl IntoResponse {
+pub async fn custom_health_handler() -> impl IntoResponse {
     // Custom checks you might want to add
     let db_status = check_database().await;
     
@@ -74,7 +95,7 @@ async fn custom_health_handler() -> impl IntoResponse {
     }))
 }
 
-// Register in your router
+// Register in your router (src/app/router.rs)
 pub fn configure_routes(router: &mut Router) {
     router.route("/health", get(custom_health_handler));
 }
@@ -116,6 +137,14 @@ public class UserController {
 ### Navius (Rust)
 
 ```rust
+// In src/app/controllers/user_controller.rs
+use navius::core::core_macros::{api_controller, api_routes, request_mapping, get, post};
+use navius::core::core_error::AppError;
+use navius::app::services::UserService;
+use axum::{Json, extract::Path};
+use uuid::Uuid;
+use std::sync::Arc;
+
 #[api_controller]
 #[request_mapping("/api/users")]
 pub struct UserController {
@@ -190,6 +219,16 @@ public class UserServiceImpl implements UserService {
 ### Navius (Rust)
 
 ```rust
+// In src/app/services/user_service.rs
+use navius::core::core_macros::{service, transactional};
+use navius::core::core_error::AppError;
+use navius::app::repositories::UserRepository;
+use navius::app::models::User;
+use async_trait::async_trait;
+use std::sync::Arc;
+use uuid::Uuid;
+use chrono::Utc;
+
 #[service]
 pub struct UserServiceImpl {
     repository: Arc<dyn UserRepository>,
@@ -242,6 +281,13 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 ### Navius (Rust)
 
 ```rust
+// In src/app/repositories/user_repository.rs
+use navius::core::core_macros::{repository, query};
+use navius::core::core_error::AppError;
+use navius::app::models::User;
+use async_trait::async_trait;
+use uuid::Uuid;
+
 #[repository]
 pub trait UserRepository: Send + Sync {
     async fn find_all(&self) -> Result<Vec<User>, AppError>;
@@ -272,6 +318,10 @@ public class SecurityProperties {
 ### Navius (Rust)
 
 ```rust
+// In src/app/config/security_config.rs
+use navius::core::core_macros::ConfigurationProperties;
+use serde::Deserialize;
+
 #[derive(Debug, Deserialize, ConfigurationProperties)]
 #[config(prefix = "app.security")]
 pub struct SecurityConfig {
@@ -312,6 +362,9 @@ public class UserServiceImpl implements UserService {
 ### Navius (Rust)
 
 ```rust
+// In src/app/services/user_service.rs
+use navius::core::core_macros::{cacheable, cache_evict};
+
 #[async_trait]
 impl UserService for UserServiceImpl {
     #[cacheable(cache = "users", key = "{id}")]
@@ -350,6 +403,10 @@ public class UserRequest {
 ### Navius (Rust)
 
 ```rust
+// In src/app/models/user_request.rs
+use navius::core::core_macros::Validate;
+use serde::Deserialize;
+
 #[derive(Debug, Deserialize, Validate)]
 pub struct UserRequest {
     #[validate(required(message = "Name is required"))]
@@ -391,6 +448,13 @@ public class GlobalExceptionHandler {
 ### Navius (Rust)
 
 ```rust
+// In src/app/error/global_error_handler.rs
+use navius::core::core_macros::exception_handler;
+use navius::core::core_error::AppError;
+use navius::app::models::ErrorResponse;
+use axum::{response::IntoResponse, Json};
+use axum::http::StatusCode;
+
 #[exception_handler]
 pub async fn global_error_handler(err: AppError) -> impl IntoResponse {
     let (status, error_response) = match err {
@@ -452,9 +516,10 @@ app.security:
 ## Benefits of Navius for Spring Boot Developers
 
 1. **Familiar Patterns**: Navius implements Spring Boot's core patterns like controllers, services, and repositories
-2. **Macro-Based Annotations**: Similar to Spring annotations but with Rust's compile-time safety
+2. **Clear Naming Conventions**: Core framework files use `core_` prefix, allowing users to create their own files without conflicts
 3. **Enhanced Performance**: Get the speed and resource efficiency of Rust with Spring Boot's developer experience
 4. **Type Safety**: Benefit from Rust's strong type system while using familiar Spring patterns
 5. **Memory Safety**: Eliminate whole classes of runtime errors with Rust's ownership model
 6. **Async by Default**: First-class support for asynchronous programming with similar simplicity
 7. **Production Ready**: Built-in support for metrics, health checks, and observability 
+8. **Intuitive Customization**: Clear separation between framework code and user code makes customization straightforward 

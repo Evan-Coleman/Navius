@@ -42,7 +42,17 @@ A stable application with:
 ## Implementation Progress Tracking
 
 ### Phase 1: Fix Build Errors and Core Structure
-1. **Router Module Fixes**
+1. **Core Naming Standardization (HIGH PRIORITY)**
+   - [ ] Create consistent naming pattern for core files with `core_` prefix
+   - [ ] Rename `router.rs` to `core_router.rs` to avoid conflicts with user-defined routers
+   - [ ] Rename `@core.rs` and other unclear filenames with descriptive names
+   - [ ] Update all imports and references to reflect new naming pattern
+   - [ ] Create user-extensible "shadow" files in app directory for customization
+   - [ ] Document naming conventions and extension points
+   
+   *Updated at: Not started*
+
+2. **Router Module Fixes**
    - [x] Create missing `app_router.rs` file in the core router module
    - [x] Define the `AppState` struct in the correct location
    - [x] Fix imports across the codebase to use the correct `AppState` path
@@ -52,7 +62,7 @@ A stable application with:
    
    *Updated at: May 31, 2024*
 
-2. **Module Structure Cleanup**
+3. **Module Structure Cleanup**
    - [ ] Create missing `examples` module with Spring Boot-like implementation examples
    - [x] Fix module declarations and re-exports
    - [x] Clean up any unnecessary imports
@@ -61,7 +71,7 @@ A stable application with:
    
    *Updated at: May 31, 2024*
 
-3. **Error Handling Improvements**
+4. **Error Handling Improvements**
    - [x] Fix ServiceError implementation to include Repository errors
    - [x] Fix error propagation between services and API layers
    - [x] Ensure proper error conversion between types
@@ -70,7 +80,7 @@ A stable application with:
    
    *Updated at: May 31, 2024*
 
-4. **Cache System Stabilization**
+5. **Cache System Stabilization**
    - [x] Fix cache registry to properly handle Option<Arc<CacheRegistry>>
    - [x] Fix resource fetch closures and future handling
    - [x] Fix type conversion issues in cache get/store operations
