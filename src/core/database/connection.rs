@@ -4,6 +4,7 @@
 
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::time::Duration;
 
 #[cfg(test)]
@@ -106,11 +107,19 @@ impl DatabaseConnection for PgDatabaseConnection {
 }
 
 /// Mock database connection for testing
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct MockDatabaseConnection {
     config: DatabaseConfig,
-    #[cfg(test)]
-    users: std::sync::Mutex<Vec<User>>,
+    users: Arc<RwLock<Vec<User>>>,
+}
+
+impl Clone for MockDatabaseConnection {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            users: self.users.clone(),
+        }
+    }
 }
 
 impl MockDatabaseConnection {
@@ -118,46 +127,43 @@ impl MockDatabaseConnection {
     pub fn new(config: DatabaseConfig) -> Self {
         Self {
             config,
-            #[cfg(test)]
-            users: std::sync::Mutex::new(Vec::new()),
+            users: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
-    #[cfg(test)]
     /// Add a user to the mock database
     pub fn add_user(&self, user: User) {
-        let mut users = self.users.lock().unwrap();
+        let mut users = self.users.write().unwrap();
         users.push(user);
     }
 
-    #[cfg(test)]
     /// Get all users from the mock database
     pub fn get_users(&self) -> Vec<User> {
-        let users = self.users.lock().unwrap();
-        users.clone()
+        let users = self.users.read().unwrap();
+        users.to_vec()
     }
 
     /// Find a user by ID
     pub fn find_user_by_id(&self, id: uuid::Uuid) -> Option<User> {
-        let users = self.users.lock().unwrap();
+        let users = self.users.read().unwrap();
         users.iter().find(|u| u.id == id).cloned()
     }
 
     /// Find a user by username
     pub fn find_user_by_username(&self, username: &str) -> Option<User> {
-        let users = self.users.lock().unwrap();
+        let users = self.users.read().unwrap();
         users.iter().find(|u| u.username == username).cloned()
     }
 
     /// Find a user by email
     pub fn find_user_by_email(&self, email: &str) -> Option<User> {
-        let users = self.users.lock().unwrap();
+        let users = self.users.read().unwrap();
         users.iter().find(|u| u.email == email).cloned()
     }
 
     /// Save a user (create or update)
     pub fn save_user(&self, user: User) -> User {
-        let mut users = self.users.lock().unwrap();
+        let mut users = self.users.write().unwrap();
 
         // Check if the user already exists
         if let Some(idx) = users.iter().position(|u| u.id == user.id) {
@@ -173,7 +179,7 @@ impl MockDatabaseConnection {
 
     /// Delete a user by ID
     pub fn delete_user(&self, id: uuid::Uuid) -> bool {
-        let mut users = self.users.lock().unwrap();
+        let mut users = self.users.write().unwrap();
         if let Some(idx) = users.iter().position(|u| u.id == id) {
             users.remove(idx);
             true
@@ -184,7 +190,7 @@ impl MockDatabaseConnection {
 
     /// Count users
     pub fn count_users(&self) -> usize {
-        let users = self.users.lock().unwrap();
+        let users = self.users.read().unwrap();
         users.len()
     }
 }
@@ -200,7 +206,8 @@ impl DatabaseConnection for MockDatabaseConnection {
     }
 
     fn get_pool(&self) -> Arc<dyn ImportedPgPool> {
-        unimplemented!("Mock database does not provide a real connection pool")
+        // For mock implementation, we'll return a new empty pool
+        Arc::new(Pool::new())
     }
 }
 

@@ -61,10 +61,14 @@ This roadmap outlines our plan to clean up and organize the Navius codebase, pri
 
 ## Current Focus
 - HIGHEST PRIORITY: Fixing remaining compilation errors
-- Fixed ServiceRegistry::new to add ?Sized trait bound
-- Fixed metrics handler lifetime issues
-- Added production feature flag to Cargo.toml
-- Fixed type conversion issues in app_router.rs
+- Fixed health_check and metrics_handler name conflicts
+- Fixed AppError::InternalError usage with AppError::internal_server_error()
+- Fixed ServiceRegistry::get to add ?Sized trait bound
+- Fixed import issues for proper namespace resolution
+- Applied fixes to pet_handler.rs to use pet_service() to get the service
+- Fixed elapsed method not found issue in health_check.rs by using Utc::now() - start_time
+- Renamed unused variables to avoid compiler warnings
+- Fixed MockPetRepository::new() calls to include required arguments
 
 ## Next Steps
 - Resolve remaining database connection and executor issues
@@ -123,7 +127,7 @@ This roadmap outlines the strategy to address approximately 100 errors (up from 
    - [x] Track daily error count reduction
    - [x] Prioritize errors blocking `cargo run`
    
-   *Started - March 24, 2025*
+   *Updated - March 24, 2025*
 
 2. **Database Executor Issues** 🔄
    - [ ] Update all &dyn PgPool usages to concrete types
@@ -348,3 +352,65 @@ This roadmap outlines the strategy to address approximately 100 errors (up from 
    - Tag dependencies used only by examples
    - Consider making examples optional features
    - Document example-specific setup requirements
+
+# Codebase Cleanup Roadmap
+
+This roadmap outlines tasks to clean up the codebase and fix existing issues.
+
+## Goals
+
+- Fix existing compile errors
+- Improve code quality and maintainability
+- Remove unused code and dependencies
+- Standardize error handling
+- Improve documentation
+
+## Tasks
+
+### Critical Errors
+
+- [x] Fix usage of `AppError::InternalError` to `AppError::internal_server_error()`
+- [x] Add `?Sized` trait bound to `ServiceRegistry::get` method
+- [x] Fix imports and unused variable warnings 
+- [x] Fix `MockPetRepository::new()` calls to include required arguments
+- [x] Fix methods not found on `IPetService` trait object
+- [x] Update `pet_handler.rs` to use the correct DTO types and UUID handling
+- [x] Fix `ServiceRegistry` to properly handle the pet service
+- [ ] Fix `unwrap_or_default()` method not found errors
+- [ ] Resolve `MockDatabaseConnection` issues with missing `users` field
+- [ ] Fix mismatched types in `app_router.rs` with `db_pool` and `token_client_arc`
+- [ ] Address the `DatabaseConnection` trait implementation issues
+
+### Code Quality Improvements
+
+- [ ] Standardize error handling approach
+- [ ] Improve API documentation
+- [ ] Remove deprecated code 
+- [ ] Add missing tests
+- [ ] Improve logging consistency
+
+### Technical Debt
+
+- [ ] Refactor duplicated code
+- [ ] Update dependencies
+- [ ] Remove unused dependencies
+- [ ] Standardize module organization
+- [ ] Improve configuration validation
+
+## Timeline
+
+- Critical errors: Immediate priority
+- Code quality improvements: Next priority
+- Technical debt: Ongoing
+
+## Dependencies
+
+- Rust 1.70+
+- All crates listed in Cargo.toml
+
+## Success Criteria
+
+- Successful compilation with no errors
+- All tests passing
+- Reduced warning count
+- Improved code maintainability

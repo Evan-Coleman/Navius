@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE pets\n            SET name = $2, pet_type = $3, breed = $4, age = $5, updated_at = $6\n            WHERE id = $1\n            RETURNING id, name, pet_type, breed, age, created_at, updated_at\n            ",
+  "query": "\n            SELECT \n                id, \n                name, \n                pet_type, \n                breed, \n                age,\n                created_at, \n                updated_at\n            FROM pets\n            WHERE id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -41,12 +41,7 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Varchar",
-        "Varchar",
-        "Varchar",
-        "Int4",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -59,5 +54,5 @@
       false
     ]
   },
-  "hash": "2e197c3dcc957dbf5e67da9344319da56bd4ff773030e06c36a8c0e3a229b382"
+  "hash": "3f4a590305a99bdbf02e280d80ed4f6414f6772577262d4c1c440cd443de360f"
 }

@@ -1,3 +1,4 @@
+use crate::app::services::pet_service::Pet;
 /// This file implements the core Pet database API.
 /// It provides the main functionality for managing pets in the application.
 /// This is a CORE implementation and should not be removed.
@@ -51,27 +52,27 @@ mod uuid_serde {
 }
 
 // API response for pet operations
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct PetResponse {
     pub id: Uuid,
     pub name: String,
     pub pet_type: String,
     pub breed: Option<String>,
     pub age: Option<i32>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
-impl From<ServicePet> for PetResponse {
-    fn from(pet: ServicePet) -> Self {
+impl From<Pet> for PetResponse {
+    fn from(pet: Pet) -> Self {
         Self {
             id: pet.id,
             name: pet.name,
-            pet_type: pet.pet_type.unwrap_or_default(),
+            pet_type: pet.pet_type,
             breed: pet.breed,
-            age: Some(pet.age),
-            created_at: "".to_string(), // Service Pet doesn't have timestamp fields
-            updated_at: "".to_string(),
+            age: pet.age,
+            created_at: pet.created_at,
+            updated_at: pet.updated_at,
         }
     }
 }
@@ -82,10 +83,10 @@ impl From<RepositoryPet> for PetResponse {
             id: pet.id,
             name: pet.name,
             pet_type: pet.pet_type,
-            breed: Some(pet.breed),
-            age: Some(pet.age),
-            created_at: pet.created_at.to_rfc3339(),
-            updated_at: pet.updated_at.to_rfc3339(),
+            breed: pet.breed,
+            age: pet.age,
+            created_at: pet.created_at,
+            updated_at: pet.updated_at,
         }
     }
 }
@@ -99,13 +100,16 @@ pub struct CreatePetRequest {
     pub age: Option<i32>,
 }
 
-impl From<CreatePetRequest> for CreatePetDto {
+impl From<CreatePetRequest> for Pet {
     fn from(req: CreatePetRequest) -> Self {
         Self {
+            id: Uuid::new_v4(), // Generate a new UUID
             name: req.name,
-            pet_type: Some(req.pet_type),
+            pet_type: req.pet_type,
             breed: req.breed,
             age: req.age,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
         }
     }
 }
@@ -119,13 +123,16 @@ pub struct UpdatePetRequest {
     pub age: Option<i32>,
 }
 
-impl From<UpdatePetRequest> for UpdatePetDto {
+impl From<UpdatePetRequest> for Pet {
     fn from(req: UpdatePetRequest) -> Self {
         Self {
-            name: req.name,
-            pet_type: req.pet_type,
+            id: Uuid::new_v4(), // Will be replaced by the service
+            name: req.name.unwrap_or_default(),
+            pet_type: req.pet_type.unwrap_or_default(),
             breed: req.breed,
             age: req.age,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
         }
     }
 }
@@ -251,30 +258,13 @@ pub async fn delete_pet(
 }
 
 // Helper function to get pet service from state
-fn get_pet_service(state: Arc<AppState>) -> Result<Arc<PetService<dyn PetRepository>>> {
-    // Try to get the service from the registry first
-    if let Some(service) = state
-        .service_registry
-        .get::<PetService<dyn PetRepository>>("pet_service")
-    {
-        return Ok(service);
-    }
-
-    // If not in registry, use the one from services if available
-    match &state.services {
-        Some(services) => {
-            if let Some(pet_service) = services.get_pet_service() {
-                // We need to downcast the IPetService trait object to the concrete PetService
-                return Ok(Arc::new(PetService::new(pet_service.db_pool.clone())));
-            }
-        }
-        None => {}
-    }
-
-    // As fallback, create a new pet service if we have a database pool
-    if let Some(db_pool) = &state.db_pool {
-        return Ok(Arc::new(PetService::new(db_pool.clone())));
-    }
-
-    Err(AppError::internal_server_error("Pet service not available"))
+fn get_pet_service(state: Arc<AppState>) -> Result<Arc<dyn IPetService>> {
+    // The service_registry is not optional in AppState, so we can access it directly
+    return match state.service_registry.get_pet_service() {
+        Ok(service) => Ok(service),
+        Err(e) => Err(AppError::internal_server_error(&format!(
+            "Failed to get pet service: {}",
+            e
+        ))),
+    };
 }

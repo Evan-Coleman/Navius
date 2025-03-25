@@ -27,5 +27,6 @@ async fn health_check() -> &'static str {
 }
 
 async fn metrics() -> String {
-    crate::core::metrics_endpoint_handler().await
+    let handle = crate::core::metrics::init_metrics();
+    crate::core::metrics_endpoint_handler(&handle).await
 }

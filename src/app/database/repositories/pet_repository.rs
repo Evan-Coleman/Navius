@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{Error as SqlxError, PgPool};
 use std::sync::Arc;
+use std::sync::Mutex;
 use uuid::Uuid;
 
 use crate::core::error::AppError;
@@ -23,7 +24,7 @@ pub struct Pet {
     pub breed: Option<String>,
 
     /// Optional age of the pet
-    pub age: i32,
+    pub age: Option<i32>,
 
     /// When the pet was created in the system
     pub created_at: DateTime<Utc>,
@@ -33,7 +34,13 @@ pub struct Pet {
 }
 
 impl Pet {
-    pub fn new(id: Uuid, name: String, pet_type: String, breed: Option<String>, age: i32) -> Self {
+    pub fn new(
+        id: Uuid,
+        name: String,
+        pet_type: String,
+        breed: Option<String>,
+        age: Option<i32>,
+    ) -> Self {
         let now = Utc::now();
         Self {
             id,
@@ -60,19 +67,19 @@ impl From<SqlxError> for AppError {
 #[async_trait]
 pub trait PetRepository: Send + Sync {
     /// Find all pets
-    async fn find_all(&self) -> Result<Vec<Pet>, AppError>;
+    async fn get_pets(&self) -> Result<Vec<Pet>, AppError>;
 
     /// Find a pet by ID
-    async fn find_by_id(&self, id: Uuid) -> Result<Pet, AppError>;
+    async fn get_pet_by_id(&self, id: Uuid) -> Result<Pet, AppError>;
 
     /// Create a new pet
-    async fn create(&self, pet: Pet) -> Result<Pet, AppError>;
+    async fn create_pet(&self, pet: Pet) -> Result<Pet, AppError>;
 
     /// Update an existing pet
-    async fn update(&self, pet: Pet) -> Result<Pet, AppError>;
+    async fn update_pet(&self, id: Uuid, pet: Pet) -> Result<Pet, AppError>;
 
     /// Delete a pet by ID
-    async fn delete(&self, id: Uuid) -> Result<bool, AppError>;
+    async fn delete_pet(&self, id: Uuid) -> Result<(), AppError>;
 }
 
 /// Postgres implementation of PetRepository
@@ -89,44 +96,92 @@ impl PgPetRepository {
 
 #[async_trait]
 impl PetRepository for PgPetRepository {
-    async fn find_all(&self) -> Result<Vec<Pet>, AppError> {
-        let pets = sqlx::query_as!(
-            Pet,
+    async fn get_pets(&self) -> Result<Vec<Pet>, AppError> {
+        // Use query! instead of query_as! to avoid type checking issues
+        let rows = sqlx::query!(
             r#"
-            SELECT id, name, pet_type, breed, age, created_at, updated_at
+            SELECT 
+                id, 
+                name, 
+                pet_type, 
+                breed, 
+                age,
+                created_at, 
+                updated_at
             FROM pets
             "#
         )
         .fetch_all(self.pool.as_ref())
-        .await?;
+        .await
+        .map_err(|e| AppError::DatabaseError(e.to_string()))?;
+
+        // Map the rows to Pet structs manually
+        let pets = rows
+            .into_iter()
+            .map(|row| Pet {
+                id: row.id,
+                name: row.name,
+                pet_type: row.pet_type,
+                breed: row.breed,
+                age: row.age,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            })
+            .collect();
 
         Ok(pets)
     }
 
-    async fn find_by_id(&self, id: Uuid) -> Result<Pet, AppError> {
-        let pet = sqlx::query_as!(
-            Pet,
+    async fn get_pet_by_id(&self, id: Uuid) -> Result<Pet, AppError> {
+        // Use query! instead of query_as! to avoid type checking issues
+        let row = sqlx::query!(
             r#"
-            SELECT id, name, pet_type, breed, age, created_at, updated_at
+            SELECT 
+                id, 
+                name, 
+                pet_type, 
+                breed, 
+                age,
+                created_at, 
+                updated_at
             FROM pets
             WHERE id = $1
             "#,
             id
         )
         .fetch_optional(self.pool.as_ref())
-        .await?
+        .await
+        .map_err(|e| AppError::DatabaseError(e.to_string()))?
         .ok_or_else(|| AppError::NotFound(format!("Pet with id {} not found", id)))?;
+
+        // Map the row to a Pet struct manually
+        let pet = Pet {
+            id: row.id,
+            name: row.name,
+            pet_type: row.pet_type,
+            breed: row.breed,
+            age: row.age,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        };
 
         Ok(pet)
     }
 
-    async fn create(&self, pet: Pet) -> Result<Pet, AppError> {
-        let created_pet = sqlx::query_as!(
-            Pet,
+    async fn create_pet(&self, pet: Pet) -> Result<Pet, AppError> {
+        // Use query! instead of query_as! to avoid type checking issues
+        let row = sqlx::query!(
             r#"
             INSERT INTO pets (id, name, pet_type, breed, age, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING id, name, pet_type, breed, age, created_at, updated_at
+            RETURNING 
+                id, 
+                name, 
+                pet_type, 
+                breed, 
+                age,
+                created_at, 
+                updated_at
             "#,
             pet.id,
             pet.name,
@@ -137,36 +192,71 @@ impl PetRepository for PgPetRepository {
             pet.updated_at
         )
         .fetch_one(self.pool.as_ref())
-        .await?;
+        .await
+        .map_err(|e| AppError::DatabaseError(e.to_string()))?;
+
+        // Map the row to a Pet struct manually
+        let created_pet = Pet {
+            id: row.id,
+            name: row.name,
+            pet_type: row.pet_type,
+            breed: row.breed,
+            age: row.age,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        };
 
         Ok(created_pet)
     }
 
-    async fn update(&self, pet: Pet) -> Result<Pet, AppError> {
-        let updated_pet = sqlx::query_as!(
-            Pet,
+    async fn update_pet(&self, id: Uuid, pet: Pet) -> Result<Pet, AppError> {
+        // Use query! instead of query_as! to avoid type checking issues
+        let row = sqlx::query!(
             r#"
             UPDATE pets
-            SET name = $2, pet_type = $3, breed = $4, age = $5, updated_at = $6
-            WHERE id = $1
-            RETURNING id, name, pet_type, breed, age, created_at, updated_at
+            SET 
+                name = $1,
+                pet_type = $2,
+                breed = $3,
+                age = $4,
+                updated_at = $5
+            WHERE id = $6
+            RETURNING 
+                id, 
+                name, 
+                pet_type, 
+                breed, 
+                age,
+                created_at, 
+                updated_at
             "#,
-            pet.id,
             pet.name,
             pet.pet_type,
             pet.breed,
             pet.age,
-            pet.updated_at
+            pet.updated_at,
+            id
         )
-        .fetch_optional(self.pool.as_ref())
-        .await?
-        .ok_or_else(|| AppError::NotFound(format!("Pet with id {} not found", pet.id)))?;
+        .fetch_one(self.pool.as_ref())
+        .await
+        .map_err(|e| AppError::DatabaseError(e.to_string()))?;
+
+        // Map the row to a Pet struct manually
+        let updated_pet = Pet {
+            id: row.id,
+            name: row.name,
+            pet_type: row.pet_type,
+            breed: row.breed,
+            age: row.age,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        };
 
         Ok(updated_pet)
     }
 
-    async fn delete(&self, id: Uuid) -> Result<bool, AppError> {
-        let result = sqlx::query!(
+    async fn delete_pet(&self, id: Uuid) -> Result<(), AppError> {
+        sqlx::query!(
             r#"
             DELETE FROM pets
             WHERE id = $1
@@ -174,68 +264,71 @@ impl PetRepository for PgPetRepository {
             id
         )
         .execute(self.pool.as_ref())
-        .await?;
+        .await
+        .map_err(|e| AppError::DatabaseError(e.to_string()))?;
 
-        Ok(result.rows_affected() > 0)
+        Ok(())
     }
 }
 
 #[cfg(test)]
-pub struct MockPetRepository {
-    pets: std::sync::Mutex<Vec<Pet>>,
-}
+pub mod tests {
+    use super::*;
+    use std::sync::Mutex;
 
-#[cfg(test)]
-impl MockPetRepository {
-    pub fn new() -> Self {
-        Self {
-            pets: std::sync::Mutex::new(Vec::new()),
+    pub struct MockPetRepository {
+        pets: Arc<Mutex<Vec<Pet>>>,
+    }
+
+    impl MockPetRepository {
+        pub fn new(pets: Vec<Pet>) -> Self {
+            Self {
+                pets: Arc::new(Mutex::new(pets)),
+            }
         }
     }
-}
 
-#[cfg(test)]
-#[async_trait]
-impl PetRepository for MockPetRepository {
-    async fn find_all(&self) -> Result<Vec<Pet>, AppError> {
-        let pets = self.pets.lock().unwrap();
-        Ok(pets.iter().cloned().collect())
-    }
+    #[async_trait]
+    impl PetRepository for MockPetRepository {
+        async fn get_pets(&self) -> Result<Vec<Pet>, AppError> {
+            Ok(self.pets.lock().unwrap().clone())
+        }
 
-    async fn find_by_id(&self, id: Uuid) -> Result<Pet, AppError> {
-        let pets = self.pets.lock().unwrap();
-        pets.iter()
-            .find(|p| p.id == id)
-            .cloned()
-            .ok_or_else(|| AppError::NotFound(format!("Pet with id {} not found", id)))
-    }
+        async fn get_pet_by_id(&self, id: Uuid) -> Result<Pet, AppError> {
+            self.pets
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|p| p.id == id)
+                .cloned()
+                .ok_or_else(|| AppError::NotFound(format!("Pet with id {} not found", id)))
+        }
 
-    async fn create(&self, pet: Pet) -> Result<Pet, AppError> {
-        let mut pets = self.pets.lock().unwrap();
-        pets.push(pet.clone());
-        Ok(pet)
-    }
-
-    async fn update(&self, pet: Pet) -> Result<Pet, AppError> {
-        let mut pets = self.pets.lock().unwrap();
-        if let Some(pos) = pets.iter().position(|p| p.id == pet.id) {
-            pets[pos] = pet;
+        async fn create_pet(&self, mut pet: Pet) -> Result<Pet, AppError> {
+            let mut pets = self.pets.lock().unwrap();
+            pet.id = Uuid::new_v4();
+            pets.push(pet.clone());
             Ok(pet)
-        } else {
-            Err(AppError::NotFound(format!(
-                "Pet with id {} not found",
-                pet.id
-            )))
         }
-    }
 
-    async fn delete(&self, id: Uuid) -> Result<bool, AppError> {
-        let mut pets = self.pets.lock().unwrap();
-        if let Some(index) = pets.iter().position(|p| p.id == id) {
-            pets.remove(index);
-            Ok(true)
-        } else {
-            Ok(false)
+        async fn update_pet(&self, id: Uuid, pet: Pet) -> Result<Pet, AppError> {
+            let mut pets = self.pets.lock().unwrap();
+            if let Some(existing_pet) = pets.iter_mut().find(|p| p.id == id) {
+                *existing_pet = pet;
+                Ok(existing_pet.clone())
+            } else {
+                Err(AppError::NotFound(format!("Pet with id {} not found", id)))
+            }
+        }
+
+        async fn delete_pet(&self, id: Uuid) -> Result<(), AppError> {
+            let mut pets = self.pets.lock().unwrap();
+            if let Some(index) = pets.iter().position(|p| p.id == id) {
+                pets.remove(index);
+                Ok(())
+            } else {
+                Err(AppError::NotFound(format!("Pet with id {} not found", id)))
+            }
         }
     }
 }
@@ -267,31 +360,37 @@ mod tests {
             name: "TestPet".to_string(),
             pet_type: "Dog".to_string(),
             breed: Some("TestBreed".to_string()),
-            age: 3,
+            age: Some(3),
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
 
         // Test create
-        let created_pet = repository.create(pet.clone()).await.unwrap();
+        let created_pet = repository.create_pet(pet.clone()).await.unwrap();
         assert_eq!(created_pet.name, pet.name);
 
-        // Test find_by_id
-        let found_pet = repository.find_by_id(created_pet.id).await.unwrap();
+        // Test get_pet_by_id
+        let found_pet = repository.get_pet_by_id(created_pet.id).await.unwrap();
         assert_eq!(found_pet.id, created_pet.id);
 
-        // Test find_all
-        let all_pets = repository.find_all().await.unwrap();
+        // Test get_pets
+        let all_pets = repository.get_pets().await.unwrap();
         assert!(all_pets.len() >= 1);
 
-        // Test update
+        // Test update_pet
         let mut updated_pet = created_pet.clone();
         updated_pet.name = "UpdatedTestPet".to_string();
-        let result = repository.update(updated_pet.clone()).await.unwrap();
+        let result = repository
+            .update_pet(updated_pet.id, updated_pet.clone())
+            .await
+            .unwrap();
         assert_eq!(result.name, "UpdatedTestPet");
 
-        // Test delete
-        let deleted = repository.delete(created_pet.id).await.unwrap();
-        assert!(deleted);
+        // Test delete_pet
+        repository.delete_pet(created_pet.id).await.unwrap();
+
+        // Verify it's gone
+        let result = repository.get_pet_by_id(created_pet.id).await;
+        assert!(result.is_err());
     }
 }

@@ -29,7 +29,7 @@ pub mod pet_service;
 // Re-export these types for convenience
 pub use dto::{CreatePetDto, UpdatePetDto};
 pub use error::ServiceError;
-pub use pet_service::{IPetService, Pet, PetService};
+pub use pet_service::{IPetService, PetService};
 
 /// Default implementation of ServiceRegistry that can be used by applications
 pub struct DefaultServiceRegistry {

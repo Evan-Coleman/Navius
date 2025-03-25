@@ -1,9 +1,10 @@
 use axum::{
+    Json,
     body::{self, Body},
-    extract::{ConnectInfo, Extension, Request as AxumRequest, State},
+    extract::{ConnectInfo, Extension, Path, Query, Request as AxumRequest, State},
     http::{HeaderMap, Method, Request, Response, StatusCode, Uri},
     middleware::{self, Next},
-    response::{IntoResponse, Response as AxumResponse},
+    response::{Html, IntoResponse, Response as AxumResponse},
     routing::{Router, get, post},
 };
 use chrono::{DateTime, Utc};
@@ -26,18 +27,18 @@ use tracing::{Level, info};
 use crate::{
     app::{
         api::handlers::{
-            health_check::health_check,
-            metrics_handler::metrics_handler,
+            health_check::health_check as app_health_check,
+            metrics_handler::metrics_handler as app_metrics_handler,
             pet_handler::{create_pet, delete_pet, get_pet_by_id, get_pets, update_pet},
         },
-        database::repositories::pet_repository::{PetRepository, PgPetRepository},
-        services::pet_service::{MockPetRepository, PetService},
+        database::{PetRepository, PgPetRepository},
+        services::{IPetService, PetService},
     },
     auth::middleware::EntraAuthLayer,
     core::auth::{EntraTokenClient, middleware::RoleRequirement, mock::MockTokenClient},
     core::cache::CacheRegistry,
     core::config::app_config::AppConfig,
-    core::database::PgPool,
+    core::database::{PgPool, connection::DatabaseConnection},
     core::error::AppError,
     core::handlers::logging,
     core::metrics::metrics_service,
@@ -48,11 +49,12 @@ use crate::{
 };
 
 use super::CoreRouter;
+use crate::core::auth::TokenClient;
 
 /// Application state shared across all routes
 #[derive(Clone)]
 pub struct AppState {
-    pub client: Arc<EntraTokenClient>,
+    pub client: Arc<dyn crate::core::auth::TokenClient + Send + Sync>,
     pub config: Arc<AppConfig>,
     pub start_time: DateTime<Utc>,
     pub cache_registry: Arc<CacheRegistry>,
@@ -63,7 +65,7 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(
-        client: Arc<EntraTokenClient>,
+        client: Arc<dyn crate::core::auth::TokenClient + Send + Sync>,
         config: Arc<AppConfig>,
         start_time: DateTime<Utc>,
         cache_registry: Arc<CacheRegistry>,
@@ -95,9 +97,18 @@ impl Default for AppState {
         let cache_registry = Arc::new(CacheRegistry::new());
         let token_client = Arc::new(EntraTokenClient::from_config(&config));
         let metrics_handle = crate::core::metrics::init_metrics();
-        let mock_repository = Arc::new(MockPetRepository::default());
-        let pet_service = Arc::new(PetService::new(mock_repository));
-        let service_registry = Arc::new(ServiceRegistry::new(pet_service));
+
+        // Create an empty Postgres pool for default state
+        let db_pool = Arc::new(Pool::<Postgres>::connect_lazy_with(
+            sqlx::postgres::PgConnectOptions::new()
+                .host("localhost")
+                .port(5432)
+                .database("postgres")
+                .username("postgres")
+                .password("postgres"),
+        ));
+
+        let service_registry = Arc::new(ServiceRegistry::new(db_pool));
 
         Self {
             client: token_client,
@@ -121,12 +132,21 @@ impl AppState {
         let client = Arc::new(EntraTokenClient::from_config(&config));
         let metrics_handle = crate::core::metrics::init_metrics();
 
-        let pet_repository: Arc<dyn PetRepository> = match &db_pool {
-            Some(pool) => Arc::new(PgPetRepository::new(pool.clone())),
-            None => Arc::new(MockPetRepository::default()),
+        let service_registry = match &db_pool {
+            Some(pool) => Arc::new(ServiceRegistry::new(pool.clone())),
+            None => {
+                // Create an empty Postgres pool for when no DB is provided
+                let empty_pool = Arc::new(Pool::<Postgres>::connect_lazy_with(
+                    sqlx::postgres::PgConnectOptions::new()
+                        .host("localhost")
+                        .port(5432)
+                        .database("postgres")
+                        .username("postgres")
+                        .password("postgres"),
+                ));
+                Arc::new(ServiceRegistry::new(empty_pool))
+            }
         };
-        let pet_service = Arc::new(PetService::new(pet_repository));
-        let service_registry = Arc::new(ServiceRegistry::new(pet_service));
 
         let cache_registry = match cache_registry {
             Some(registry) => Arc::new(registry),
@@ -144,12 +164,16 @@ impl AppState {
         })
     }
 
+    #[cfg(test)]
     pub fn new_test() -> Arc<Self> {
         let config = AppConfig::default();
         let metrics_handle = crate::core::metrics::init_metrics();
-        let mock_repository = Arc::new(MockPetRepository::default());
+
+        // For tests, use the MockPetRepository
+        use crate::app::database::repositories::pet_repository::tests::MockPetRepository;
+        let mock_repository = Arc::new(MockPetRepository::new(vec![]));
         let pet_service = Arc::new(PetService::new(mock_repository));
-        let service_registry = Arc::new(ServiceRegistry::new(pet_service));
+        let service_registry = Arc::new(ServiceRegistry::new_with_services(pet_service));
 
         Arc::new(AppState {
             client: Arc::new(EntraTokenClient::from_config(&config)),
@@ -162,11 +186,15 @@ impl AppState {
         })
     }
 
+    #[cfg(test)]
     pub fn new_test_with_config(config: AppConfig) -> Arc<Self> {
         let metrics_handle = crate::core::metrics::init_metrics();
-        let mock_repository = Arc::new(MockPetRepository::default());
+
+        // For tests, use the MockPetRepository
+        use crate::app::database::repositories::pet_repository::tests::MockPetRepository;
+        let mock_repository = Arc::new(MockPetRepository::new(vec![]));
         let pet_service = Arc::new(PetService::new(mock_repository));
-        let service_registry = Arc::new(ServiceRegistry::new(pet_service));
+        let service_registry = Arc::new(ServiceRegistry::new_with_services(pet_service));
 
         Arc::new(AppState {
             client: Arc::new(EntraTokenClient::from_config(&config)),
@@ -282,20 +310,24 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
     let resource_registry = crate::utils::api_resource::ApiResourceRegistry::new();
 
     // Create the app state
-    let pet_repository: Arc<dyn PetRepository> = match &db_pool {
-        Some(pool) => Arc::new(PgPetRepository::new(pool.clone())),
-        None => Arc::new(MockPetRepository::default()),
-    };
-    let pet_service = Arc::new(PetService::new(pet_repository));
-    let service_registry = Arc::new(ServiceRegistry::new(pet_service));
-
-    let state = Arc::new(AppState {
+    let app_state = Arc::new(AppState {
         client: Arc::new(EntraTokenClient::from_config(&config)),
         config: Arc::new(config.clone()),
         start_time,
         cache_registry,
         metrics_handle: Arc::new(metrics_handle),
-        service_registry,
+        service_registry: Arc::new({
+            // Create an empty Postgres pool for when no DB is provided
+            let empty_pool = Arc::new(Pool::<Postgres>::connect_lazy_with(
+                sqlx::postgres::PgConnectOptions::new()
+                    .host("localhost")
+                    .port(5432)
+                    .database("postgres")
+                    .username("postgres")
+                    .password("postgres"),
+            ));
+            ServiceRegistry::new(empty_pool)
+        }),
         db_pool,
     });
 
@@ -305,15 +337,25 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
     // Configure server address
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server.port));
 
-    (state, addr)
+    (app_state, addr)
 }
 
+#[cfg(test)]
 pub fn create_test_router() -> Router<Arc<AppState>> {
     let config = AppConfig::default();
     let metrics_handle = PrometheusBuilder::new().build_recorder().handle();
-    let mock_repository = Arc::new(MockPetRepository::default());
-    let pet_service = Arc::new(PetService::new(mock_repository));
-    let service_registry = Arc::new(ServiceRegistry::new(pet_service));
+
+    // Create an empty Postgres pool for tests
+    let db_pool = Arc::new(Pool::<Postgres>::connect_lazy_with(
+        sqlx::postgres::PgConnectOptions::new()
+            .host("localhost")
+            .port(5432)
+            .database("postgres")
+            .username("postgres")
+            .password("postgres"),
+    ));
+
+    let service_registry = Arc::new(ServiceRegistry::new(db_pool.clone()));
 
     let state = Arc::new(AppState {
         client: Arc::new(EntraTokenClient::from_config(&config)),
@@ -322,17 +364,27 @@ pub fn create_test_router() -> Router<Arc<AppState>> {
         cache_registry: Arc::new(CacheRegistry::new()),
         metrics_handle: Arc::new(metrics_handle),
         service_registry,
-        db_pool: None,
+        db_pool: Some(db_pool),
     });
 
     Router::new().with_state(state)
 }
 
+#[cfg(test)]
 pub fn create_test_router_with_config(config: AppConfig) -> Router<Arc<AppState>> {
     let metrics_handle = PrometheusBuilder::new().build_recorder().handle();
-    let mock_repository = Arc::new(MockPetRepository::default());
-    let pet_service = Arc::new(PetService::new(mock_repository));
-    let service_registry = Arc::new(ServiceRegistry::new(pet_service));
+
+    // Create an empty Postgres pool for tests
+    let db_pool = Arc::new(Pool::<Postgres>::connect_lazy_with(
+        sqlx::postgres::PgConnectOptions::new()
+            .host("localhost")
+            .port(5432)
+            .database("postgres")
+            .username("postgres")
+            .password("postgres"),
+    ));
+
+    let service_registry = Arc::new(ServiceRegistry::new(db_pool.clone()));
 
     let state = Arc::new(AppState {
         client: Arc::new(EntraTokenClient::from_config(&config)),
@@ -341,102 +393,103 @@ pub fn create_test_router_with_config(config: AppConfig) -> Router<Arc<AppState>
         cache_registry: Arc::new(CacheRegistry::new()),
         metrics_handle: Arc::new(metrics_handle),
         service_registry,
-        db_pool: None,
+        db_pool: Some(db_pool),
     });
 
     Router::new().with_state(state)
 }
 
+/// Initialize application router with all routes
 pub async fn app_router(
     config: &AppConfig,
     start_time: DateTime<Utc>,
-    db_pool: Option<Arc<Arc<dyn DatabaseConnection>>>,
+    db_pool: Option<Arc<Pool<Postgres>>>,
     api_client: Option<Arc<dyn ApiClient>>,
     cache_registry: Arc<CacheRegistry>,
-    metrics_handle: Arc<PrometheusHandle>,
+    metrics_handle: PrometheusHandle,
 ) -> Router {
-    let app_state = Arc::new(AppState {
-        start_time,
-        config: config.clone(),
-        client: api_client,
-        cache_registry: cache_registry.clone(),
-        metrics_handle: metrics_handle.clone(),
-        service_registry: Arc::new(ServiceRegistry::new()),
-        db_pool: db_pool.clone(),
-    });
-
-    // Create a pet repository based on the database connection
-    let pet_repo: Arc<dyn pet_repository::PetRepository + Send + Sync> = match &db_pool {
-        Some(conn) => {
-            // If we have a database connection, check if it's a Postgres connection
-            // and create a PgPetRepository. Otherwise, use a mock repository.
-            if let Some(pool) = conn.downcast_pg_pool() {
-                // Create PgPetRepository with the Postgres pool
-                Arc::new(PgPetRepository::new(pool.clone()))
-            } else {
-                // Fallback to mock repository if not a Postgres connection
-                Arc::new(MockPetRepository::new())
-            }
-        }
-        None => Arc::new(MockPetRepository::new()),
+    let token_client: Arc<dyn TokenClient + Send + Sync> = match api_client {
+        Some(client) => client.clone(),
+        None => Arc::new(EntraTokenClient::from_config(config)),
     };
 
-    let pet_service = Arc::new(PetService::new(pet_repo));
-    let service_registry = Arc::new(ServiceRegistry::new(pet_service));
+    // Create service registry based on db availability
+    let service_registry = match &db_pool {
+        Some(pool) => Arc::new(ServiceRegistry::new(pool.clone())),
+        None => {
+            // Create an empty Postgres pool for when no DB is provided
+            let empty_pool = Arc::new(Pool::<Postgres>::connect_lazy_with(
+                sqlx::postgres::PgConnectOptions::new()
+                    .host("localhost")
+                    .port(5432)
+                    .database("postgres")
+                    .username("postgres")
+                    .password("postgres"),
+            ));
+            Arc::new(ServiceRegistry::new(empty_pool))
+        }
+    };
 
-    let state = Arc::new(AppState {
-        client: app_state.client.clone(),
-        config: app_state.config.clone(),
-        start_time: app_state.start_time,
-        cache_registry: app_state.cache_registry.clone(),
-        metrics_handle: app_state.metrics_handle.clone(),
+    // Create app state
+    let app_state = Arc::new(AppState {
+        client: token_client,
+        config: Arc::new(config.clone()),
+        start_time,
+        cache_registry,
+        metrics_handle: Arc::new(metrics_handle),
         service_registry,
-        db_pool: db_pool.clone(),
+        db_pool,
     });
 
-    Router::new()
-        .route("/health", get(health_check))
-        .route("/metrics", get(metrics_handler))
-        .route("/pets", get(get_pets).post(create_pet))
+    // User-defined routes go here
+    let user_routes = Router::new()
+        .route("/users", get(hello_world))
+        .route("/api/pets", get(get_pets).post(create_pet))
         .route(
-            "/pets/:id",
+            "/api/pets/:id",
             get(get_pet_by_id).put(update_pet).delete(delete_pet),
-        )
-        .with_state(state)
-        .layer(TraceLayer::new_for_http())
+        );
+
+    // Create the main app router with middleware
+    create_core_app_router(app_state, user_routes)
 }
 
-async fn health_check(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+async fn health_check(State(_state): State<Arc<AppState>>) -> impl IntoResponse {
     // ...
 }
 
-async fn metrics_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+async fn metrics_handler(State(_state): State<Arc<AppState>>) -> impl IntoResponse {
     // ...
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::services::pet_service::{MockPetRepository, PetService};
-    use axum::{
-        body::Body,
-        http::{Request, StatusCode},
-        response::Response,
-    };
+    use crate::app::database::repositories::pet_repository::tests::MockPetRepository;
+    use axum::body::to_bytes;
+    use axum::http::Request;
     use tower::ServiceExt;
 
     fn create_test_state() -> Arc<AppState> {
-        let config = Arc::new(AppConfig::default());
-        let metrics_handle = Arc::new(init_metrics());
+        let config = AppConfig::default();
+        let metrics_handle = Arc::new(crate::core::metrics::init_metrics());
         let cache_registry = Arc::new(CacheRegistry::new());
-        let client = Arc::new(EntraTokenClient::from_config(&config));
-        let mock_repository: Arc<dyn PetRepository> = Arc::new(MockPetRepository::default());
-        let pet_service = Arc::new(PetService::new(mock_repository));
-        let service_registry = Arc::new(ServiceRegistry::new(pet_service));
+
+        // Create empty Postgres pool for tests
+        let db_pool = Arc::new(Pool::<Postgres>::connect_lazy_with(
+            sqlx::postgres::PgConnectOptions::new()
+                .host("localhost")
+                .port(5432)
+                .database("postgres")
+                .username("postgres")
+                .password("postgres"),
+        ));
+
+        let service_registry = Arc::new(ServiceRegistry::new(db_pool));
 
         Arc::new(AppState {
-            client,
-            config,
+            client: Arc::new(EntraTokenClient::from_config(&config)),
+            config: Arc::new(config),
             start_time: Utc::now(),
             cache_registry,
             metrics_handle,
@@ -445,25 +498,102 @@ mod tests {
         })
     }
 
-    async fn test_request(router: Router, uri: &str) -> Response {
-        let request = Request::builder().uri(uri).body(Body::empty()).unwrap();
-
-        router.oneshot(request).await.unwrap()
+    async fn test_request(router: Router, uri: &str) -> Response<Body> {
+        router
+            .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap()
     }
 
     #[tokio::test]
     async fn test_health_check() {
         let state = create_test_state();
-        let router = app_router(state).await;
+        let router = Router::new()
+            .route("/health", get(app_health_check))
+            .with_state(state);
+
         let response = test_request(router, "/health").await;
         assert_eq!(response.status(), StatusCode::OK);
+
+        let body = to_bytes(response.into_body()).await.unwrap();
+        assert_eq!(&body[..], b"OK");
     }
 
     #[tokio::test]
     async fn test_metrics_handler() {
         let state = create_test_state();
-        let router = app_router(state).await;
+        let router = Router::new()
+            .route("/metrics", get(app_metrics_handler))
+            .with_state(state);
+
         let response = test_request(router, "/metrics").await;
         assert_eq!(response.status(), StatusCode::OK);
     }
+
+    #[cfg(test)]
+    async fn make_database_request() -> Router {
+        // Set up mocked db if needed
+        let db_pool = Arc::new(Pool::<Postgres>::connect_lazy_with(
+            sqlx::postgres::PgConnectOptions::new()
+                .host("localhost")
+                .port(5432)
+                .database("postgres")
+                .username("postgres")
+                .password("postgres"),
+        ));
+
+        let service_registry = Arc::new(ServiceRegistry::new(db_pool));
+
+        let app_state = Arc::new(AppState {
+            client: Arc::new(EntraTokenClient::default()),
+            config: Arc::new(AppConfig::default()),
+            start_time: Utc::now(),
+            cache_registry: Arc::new(CacheRegistry::new()),
+            metrics_handle: Arc::new(crate::core::metrics::init_metrics()),
+            service_registry,
+            db_pool: None,
+        });
+
+        Router::new()
+            .route("/data", get(hello_world))
+            .with_state(app_state)
+    }
+
+    #[cfg(test)]
+    async fn make_healthcheck_request() -> Router {
+        // Set up mocked db if needed
+        let db_pool = Arc::new(Pool::<Postgres>::connect_lazy_with(
+            sqlx::postgres::PgConnectOptions::new()
+                .host("localhost")
+                .port(5432)
+                .database("postgres")
+                .username("postgres")
+                .password("postgres"),
+        ));
+
+        let service_registry = Arc::new(ServiceRegistry::new(db_pool));
+
+        let app_state = Arc::new(AppState {
+            client: Arc::new(EntraTokenClient::default()),
+            config: Arc::new(AppConfig::default()),
+            start_time: Utc::now(),
+            cache_registry: Arc::new(CacheRegistry::new()),
+            metrics_handle: Arc::new(crate::core::metrics::init_metrics()),
+            service_registry,
+            db_pool: None,
+        });
+
+        Router::new()
+            .route("/health", get(hello_world))
+            .with_state(app_state)
+    }
+}
+
+// For now, let's create a local trait definition for ApiClient if it doesn't exist elsewhere
+#[allow(dead_code)]
+pub trait ApiClient: Send + Sync {}
+
+// Helper function for example route
+async fn hello_world() -> &'static str {
+    "Hello, World!"
 }

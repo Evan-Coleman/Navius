@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, name, pet_type, breed, age, created_at, updated_at\n            FROM pets\n            ",
+  "query": "\n            INSERT INTO pets (id, name, pet_type, breed, age, created_at, updated_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7)\n            RETURNING \n                id, \n                name, \n                pet_type, \n                breed, \n                age,\n                created_at, \n                updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -40,7 +40,15 @@
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Int4",
+        "Timestamptz",
+        "Timestamptz"
+      ]
     },
     "nullable": [
       false,
@@ -52,5 +60,5 @@
       false
     ]
   },
-  "hash": "4d76ca80e77f0bb39368fa25ab83665f42555ea0f4353afd648f14a91bc3c034"
+  "hash": "a22fe31852647415c22a5c18fe04ed527935188c2ba40268dfe30286eab325e6"
 }

@@ -2,93 +2,67 @@ use axum::{
     Json,
     extract::{Path, State},
     http::StatusCode,
+    response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::{
-    app::services::pet_service::{Pet, PetService},
-    core::{error::AppError, router::AppState},
+    app::api::pet_core::{CreatePetRequest, PetResponse, UpdatePetRequest},
+    app::services::dto::{CreatePetDto, UpdatePetDto},
+    core::{error::AppError, services::ServiceRegistry},
 };
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CreatePetRequest {
-    pub name: String,
-    pub pet_type: String,
-    pub breed: Option<String>,
-    pub age: i32,
+/// Get all pets
+pub async fn get_pets(
+    State(state): State<Arc<ServiceRegistry>>,
+) -> Result<Json<Vec<PetResponse>>, AppError> {
+    let pet_service = state.get_pet_service()?;
+    let pets = pet_service.get_all_pets().await?;
+    Ok(Json(pets.into_iter().map(PetResponse::from).collect()))
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct UpdatePetRequest {
-    pub name: Option<String>,
-    pub pet_type: Option<String>,
-    pub breed: Option<String>,
-    pub age: Option<i32>,
-}
-
-pub async fn get_pets(State(state): State<Arc<AppState>>) -> Result<Json<Vec<Pet>>, AppError> {
-    let pets = state.service_registry.pet_service.find_all().await?;
-    Ok(Json(pets))
-}
-
+/// Get a pet by ID
 pub async fn get_pet_by_id(
-    State(state): State<Arc<AppState>>,
+    State(state): State<Arc<ServiceRegistry>>,
     Path(id): Path<Uuid>,
-) -> Result<Json<Pet>, AppError> {
-    let pet = state.service_registry.pet_service.find_by_id(id).await?;
-    Ok(Json(pet))
+) -> Result<Json<PetResponse>, AppError> {
+    let pet_service = state.get_pet_service()?;
+    let pet = pet_service.get_pet_by_id(id).await?;
+    Ok(Json(PetResponse::from(pet)))
 }
 
+/// Create a pet
 pub async fn create_pet(
-    State(state): State<Arc<AppState>>,
-    Json(request): Json<CreatePetRequest>,
-) -> Result<(StatusCode, Json<Pet>), AppError> {
-    let pet = Pet {
-        id: Uuid::new_v4(),
-        name: request.name,
-        pet_type: request.pet_type,
-        breed: request.breed,
-        age: request.age,
-        created_at: chrono::Utc::now(),
-        updated_at: chrono::Utc::now(),
-    };
-
-    let created_pet = state.service_registry.pet_service.create(pet).await?;
-    Ok((StatusCode::CREATED, Json(created_pet)))
+    State(state): State<Arc<ServiceRegistry>>,
+    Json(pet): Json<CreatePetRequest>,
+) -> Result<Json<PetResponse>, AppError> {
+    let pet_service = state.get_pet_service()?;
+    let dto: CreatePetDto = pet.into();
+    let pet = pet_service.create_pet(dto).await?;
+    Ok(Json(PetResponse::from(pet)))
 }
 
+/// Update a pet
 pub async fn update_pet(
-    State(state): State<Arc<AppState>>,
+    State(state): State<Arc<ServiceRegistry>>,
     Path(id): Path<Uuid>,
-    Json(request): Json<UpdatePetRequest>,
-) -> Result<Json<Pet>, AppError> {
-    let pet = state.service_registry.pet_service.find_by_id(id).await?;
-
-    let updated_pet = Pet {
-        id: pet.id,
-        name: request.name.unwrap_or(pet.name),
-        pet_type: request.pet_type.unwrap_or(pet.pet_type),
-        breed: request.breed.or(pet.breed),
-        age: request.age.unwrap_or(pet.age),
-        created_at: pet.created_at,
-        updated_at: chrono::Utc::now(),
-    };
-
-    let updated_pet = state
-        .service_registry
-        .pet_service
-        .update(updated_pet)
-        .await?;
-    Ok(Json(updated_pet))
+    Json(pet): Json<UpdatePetRequest>,
+) -> Result<Json<PetResponse>, AppError> {
+    let pet_service = state.get_pet_service()?;
+    let dto: UpdatePetDto = pet.into();
+    let pet = pet_service.update_pet(id, dto).await?;
+    Ok(Json(PetResponse::from(pet)))
 }
 
+/// Delete a pet
 pub async fn delete_pet(
-    State(state): State<Arc<AppState>>,
+    State(state): State<Arc<ServiceRegistry>>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    state.service_registry.pet_service.delete(id).await?;
+    let pet_service = state.get_pet_service()?;
+    pet_service.delete_pet(id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -101,7 +75,7 @@ mod tests {
     use crate::core::config::AppConfig;
     use crate::core::metrics::init_metrics;
 
-    fn create_test_state() -> Arc<AppState> {
+    fn create_test_state() -> Arc<ServiceRegistry> {
         let config = Arc::new(AppConfig::default());
         let metrics_handle = Arc::new(init_metrics());
         let cache_registry = Arc::new(CacheRegistry::new());
@@ -110,15 +84,7 @@ mod tests {
         let pet_service = Arc::new(PetService::new(mock_repository));
         let service_registry = Arc::new(ServiceRegistry::new(pet_service));
 
-        Arc::new(AppState {
-            client,
-            config,
-            start_time: chrono::Utc::now(),
-            cache_registry,
-            metrics_handle,
-            service_registry,
-            db_pool: None,
-        })
+        service_registry
     }
 
     #[tokio::test]
@@ -143,7 +109,7 @@ mod tests {
             name: "Fluffy".to_string(),
             pet_type: "Cat".to_string(),
             breed: Some("Persian".to_string()),
-            age: 3,
+            age: Some(3),
         };
 
         let result = create_pet(State(state), Json(request)).await;

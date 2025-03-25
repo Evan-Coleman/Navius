@@ -1,6 +1,6 @@
 -- Create the pets table
 CREATE TABLE IF NOT EXISTS pets (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     pet_type VARCHAR(50) NOT NULL,
     breed VARCHAR(100),

@@ -31,8 +31,8 @@ pub struct PetResponse {
     pub id: Uuid,
     pub name: String,
     pub pet_type: String,
-    pub breed: String,
-    pub age: i32,
+    pub breed: Option<String>,
+    pub age: Option<i32>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -42,9 +42,9 @@ impl From<ServicePet> for PetResponse {
         Self {
             id: pet.id,
             name: pet.name,
-            pet_type: pet.pet_type.unwrap_or_default(),
-            breed: pet.breed.unwrap_or_default(),
-            age: pet.age.unwrap_or_default(),
+            pet_type: pet.pet_type,
+            breed: pet.breed,
+            age: pet.age,
             created_at: Utc::now().to_rfc3339(),
             updated_at: Utc::now().to_rfc3339(),
         }
@@ -83,7 +83,7 @@ impl From<CreatePetRequest> for CreatePetDto {
     fn from(req: CreatePetRequest) -> Self {
         Self {
             name: req.name,
-            pet_type: Some(req.pet_type),
+            pet_type: req.pet_type,
             breed: req.breed,
             age: req.age,
         }
@@ -219,23 +219,13 @@ pub async fn delete_pet(
 }
 
 // Helper function to get pet service
-fn get_pet_service(state: Arc<AppState>) -> Result<Arc<PetService<dyn PetRepository>>> {
-    // Try to get the service from the registry first
-    if let Some(service) = state
-        .service_registry
-        .get::<PetService<dyn PetRepository>>("pet_service")
-    {
-        return Ok(service);
-    }
-
-    // Get the database connection
-    let db_pool = state.db_pool.clone().ok_or_else(|| {
-        error!("Database connection not available");
-        AppError::internal_server_error("Database connection not available")
-    })?;
-
-    // Create and return the service directly with the database pool
-    let service = Arc::new(PetService::new(db_pool.as_ref().clone()));
-    info!("Created new PetService instance for pet_db API");
-    Ok(service)
+fn get_pet_service(state: Arc<AppState>) -> Result<Arc<dyn IPetService>> {
+    // The service_registry is not optional in AppState, so we can access it directly
+    return match state.service_registry.get_pet_service() {
+        Ok(service) => Ok(service),
+        Err(e) => Err(AppError::internal_server_error(&format!(
+            "Failed to get pet service: {}",
+            e
+        ))),
+    };
 }
