@@ -22,16 +22,143 @@
 //! - Structured error handling
 //! - Configuration management
 
+// ===============================================================================
+// Core Framework Modules - Not intended for modification by users
+// ===============================================================================
+
 /// Core framework functionality not intended for modification by users
-pub mod core;
+pub mod core {
+    // Core API module
+    pub mod api;
+
+    // Authentication and authorization
+    pub mod auth;
+
+    // Caching functionality
+    pub mod cache;
+
+    // Configuration management
+    pub mod config;
+
+    // Core logger implementation
+    pub mod core_logger;
+
+    // Core middleware implementation
+    pub mod core_middleware;
+
+    // Error handling
+    pub mod error;
+
+    // API request handlers
+    pub mod handlers {
+        // Health check handlers
+        pub mod core_health;
+
+        // Debug and management actuator endpoints
+        pub mod core_actuator;
+
+        // API documentation handlers
+        pub mod core_docs;
+
+        // Logging middleware
+        pub mod core_logging;
+
+        pub use core_actuator::*;
+        pub use core_docs::*;
+        pub use core_health::*;
+        pub use core_logging::*;
+    }
+
+    // Metrics collection and reporting
+    pub mod metrics;
+
+    // Data models and schemas
+    pub mod models {
+        // Error models
+        pub mod core_error;
+
+        // User-extensible models
+        pub mod core_extensions;
+
+        // Response models
+        pub mod core_response;
+
+        pub use core_error::*;
+        pub use core_extensions::*;
+        pub use core_response::*;
+    }
+
+    // Reliability features
+    pub mod reliability;
+
+    // Routing functionality
+    pub mod router {
+        // Core router implementation
+        pub mod core_router;
+
+        // Application router
+        pub mod core_app_router;
+
+        pub use core_app_router::*;
+        pub use core_router::*;
+    }
+
+    // Service implementations
+    pub mod services;
+
+    // Utility functions
+    pub mod utils;
+
+    // Re-export key components for easier access
+    pub use self::auth::{EntraAuthLayer, EntraTokenClient};
+    pub use self::cache::ResourceCache;
+    pub use self::cache::cache_manager::{CacheRegistry, get_resource_cache, init_cache_registry};
+    pub use self::config::app_config::{AppConfig, load_config};
+    pub use self::error::{AppError, Result};
+    pub use self::metrics::{init_metrics, metrics_endpoint_handler, try_record_metrics};
+    pub use self::reliability::apply_reliability;
+    pub use self::router::CoreRouter;
+    pub use self::utils::api_resource::{
+        ApiHandlerOptions, ApiResource, ApiResourceRegistry, create_api_handler,
+    };
+
+    // Export specific items from modules to avoid name conflicts
+    pub use self::core_logger as logger;
+    pub use self::core_middleware as middleware;
+    pub use self::handlers::core_health as handlers_health;
+    pub use self::services::health as services_health;
+}
+
+// ===============================================================================
+// Application Modules - Can be extended and modified by users
+// ===============================================================================
 
 /// Application components that can be extended by users
-pub mod app;
+pub mod app {
+    // API endpoints and examples
+    pub mod api {
+        // Example Spring Boot-like implementations
+        pub mod examples;
+
+        pub use examples::*;
+    }
+
+    // Service implementations
+    pub mod services;
+}
+
+// ===============================================================================
+// Examples Module - Can be enabled/disabled with feature flag
+// ===============================================================================
 
 /// Examples that demonstrate how to use the framework
 /// These can be optionally included or removed
 #[cfg(feature = "examples")]
 pub mod examples;
+
+// ===============================================================================
+// Convenience Re-exports - For easier access to common components
+// ===============================================================================
 
 /// Caching functionality
 pub mod cache {
@@ -61,12 +188,12 @@ pub mod api {
 /// API request handlers
 pub mod handlers {
     pub use crate::app::api::*;
+    pub use crate::core::handlers::*;
 }
 
 /// Data models and schemas
 pub mod models {
-    pub use crate::core::models::core_error::*;
-    pub use crate::core::models::core_extensions::*;
+    pub use crate::core::models::*;
 }
 
 /// Service module for business logic
@@ -102,6 +229,7 @@ pub mod mockable {
     pub trait MockExtern {}
 }
 
+// Direct re-exports for commonly used types
 pub use crate::app::api::*;
 pub use crate::core::error::*;
 pub use crate::core::models::*;

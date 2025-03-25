@@ -11,6 +11,7 @@ use axum::{
     routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -180,7 +181,7 @@ impl ExampleController {
                 }),
             )
             .route(
-                "/examples/:id",
+                "/examples/{id}",
                 get(
                     |state: State<Arc<AppState>>, path: Path<String>| async move {
                         let controller = state
@@ -218,6 +219,170 @@ impl ExampleController {
     }
 }
 
+/// Example of a Spring Boot-like health indicator
+///
+/// In Spring Boot, you can create custom health indicators by extending the
+/// HealthIndicator interface. This example shows how to create a similar pattern
+/// in Navius.
+pub trait HealthIndicator {
+    /// Get the name of the health indicator
+    fn name(&self) -> String;
+
+    /// Check health and return status and details
+    fn health(&self) -> (String, Option<String>);
+}
+
+/// Example database health indicator
+pub struct DatabaseHealthIndicator {
+    connection_string: String,
+}
+
+impl DatabaseHealthIndicator {
+    pub fn new(connection_string: &str) -> Self {
+        Self {
+            connection_string: connection_string.to_string(),
+        }
+    }
+
+    fn check_connection(&self) -> bool {
+        // In a real implementation, this would check the database connection
+        !self.connection_string.is_empty()
+    }
+}
+
+impl HealthIndicator for DatabaseHealthIndicator {
+    fn name(&self) -> String {
+        "database".to_string()
+    }
+
+    fn health(&self) -> (String, Option<String>) {
+        if self.check_connection() {
+            (
+                "UP".to_string(),
+                Some(format!("Connected to {}", self.connection_string)),
+            )
+        } else {
+            (
+                "DOWN".to_string(),
+                Some("Unable to connect to database".to_string()),
+            )
+        }
+    }
+}
+
+/// Example API health indicator
+pub struct ApiHealthIndicator {
+    api_url: String,
+}
+
+impl ApiHealthIndicator {
+    pub fn new(api_url: &str) -> Self {
+        Self {
+            api_url: api_url.to_string(),
+        }
+    }
+
+    fn check_api(&self) -> bool {
+        // In a real implementation, this would check the API status
+        !self.api_url.is_empty()
+    }
+}
+
+impl HealthIndicator for ApiHealthIndicator {
+    fn name(&self) -> String {
+        "api".to_string()
+    }
+
+    fn health(&self) -> (String, Option<String>) {
+        if self.check_api() {
+            (
+                "UP".to_string(),
+                Some(format!("API available at {}", self.api_url)),
+            )
+        } else {
+            ("DOWN".to_string(), Some("API unavailable".to_string()))
+        }
+    }
+}
+
+/// Custom health service that aggregates health indicators
+pub struct HealthService {
+    indicators: Vec<Box<dyn HealthIndicator + Send + Sync>>,
+}
+
+impl HealthService {
+    pub fn new() -> Self {
+        Self {
+            indicators: Vec::new(),
+        }
+    }
+
+    pub fn add_indicator<I: HealthIndicator + Send + Sync + 'static>(&mut self, indicator: I) {
+        self.indicators.push(Box::new(indicator));
+    }
+
+    pub fn check_health(&self) -> Value {
+        let mut status = "UP".to_string();
+        let mut components = HashMap::new();
+
+        for indicator in &self.indicators {
+            let (indicator_status, details) = indicator.health();
+
+            // If any component is down, the overall status is down
+            if indicator_status != "UP" {
+                status = "DOWN".to_string();
+            }
+
+            // Add the component status to the response
+            let component_details = if let Some(details) = details {
+                json!({
+                    "status": indicator_status,
+                    "details": {
+                        "message": details
+                    }
+                })
+            } else {
+                json!({
+                    "status": indicator_status
+                })
+            };
+
+            components.insert(indicator.name(), component_details);
+        }
+
+        // Create a Spring Boot-style health response
+        json!({
+            "status": status,
+            "components": components
+        })
+    }
+}
+
+/// Example of a custom health endpoint handler that extends the simple /health endpoint
+///
+/// This shows how a user can extend the simple /health endpoint with custom checks
+/// in a Spring Boot-like way.
+pub async fn custom_health_handler(State(state): State<Arc<AppState>>) -> Json<Value> {
+    // Create a health service with custom indicators
+    let mut health_service = HealthService::new();
+
+    // Add health indicators
+    health_service.add_indicator(DatabaseHealthIndicator::new(
+        "postgres://localhost:5432/navius",
+    ));
+    health_service.add_indicator(ApiHealthIndicator::new("https://api.example.com"));
+
+    // Get the health status
+    let health = health_service.check_health();
+
+    Json(health)
+}
+
+/// Example of how to register a custom health endpoint in your application
+pub fn register_custom_health_endpoint(router: Router<Arc<AppState>>) -> Router<Arc<AppState>> {
+    router.route("/health/custom", get(custom_health_handler))
+}
+
 /// Configure routes for the examples module in a Spring Boot-like way
 pub fn configure_routes(router: Router<Arc<AppState>>) -> Router<Arc<AppState>> {
     // Create dependencies
@@ -225,8 +390,9 @@ pub fn configure_routes(router: Router<Arc<AppState>>) -> Router<Arc<AppState>> 
     let service = Arc::new(ExampleService::new(repository));
     let controller = Arc::new(ExampleController::new(service));
 
-    // Register routes
-    controller.register_routes(router)
+    // Register routes including the custom health endpoint
+    let router = controller.register_routes(router);
+    register_custom_health_endpoint(router)
 }
 
 /// Register services needed by the example controller in the application registry
