@@ -5,7 +5,6 @@ use sqlx::{Pool, Postgres};
 use std::{collections::BTreeMap, sync::Arc, time::SystemTime};
 
 use crate::core::{
-    database::PgPool,
     models::{DependencyStatus, DetailedHealthResponse, HealthCheckResponse},
     router::AppState,
 };

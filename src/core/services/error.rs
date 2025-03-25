@@ -21,7 +21,6 @@ impl fmt::Display for ServiceError {
         match self {
             ServiceError::Repository(msg) => write!(f, "Repository error: {}", msg),
             ServiceError::Validation(msg) => write!(f, "Validation error: {}", msg),
-            ServiceError::Repository(msg) => write!(f, "Repository error: {}", msg),
             ServiceError::NotFound(msg) => write!(f, "Not found: {}", msg),
             ServiceError::Conflict(msg) => write!(f, "Conflict: {}", msg),
             ServiceError::Other(msg) => write!(f, "Service error: {}", msg),

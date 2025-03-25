@@ -278,9 +278,9 @@ impl From<AppServiceError> for AppError {
         match err {
             AppServiceError::Repository(msg) => Self::DatabaseError(msg),
             AppServiceError::Validation(msg) => Self::ValidationError(msg),
-            AppServiceError::Other(msg) => Self::InternalServerError(msg),
             AppServiceError::NotFound(msg) => Self::NotFoundError(msg),
-            AppServiceError::Conflict(msg) => Self::ConflictError(msg),
+            AppServiceError::BadRequest(msg) => Self::BadRequest(msg),
+            AppServiceError::Internal(msg) => Self::InternalServerError(msg),
         }
     }
 }
@@ -291,13 +291,8 @@ impl From<CoreServiceError> for AppError {
             CoreServiceError::Repository(msg) => Self::DatabaseError(msg),
             CoreServiceError::Validation(msg) => Self::ValidationError(msg),
             CoreServiceError::Other(msg) => Self::InternalServerError(msg),
-            CoreServiceError::UserNotFound => Self::NotFoundError("User not found".to_string()),
-            CoreServiceError::UsernameExists => {
-                Self::ConflictError("Username already exists".to_string())
-            }
-            CoreServiceError::EmailExists => {
-                Self::ConflictError("Email already exists".to_string())
-            }
+            CoreServiceError::NotFound(msg) => Self::NotFoundError(msg),
+            CoreServiceError::Conflict(msg) => Self::ConflictError(msg),
         }
     }
 }

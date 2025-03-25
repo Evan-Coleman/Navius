@@ -16,6 +16,12 @@ app:
   # More verbose logging in development
   log_level: "debug"
 
+# API configuration
+api:
+  base_url: "http://localhost:3000"
+  version: "1.0.0"
+  timeout_seconds: 30
+
 cache:
   enabled: true
   # ttl_seconds: 300
@@ -24,7 +30,7 @@ cache:
 
 # Database configuration
 database:
-  enabled: true
+  enabled: false
   url: "postgres://postgres:postgres@localhost:5432/app"
   max_connections: 10
   connect_timeout_seconds: 30

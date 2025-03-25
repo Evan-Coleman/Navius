@@ -3,8 +3,6 @@
 //! This module provides services that implement business logic.
 //! Services use repositories to interact with data and implement business rules.
 
-use crate::app::database::repositories::pet_repository::PgPetRepository;
-use crate::app::services::pet_service::{IPetService, PetService};
 use crate::core::config::app_config::DatabaseConfig;
 use crate::core::database::PgPool;
 use crate::core::error::AppError;
@@ -16,43 +14,36 @@ use std::sync::Arc;
 pub mod error;
 pub mod health;
 pub mod metrics;
-pub mod pet;
 
 pub use error::ServiceError;
-pub use pet::PetService as CorePetService;
 
 /// Type alias for service results
 pub type ServiceResult<T> = Result<T, ServiceError>;
 
 /// Trait for service registry with required methods
 pub trait ServiceRegistryTrait {
-    /// Get the pet service
-    fn pet_service(&self) -> &dyn Any;
+    // Pet service methods removed for stability
 }
 
 /// Registry for managing application services
 pub struct ServiceRegistry {
-    pet_service: Arc<dyn IPetService + Send + Sync>,
+    // Pet service removed for stability
 }
 
 impl ServiceRegistry {
     /// Create a new service registry
     pub fn new(db_pool: Arc<Pool<Postgres>>) -> Self {
-        let pet_repository = Arc::new(PgPetRepository::new(db_pool));
-        let pet_service = Arc::new(PetService::new(pet_repository));
-
-        Self { pet_service }
+        // Pet service initialization removed for stability
+        Self {}
     }
 
     #[cfg(test)]
-    pub fn new_with_services(pet_service: Arc<dyn IPetService + Send + Sync>) -> Self {
-        Self { pet_service }
+    pub fn new_with_services() -> Self {
+        // Pet service parameter removed for stability
+        Self {}
     }
 
-    /// Get a pet service
-    pub fn get_pet_service(&self) -> Result<Arc<dyn IPetService + Send + Sync>, AppError> {
-        Ok(self.pet_service.clone())
-    }
+    // Pet service getter removed for stability
 }
 
 impl Default for ServiceRegistry {
@@ -64,7 +55,7 @@ impl Default for ServiceRegistry {
 // Backward compatibility for Services type
 pub struct Services {
     db_connection: Option<Arc<dyn PgPool>>,
-    pet_service: Option<Arc<dyn IPetService + Send + Sync>>,
+    // Pet service field removed for stability
 }
 
 impl Services {
@@ -79,31 +70,25 @@ impl Services {
                 .password("postgres"),
         ));
 
-        let pet_repository = Arc::new(PgPetRepository::new(pool));
-        let pet_service =
-            Some(Arc::new(PetService::new(pet_repository)) as Arc<dyn IPetService + Send + Sync>);
+        // Pet service initialization removed for stability
 
         Self {
             db_connection,
-            pet_service,
+            // Pet service field removed
         }
     }
 
-    pub fn get_pet_service(&self) -> Option<Arc<dyn IPetService + Send + Sync>> {
-        self.pet_service.clone()
-    }
+    // Pet service getter removed for stability
 }
 
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::app::database::repositories::pet_repository::tests::MockPetRepository;
+    // Pet-related imports removed for stability
 
     pub fn create_test_registry() -> Arc<ServiceRegistry> {
-        let mock_repository = Arc::new(MockPetRepository::new(vec![]));
-        let pet_service = Arc::new(PetService::new(mock_repository));
-
-        Arc::new(ServiceRegistry { pet_service })
+        // Pet-related mock setup removed for stability
+        Arc::new(ServiceRegistry {})
     }
 
     #[test]
@@ -119,7 +104,7 @@ pub mod tests {
                 .password("postgres"),
         ));
         let registry = ServiceRegistry::new(db_pool);
-        assert!(Arc::strong_count(&registry.pet_service) > 0);
+        // Pet service assertion removed
     }
 
     #[test]

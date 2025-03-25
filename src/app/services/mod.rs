@@ -17,42 +17,39 @@
 //! This module contains all the service implementations that are intended
 //! to be customized or extended by users of the framework.
 
-use crate::app::database::repositories::pet_repository::PetRepository;
+// Pet repositories imports removed for stability
 use std::any::Any;
 use std::sync::Arc;
 
 // Make these modules public so they can be imported by other modules
 pub mod dto;
 pub mod error;
-pub mod pet_service;
+// pub mod pet_service; // Pet service removed for stability
 
 // Re-export these types for convenience
-pub use dto::{CreatePetDto, UpdatePetDto};
+// Pet DTOs removed for stability
 pub use error::ServiceError;
-pub use pet_service::{IPetService, PetService};
+// Pet service removed for stability
 
 /// Default implementation of ServiceRegistry that can be used by applications
 pub struct DefaultServiceRegistry {
     // service fields go here
-    pet_service: Arc<dyn Any + Send + Sync>,
+    // Pet service removed for stability
 }
 
 impl DefaultServiceRegistry {
     /// Create a new DefaultServiceRegistry with all required services
-    pub fn new(pet_repository: Arc<dyn PetRepository>) -> Self {
+    pub fn new() -> Self {
         Self {
             // Initialize your services here
-            pet_service: Arc::new(PetService::new(pet_repository)) as Arc<dyn Any + Send + Sync>,
+            // Pet service removed for stability
         }
     }
 }
 
 // Add missing trait implementation from the "server-info" rule
 impl crate::core::services::ServiceRegistryTrait for DefaultServiceRegistry {
-    // Implement access methods
-    fn pet_service(&self) -> &dyn Any {
-        self.pet_service.as_ref()
-    }
+    // Pet service removed for stability
 }
 
 impl Default for DefaultServiceRegistry {

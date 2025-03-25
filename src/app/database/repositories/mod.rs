@@ -1,3 +1,3 @@
-pub mod pet_repository;
-
-pub use pet_repository::{Pet, PetRepository};
+// Pet repositories removed for stability
+// This file previously contained Pet-related repository code
+// which has been removed to simplify the application

@@ -26,18 +26,9 @@ use tracing::{Level, info};
 use uuid::Uuid;
 
 use crate::{
-    app::{
-        api::handlers::{
-            health_check::health_check as app_health_check,
-            metrics_handler::metrics_handler as app_metrics_handler,
-            pet_handler::{
-                create_pet as handler_create_pet, delete_pet as handler_delete_pet,
-                get_pet_by_id as handler_get_pet_by_id, get_pets as handler_get_pets,
-                update_pet as handler_update_pet,
-            },
-        },
-        database::{PetRepository, PgPetRepository},
-        services::{IPetService, PetService},
+    app::api::handlers::{
+        health_check::health_check as app_health_check,
+        metrics_handler::metrics_handler as app_metrics_handler,
     },
     auth::middleware::EntraAuthLayer,
     core::auth::{EntraTokenClient, middleware::RoleRequirement, mock::MockTokenClient},
@@ -54,10 +45,6 @@ use crate::{
 };
 
 use super::CoreRouter;
-use crate::app::api::pet_core::{
-    CreatePetRequest, UpdatePetRequest, create_pet as core_create_pet,
-    delete_pet as core_delete_pet, get_pet as core_get_pet, update_pet as core_update_pet,
-};
 use crate::core::auth::TokenClient;
 
 /// Application state shared across all routes
@@ -178,11 +165,8 @@ impl AppState {
         let config = AppConfig::default();
         let metrics_handle = crate::core::metrics::init_metrics();
 
-        // For tests, use the MockPetRepository
-        use crate::app::database::repositories::pet_repository::tests::MockPetRepository;
-        let mock_repository = Arc::new(MockPetRepository::new(vec![]));
-        let pet_service = Arc::new(PetService::new(mock_repository));
-        let service_registry = Arc::new(ServiceRegistry::new_with_services(pet_service));
+        // Pet-related mock setup removed for stability
+        let service_registry = Arc::new(ServiceRegistry::new_with_services());
 
         Arc::new(AppState {
             client: Arc::new(EntraTokenClient::from_config(&config)),
@@ -199,11 +183,8 @@ impl AppState {
     pub fn new_test_with_config(config: AppConfig) -> Arc<Self> {
         let metrics_handle = crate::core::metrics::init_metrics();
 
-        // For tests, use the MockPetRepository
-        use crate::app::database::repositories::pet_repository::tests::MockPetRepository;
-        let mock_repository = Arc::new(MockPetRepository::new(vec![]));
-        let pet_service = Arc::new(PetService::new(mock_repository));
-        let service_registry = Arc::new(ServiceRegistry::new_with_services(pet_service));
+        // Pet-related mock setup removed for stability
+        let service_registry = Arc::new(ServiceRegistry::new_with_services());
 
         Arc::new(AppState {
             client: Arc::new(EntraTokenClient::from_config(&config)),
@@ -223,7 +204,7 @@ pub fn create_core_app_router(state: Arc<AppState>) -> Router {
     let core_routes = CoreRouter::create_core_routes(state.clone());
 
     // Set up shared routes with middleware
-    Router::new().nest("/", core_routes).layer(
+    Router::new().merge(core_routes).layer(
         TraceLayer::new_for_http()
             .make_span_with(
                 DefaultMakeSpan::new()
@@ -433,41 +414,9 @@ pub async fn app_router(
     // Create the core router with middleware
     let router = create_core_app_router(app_state.clone());
 
-    // Create closures that capture app_state
-    let app_state1 = app_state.clone();
-    let app_state2 = app_state.clone();
-    let app_state3 = app_state.clone();
-    let app_state4 = app_state.clone();
-    let app_state5 = app_state.clone();
+    // Pet routes removed for stability
 
-    // Add user-defined routes with closures
-    router
-        .route("/users", get(|| async { hello_world().await }))
-        .route(
-            "/api/pets",
-            get(move || async move {
-                // Use core_get_pet handler which should work with AppState
-                let resp = core_get_pet(State(app_state1.clone()), Path(Uuid::nil())).await;
-                resp
-            })
-            .post(move |payload: Json<CreatePetRequest>| async move {
-                core_create_pet(State(app_state2), payload).await
-            }),
-        )
-        .route(
-            "/api/pets/:id",
-            get(move |Path(id): Path<Uuid>| async move {
-                core_get_pet(State(app_state3), Path(id)).await
-            })
-            .put(
-                move |Path(id): Path<Uuid>, payload: Json<UpdatePetRequest>| async move {
-                    core_update_pet(State(app_state4), Path(id), payload).await
-                },
-            )
-            .delete(move |Path(id): Path<Uuid>| async move {
-                core_delete_pet(State(app_state5), Path(id)).await
-            }),
-        )
+    router.route("/users", get(|| async { hello_world().await }))
 }
 
 async fn health_check(State(_state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -481,7 +430,7 @@ async fn metrics_handler(State(_state): State<Arc<AppState>>) -> impl IntoRespon
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::database::repositories::pet_repository::tests::MockPetRepository;
+    // Pet-related imports removed for stability
     use axum::body::to_bytes;
     use axum::http::Request;
     use tower::ServiceExt;

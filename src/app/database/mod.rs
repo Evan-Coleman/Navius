@@ -1,7 +1,5 @@
 pub mod repositories;
 
-// Re-export repository traits for public use
-pub use repositories::pet_repository::{Pet, PetRepository, PgPetRepository};
-
-#[cfg(test)]
-pub use repositories::pet_repository::tests::MockPetRepository;
+// Pet re-exports removed for stability
+// This file previously contained Pet-related repository exports
+// which have been removed to simplify the application

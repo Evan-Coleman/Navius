@@ -26,11 +26,7 @@ use std::sync::Arc;
 // pub mod products;
 // pub mod orders;
 
-/// Internal Pet database core implementation
-pub mod pet_core;
-
-/// Alternative Pet database implementation
-pub mod pet_db;
+// Pet-related modules removed for stability
 
 /// Example API implementations
 pub mod examples;
@@ -62,10 +58,7 @@ pub fn routes() -> Router<Arc<AppState>> {
         );
     }
 
-    // Core Pet DB implementations
-    router = router
-        .merge(pet_core::configure())
-        .merge(pet_db::configure());
+    // Pet-related routes removed for stability
 
     // Add your own routes below:
     // router = router.merge(users::routes());
