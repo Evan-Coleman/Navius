@@ -1,4 +1,6 @@
-use super::*;
+//! Microsoft Entra ID (Azure AD) OAuth provider
+
+use super::common::*;
 use crate::core::auth::error::AuthError;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode_header};
 use reqwest::Client;

@@ -1,10 +1,5 @@
-mod entra;
-mod google;
+pub mod common;
+pub mod entra;
 
+pub use common::*;
 pub use entra::EntraProvider;
-pub use google::GoogleProvider;
-
-#[async_trait]
-pub trait OAuthProvider: Send + Sync {
-    // Trait implementation...
-}

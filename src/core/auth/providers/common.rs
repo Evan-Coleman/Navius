@@ -1,7 +1,8 @@
+use crate::core::auth::providers::entra::EntraProvider;
 use crate::core::auth::{AuthConfig, AuthError, StandardClaims};
 use crate::core::config::AppConfig;
 use async_trait::async_trait;
-use governor::{Quota, RateLimiter};
+use governor::{DefaultClock, InMemoryState, NotKeyed, Quota, RateLimiter};
 use metrics::{counter, gauge, histogram};
 use nonzero_ext::nonzero;
 use serde::Serialize;
@@ -201,86 +202,37 @@ impl CircuitBreaker {
     }
 
     fn record_success(&self) {
-        if let CircuitState::HalfOpen = *self.state.borrow() {
-            self.state.send(CircuitState::Closed).ok();
+        if *self.state.borrow() == CircuitState::HalfOpen {
+            self.state.send(CircuitState::Closed).unwrap_or_default();
         }
     }
 
     fn record_failure(&self, reset_timeout: Duration) {
-        let new_state = match *self.state.borrow() {
-            CircuitState::Closed | CircuitState::HalfOpen => {
-                CircuitState::Open(Instant::now() + reset_timeout)
+        let until = Instant::now() + reset_timeout;
+        match *self.state.borrow() {
+            CircuitState::HalfOpen | CircuitState::Closed => {
+                self.state
+                    .send(CircuitState::Open(until))
+                    .unwrap_or_default();
             }
-            _ => return,
-        };
-        self.state.send(new_state).ok();
-    }
-}
-
-#[async_trait]
-impl OAuthProvider for EntraProvider {
-    async fn validate_token(&self, token: &str) -> Result<StandardClaims, AuthError> {
-        self.circuit_breaker.check().await?;
-
-        let result = self.inner_validate_token(token).await;
-
-        match &result {
-            Ok(_) => self.circuit_breaker.record_success(),
-            Err(_) => self
-                .circuit_breaker
-                .record_failure(self.config.reset_timeout),
-        }
-
-        result
-    }
-
-    async fn refresh_jwks(&self) -> Result<(), AuthError> {
-        let timer = metrics::Timer::start("auth_jwks_refresh_time");
-        // ... existing refresh logic ...
-        timer.stop();
-        counter!("auth_jwks_refreshes", 1, "provider" => self.name());
-        Ok(())
-    }
-
-    async fn health_check(&self) -> HealthStatus {
-        let cache = self.jwks_cache.lock().unwrap();
-        let circuit_state = match *self.circuit_breaker.state.borrow() {
-            CircuitState::Closed => "closed",
-            CircuitState::Open(_) => "open",
-            CircuitState::HalfOpen => "half-open",
-        };
-
-        match &*cache {
-            Some(entry) => HealthStatus {
-                ready: true,
-                jwks_valid: entry.expires_at > SystemTime::now(),
-                last_refresh: entry
-                    .expires_at
-                    .checked_sub(Duration::from_secs(300))
-                    .unwrap_or(entry.expires_at),
-                error: None,
-                circuit_state: circuit_state.to_string(),
-            },
-            None => HealthStatus {
-                ready: false,
-                jwks_valid: false,
-                last_refresh: SystemTime::UNIX_EPOCH,
-                error: Some("JWKS not initialized".to_string()),
-                circuit_state: circuit_state.to_string(),
-            },
+            CircuitState::Open(current) if until > current => {
+                self.state
+                    .send(CircuitState::Open(until))
+                    .unwrap_or_default();
+            }
+            _ => {}
         }
     }
 }
 
-// Update provider configuration
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ProviderConfig {
     // ... existing fields ...
     #[serde(default = "default_refresh_rate")]
     pub refresh_rate_limit: RateLimitConfig,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct RateLimitConfig {
     pub max_requests: u32,
     pub per_seconds: u32,
@@ -288,7 +240,7 @@ pub struct RateLimitConfig {
 
 fn default_refresh_rate() -> RateLimitConfig {
     RateLimitConfig {
-        max_requests: 5,
+        max_requests: 10,
         per_seconds: 60,
     }
 }
