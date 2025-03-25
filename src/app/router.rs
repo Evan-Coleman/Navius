@@ -4,18 +4,34 @@ use axum::{
 };
 use std::sync::Arc;
 
-use crate::core::router::app_router::AppState;
+use crate::core::router::app_router::{AppState, RouterBuilder};
 use config::Config;
 
-pub fn create_router(
-    _config: Config,
-    // Database connection parameter removed for stability
-) -> Router<Arc<AppState>> {
-    // Create a basic app state with default settings
+/// Create an application router with the given configuration
+///
+/// This function provides a Spring Boot-like developer experience
+/// where you can easily configure and extend the application.
+pub fn create_router(config: Config) -> Router {
+    // Convert from config to AppConfig
+    let app_config = crate::core::config::app_config::AppConfig::default();
+
+    // Create a basic app state to use with the router
     let app_state = Arc::new(AppState::default());
 
-    // Define routes
-    Router::new().with_state(app_state)
+    // Create a router using the builder pattern
+    let router = RouterBuilder::new()
+        .with_config(app_config)
+        .with_metrics_enabled(true)
+        .with_cors(true)
+        .build();
+
+    // Convert the router to use our app state
+    router.with_state(())
+}
+
+/// Create a Spring Boot-like application with sensible defaults
+pub fn create_application() -> RouterBuilder {
+    crate::core::router::app_router::create_application()
 }
 
 async fn health_check() -> &'static str {

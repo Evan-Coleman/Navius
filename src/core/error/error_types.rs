@@ -74,9 +74,6 @@ pub enum AppError {
     #[error("External service error: {0}")]
     ExternalServiceError(String),
 
-    #[error("Database error: {0}")]
-    DatabaseError(String),
-
     #[error("Cache error: {0}")]
     CacheError(String),
 
@@ -121,7 +118,6 @@ impl AppError {
             AppError::CacheError(_) => ErrorSeverity::Medium,
             AppError::ClientError(_) => ErrorSeverity::Medium,
             AppError::ExternalServiceError(_) => ErrorSeverity::High,
-            AppError::DatabaseError(_) => ErrorSeverity::High,
             AppError::ConfigError(_) => ErrorSeverity::High,
             AppError::IoError(_) => ErrorSeverity::High,
             AppError::InternalServerError(_) => ErrorSeverity::High,
@@ -147,7 +143,6 @@ impl AppError {
             AppError::CacheError(_) => "cache_error",
             AppError::ClientError(_) => "client_error",
             AppError::ExternalServiceError(_) => "external_service_error",
-            AppError::DatabaseError(_) => "database_error",
             AppError::ConfigError(_) => "config_error",
             AppError::IoError(_) => "io_error",
             AppError::InternalServerError(_) => "internal_server_error",
@@ -174,7 +169,6 @@ impl AppError {
             AppError::CacheError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::ClientError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::ExternalServiceError(_) => StatusCode::BAD_GATEWAY,
-            AppError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::ConfigError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::IoError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -202,10 +196,6 @@ impl AppError {
 
     pub fn validation_error(message: impl Into<String>) -> Self {
         Self::ValidationError(message.into())
-    }
-
-    pub fn database_error(message: impl Into<String>) -> Self {
-        Self::DatabaseError(message.into())
     }
 
     pub fn unauthorized(message: impl Into<String>) -> Self {
@@ -275,7 +265,6 @@ impl IntoResponse for AppError {
 impl From<CoreServiceError> for AppError {
     fn from(err: CoreServiceError) -> Self {
         match err {
-            CoreServiceError::Repository(msg) => Self::DatabaseError(msg),
             CoreServiceError::Validation(msg) => Self::ValidationError(msg),
             CoreServiceError::Other(msg) => Self::InternalServerError(msg),
             CoreServiceError::NotFound(msg) => Self::NotFoundError(msg),
@@ -321,10 +310,6 @@ mod tests {
             ErrorSeverity::Medium
         );
 
-        assert_eq!(
-            AppError::DatabaseError("test".into()).severity(),
-            ErrorSeverity::High
-        );
         assert_eq!(
             AppError::InternalServerError("test".into()).severity(),
             ErrorSeverity::High

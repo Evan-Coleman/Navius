@@ -87,7 +87,6 @@ mod tests {
             metrics_handle: Some(metrics_handle),
             token_client: None,
             resource_registry: None,
-            db_pool: None,
             service_registry: Arc::new(ServiceRegistry::new()),
         })
     }

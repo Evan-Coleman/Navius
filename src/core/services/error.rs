@@ -4,8 +4,6 @@ use std::fmt;
 /// Error type for service operations
 #[derive(Debug)]
 pub enum ServiceError {
-    /// Database or repository errors
-    Repository(String),
     /// Input validation errors
     Validation(String),
     /// Resource not found errors
@@ -19,7 +17,6 @@ pub enum ServiceError {
 impl fmt::Display for ServiceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ServiceError::Repository(msg) => write!(f, "Repository error: {}", msg),
             ServiceError::Validation(msg) => write!(f, "Validation error: {}", msg),
             ServiceError::NotFound(msg) => write!(f, "Not found: {}", msg),
             ServiceError::Conflict(msg) => write!(f, "Conflict: {}", msg),
@@ -31,7 +28,6 @@ impl fmt::Display for ServiceError {
 impl From<AppError> for ServiceError {
     fn from(err: AppError) -> Self {
         match err {
-            AppError::DatabaseError(msg) => ServiceError::Repository(msg),
             AppError::ValidationError(msg) => ServiceError::Validation(msg),
             AppError::NotFound(msg) => ServiceError::NotFound(msg),
             AppError::NotFoundError(msg) => ServiceError::NotFound(msg),

@@ -324,7 +324,6 @@ mod tests {
             start_time: std::time::SystemTime::now(),
             cache_registry: Some(Arc::new(CacheRegistry::default())),
             client: Some(reqwest::Client::new()),
-            db_pool: None,
             token_client: Some(Arc::new(MockTokenClient::default())),
             metrics_handle: Some(
                 metrics_exporter_prometheus::PrometheusBuilder::new()

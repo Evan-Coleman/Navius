@@ -6,8 +6,7 @@ mod tests;
 pub use app_config::AppConfig;
 pub use app_config::load_config;
 use app_config::{
-    ApiConfig, AuthConfig, CacheConfig, DatabaseConfig, LoggingConfig, ReliabilityConfig,
-    ServerConfig,
+    ApiConfig, AuthConfig, CacheConfig, LoggingConfig, ReliabilityConfig, ServerConfig,
 };
 
 use lazy_static::lazy_static;
@@ -34,7 +33,6 @@ impl Default for AppConfig {
             api: ApiConfig::default(),
             logging: LoggingConfig::default(),
             cache: CacheConfig::default(),
-            database: DatabaseConfig::default(),
             auth: AuthConfig::default(),
             reliability: ReliabilityConfig::default(),
             openapi: app_config::OpenApiConfig::default(),

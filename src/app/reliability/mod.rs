@@ -27,12 +27,3 @@ use std::time::Duration;
 
 // Example: Define custom circuit breakers for external services
 // pub mod service_circuit_breakers;
-
-/// Create a retry policy suitable for database operations
-///
-/// This is an example function that demonstrates how to create a retry policy.
-pub fn create_db_retry_policy() -> Duration {
-    // This is a placeholder that returns a simple timeout duration
-    // In a real application, you would implement a proper retry policy
-    Duration::from_millis(100)
-}

@@ -3,6 +3,7 @@
 //! This module defines interfaces and types that are used throughout the authentication system.
 
 use async_trait::async_trait;
+use std::fmt::Debug;
 
 use crate::core::{
     auth::models::{JwtClaims, TokenResponse, UserProfile},
@@ -20,7 +21,7 @@ pub struct TokenValidationResult {
 
 /// Interface for token acquisition and validation
 #[async_trait]
-pub trait TokenClient: Send + Sync {
+pub trait TokenClient: Send + Sync + Debug {
     /// Get a token using username and password
     async fn get_token(&self, username: &str, password: &str) -> Result<TokenResponse, AppError>;
 

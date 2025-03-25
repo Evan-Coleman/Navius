@@ -35,18 +35,6 @@ fn test_default_cache_config() {
 }
 
 #[test]
-fn test_default_database_config() {
-    let db = DatabaseConfig::default();
-
-    // Default values
-    assert_eq!(db.enabled, false);
-    assert_eq!(db.url, "postgres://postgres:postgres@localhost:5432/app");
-    assert_eq!(db.max_connections, 10);
-    assert_eq!(db.connect_timeout_seconds, 30);
-    assert_eq!(db.idle_timeout_seconds, Some(300));
-}
-
-#[test]
 fn test_default_api_config() {
     let api = ApiConfig::default();
 

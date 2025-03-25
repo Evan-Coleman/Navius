@@ -467,6 +467,185 @@ impl CacheRegistry {
             }
         }
     }
+
+    /// Create a cache key for a resource
+    pub fn create_key<T: ApiResource>(&self, id: &T::Id) -> Option<String> {
+        if !self.enabled {
+            return None;
+        }
+
+        let resource_type = T::resource_type();
+        if !self.has_cache(resource_type) {
+            return None;
+        }
+
+        Some(id.to_string())
+    }
+
+    /// Get or fetch a resource from cache
+    pub async fn get_or_fetch<T, F, Fut>(&self, cache_key: String, fetch_fn: F) -> Result<T, String>
+    where
+        T: ApiResource + 'static,
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = Result<T, String>>,
+    {
+        if !self.enabled {
+            return fetch_fn().await;
+        }
+
+        let resource_type = T::resource_type();
+        get_or_fetch(self, resource_type, &cache_key, fetch_fn).await
+    }
+
+    /// Store a resource in cache
+    pub async fn store<T: ApiResource + 'static>(
+        &self,
+        cache_key: String,
+        resource: T,
+    ) -> Result<(), String> {
+        if !self.enabled {
+            return Ok(());
+        }
+
+        let resource_type = T::resource_type();
+        if let Some(cache) = get_resource_cache::<T>(self, resource_type) {
+            cache.cache.insert(cache_key, resource).await;
+            Ok(())
+        } else {
+            Err(format!(
+                "No cache found for resource type: {}",
+                resource_type
+            ))
+        }
+    }
+
+    /// Invalidate all caches in the registry
+    pub async fn invalidate_all(&self) {
+        if !self.enabled {
+            return;
+        }
+
+        let caches = match self.caches.read() {
+            Ok(caches) => caches,
+            Err(_) => {
+                warn!("Failed to acquire read lock on cache registry for invalidation");
+                return;
+            }
+        };
+
+        for (resource_type, _) in caches.iter() {
+            debug!("Invalidating cache for resource type: {}", resource_type);
+            // We'll need to handle each resource type separately due to type erasure
+            self.invalidate_resource_cache(resource_type).await;
+        }
+
+        info!("🧹 Invalidated all caches in registry");
+    }
+
+    /// Invalidate a specific resource cache
+    pub async fn invalidate_resource_cache(&self, resource_type: &str) {
+        if !self.enabled {
+            return;
+        }
+
+        let caches = match self.caches.read() {
+            Ok(caches) => caches,
+            Err(_) => {
+                warn!("Failed to acquire read lock on cache registry");
+                return;
+            }
+        };
+
+        if let Some(cache) = caches.get(resource_type) {
+            // We need to handle this dynamically since we can't know the type T at compile time
+            // Use a dispatcher pattern to call the correct invalidate method
+
+            // This is a simplified approach - in a real implementation, you might want to
+            // define a trait with an invalidate method and have ResourceCache implement it
+            debug!("Invalidating cache for resource type: {}", resource_type);
+
+            // Reset metrics manually since we can't call the correct invalidate method directly
+            gauge!("cache_active_entries", "resource_type" => resource_type.to_string()).set(0.0);
+            gauge!("cache_current_size", "resource_type" => resource_type.to_string()).set(0.0);
+
+            info!("🧹 Invalidated cache for resource type: {}", resource_type);
+        }
+    }
+
+    /// Get statistics for all caches
+    pub fn get_all_stats(&self) -> HashMap<String, CacheStats> {
+        if !self.enabled {
+            return HashMap::new();
+        }
+
+        let mut stats = HashMap::new();
+
+        let caches = match self.caches.read() {
+            Ok(caches) => caches,
+            Err(_) => {
+                warn!("Failed to acquire read lock on cache registry");
+                return HashMap::new();
+            }
+        };
+
+        // Collect basic stats for each cache - we can't get detailed stats due to type erasure
+        for (resource_type, _) in caches.iter() {
+            // Get metrics from the metrics system
+            let mut labels = Vec::new();
+            labels.push(("resource_type", resource_type.clone()));
+
+            let hits = crate::core::metrics::metrics_handler::try_get_counter_with_labels(
+                "cache_hits",
+                &labels,
+            )
+            .unwrap_or(0);
+
+            let misses = crate::core::metrics::metrics_handler::try_get_counter_with_labels(
+                "cache_misses",
+                &labels,
+            )
+            .unwrap_or(0);
+
+            let size = crate::core::metrics::metrics_handler::try_get_gauge_with_labels(
+                "cache_current_size",
+                &labels,
+            )
+            .unwrap_or(0.0) as usize;
+
+            let total = hits + misses;
+            let hit_ratio = if total > 0 {
+                hits as f64 / total as f64 * 100.0
+            } else {
+                0.0
+            };
+
+            stats.insert(
+                resource_type.clone(),
+                CacheStats {
+                    size,
+                    hits,
+                    misses,
+                    hit_ratio,
+                },
+            );
+        }
+
+        stats
+    }
+
+    /// Check if the registry has a cache for a specific resource type
+    pub fn has_cache(&self, resource_type: &str) -> bool {
+        if !self.enabled {
+            return false;
+        }
+
+        let caches = match self.caches.read() {
+            Ok(caches) => caches,
+            Err(_) => return false,
+        };
+
+        caches.contains_key(resource_type)
+    }
 }
 
 impl Default for CacheRegistry {
@@ -630,132 +809,28 @@ impl<T: ApiResource> ResourceCache<T> {
 
 // Add missing methods to CacheRegistry
 impl CacheRegistry {
-    /// Invalidate all caches in the registry
-    pub async fn invalidate_all(&self) {
-        if !self.enabled {
-            return;
-        }
-
-        let caches = match self.caches.read() {
-            Ok(caches) => caches,
-            Err(_) => {
-                warn!("Failed to acquire read lock on cache registry for invalidation");
-                return;
-            }
-        };
-
-        for (resource_type, _) in caches.iter() {
-            debug!("Invalidating cache for resource type: {}", resource_type);
-            // We'll need to handle each resource type separately due to type erasure
-            self.invalidate_resource_cache(resource_type).await;
-        }
-
-        info!("🧹 Invalidated all caches in registry");
-    }
-
-    /// Invalidate a specific resource cache
-    pub async fn invalidate_resource_cache(&self, resource_type: &str) {
-        if !self.enabled {
-            return;
-        }
-
-        let caches = match self.caches.read() {
-            Ok(caches) => caches,
-            Err(_) => {
-                warn!("Failed to acquire read lock on cache registry");
-                return;
-            }
-        };
-
-        if let Some(cache) = caches.get(resource_type) {
-            // We need to handle this dynamically since we can't know the type T at compile time
-            // Use a dispatcher pattern to call the correct invalidate method
-
-            // This is a simplified approach - in a real implementation, you might want to
-            // define a trait with an invalidate method and have ResourceCache implement it
-            debug!("Invalidating cache for resource type: {}", resource_type);
-
-            // Reset metrics manually since we can't call the correct invalidate method directly
-            gauge!("cache_active_entries", "resource_type" => resource_type.to_string()).set(0.0);
-            gauge!("cache_current_size", "resource_type" => resource_type.to_string()).set(0.0);
-
-            info!("🧹 Invalidated cache for resource type: {}", resource_type);
+    pub fn record_cache_metrics(&self, resource_type: &str, current_size: usize) {
+        if self.enabled {
+            record_cache_size(resource_type, current_size as u64);
         }
     }
 
-    /// Get statistics for all caches
-    pub fn get_all_stats(&self) -> HashMap<String, CacheStats> {
-        if !self.enabled {
-            return HashMap::new();
+    pub fn record_active_entries_metric(&self, resource_type: &str, active_entries: u64) {
+        if self.enabled {
+            record_active_entries(resource_type, active_entries);
         }
-
-        let mut stats = HashMap::new();
-
-        let caches = match self.caches.read() {
-            Ok(caches) => caches,
-            Err(_) => {
-                warn!("Failed to acquire read lock on cache registry");
-                return HashMap::new();
-            }
-        };
-
-        // Collect basic stats for each cache - we can't get detailed stats due to type erasure
-        for (resource_type, _) in caches.iter() {
-            // Get metrics from the metrics system
-            let mut labels = Vec::new();
-            labels.push(("resource_type", resource_type.clone()));
-
-            let hits = crate::core::metrics::metrics_handler::try_get_counter_with_labels(
-                "cache_hits",
-                &labels,
-            )
-            .unwrap_or(0);
-
-            let misses = crate::core::metrics::metrics_handler::try_get_counter_with_labels(
-                "cache_misses",
-                &labels,
-            )
-            .unwrap_or(0);
-
-            let size = crate::core::metrics::metrics_handler::try_get_gauge_with_labels(
-                "cache_current_size",
-                &labels,
-            )
-            .unwrap_or(0.0) as usize;
-
-            let total = hits + misses;
-            let hit_ratio = if total > 0 {
-                hits as f64 / total as f64 * 100.0
-            } else {
-                0.0
-            };
-
-            stats.insert(
-                resource_type.clone(),
-                CacheStats {
-                    size,
-                    hits,
-                    misses,
-                    hit_ratio,
-                },
-            );
-        }
-
-        stats
     }
 
-    /// Check if the registry has a cache for a specific resource type
-    pub fn has_cache(&self, resource_type: &str) -> bool {
-        if !self.enabled {
-            return false;
+    pub fn record_cache_hit(&self, resource_type: &str, count: u64) {
+        if self.enabled {
+            record_cache_hits(resource_type, count);
         }
+    }
 
-        let caches = match self.caches.read() {
-            Ok(caches) => caches,
-            Err(_) => return false,
-        };
-
-        caches.contains_key(resource_type)
+    pub fn record_cache_miss(&self, resource_type: &str, count: u64) {
+        if self.enabled {
+            record_cache_misses(resource_type, count);
+        }
     }
 }
 
@@ -801,82 +876,6 @@ fn record_cache_misses(resource_type: &str, misses: u64) {
         &labels,
         misses,
     );
-}
-
-// Find all labels still using HashMap and fix the remaining issues
-fn metrics_for_cache(
-    resource_type: &str,
-    hit_count: u64,
-    miss_count: u64,
-    size: usize,
-) -> HashMap<String, CacheStats> {
-    let mut labels = Vec::new();
-    labels.push(("resource_type", resource_type.to_string()));
-
-    // Record cache hit/miss metrics
-    crate::core::metrics::metrics_handler::record_counter_with_labels(
-        "cache_hits",
-        &labels,
-        hit_count,
-    );
-
-    crate::core::metrics::metrics_handler::record_counter_with_labels(
-        "cache_misses",
-        &labels,
-        miss_count,
-    );
-
-    // Record cache size metrics
-    crate::core::metrics::metrics_handler::record_gauge_with_labels(
-        "cache_current_size",
-        &labels,
-        size as f64,
-    );
-
-    let mut map = HashMap::new();
-    let hit_ratio = if hit_count + miss_count > 0 {
-        (hit_count as f64 / (hit_count + miss_count) as f64) * 100.0
-    } else {
-        0.0
-    };
-
-    map.insert(
-        resource_type.to_string(),
-        CacheStats {
-            size,
-            hits: hit_count,
-            misses: miss_count,
-            hit_ratio,
-        },
-    );
-
-    map
-}
-
-impl CacheRegistry {
-    pub fn record_cache_metrics(&self, resource_type: &str, current_size: usize) {
-        if self.enabled {
-            record_cache_size(resource_type, current_size as u64);
-        }
-    }
-
-    pub fn record_active_entries_metric(&self, resource_type: &str, active_entries: u64) {
-        if self.enabled {
-            record_active_entries(resource_type, active_entries);
-        }
-    }
-
-    pub fn record_cache_hit(&self, resource_type: &str, count: u64) {
-        if self.enabled {
-            record_cache_hits(resource_type, count);
-        }
-    }
-
-    pub fn record_cache_miss(&self, resource_type: &str, count: u64) {
-        if self.enabled {
-            record_cache_misses(resource_type, count);
-        }
-    }
 }
 
 #[cfg(test)]

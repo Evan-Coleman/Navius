@@ -1,5 +1,5 @@
 use axum::{extract::State, http::StatusCode, response::Json};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, sync::Arc, time::SystemTime};
 
@@ -7,6 +7,12 @@ use crate::core::{
     models::{DependencyStatus, DetailedHealthResponse, HealthCheckResponse},
     router::AppState,
 };
+
+/// Ultra-minimal health check endpoint for simple monitoring
+/// Returns a simple JSON status object like Spring Boot's /health endpoint
+pub async fn simple_health_handler() -> Json<Value> {
+    Json(json!({ "status": "UP" }))
+}
 
 /// Simple health check endpoint
 pub async fn health_handler() -> Json<HealthCheckResponse> {
@@ -20,41 +26,37 @@ pub async fn health_handler() -> Json<HealthCheckResponse> {
     })
 }
 
-/// Detailed health check that includes database status
+/// Detailed health check
 pub async fn detailed_health_handler(
     State(state): State<Arc<AppState>>,
 ) -> Json<DetailedHealthResponse> {
     let version = env!("CARGO_PKG_VERSION").to_string();
 
-    // Calculate uptime by comparing current time to start time
-    let now = Utc::now();
-    let uptime_duration = now.signed_duration_since(state.start_time);
-    let uptime_secs = uptime_duration.num_seconds() as u64;
+    // Calculate uptime directly instead of using DateTime comparison
+    let now = SystemTime::now();
+    let uptime_secs = now
+        .duration_since(state.start_time)
+        .unwrap_or_default()
+        .as_secs();
     let uptime = format!("{}s", uptime_secs);
 
     // Check dependencies
     let mut dependencies = Vec::new();
-
-    // Database access removed for stability
-    // Always report database as disabled since it has been removed
-    dependencies.push(DependencyStatus {
-        name: "Database".to_string(),
-        status: "DISABLED".to_string(),
-        details: Some("Database functionality has been removed for stability".to_string()),
-    });
 
     // Check cache if available
     dependencies.push(DependencyStatus {
         name: "Cache".to_string(),
         status: "UP".to_string(),
         details: Some(format!(
-            "Cache enabled with {} entries",
-            state.cache_registry.count_entries()
+            "Cache {}",
+            match &state.cache_registry {
+                Some(registry) => format!("enabled"),
+                None => format!("disabled"),
+            }
         )),
     });
 
     // Determine overall status - if any dependency is down, the whole service is down
-    // Database being disabled doesn't count as DOWN since it's intentional
     let status = if dependencies
         .iter()
         .any(|d| d.status != "UP" && d.status != "DISABLED")
@@ -71,9 +73,6 @@ pub async fn detailed_health_handler(
         dependencies,
     })
 }
-
-// Database connection check removed for stability as we no longer use a database
-// The function has been simplified to always return a disabled status
 
 #[cfg(test)]
 mod tests {
@@ -97,14 +96,6 @@ mod tests {
         assert_eq!(response.status_code(), StatusCode::OK);
         assert_eq!(response.0.status, "UP");
 
-        // Should have at least the database disabled dependency
         assert!(!response.0.dependencies.is_empty());
-        assert!(
-            response
-                .0
-                .dependencies
-                .iter()
-                .any(|d| d.name == "Database" && d.status == "DISABLED")
-        );
     }
 }

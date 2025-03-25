@@ -17,6 +17,7 @@ use crate::core::config::constants;
 use crate::core::error::AppError;
 
 /// Token cache entry
+#[derive(Debug)]
 struct TokenCacheEntry {
     /// The access token
     access_token: String,
@@ -25,6 +26,7 @@ struct TokenCacheEntry {
 }
 
 /// Entra token client for acquiring tokens for downstream services
+#[derive(Debug)]
 pub struct EntraTokenClient {
     /// HTTP client for making requests
     client: Client,

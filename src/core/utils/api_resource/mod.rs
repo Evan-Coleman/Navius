@@ -39,23 +39,33 @@ pub fn register_resource<T: ApiResource + 'static>(
 ) -> Result<(), String> {
     let resource_name = resource_type.unwrap_or_else(|| T::resource_type());
 
-    // Register the resource type in the cache registry
-    match register_resource_cache::<T>(&state.cache_registry, resource_name) {
-        Ok(_) => {
-            info!(
-                "✅ Registered resource type {} in cache registry",
-                resource_name
-            );
-            Ok(())
+    // Check if the cache registry is available
+    if let Some(registry) = &state.cache_registry {
+        // Register the resource type in the cache registry
+        match register_resource_cache::<T>(registry, resource_name) {
+            Ok(_) => {
+                info!(
+                    "✅ Registered resource type {} in cache registry",
+                    resource_name
+                );
+                Ok(())
+            }
+            Err(e) => {
+                // Don't fail if registration fails - just log and continue
+                info!(
+                    "⚠️ Failed to register resource type {} in cache registry: {}",
+                    resource_name, e
+                );
+                Ok(())
+            }
         }
-        Err(e) => {
-            // Don't fail if registration fails - just log and continue
-            info!(
-                "⚠️ Failed to register resource type {} in cache registry: {}",
-                resource_name, e
-            );
-            Ok(())
-        }
+    } else {
+        // Cache registry is not available, just log and continue
+        info!(
+            "⚠️ Cache registry not available, skipping registration of {}",
+            resource_name
+        );
+        Ok(())
     }
 }
 
@@ -106,7 +116,6 @@ mod tests {
             start_time: SystemTime::now(),
             cache_registry: Some(Arc::new(cache_registry)),
             client: Some(Client::new()),
-            db_pool: None,
             token_client: Some(Arc::new(MockTokenClient::default())),
             metrics_handle: Some(metrics_handle),
             resource_registry: Some(Arc::new(ApiResourceRegistry::new())),

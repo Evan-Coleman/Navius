@@ -7,8 +7,7 @@ use metrics_exporter_prometheus::PrometheusBuilder;
 use navius::{
     app::router,
     core::{
-        config::app_config::{AppConfig, AuthConfig, CacheConfig, DatabaseConfig},
-        database::{PgPool, connection::MockDatabaseConnection},
+        config::app_config::{AppConfig, AuthConfig, CacheConfig},
         router::AppState,
         utils::api_resource::ApiResourceRegistry,
     },
@@ -26,15 +25,6 @@ const MAX_BODY_SIZE: usize = 1024 * 1024; // 1MB limit for response bodies
 
 mod common;
 
-// Create a shared mock database
-static MOCK_DB: Lazy<Arc<Box<dyn PgPool>>> = Lazy::new(|| {
-    let mut config = DatabaseConfig::default();
-    config.enabled = true;
-    let mock_conn = MockDatabaseConnection::new(&config);
-    println!("Created mock database: {:?}", mock_conn);
-    Arc::new(Box::new(mock_conn))
-});
-
 /// Helper function to create a test server with all dependencies
 async fn setup_test_server() -> Router {
     // Create test configuration
@@ -47,20 +37,12 @@ async fn setup_test_server() -> Router {
             enabled: false,
             ..Default::default()
         },
-        database: DatabaseConfig {
-            enabled: true,
-            ..Default::default()
-        },
         ..Default::default()
     };
 
     // Create test state
     let metrics_recorder = PrometheusBuilder::new().build_recorder();
     let metrics_handle = metrics_recorder.handle();
-
-    // Create mock database connection
-    let mock_db = MockDatabaseConnection::new(&config.database);
-    let db_pool: Arc<Box<dyn PgPool>> = Arc::new(Box::new(mock_db));
 
     let state = Arc::new(AppState {
         client: Client::new(),
@@ -70,7 +52,6 @@ async fn setup_test_server() -> Router {
         metrics_handle,
         token_client: None,
         resource_registry: ApiResourceRegistry::new(),
-        db_pool: Some(db_pool),
     });
 
     // Create router with test state
