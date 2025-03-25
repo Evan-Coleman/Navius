@@ -243,8 +243,8 @@ pub mod mockable {
 }
 
 // Direct re-exports for commonly used types
-pub use crate::app::api::*;
+pub use crate::app::api::examples as app_examples;
 pub use crate::core::error::*;
 pub use crate::core::models::*;
 pub use crate::core::services::error as core_service_error;
-pub use crate::core::services::*;
+pub use crate::core::services::health::HealthService as CoreHealthService;

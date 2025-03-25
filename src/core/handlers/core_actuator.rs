@@ -92,17 +92,11 @@ fn get_active_features() -> Vec<String> {
     #[cfg(feature = "default")]
     features.push("default".to_string());
 
-    #[cfg(feature = "full")]
-    features.push("full".to_string());
-
     #[cfg(feature = "examples")]
     features.push("examples".to_string());
 
     #[cfg(feature = "production")]
     features.push("production".to_string());
-
-    #[cfg(feature = "metrics")]
-    features.push("metrics".to_string());
 
     features
 }
