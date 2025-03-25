@@ -17,15 +17,6 @@
 //! This module contains all the service implementations that are intended
 //! to be customized or extended by users of the framework.
 
-// Pet repositories imports removed for stability
-use std::any::Any;
-use std::sync::Arc;
-
-// Re-export these types for convenience
-// Pet DTOs removed for stability
-pub use error::ServiceError;
-// Pet service removed for stability
-
 /// Default implementation of ServiceRegistry that can be used by applications
 pub struct DefaultServiceRegistry {
     // service fields go here
@@ -40,11 +31,6 @@ impl DefaultServiceRegistry {
             // Pet service removed for stability
         }
     }
-}
-
-// Add missing trait implementation from the "server-info" rule
-impl crate::core::services::ServiceRegistryTrait for DefaultServiceRegistry {
-    // Pet service removed for stability
 }
 
 impl Default for DefaultServiceRegistry {

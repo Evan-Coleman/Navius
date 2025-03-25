@@ -1,7 +1,6 @@
 use axum::{extract::State, http::StatusCode, response::Json};
 use chrono::Utc;
 use serde_json::{Value, json};
-use sqlx::{Pool, Postgres};
 use std::{collections::BTreeMap, sync::Arc, time::SystemTime};
 
 use crate::core::{
@@ -36,10 +35,13 @@ pub async fn detailed_health_handler(
     // Check dependencies
     let mut dependencies = Vec::new();
 
-    // Check database if available
-    if let Some(pool) = &state.db_pool {
-        dependencies.push(check_database_connection(pool).await);
-    }
+    // Database access removed for stability
+    // Always report database as disabled since it has been removed
+    dependencies.push(DependencyStatus {
+        name: "Database".to_string(),
+        status: "DISABLED".to_string(),
+        details: Some("Database functionality has been removed for stability".to_string()),
+    });
 
     // Check cache if available
     dependencies.push(DependencyStatus {
@@ -52,7 +54,11 @@ pub async fn detailed_health_handler(
     });
 
     // Determine overall status - if any dependency is down, the whole service is down
-    let status = if dependencies.iter().any(|d| d.status != "UP") {
+    // Database being disabled doesn't count as DOWN since it's intentional
+    let status = if dependencies
+        .iter()
+        .any(|d| d.status != "UP" && d.status != "DISABLED")
+    {
         "DOWN".to_string()
     } else {
         "UP".to_string()
@@ -66,37 +72,8 @@ pub async fn detailed_health_handler(
     })
 }
 
-/// Check database connection and return status
-async fn check_database_connection(pool: &Arc<Pool<Postgres>>) -> DependencyStatus {
-    let start = std::time::Instant::now();
-
-    match pool.acquire().await {
-        Ok(_) => {
-            let mut details = BTreeMap::new();
-            details.insert("status".to_string(), "Connected".to_string());
-            details.insert(
-                "response_time_ms".to_string(),
-                format!("{}", start.elapsed().as_millis()),
-            );
-
-            DependencyStatus {
-                name: "Database".to_string(),
-                status: "UP".to_string(),
-                details: Some(serde_json::to_string(&details).unwrap_or_default()),
-            }
-        }
-        Err(e) => {
-            let mut details = BTreeMap::new();
-            details.insert("error".to_string(), e.to_string());
-
-            DependencyStatus {
-                name: "Database".to_string(),
-                status: "DOWN".to_string(),
-                details: Some(serde_json::to_string(&details).unwrap_or_default()),
-            }
-        }
-    }
-}
+// Database connection check removed for stability as we no longer use a database
+// The function has been simplified to always return a disabled status
 
 #[cfg(test)]
 mod tests {
@@ -120,7 +97,14 @@ mod tests {
         assert_eq!(response.status_code(), StatusCode::OK);
         assert_eq!(response.0.status, "UP");
 
-        // No dependencies configured in default state
-        assert!(response.0.dependencies.is_empty());
+        // Should have at least the database disabled dependency
+        assert!(!response.0.dependencies.is_empty());
+        assert!(
+            response
+                .0
+                .dependencies
+                .iter()
+                .any(|d| d.name == "Database" && d.status == "DISABLED")
+        );
     }
 }

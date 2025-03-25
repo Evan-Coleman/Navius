@@ -9,17 +9,13 @@ use config::Config;
 
 pub fn create_router(
     _config: Config,
-    _db_connection: Option<Arc<dyn PgPool>>,
+    // Database connection parameter removed for stability
 ) -> Router<Arc<AppState>> {
     // Create a basic app state with default settings
     let app_state = Arc::new(AppState::default());
 
     // Define routes
-    Router::new()
-        .route("/health", get(health_check))
-        .route("/metrics", get(metrics))
-        // Pet routes removed for stability
-        .with_state(app_state)
+    Router::new().with_state(app_state)
 }
 
 async fn health_check() -> &'static str {

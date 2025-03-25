@@ -13,7 +13,6 @@ use crate::core::{
         health::{detailed_health_handler, health_handler},
     },
     models::{DetailedHealthResponse, HealthCheckResponse},
-    services::ServiceRegistry,
 };
 
 use super::AppState;

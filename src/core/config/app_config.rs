@@ -684,11 +684,6 @@ impl AppConfig {
         format!("/actuator/docs/{}", self.openapi.spec_file)
     }
 
-    /// Get the petstore API URL
-    pub fn petstore_api_url(&self) -> String {
-        self.api.base_url.clone()
-    }
-
     pub fn api_url(&self) -> &str {
         &self.api.base_url
     }

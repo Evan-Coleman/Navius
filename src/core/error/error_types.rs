@@ -272,18 +272,6 @@ impl IntoResponse for AppError {
     }
 }
 
-impl From<AppServiceError> for AppError {
-    fn from(err: AppServiceError) -> Self {
-        match err {
-            AppServiceError::Repository(msg) => Self::DatabaseError(msg),
-            AppServiceError::Validation(msg) => Self::ValidationError(msg),
-            AppServiceError::NotFound(msg) => Self::NotFoundError(msg),
-            AppServiceError::BadRequest(msg) => Self::BadRequest(msg),
-            AppServiceError::Internal(msg) => Self::InternalServerError(msg),
-        }
-    }
-}
-
 impl From<CoreServiceError> for AppError {
     fn from(err: CoreServiceError) -> Self {
         match err {

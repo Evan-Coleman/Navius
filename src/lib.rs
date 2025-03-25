@@ -69,20 +69,11 @@ pub mod models {
     pub use crate::core::models::extensions::*;
 }
 
-/// Repository module for data access
-pub mod repository {
-    pub use crate::core::repository::*;
-}
-
 /// Service module for business logic
 pub mod services {
     pub use crate::app::services::*;
     pub use crate::core::services::*;
 }
-
-/// Generated API clients
-#[path = "generated_apis.rs"]
-pub mod generated_apis;
 
 /// Reliability features for improved resilience
 pub mod reliability {

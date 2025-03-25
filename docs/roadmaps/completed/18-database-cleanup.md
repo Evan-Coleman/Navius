@@ -3,7 +3,7 @@ title: Database Cleanup Roadmap
 description: Plan for removing all database implementation code
 category: Infrastructure
 tags: [database, cleanup, stability]
-last_updated: March 25, 2024
+last_updated: March 26, 2024
 version: 1.0
 ---
 
@@ -74,4 +74,8 @@ Project completed successfully. Consider these potential future steps:
 
 - Configuration updates in `config/development.yaml`
 - Fixed router code in `src/core/router/app_router.rs`
-- Created placeholders in `src/core/database/models/mod.rs` 
+- Created placeholders in `src/core/services/mod.rs`
+- Added ServiceRegistry::new_without_database method
+- Updated health checks to report database as "DISABLED"
+- Fixed service imports and error handling
+- Removed all SQLx references 
