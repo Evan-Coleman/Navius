@@ -197,7 +197,7 @@ impl UserController {
     /// Register the controller's routes with the router
     /// Note: This is just an example to demonstrate the concepts.
     /// In a real application, this would need to be integrated with Axum's router.
-    pub fn register_routes(&self, router: &mut Router) {
+    pub fn register_routes(&self, _router: &mut Router) {
         // Define the base path for the controller
         let base_path = RequestMapping::new("/api/users");
 

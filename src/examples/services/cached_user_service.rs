@@ -107,7 +107,7 @@ impl CachedUserService {
 
         if result {
             // Define cache evict config (similar to @CacheEvict(value = "users", key = "#id"))
-            let cache_evict = CacheEvict::new("users", "{id}");
+            let _cache_evict = CacheEvict::new("users", "{id}");
 
             // Evict from cache if deletion was successful
             let cache_key = format!("user:{}", id);
@@ -120,7 +120,7 @@ impl CachedUserService {
     /// Clear all users from cache (similar to @CacheEvict(value = "users", allEntries = true))
     pub async fn clear_cache(&self) {
         // Define cache evict config
-        let cache_evict = CacheEvict::new("users", "*").with_all_entries(true);
+        let _cache_evict = CacheEvict::new("users", "*").with_all_entries(true);
 
         // In a real implementation, this would clear all cache entries with the "users" prefix
         // For simplicity, we don't implement the actual cache clearing logic here

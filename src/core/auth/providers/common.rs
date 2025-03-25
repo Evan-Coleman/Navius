@@ -90,7 +90,7 @@ impl ProviderRegistry {
             .expect("Default provider not found")
     }
 
-    pub fn initialize(config: AuthConfig) -> anyhow::Result<Self> {
+    pub fn initialize(config: AuthConfig) -> Result<Self, AuthError> {
         let mut providers: HashMap<String, Arc<dyn OAuthProvider>> = HashMap::new();
 
         for (name, provider_config) in &config.providers {
@@ -119,7 +119,7 @@ impl ProviderRegistry {
         })
     }
 
-    pub fn from_app_config(config: &AppConfig) -> anyhow::Result<Self> {
+    pub fn from_app_config(config: &AppConfig) -> Result<Self, AuthError> {
         let registry = Self::initialize(config.auth.clone())?;
 
         if config.auth.debug {
@@ -150,7 +150,7 @@ impl ProviderRegistry {
     }
 
     pub fn initialize_with_refresh(config: AuthConfig) -> Result<Self, AuthError> {
-        let mut registry = Self::initialize(config)?;
+        let registry = Self::initialize(config)?;
         registry.start_jwks_refresh(300); // Refresh every 5 minutes
         Ok(registry)
     }
