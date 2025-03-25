@@ -66,6 +66,9 @@ This rule helps track attempted error fixes during the codebase cleanup process.
 | E013 | Option<Arc<CacheRegistry>> vs Arc<CacheRegistry> mismatches | • Using if-let statements with wrong types | Replace Option<Arc<CacheRegistry>> with Arc<CacheRegistry> for consistency | In Progress |
 | E014 | AppState has conflicting `new` implementations | • Adding different parameter lists | Use distinct function names or split implementation into separate files | Open |
 | E015 | Missing functions in cache_manager.rs | • Commenting out function calls<br>• Creating empty function shells | Implement proper functions with useful implementations | Resolved |
+| E016 | ServiceError to AppError missing From variants | • Using a match expression with incomplete cases<br>• Creating helper functions | Implement all error variants in From<AppError> for ServiceError | Resolved |
+| E017 | Pet module/models missing in database exports | • Changing import paths<br>• Using fully qualified paths | Create proper mod.rs files and export all required modules | Resolved |
+| E018 | Type mismatch between AppError and ServiceError in returns | • Ignoring with .map_err()<br>• Manual conversions | Add .map_err(ServiceError::from) to properly convert errors | Resolved |
 
 ## Common Errors and Solutions
 
@@ -127,6 +130,26 @@ This rule helps track attempted error fixes during the codebase cleanup process.
   - Pending investigation
   - Need to standardize ID types across the codebase
 
+### Module and Import Errors
+- **Symptoms**: `unresolved import`, `could not find module`
+- **Failed Approaches**:
+  - Changing import paths without fixing module structure
+  - Using glob imports to avoid specific naming
+- **Working Approach**:
+  - Create proper mod.rs files to export all required modules
+  - Ensure all directories with modules have mod.rs files
+  - Use consistent naming and aliasing for imported types
+
+### Error Conversion Issues
+- **Symptoms**: `expected Result<_, ServiceError>, found Result<_, AppError>`
+- **Failed Approaches**:
+  - Direct assignment without conversion
+  - Manual match expressions for each error type
+- **Working Approach**:
+  - Implement comprehensive From<AppError> for ServiceError
+  - Use .map_err(ServiceError::from) for error conversion
+  - Ensure all AppError variants have a corresponding ServiceError conversion
+
 ### Bypassing Errors with Feature Flags (ANTI-PATTERN) 
 - **Symptoms**: Using `--no-default-features` to bypass compile errors
 - **Failed Approaches**:
@@ -176,4 +199,5 @@ This rule helps track attempted error fixes during the codebase cleanup process.
 | Initial | Created document with basic structure and examples |
 | Update 1 | Added new error patterns from test run: metrics lifetime issues, executor trait problems, and missing imports |
 | Update 2 | Added new error patterns: ID type mismatches, metrics static lifetime issues, and PetResponse trait implementations |
-| Update 3 | Updated with solutions for metrics handler lifetime issues (E003, E007, E012) using proper dereferencing and Vec instead of HashMap; updated error count to ~70 errors | 
+| Update 3 | Updated with solutions for metrics handler lifetime issues (E003, E007, E012) using proper dereferencing and Vec instead of HashMap; updated error count to ~70 errors |
+| Update 4 | Updated with progress on fixing ServiceError to AppError conversions (E016), module exports (E017), and type mismatches (E018); error count reduced to 6 errors | 

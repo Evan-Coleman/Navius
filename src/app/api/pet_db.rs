@@ -15,9 +15,12 @@ use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
 use crate::app::database::repositories::pet_repository::{
-    Pet, PetRepository, PgPetRepository as DefaultPetRepository,
+    Pet as RepositoryPet, PetRepository, PgPetRepository as DefaultPetRepository,
 };
-use crate::app::services::{CreatePetDto, IPetService, PetService, UpdatePetDto};
+use crate::app::services::{
+    CreatePetDto, IPetService, UpdatePetDto,
+    pet_service::{Pet as ServicePet, PetService},
+};
 use crate::core::error::{AppError, Result};
 use crate::core::router::AppState;
 use crate::core::services::ServiceRegistry;
@@ -34,8 +37,8 @@ pub struct PetResponse {
     pub updated_at: String,
 }
 
-impl From<pet_service::Pet> for PetResponse {
-    fn from(pet: pet_service::Pet) -> Self {
+impl From<ServicePet> for PetResponse {
+    fn from(pet: ServicePet) -> Self {
         Self {
             id: pet.id,
             name: pet.name,
@@ -48,8 +51,8 @@ impl From<pet_service::Pet> for PetResponse {
     }
 }
 
-impl From<pet_repository::Pet> for PetResponse {
-    fn from(pet: pet_repository::Pet) -> Self {
+impl From<RepositoryPet> for PetResponse {
+    fn from(pet: RepositoryPet) -> Self {
         Self {
             id: pet.id,
             name: pet.name,

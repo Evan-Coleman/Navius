@@ -122,7 +122,10 @@ impl AppState {
         let metrics_handle = crate::core::metrics::init_metrics();
 
         let pet_repository: Arc<dyn PetRepository> = match &db_pool {
-            Some(pool) => Arc::new(PgPetRepository::new(pool.clone())),
+            Some(pool) => {
+                let pg_pool: &Arc<Pool<Postgres>> = pool;
+                Arc::new(PgPetRepository::new(pg_pool.clone()))
+            }
             None => Arc::new(MockPetRepository::default()),
         };
         let pet_service = Arc::new(PetService::new(pet_repository));
@@ -260,13 +263,13 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
     };
 
     // Attempt to initialize database connection if enabled
-    if config.database.enabled {
+    let db_pool = if config.database.enabled {
         // Clone the database config to avoid the borrow issue
         let db_config = config.database.clone();
         match crate::core::init_database(db_config).await {
             Ok(pool) => {
                 info!("🔧 Database connection initialized");
-                Some(pool)
+                Some(Arc::new(pool))
             }
             Err(e) => {
                 tracing::error!("❌ Failed to initialize database: {}", e);
@@ -283,7 +286,10 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
 
     // Create the app state
     let pet_repository: Arc<dyn PetRepository> = match &db_pool {
-        Some(pool) => Arc::new(PgPetRepository::new(pool.clone())),
+        Some(pool) => {
+            let pg_pool: &Arc<Pool<Postgres>> = pool;
+            Arc::new(PgPetRepository::new(pg_pool.clone()))
+        }
         None => Arc::new(MockPetRepository::default()),
     };
     let pet_service = Arc::new(PetService::new(pet_repository));

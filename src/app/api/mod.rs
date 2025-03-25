@@ -35,6 +35,9 @@ pub mod pet_db;
 /// Example API implementations
 pub mod examples;
 
+/// API handler implementations
+pub mod handlers;
+
 /// Helper function to merge all API routes together
 ///
 /// # Example

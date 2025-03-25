@@ -36,8 +36,12 @@ impl From<AppError> for ServiceError {
         match err {
             AppError::DatabaseError(msg) => ServiceError::Repository(msg),
             AppError::ValidationError(msg) => ServiceError::Validation(msg),
+            AppError::NotFound(msg) => ServiceError::NotFound(msg),
             AppError::NotFoundError(msg) => ServiceError::NotFound(msg),
             AppError::ConflictError(msg) => ServiceError::Conflict(msg),
+            AppError::ConfigError(_) => ServiceError::Other("Configuration error".to_string()),
+            AppError::ClientError(e) => ServiceError::Other(format!("HTTP client error: {}", e)),
+            AppError::IoError(e) => ServiceError::Other(format!("IO error: {}", e)),
             AppError::AuthenticationError(msg) => {
                 ServiceError::Other(format!("Authentication error: {}", msg))
             }
@@ -45,6 +49,9 @@ impl From<AppError> for ServiceError {
                 ServiceError::Other(format!("Authorization error: {}", msg))
             }
             AppError::BadRequest(msg) => ServiceError::Validation(msg),
+            AppError::Unauthorized(msg) => ServiceError::Other(format!("Unauthorized: {}", msg)),
+            AppError::Forbidden(msg) => ServiceError::Other(format!("Forbidden: {}", msg)),
+            AppError::RateLimited(msg) => ServiceError::Other(format!("Rate limited: {}", msg)),
             AppError::InternalServerError(msg) => ServiceError::Other(msg),
             AppError::ConfigurationError(msg) => {
                 ServiceError::Other(format!("Configuration error: {}", msg))
@@ -53,6 +60,9 @@ impl From<AppError> for ServiceError {
             AppError::NetworkError(msg) => ServiceError::Other(format!("Network error: {}", msg)),
             AppError::ExternalServiceError(msg) => {
                 ServiceError::Other(format!("External service error: {}", msg))
+            }
+            AppError::NotImplementedError(msg) => {
+                ServiceError::Other(format!("Not implemented: {}", msg))
             }
         }
     }

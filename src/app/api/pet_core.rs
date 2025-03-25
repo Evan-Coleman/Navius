@@ -69,7 +69,7 @@ impl From<ServicePet> for PetResponse {
             name: pet.name,
             pet_type: pet.pet_type.unwrap_or_default(),
             breed: pet.breed,
-            age: pet.age,
+            age: Some(pet.age),
             created_at: "".to_string(), // Service Pet doesn't have timestamp fields
             updated_at: "".to_string(),
         }
@@ -214,13 +214,14 @@ pub async fn create_pet(
 pub async fn update_pet(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
-    Json(request): Json<UpdatePetDto>,
+    Json(request): Json<UpdatePetRequest>,
 ) -> Result<Json<PetResponse>> {
     info!("Updating pet with ID: {}", id);
 
     let pet_service = get_pet_service(state)?;
+    let dto = UpdatePetDto::from(request);
 
-    let pet = pet_service.update_pet(id, request).await.map_err(|e| {
+    let pet = pet_service.update_pet(id, dto).await.map_err(|e| {
         error!("Failed to update pet with ID {}: {}", id, e);
         AppError::from(e)
     })?;

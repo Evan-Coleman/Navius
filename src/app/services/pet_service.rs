@@ -10,7 +10,7 @@ use crate::app::services::dto::{CreatePetDto, UpdatePetDto};
 use crate::app::services::error::ServiceError;
 use crate::core::database::connection::DatabaseConnection;
 use crate::core::{
-    database::{models::Pet, repositories::PetRepository},
+    database::{models::pet::Pet as CorePet, repositories::PetRepository as CorePetRepository},
     error::AppError,
 };
 
@@ -82,11 +82,11 @@ impl<R: PetRepository + ?Sized> PetService<R> {
 #[async_trait]
 impl<R: PetRepository + ?Sized> IPetService for PetService<R> {
     async fn get_all_pets(&self) -> Result<Vec<Pet>, ServiceError> {
-        self.find_all().await
+        self.find_all().await.map_err(ServiceError::from)
     }
 
     async fn get_pet_by_id(&self, id: Uuid) -> Result<Pet, ServiceError> {
-        self.find_by_id(id).await
+        self.find_by_id(id).await.map_err(ServiceError::from)
     }
 
     async fn create_pet(&self, dto: CreatePetDto) -> Result<Pet, ServiceError> {
@@ -100,6 +100,7 @@ impl<R: PetRepository + ?Sized> IPetService for PetService<R> {
             updated_at: Utc::now(),
         })
         .await
+        .map_err(ServiceError::from)
     }
 
     async fn update_pet(&self, id: Uuid, dto: UpdatePetDto) -> Result<Pet, ServiceError> {
@@ -113,6 +114,7 @@ impl<R: PetRepository + ?Sized> IPetService for PetService<R> {
             updated_at: Utc::now(),
         })
         .await
+        .map_err(ServiceError::from)
     }
 
     async fn delete_pet(&self, id: Uuid) -> Result<bool, AppError> {
