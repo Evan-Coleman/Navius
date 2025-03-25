@@ -31,7 +31,7 @@ cache:
 # Database configuration
 database:
   enabled: false
-  url: "postgres://postgres:postgres@localhost:5432/app"
+  url: "${DATABASE_URL}"
   max_connections: 10
   connect_timeout_seconds: 30
   idle_timeout_seconds: 300
