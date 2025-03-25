@@ -74,7 +74,13 @@ This rule helps track attempted error fixes during the codebase cleanup process.
 | E021 | Production feature flag missing in Cargo.toml | • Ignoring the warning<br>• Removing cfg! checks | Add production feature flag to Cargo.toml | Resolved |
 | E022 | Missing 'examples' feature flag in Cargo.toml | ✅ Fixed | goblin | 2023-06-06 | Added feature flag |
 | E023 | Lifetime issues in metrics_handler.rs with labels | ✅ Fixed | goblin | 2023-06-06 | Used String::clone() to ensure 'static lifetime |
-| E024 | Incorrect app_router function signature | 🔄 In Progress | goblin | 2023-06-06 | Updating parameters and return types |
+| E024 | Incorrect app_router function signature | Resolved | Fixed by updating parameters and return types | 2024-05-30 |
+| E025 | Naming conflicts between pet_handler and pet_core | • Direct imports with same names<br>• Using glob imports | Use the `as` keyword to rename imports (e.g., `create_pet as core_create_pet`) | Resolved |
+| E026 | Type mismatch between AppState and ServiceRegistry in router.rs | • Passing AppState to functions expecting ServiceRegistry | Use consistent handlers that work with AppState | Resolved |
+| E027 | Missing `get_pets` function in pet_core | • Direct import from pet_core | Use the existing `get_pet` function with Uuid::nil() as a substitute | Resolved |
+| E028 | Missing `init` function in app module | • Directly calling app::init() | Use router::app_router::init_app_state() instead | Resolved |
+| E029 | Outdated AppError variants in main.rs | • Using AppError::InternalError | Use AppError::internal_server_error() function instead | Resolved |
+| E030 | Duplicate AppError imports in main.rs | • Having multiple imports of the same type | Keep only one import of AppError | Resolved |
 
 ## Common Errors and Solutions
 
@@ -176,6 +182,35 @@ This rule helps track attempted error fixes during the codebase cleanup process.
   - Always use `cargo run` without feature flags to see actual errors
   - Fix errors properly rather than bypassing them
   - Address root causes instead of symptoms
+
+### Naming Conflicts in Imports
+- **Symptoms**: Multiple definitions of the same name in a module (e.g., `create_pet` defined multiple times)
+- **Failed Approaches**:
+  - Using direct imports without aliases
+  - Using glob imports to avoid naming specificity
+- **Working Approach**:
+  - Use the `as` keyword to create aliases for imported functions
+  - Example: `use crate::app::api::pet_core::{create_pet as core_create_pet}`
+  - Keep naming consistent across the codebase
+
+### Function Not Found Errors
+- **Symptoms**: `cannot find function X in module Y`
+- **Failed Approaches**:
+  - Directly trying to use function names that don't exist
+  - Adding wrong import paths
+- **Working Approach**:
+  - Check if the function name has changed or moved
+  - Look for alternative functions that provide similar functionality
+  - Update import paths to match the refactored codebase structure
+
+### AppError Construction Issues
+- **Symptoms**: `no variant or associated item named X found for enum AppError`
+- **Failed Approaches**:
+  - Using outdated enum variants like `AppError::InternalError`
+- **Working Approach**:
+  - Use function-based constructors: `AppError::internal_server_error()`
+  - Check the AppError definition for available construction methods
+  - Use consistent error creation patterns throughout the codebase
 
 ## Critical Areas to Monitor
 

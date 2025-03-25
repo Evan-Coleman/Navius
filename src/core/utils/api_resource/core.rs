@@ -18,10 +18,12 @@ use crate::{
     utils::api_resource::ApiResourceRegistry,
 };
 
+use crate::core::models::DependencyStatus;
+
 /// Trait for API resources that can be cached and managed
 pub trait ApiResource: Clone + Send + Sync + 'static {
     /// The type used for resource identification
-    type Id: Display + Clone;
+    type Id: Display + Clone + Send + Sync;
 
     /// The string representation of the resource type (e.g., "user", "account")
     fn resource_type() -> &'static str;
@@ -34,8 +36,21 @@ pub trait ApiResource: Clone + Send + Sync + 'static {
 pub type BoxFuture<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
 
 /// Register a resource type with the registry
-pub fn register_resource<R: ApiResource + 'static>(registry: &Arc<ApiResourceRegistry>) {
-    registry.register_resource::<R>();
+pub fn register_resource<R: ApiResource + 'static>(
+    registry: &Arc<ApiResourceRegistry>,
+) -> std::result::Result<(), String> {
+    // Create a simple health check function that just returns UP status
+    let health_check = |_state: &Arc<AppState>| {
+        Box::pin(async {
+            DependencyStatus {
+                name: format!("{} ({})", R::api_name(), R::resource_type()),
+                status: "UP".to_string(),
+                details: None,
+            }
+        }) as futures::future::BoxFuture<'static, DependencyStatus>
+    };
+
+    registry.register::<R, _>(health_check)
 }
 
 /// Options for configuring the API handler's behavior
@@ -159,7 +174,6 @@ where
                     resource_type,
                     &cache_key,
                     fetch_closure,
-                    options.cache_ttl_seconds,
                 )
                 .await
                 {

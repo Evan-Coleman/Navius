@@ -16,29 +16,17 @@ use crate::core::config::app_config::DatabaseConfig;
 use crate::core::error::error_types::AppError;
 
 use super::error::DatabaseError;
-use super::{PgPool as ImportedPgPool, PgTransaction as ImportedPgTransaction};
+use super::{PgPool, PgTransaction};
 use sqlx::{Pool, Postgres, Transaction, postgres::PgPoolOptions};
+use std::any::Any;
 
-#[async_trait]
-pub trait DatabaseConnection: Send + Sync {
-    async fn ping(&self) -> Result<(), AppError>;
-    async fn begin(&self) -> Result<Box<dyn DatabaseTransaction>, AppError>;
-    fn get_pool(&self) -> Arc<dyn ImportedPgPool>;
-}
-
-#[async_trait]
-pub trait DatabaseTransaction: Send + Sync {
-    async fn commit(self: Box<Self>) -> Result<(), AppError>;
-    async fn rollback(self: Box<Self>) -> Result<(), AppError>;
-}
-
-/// PostgreSQL connection implementation
-pub struct PgTransaction {
+/// PostgreSQL transaction implementation
+pub struct PgTransactionImpl {
     transaction: sqlx::Transaction<'static, sqlx::Postgres>,
 }
 
 #[async_trait]
-impl DatabaseTransaction for PgTransaction {
+impl PgTransaction for PgTransactionImpl {
     async fn commit(self: Box<Self>) -> Result<(), AppError> {
         self.transaction
             .commit()
@@ -80,7 +68,7 @@ impl PgDatabaseConnection {
 }
 
 #[async_trait]
-impl DatabaseConnection for PgDatabaseConnection {
+impl PgPool for PgDatabaseConnection {
     async fn ping(&self) -> Result<(), AppError> {
         sqlx::query("SELECT 1")
             .execute(self.pool.as_ref())
@@ -89,20 +77,17 @@ impl DatabaseConnection for PgDatabaseConnection {
             .map_err(|e| AppError::DatabaseError(e.to_string()))
     }
 
-    async fn begin(&self) -> Result<Box<dyn DatabaseTransaction>, AppError> {
+    async fn begin(&self) -> Result<Box<dyn PgTransaction>, AppError> {
         let transaction = self
             .pool
             .begin()
             .await
             .map_err(|e| AppError::DatabaseError(e.to_string()))?;
-        Ok(Box::new(PgTransaction { transaction }))
+        Ok(Box::new(PgTransactionImpl { transaction }))
     }
 
-    fn get_pool(&self) -> Arc<dyn ImportedPgPool> {
-        // This is not ideal, but a temporary fix until we can properly address the trait vs. struct issue
-        unimplemented!(
-            "PgDatabaseConnection does not support get_pool with the current trait design"
-        )
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -196,18 +181,17 @@ impl MockDatabaseConnection {
 }
 
 #[async_trait]
-impl DatabaseConnection for MockDatabaseConnection {
+impl PgPool for MockDatabaseConnection {
     async fn ping(&self) -> Result<(), AppError> {
         Ok(())
     }
 
-    async fn begin(&self) -> Result<Box<dyn DatabaseTransaction>, AppError> {
+    async fn begin(&self) -> Result<Box<dyn PgTransaction>, AppError> {
         Ok(Box::new(MockTransaction {}))
     }
 
-    fn get_pool(&self) -> Arc<dyn ImportedPgPool> {
-        // For mock implementation, we'll return a new empty pool
-        Arc::new(Pool::new())
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -216,7 +200,7 @@ impl DatabaseConnection for MockDatabaseConnection {
 pub struct MockTransaction {}
 
 #[async_trait]
-impl DatabaseTransaction for MockTransaction {
+impl PgTransaction for MockTransaction {
     async fn commit(self: Box<Self>) -> Result<(), AppError> {
         Ok(())
     }
@@ -227,9 +211,7 @@ impl DatabaseTransaction for MockTransaction {
 }
 
 /// Initialize the database connection
-pub async fn init_database(
-    config: DatabaseConfig,
-) -> Result<Arc<dyn DatabaseConnection>, AppError> {
+pub async fn init_database(config: DatabaseConfig) -> Result<Arc<dyn PgPool>, AppError> {
     if cfg!(test) {
         Ok(Arc::new(MockDatabaseConnection::new(config)))
     } else {
@@ -239,9 +221,7 @@ pub async fn init_database(
 }
 
 /// Create a PostgreSQL connection pool from configuration
-pub async fn create_pool(
-    config: &DatabaseConfig,
-) -> Result<Arc<dyn DatabaseConnection>, DatabaseError> {
+pub async fn create_pool(config: &DatabaseConfig) -> Result<Arc<dyn PgPool>, DatabaseError> {
     if !config.enabled {
         return Err(DatabaseError::NotEnabled);
     }
@@ -276,14 +256,15 @@ pub struct ConnectionStats {
     /// Number of idle connections in the pool
     pub idle_connections: u32,
 
-    /// Number of active connections from the pool
+    /// Number of active connections in the pool
     pub active_connections: u32,
 
     /// Maximum pool size
     pub max_connections: u32,
 }
 
-async fn create_connection_pool(config: &DatabaseConfig) -> Result<Pool<Postgres>, AppError> {
+/// Create a Postgres connection pool from a database configuration
+pub async fn create_connection_pool(config: &DatabaseConfig) -> Result<Pool<Postgres>, AppError> {
     let pool = PgPoolOptions::new()
         .max_connections(config.max_connections)
         .acquire_timeout(Duration::from_secs(config.connect_timeout_seconds))
@@ -298,4 +279,50 @@ async fn create_connection_pool(config: &DatabaseConfig) -> Result<Pool<Postgres
         .map_err(|e| AppError::DatabaseError(format!("Migration failed: {}", e)))?;
 
     Ok(pool)
+}
+
+/// Implement PgPool trait for SQLx Pool<Postgres>
+#[async_trait]
+impl PgPool for Pool<Postgres> {
+    async fn ping(&self) -> Result<(), AppError> {
+        self.acquire()
+            .await
+            .map_err(|e| AppError::DatabaseError(format!("Failed to ping database: {}", e)))?;
+        Ok(())
+    }
+
+    async fn begin(&self) -> Result<Box<dyn PgTransaction>, AppError> {
+        let tx = self
+            .begin()
+            .await
+            .map_err(|e| AppError::DatabaseError(format!("Failed to begin transaction: {}", e)))?;
+
+        Ok(Box::new(PgTransactionWrapper { tx }))
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+/// Wrapper for SQLx Transaction<'static, Postgres> to implement PgTransaction
+pub struct PgTransactionWrapper {
+    tx: sqlx::Transaction<'static, Postgres>,
+}
+
+#[async_trait]
+impl PgTransaction for PgTransactionWrapper {
+    async fn commit(self: Box<Self>) -> Result<(), AppError> {
+        self.tx
+            .commit()
+            .await
+            .map_err(|e| AppError::DatabaseError(format!("Failed to commit transaction: {}", e)))
+    }
+
+    async fn rollback(self: Box<Self>) -> Result<(), AppError> {
+        self.tx
+            .rollback()
+            .await
+            .map_err(|e| AppError::DatabaseError(format!("Failed to rollback transaction: {}", e)))
+    }
 }

@@ -23,13 +23,18 @@ use tower_http::{
     trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
 };
 use tracing::{Level, info};
+use uuid::Uuid;
 
 use crate::{
     app::{
         api::handlers::{
             health_check::health_check as app_health_check,
             metrics_handler::metrics_handler as app_metrics_handler,
-            pet_handler::{create_pet, delete_pet, get_pet_by_id, get_pets, update_pet},
+            pet_handler::{
+                create_pet as handler_create_pet, delete_pet as handler_delete_pet,
+                get_pet_by_id as handler_get_pet_by_id, get_pets as handler_get_pets,
+                update_pet as handler_update_pet,
+            },
         },
         database::{PetRepository, PgPetRepository},
         services::{IPetService, PetService},
@@ -38,7 +43,7 @@ use crate::{
     core::auth::{EntraTokenClient, middleware::RoleRequirement, mock::MockTokenClient},
     core::cache::CacheRegistry,
     core::config::app_config::AppConfig,
-    core::database::{PgPool, connection::DatabaseConnection},
+    core::database::PgPool,
     core::error::AppError,
     core::handlers::logging,
     core::metrics::metrics_service,
@@ -49,6 +54,10 @@ use crate::{
 };
 
 use super::CoreRouter;
+use crate::app::api::pet_core::{
+    CreatePetRequest, UpdatePetRequest, create_pet as core_create_pet,
+    delete_pet as core_delete_pet, get_pet as core_get_pet, update_pet as core_update_pet,
+};
 use crate::core::auth::TokenClient;
 
 /// Application state shared across all routes
@@ -209,51 +218,24 @@ impl AppState {
 }
 
 /// Create the core application router with middleware
-pub fn create_core_app_router(state: Arc<AppState>, user_routes: Router) -> Router {
-    // Create logging middleware
-    let logging = middleware::from_fn_with_state(state.clone(), logging::log_request);
-
+pub fn create_core_app_router(state: Arc<AppState>) -> Router {
     // Get the core routes that should not be modified by users
     let core_routes = CoreRouter::create_core_routes(state.clone());
 
-    // Combine core routes with user-defined routes and add all middleware
-    Router::new()
-        .merge(core_routes)
-        .merge(user_routes)
-        .layer(logging)
-        // Add tracing with custom configuration that doesn't duplicate our logging
-        .layer(
-            TraceLayer::new_for_http()
-                .make_span_with(
-                    DefaultMakeSpan::new()
-                        .include_headers(false)
-                        .level(Level::DEBUG),
-                )
-                // Set level to TRACE to avoid duplicating our INFO logs
-                .on_response(
-                    DefaultOnResponse::new()
-                        .include_headers(false)
-                        .level(Level::TRACE),
-                ),
-        )
-        // Add timeout
-        .layer(TimeoutLayer::new(std::time::Duration::from_secs(
-            state.config.server.timeout_seconds,
-        )))
-        // Add socket address info to request extensions
-        .layer(middleware::from_fn(
-            |req: Request<Body>, next: Next| async move {
-                let conn_info_opt = req.extensions().get::<ConnectInfo<SocketAddr>>().cloned();
-
-                if let Some(conn_info) = conn_info_opt {
-                    let mut req = req;
-                    req.extensions_mut().insert(ConnectInfo(conn_info.0));
-                    next.run(req).await
-                } else {
-                    next.run(req).await
-                }
-            },
-        ))
+    // Set up shared routes with middleware
+    Router::new().nest("/", core_routes).layer(
+        TraceLayer::new_for_http()
+            .make_span_with(
+                DefaultMakeSpan::new()
+                    .include_headers(false)
+                    .level(Level::DEBUG),
+            )
+            .on_response(
+                DefaultOnResponse::new()
+                    .include_headers(false)
+                    .level(Level::INFO),
+            ),
+    )
 }
 
 /// Initialize the application state and resources
@@ -265,7 +247,7 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
     let metrics_handle = crate::core::metrics::init_metrics();
 
     // Create HTTP client with appropriate middleware
-    let client = Client::builder()
+    let _client = Client::builder()
         .timeout(Duration::from_secs(config.server.timeout_seconds))
         .build()
         .expect("Failed to create HTTP client");
@@ -291,7 +273,7 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
     let db_pool = if config.database.enabled {
         // Clone the database config to avoid the borrow issue
         let db_config = config.database.clone();
-        match crate::core::init_database(db_config).await {
+        match crate::core::database::create_connection_pool(&db_config).await {
             Ok(pool) => {
                 info!("🔧 Database connection initialized");
                 Some(Arc::new(pool))
@@ -307,9 +289,10 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
     };
 
     // Create API resource registry
-    let resource_registry = crate::utils::api_resource::ApiResourceRegistry::new();
+    let _resource_registry = crate::utils::api_resource::ApiResourceRegistry::new();
 
     // Create the app state
+    let cache_registry_clone = cache_registry.clone();
     let app_state = Arc::new(AppState {
         client: Arc::new(EntraTokenClient::from_config(&config)),
         config: Arc::new(config.clone()),
@@ -332,7 +315,7 @@ pub async fn init_app_state() -> (Arc<AppState>, SocketAddr) {
     });
 
     // Start metrics updater for the new cache registry
-    crate::core::cache::start_metrics_updater(&cache_registry).await;
+    crate::core::cache::start_metrics_updater(&cache_registry_clone).await;
 
     // Configure server address
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server.port));
@@ -404,12 +387,12 @@ pub async fn app_router(
     config: &AppConfig,
     start_time: DateTime<Utc>,
     db_pool: Option<Arc<Pool<Postgres>>>,
-    api_client: Option<Arc<dyn ApiClient>>,
+    api_client: Option<Arc<dyn TokenClient + Send + Sync>>,
     cache_registry: Arc<CacheRegistry>,
     metrics_handle: PrometheusHandle,
 ) -> Router {
     let token_client: Arc<dyn TokenClient + Send + Sync> = match api_client {
-        Some(client) => client.clone(),
+        Some(client) => client,
         None => Arc::new(EntraTokenClient::from_config(config)),
     };
 
@@ -430,6 +413,9 @@ pub async fn app_router(
         }
     };
 
+    // Create the cache registry clone before moving it
+    let cache_registry_clone = cache_registry.clone();
+
     // Create app state
     let app_state = Arc::new(AppState {
         client: token_client,
@@ -441,17 +427,47 @@ pub async fn app_router(
         db_pool,
     });
 
-    // User-defined routes go here
-    let user_routes = Router::new()
-        .route("/users", get(hello_world))
-        .route("/api/pets", get(get_pets).post(create_pet))
+    // Start metrics updater for the new cache registry
+    crate::core::cache::start_metrics_updater(&cache_registry_clone).await;
+
+    // Create the core router with middleware
+    let router = create_core_app_router(app_state.clone());
+
+    // Create closures that capture app_state
+    let app_state1 = app_state.clone();
+    let app_state2 = app_state.clone();
+    let app_state3 = app_state.clone();
+    let app_state4 = app_state.clone();
+    let app_state5 = app_state.clone();
+
+    // Add user-defined routes with closures
+    router
+        .route("/users", get(|| async { hello_world().await }))
+        .route(
+            "/api/pets",
+            get(move || async move {
+                // Use core_get_pet handler which should work with AppState
+                let resp = core_get_pet(State(app_state1.clone()), Path(Uuid::nil())).await;
+                resp
+            })
+            .post(move |payload: Json<CreatePetRequest>| async move {
+                core_create_pet(State(app_state2), payload).await
+            }),
+        )
         .route(
             "/api/pets/:id",
-            get(get_pet_by_id).put(update_pet).delete(delete_pet),
-        );
-
-    // Create the main app router with middleware
-    create_core_app_router(app_state, user_routes)
+            get(move |Path(id): Path<Uuid>| async move {
+                core_get_pet(State(app_state3), Path(id)).await
+            })
+            .put(
+                move |Path(id): Path<Uuid>, payload: Json<UpdatePetRequest>| async move {
+                    core_update_pet(State(app_state4), Path(id), payload).await
+                },
+            )
+            .delete(move |Path(id): Path<Uuid>| async move {
+                core_delete_pet(State(app_state5), Path(id)).await
+            }),
+        )
 }
 
 async fn health_check(State(_state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -515,7 +531,7 @@ mod tests {
         let response = test_request(router, "/health").await;
         assert_eq!(response.status(), StatusCode::OK);
 
-        let body = to_bytes(response.into_body()).await.unwrap();
+        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
         assert_eq!(&body[..], b"OK");
     }
 
@@ -591,7 +607,7 @@ mod tests {
 
 // For now, let's create a local trait definition for ApiClient if it doesn't exist elsewhere
 #[allow(dead_code)]
-pub trait ApiClient: Send + Sync {}
+pub trait ApiClient: TokenClient + Send + Sync {}
 
 // Helper function for example route
 async fn hello_world() -> &'static str {

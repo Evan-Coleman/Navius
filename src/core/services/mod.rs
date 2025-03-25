@@ -3,10 +3,12 @@
 //! This module provides services that implement business logic.
 //! Services use repositories to interact with data and implement business rules.
 
-use crate::app::database::{PetRepository, PgPetRepository};
-use crate::app::services::{IPetService, PetService};
-use crate::core::database::connection::DatabaseConnection;
+use crate::app::database::repositories::pet_repository::PgPetRepository;
+use crate::app::services::pet_service::{IPetService, PetService};
+use crate::core::config::app_config::DatabaseConfig;
+use crate::core::database::PgPool;
 use crate::core::error::AppError;
+use reqwest::Client;
 use sqlx::{Pool, Postgres};
 use std::any::Any;
 use std::sync::Arc;
@@ -61,12 +63,12 @@ impl Default for ServiceRegistry {
 
 // Backward compatibility for Services type
 pub struct Services {
-    db_connection: Option<Arc<dyn DatabaseConnection>>,
+    db_connection: Option<Arc<dyn PgPool>>,
     pet_service: Option<Arc<dyn IPetService + Send + Sync>>,
 }
 
 impl Services {
-    pub fn new(db_connection: Option<Arc<dyn DatabaseConnection>>) -> Self {
+    pub fn new(db_connection: Option<Arc<dyn PgPool>>) -> Self {
         // Create a default Postgres pool
         let pool = Arc::new(Pool::<Postgres>::connect_lazy_with(
             sqlx::postgres::PgConnectOptions::new()

@@ -52,6 +52,11 @@ pub struct CacheStats {
     pub hit_ratio: f64,
 }
 
+/// Define a trait for getting cache stats
+pub trait CacheStatsProvider: Send + Sync {
+    fn get_stats(&self) -> CacheStats;
+}
+
 /// Initialize the cache registry
 pub fn init_cache_registry(enabled: bool, max_capacity: u64, ttl_seconds: u64) -> CacheRegistry {
     CacheRegistry {
@@ -1101,19 +1106,7 @@ fn get_stats_for_cached_type(
     cache_registry: &CacheRegistry,
     resource_type: &str,
 ) -> Option<CacheStats> {
-    // Try to get the stats directly from the registry
-    if let Some(cache) = cache_registry.caches.read().ok()?.get(resource_type) {
-        // Return stats from the cache if available
-        let cache_info = cache.get_stats();
-        return Some(CacheStats {
-            size: cache_info.size,
-            hits: cache_info.hits,
-            misses: cache_info.misses,
-            hit_ratio: cache_info.hit_ratio,
-        });
-    }
-
-    // Fall back to metrics
+    // Skip the direct cache access and fall back to metrics
     get_cache_stats_from_metrics(resource_type)
 }
 

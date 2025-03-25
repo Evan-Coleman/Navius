@@ -24,7 +24,7 @@ pub mod utils;
 pub use auth::{EntraAuthLayer, EntraTokenClient};
 pub use cache::{CacheRegistry, ResourceCache, get_resource_cache, init_cache_registry};
 pub use config::app_config::{AppConfig, load_config};
-pub use database::{DatabaseConnection, PgPool, Transaction, init_database};
+pub use database::{PgDatabaseConnection, PgPool, PgTransaction, init_database};
 pub use error::{AppError, Result};
 pub use metrics::{init_metrics, metrics_endpoint_handler, try_record_metrics};
 pub use reliability::apply_reliability;

@@ -17,8 +17,17 @@ use navius::config;
 use navius::error::error_types::AppError;
 
 use std::{fs, path::Path, process};
-use tracing::{Level, error, info};
+use tracing::{Level, error, info, warn};
 use tracing_subscriber::FmtSubscriber;
+
+use std::env;
+use std::net::SocketAddr;
+use std::str::FromStr;
+
+use navius::core::config::app_config::AppConfig;
+use navius::core::config::load_config;
+use navius::core::router;
+use navius::core::router::app_router;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -46,7 +55,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn run_app() -> Result<(), AppError> {
     // Initialize the application
-    let (app, addr) = app::init().await;
+    let (app_state, addr) = navius::core::router::app_router::init_app_state().await;
+    let app = navius::core::router::app_router::create_core_app_router(app_state);
 
     // Load configuration
     let config = config::app_config::load_config()?;
@@ -57,7 +67,7 @@ async fn run_app() -> Result<(), AppError> {
     if !Path::new(spec_directory).exists() {
         info!("Creating OpenAPI spec directory: {}", spec_directory);
         fs::create_dir_all(spec_directory).map_err(|e| {
-            AppError::InternalError(format!("Failed to create OpenAPI directory: {}", e))
+            AppError::internal_server_error(format!("Failed to create OpenAPI directory: {}", e))
         })?;
     }
 
@@ -70,7 +80,7 @@ async fn run_app() -> Result<(), AppError> {
     // Run the server with our app
     axum::serve(listener, app)
         .await
-        .map_err(|e| AppError::InternalError(format!("Server error: {}", e)))?;
+        .map_err(|e| AppError::internal_server_error(format!("Server error: {}", e)))?;
 
     Ok(())
 }

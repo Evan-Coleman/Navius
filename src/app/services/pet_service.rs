@@ -8,7 +8,6 @@ use uuid::Uuid;
 use crate::app::database::repositories::pet_repository::{Pet as RepositoryPet, PetRepository};
 use crate::app::services::dto::{CreatePetDto, UpdatePetDto};
 use crate::app::services::error::ServiceError;
-use crate::core::database::connection::DatabaseConnection;
 use crate::core::{
     database::{models::pet::Pet as CorePet, repositories::PetRepository as CorePetRepository},
     error::AppError,
