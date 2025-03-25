@@ -1,6 +1,12 @@
-pub mod core_app_router;
-pub mod core_router;
+pub fn create_router(config: AppConfig) -> Router {
+    let auth_registry =
+        ProviderRegistry::from_app_config(&config).expect("Failed to initialize auth providers");
 
-// Only use the core prefixed modules
-pub use core_app_router::*;
-pub use core_router::*;
+    Router::new().route("/secure", get(secure_handler)).layer(
+        AuthLayer::new(auth_registry)
+            .default_provider()
+            .with_roles(RoleRequirement::Admin)
+            .layer(),
+    )
+    // ... other routes
+}

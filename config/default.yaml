@@ -37,30 +37,33 @@ auth:
   # - NAVIUS_AUDIENCE
   # - NAVIUS_SCOPE
   # - NAVIUS_TOKEN_URL
-  entra:
-    # URL formats for Entra ID (Microsoft Azure AD)
-    jwks_uri_format: "https://login.microsoftonline.com/{}/discovery/v2.0/keys"
-    authorize_url_format: "https://login.microsoftonline.com/{}/oauth2/v2.0/authorize"
-    token_url_format: "https://login.microsoftonline.com/{}/oauth2/v2.0/token"
-    # Issuer URL formats (used for validation)
-    issuer_url_formats:
-      - "https://login.microsoftonline.com/{}/v2.0"
-      - "https://login.microsoftonline.com/{}/v2.0/"
-      - "https://sts.windows.net/{}"
-      - "https://sts.windows.net/{}/"
-      - "https://login.microsoftonline.com/{}"
-      - "https://login.microsoftonline.com/{}/"
-    # Admin roles - users with these roles can access admin endpoints
-    admin_roles:
-      - "admin"
-    # Read-only roles - users with these roles can access read-only endpoints
-    read_only_roles:
-      - "read"
-      - "full"
-      - "admin"
-    # Full access roles - users with these roles can access full access endpoints
-    full_access_roles:
-      - "full"
+  default_provider: "entra"
+  providers:
+    entra:
+      enabled: true
+      client_id: "${ENTRA_CLIENT_ID}"
+      jwks_uri: "https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys"
+      issuer_url: "https://sts.windows.net/{tenant}/v2.0"
+      audience: "api://${CLIENT_ID}"
+      role_mappings:
+        admin: ["Application.Admin"]
+        read_only: ["Application.Read"]
+      provider_specific:
+        entra_tenant_id: "${ENTRA_TENANT_ID}"
+        entra_token_version: "2.0"
+      refresh_rate_limit:
+        max_requests: 5
+        per_seconds: 60
+      circuit_breaker:
+        failure_threshold: 5
+        reset_timeout_seconds: 60
+
+    google:
+      enabled: false
+      client_id: "${GOOGLE_CLIENT_ID}"
+      jwks_uri: "https://www.googleapis.com/oauth2/v3/certs"
+      issuer_url: "https://accounts.google.com"
+      audience: "${GOOGLE_CLIENT_ID}.apps.googleusercontent.com"
 
 cache:
   enabled: true

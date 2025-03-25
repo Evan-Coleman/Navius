@@ -228,6 +228,27 @@ paths:
 
 components:
   schemas:
+    AuthError:
+        type: object
+        properties:
+          error:
+            type: string
+            enum:
+              - MissingToken
+              - InvalidTokenFormat
+              - ValidationFailed
+              - InternalError
+              - AccessDenied
+              - ConfigurationError
+              - RateLimited
+              - CircuitOpen
+              - ProviderError
+              - SerializationError
+              - NetworkError
+          message:
+            type: string
+          details:
+            type: object 
     HealthCheckResponse:
       type: object
       properties:

@@ -2,6 +2,7 @@ use super::constants;
 use config::{Config, ConfigError, Environment, File};
 use dotenvy::dotenv;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::env;
 use std::path::Path;
 use std::time::Duration;
@@ -52,84 +53,13 @@ impl Default for ApiConfig {
     }
 }
 
-/// Entra ID (Azure AD) authentication configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EntraConfig {
-    /// Tenant ID (from environment variable)
-    #[serde(default)]
-    pub tenant_id: String,
-
-    /// Client ID (from environment variable)
-    #[serde(default)]
-    pub client_id: String,
-
-    /// Audience (from environment variable)
-    #[serde(default)]
-    pub audience: String,
-
-    /// Scope (from environment variable)
-    #[serde(default)]
-    pub scope: String,
-
-    /// Token URL (from environment variable)
-    #[serde(default)]
-    pub token_url: String,
-
-    /// JWKS URI format (for key discovery)
-    #[serde(default = "default_jwks_uri_format")]
-    pub jwks_uri_format: String,
-
-    /// Authorize URL format
-    #[serde(default = "default_authorize_url_format")]
-    pub authorize_url_format: String,
-
-    /// Token URL format
-    #[serde(default = "default_token_url_format")]
-    pub token_url_format: String,
-
-    /// Issuer URL formats
-    #[serde(default = "default_issuer_url_formats")]
-    pub issuer_url_formats: Vec<String>,
-
-    /// Admin roles (users with these roles can access admin endpoints)
-    pub admin_roles: Vec<String>,
-
-    /// Read-only roles (users with these roles can access read-only endpoints)
-    pub read_only_roles: Vec<String>,
-
-    /// Full access roles (users with these roles can access full access endpoints)
-    pub full_access_roles: Vec<String>,
-}
-
 /// Authentication configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct AuthConfig {
-    pub enabled: bool,
+    pub default_provider: String,
+    pub providers: HashMap<String, ProviderConfig>,
+    #[serde(default)]
     pub debug: bool,
-    pub entra: EntraConfig,
-}
-
-impl Default for AuthConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            debug: false,
-            entra: EntraConfig {
-                tenant_id: env::var(constants::auth::env_vars::TENANT_ID).unwrap_or_default(),
-                client_id: env::var(constants::auth::env_vars::CLIENT_ID).unwrap_or_default(),
-                audience: env::var(constants::auth::env_vars::AUDIENCE).unwrap_or_default(),
-                scope: env::var(constants::auth::env_vars::SCOPE).unwrap_or_default(),
-                token_url: env::var(constants::auth::env_vars::TOKEN_URL).unwrap_or_default(),
-                jwks_uri_format: default_jwks_uri_format(),
-                authorize_url_format: default_authorize_url_format(),
-                token_url_format: default_token_url_format(),
-                issuer_url_formats: default_issuer_url_formats(),
-                admin_roles: Vec::new(),
-                read_only_roles: Vec::new(),
-                full_access_roles: Vec::new(),
-            },
-        }
-    }
 }
 
 /// Logging configuration
@@ -777,4 +707,17 @@ pub fn load_config() -> Result<AppConfig, ConfigError> {
 
 fn default_reconnect_interval() -> u64 {
     30
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProviderConfig {
+    pub enabled: bool,
+    pub client_id: String,
+    pub jwks_uri: String,
+    pub issuer_url: String,
+    pub audience: String,
+    #[serde(default)]
+    pub role_mappings: RoleMappings,
+    #[serde(default)]
+    pub provider_specific: HashMap<String, serde_yaml::Value>,
 }

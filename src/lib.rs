@@ -147,6 +147,9 @@ pub mod app {
     pub mod services;
 }
 
+// Examples module
+pub mod examples;
+
 // ===============================================================================
 // Examples Module - Can be enabled/disabled with feature flag
 // ===============================================================================
@@ -154,7 +157,7 @@ pub mod app {
 /// Examples that demonstrate how to use the framework
 /// These can be optionally included or removed
 #[cfg(feature = "examples")]
-pub mod examples;
+pub mod examples_feature_flagged;
 
 // ===============================================================================
 // Convenience Re-exports - For easier access to common components
@@ -189,6 +192,15 @@ pub mod api {
 pub mod handlers {
     pub use crate::app::api::*;
     pub use crate::core::handlers::*;
+}
+
+/// Spring Boot-like annotation macros
+pub mod macros {
+    // Import from examples for now until we have the actual implementation
+    pub use crate::examples::controllers::user_controller::{
+        Controller, EndpointMapping, RequestMapping, RestController,
+    };
+    pub use crate::examples::services::cached_user_service::{CacheEvict, Cacheable, Service};
 }
 
 /// Data models and schemas

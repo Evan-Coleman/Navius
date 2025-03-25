@@ -17,6 +17,9 @@ use serde::{Deserialize, Serialize};
 use tower::{Layer, Service};
 use tracing::{debug, error, info};
 
+use crate::core::auth::providers;
+use crate::core::auth::{AuthError, StandardClaims, providers::OAuthProvider};
+use crate::core::auth_providers;
 use crate::core::config::app_config;
 use crate::core::config::app_config::AppConfig;
 use crate::core::config::constants;
@@ -944,6 +947,7 @@ pub fn role_from_string(role: &str) -> Role {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::auth::providers::mock::MockProvider;
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use serde_json::json;
@@ -1341,5 +1345,97 @@ mod tests {
         assert!(RoleRequirement::FullAccess.matches(&full_roles, &config));
         assert!(RoleRequirement::FullAccess.matches(&admin_roles, &config));
         assert!(!RoleRequirement::FullAccess.matches(&read_roles, &config));
+    }
+
+    #[tokio::test]
+    async fn test_generic_middleware() {
+        let mock_provider = MockProvider::new().with_valid_token(
+            "valid-token",
+            StandardClaims {
+                sub: "user123".to_string(),
+                aud: "test-audience".to_string(),
+                exp: 9999999999,
+                iat: 123456789,
+                iss: "https://mock-issuer".to_string(),
+                scope: Some("read write".to_string()),
+            },
+        );
+
+        let middleware = AuthMiddleware::new(Arc::new(mock_provider))
+            .with_roles(RoleRequirement::Any(vec!["admin".to_string()]))
+            .with_permissions(PermissionRequirement::All(vec!["read".to_string()]));
+
+        // Test valid request
+        let mut valid_req = Request::new(Body::empty());
+        valid_req.headers_mut().insert(
+            axum::http::header::AUTHORIZATION,
+            "Bearer valid-token".parse().unwrap(),
+        );
+
+        let response = middleware.clone().oneshot(valid_req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+}
+
+#[derive(Clone)]
+pub struct AuthLayer {
+    provider_registry: Arc<ProviderRegistry>,
+}
+
+impl AuthLayer {
+    pub fn new(registry: ProviderRegistry) -> Self {
+        Self {
+            provider_registry: Arc::new(registry),
+        }
+    }
+
+    pub fn with_provider(&self, name: &str) -> AuthMiddlewareBuilder {
+        AuthMiddlewareBuilder {
+            provider: self
+                .provider_registry
+                .get_provider(name)
+                .expect("Provider not found"),
+            role_requirement: RoleRequirement::None,
+            permission_requirement: PermissionRequirement::None,
+        }
+    }
+
+    pub fn default_provider(&self) -> AuthMiddlewareBuilder {
+        self.with_provider(&self.provider_registry.default_provider)
+    }
+}
+
+pub struct AuthMiddlewareBuilder<'a> {
+    provider: &'a dyn OAuthProvider,
+    role_requirement: RoleRequirement,
+    permission_requirement: PermissionRequirement,
+}
+
+impl<'a> AuthMiddlewareBuilder<'a> {
+    pub fn with_roles(mut self, requirement: RoleRequirement) -> Self {
+        self.role_requirement = requirement;
+        self
+    }
+
+    pub fn with_permissions(mut self, requirement: PermissionRequirement) -> Self {
+        self.permission_requirement = requirement;
+        self
+    }
+
+    pub fn layer<S>(self) -> impl Layer<S> + Clone
+    where
+        S: Service<Request> + Clone + Send + 'static,
+        S::Future: Send + 'static,
+    {
+        let provider = self.provider.clone();
+        let role_req = self.role_requirement.clone();
+        let perm_req = self.permission_requirement.clone();
+
+        tower::service_fn(move |service| AuthMiddleware {
+            inner: service,
+            provider: provider.clone(),
+            role_requirement: role_req.clone(),
+            permission_requirement: perm_req.clone(),
+        })
     }
 }
