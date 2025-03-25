@@ -31,7 +31,7 @@ pub use utils::api_resource::{
 };
 
 // Export specific items from modules to avoid name conflicts
-pub use handlers::health as handlers_health;
+pub use handlers::core_health as handlers_health;
 pub use services::health as services_health;
 pub use utils::log_request as utils_log_request;
 

@@ -255,16 +255,38 @@ mod tests {
     #[test]
     fn test_links() {
         let response = ApiResponse::success(vec![1, 2, 3])
-            .with_pagination(2, 5, 15)
+            .with_pagination(2, 10, 25)
             .with_pagination_links("/api/items", 2, 3);
 
         assert!(response.links.is_some());
         let links = response.links.unwrap();
 
-        assert_eq!(links.self_link, "/api/items?page=2&per_page=5");
-        assert_eq!(links.first.unwrap(), "/api/items?page=1&per_page=5");
-        assert_eq!(links.prev.unwrap(), "/api/items?page=1&per_page=5");
-        assert_eq!(links.next.unwrap(), "/api/items?page=3&per_page=5");
-        assert_eq!(links.last.unwrap(), "/api/items?page=3&per_page=5");
+        assert_eq!(links.self_link, "/api/items?page=2&per_page=10");
+        assert_eq!(
+            links.first,
+            Some("/api/items?page=1&per_page=10".to_string())
+        );
+        assert_eq!(
+            links.prev,
+            Some("/api/items?page=1&per_page=10".to_string())
+        );
+        assert_eq!(
+            links.next,
+            Some("/api/items?page=3&per_page=10".to_string())
+        );
+        assert_eq!(
+            links.last,
+            Some("/api/items?page=3&per_page=10".to_string())
+        );
+    }
+
+    #[test]
+    fn test_into_response() {
+        let response = ApiResponse::success("test data").into_response();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = ApiResponse::error(StatusCode::BAD_REQUEST, "Invalid input".to_string())
+            .into_response();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 }

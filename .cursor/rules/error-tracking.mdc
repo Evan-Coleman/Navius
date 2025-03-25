@@ -1,12 +1,11 @@
 ---
-description:
+description: This rule helps track attempted error fixes during the codebase cleanup process. Before attempting to fix the same error multiple times, consult this document to avoid repeating unsuccessful approaches.
 globs:
 alwaysApply: true
 ---
 
 # Error Fix Tracking Rule
 
-This rule helps track attempted error fixes during the codebase cleanup process. Before attempting to fix the same error multiple times, consult this document to avoid repeating unsuccessful approaches.
 
 ## How to Use This Rule
 

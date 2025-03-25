@@ -7,7 +7,7 @@ pub mod examples;
 use axum::Router;
 use std::sync::Arc;
 
-use crate::core::router::app_router::AppState;
+use crate::core::router::core_app_router::AppState;
 
 /// Configure all API routes
 pub fn configure(router: Router<Arc<AppState>>) -> Router<Arc<AppState>> {
@@ -20,8 +20,8 @@ pub fn configure(router: Router<Arc<AppState>>) -> Router<Arc<AppState>> {
 
 /// Register all API services
 pub fn register_services(
-    builder: crate::core::router::app_router::RouterBuilder,
-) -> crate::core::router::app_router::RouterBuilder {
+    builder: crate::core::router::core_app_router::RouterBuilder,
+) -> crate::core::router::core_app_router::RouterBuilder {
     // Register example services
     let builder = examples::register_services(builder);
 

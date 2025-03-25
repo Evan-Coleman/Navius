@@ -4,7 +4,7 @@ use axum::{
 };
 use std::sync::Arc;
 
-use crate::core::router::app_router::{AppState, RouterBuilder};
+use crate::core::router::core_app_router::{AppState, RouterBuilder};
 use config::Config;
 
 /// Create an application router with the given configuration
@@ -31,7 +31,7 @@ pub fn create_router(_config: Config) -> Router {
 
 /// Create a Spring Boot-like application with sensible defaults
 pub fn create_application() -> RouterBuilder {
-    crate::core::router::app_router::create_application()
+    crate::core::router::core_app_router::create_application()
 }
 
 async fn health_check() -> &'static str {

@@ -10,7 +10,7 @@ use std::time::SystemTime;
 
 use crate::core::{
     auth::TokenClient, cache::cache_manager::CacheRegistry, config::app_config::AppConfig,
-    handlers::health::simple_health_handler, utils::api_resource::ApiResourceRegistry,
+    handlers::core_health::simple_health_handler, utils::api_resource::ApiResourceRegistry,
 };
 
 /// ServiceRegistry for dependency injection
@@ -178,7 +178,7 @@ impl RouterBuilder {
     }
 
     /// Build the router with all configured components
-    pub fn build(self) -> Router<()> {
+    pub fn build(self) -> Router {
         let state = Arc::new(self.app_state);
 
         // Create public routes that don't require authentication
@@ -250,10 +250,9 @@ mod tests {
 
     #[test]
     fn test_app_state_default() {
-        // Create a default app state
         let state = AppState::default();
 
-        // Verify the default values
+        // Verify that the default state has the expected values
         assert!(state.client.is_none());
         assert!(state.cache_registry.is_none());
         assert!(state.token_client.is_none());

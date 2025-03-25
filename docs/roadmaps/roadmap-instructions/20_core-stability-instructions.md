@@ -25,49 +25,139 @@ This document provides detailed instructions for implementing the Core Stability
 2. Update `CoreRouter` struct and implementation in the new file
 3. Rename `app_router.rs` to `core_app_router.rs`
 4. Update `CoreRouterBuilder` struct and implementation
-5. Modify `src/core/router/mod.rs` to export from new files
+5. Modify `src/core/router/mod.rs` to export ONLY from new files (backwards compatibility NOT needed)
 6. Run tests after each file change
 7. Update all imports of router components using `find` and `sed`:
    ```bash
    find src -name "*.rs" -exec sed -i 's/use crate::core::router::/use crate::core::router::core_/g' {} \;
    ```
+8. Remove old non-prefixed files after successful testing
 
 #### Step 1.3: Model and Handler renaming (2-3 days)
 1. Rename model files:
    - `models/response.rs` → `models/core_response.rs`
    - `models/error.rs` → `models/core_error.rs`
-   - Update `models/mod.rs` to export from new files
+   - Update `models/mod.rs` to export ONLY from new files (no backwards compatibility exports)
    
 2. Rename handler files:
    - `handlers/health.rs` → `handlers/core_health.rs`
    - `handlers/actuator.rs` → `handlers/core_actuator.rs`
    - `handlers/docs.rs` → `handlers/core_docs.rs`
-   - Update `handlers/mod.rs` to export from new files
+   - Update `handlers/mod.rs` to export ONLY from new files
 
 3. Rename utility files:
    - `utils/api_client.rs` → `utils/core_api_client.rs`
    - `utils/api_logger.rs` → `utils/core_api_logger.rs`
    - `utils/date.rs` → `utils/core_date.rs`
-   - Update `utils/mod.rs` to export from new files
+   - Update `utils/mod.rs` to export ONLY from new files
 
 4. Run tests after each rename to catch errors early
+5. Remove old non-prefixed files after tests pass
 
-#### Step 1.4: Create user-extensible templates (1-2 days)
+#### Step 1.4: Eliminate mod.rs files and centralize module declarations (2-3 days)
+
+1. **Inventory and planning**:
+   - Create a complete inventory of all mod.rs files in the codebase:
+     ```bash
+     find src -name "mod.rs" > mod_files.txt
+     ```
+   - For each mod.rs file, analyze its content and identify:
+     - Module declarations
+     - Re-exports
+     - Public/private visibility settings
+
+2. **Create module declarations structure for lib.rs**:
+   - Create a draft structure of nested module declarations:
+     ```rust
+     // Example structure
+     mod core {
+         pub mod router {
+             pub mod core_router;
+             pub mod core_app_router;
+             
+             pub use core_router::*;
+             pub use core_app_router::*;
+         }
+         
+         pub mod models {
+             pub mod core_response;
+             pub mod error;
+             pub mod extensions;
+             
+             pub use core_response::*;
+             pub use error::*;
+             pub use extensions::*;
+         }
+         
+         // Other modules...
+     }
+     
+     mod app {
+         pub mod api {
+             pub mod examples;
+             
+             pub use examples::*;
+         }
+         
+         pub mod services {
+             // Service module declarations...
+         }
+         
+         // Other modules...
+     }
+     ```
+
+3. **Implement in manageable chunks**:
+   - Start with a single directory (e.g., `src/core/models/`)
+   - Move module declarations and re-exports to lib.rs
+   - Run `cargo check` to verify the changes
+   - Delete the mod.rs file once changes are verified
+   - Continue with other directories, committing after each successful change
+
+4. **Update imports**:
+   - As you remove mod.rs files, you may need to update imports in files that reference them
+   - Run `cargo check` frequently to identify issues
+   - Use find/replace tools to update imports in bulk when patterns are consistent:
+     ```bash
+     find src -name "*.rs" -exec sed -i 's/use crate::core::models::/use crate::core::models::/g' {} \;
+     ```
+
+5. **Handle special cases**:
+   - For modules with complex nesting or re-export patterns, consider:
+     - Using selective re-exports with explicit items
+     - Using aliased imports for name conflicts
+     - Creating helper re-export modules if necessary
+
+6. **Final verification**:
+   - After all mod.rs files are removed, run:
+     ```bash
+     find src -name "mod.rs"
+     ```
+   - This should return no results
+   - Run comprehensive tests to ensure no functionality is broken
+   - Verify that all public interfaces are still accessible
+
+7. **Documentation**:
+   - Update developer documentation to reflect the new module structure
+   - Add comments in lib.rs explaining the module organization
+   - Provide examples of how to add new modules in the future
+
+#### Step 1.5: Create user-extensible templates (1-2 days)
 1. Create `src/app/models.rs` with examples of extending core models
 2. Create `src/app/handlers.rs` with examples of using core handlers
 3. Update `src/app/router.rs` to reference new core router files
 4. Add clear documentation comments explaining extension points
 
-#### Step 1.5: Update documentation and finalize (1-2 days)
+#### Step 1.6: Update documentation and finalize (1-2 days)
 1. Update all documentation to reflect new file names and imports
 2. Create a dedicated naming convention guide in docs
-3. Add a migration guide for existing users
-4. Create examples showing:
+3. Create examples showing:
    - How to extend core functionality
    - User-defined files that would have naming conflicts
    - Before and after import patterns
+4. Document that backward compatibility is not maintained
 
-#### Step 1.6: Final testing and verification (1 day)
+#### Step 1.7: Final testing and verification (1 day)
 1. Run all unit tests
 2. Run integration tests
 3. Manually test example applications

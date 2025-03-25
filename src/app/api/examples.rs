@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use crate::core::{error::AppError, router::app_router::AppState};
+use crate::core::{error::AppError, router::core_app_router::AppState};
 
 /// Example domain model (similar to Spring Boot entity)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -229,10 +229,10 @@ pub fn configure_routes(router: Router<Arc<AppState>>) -> Router<Arc<AppState>> 
     controller.register_routes(router)
 }
 
-/// Register services for the examples module
+/// Register services needed by the example controller in the application registry
 pub fn register_services(
-    builder: crate::core::router::app_router::RouterBuilder,
-) -> crate::core::router::app_router::RouterBuilder {
+    builder: crate::core::router::core_app_router::RouterBuilder,
+) -> crate::core::router::core_app_router::RouterBuilder {
     // Create dependencies
     let repository = Arc::new(InMemoryExampleRepository::new()) as Arc<dyn ExampleRepository>;
     let service = Arc::new(ExampleService::new(repository.clone()));

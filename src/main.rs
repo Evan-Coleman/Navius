@@ -28,7 +28,7 @@ use std::sync::Arc;
 use navius::core::config::app_config::AppConfig;
 use navius::core::config::load_config;
 use navius::core::router;
-use navius::core::router::app_router::{RouterBuilder, create_application};
+use navius::core::router::core_app_router::{RouterBuilder, create_application};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

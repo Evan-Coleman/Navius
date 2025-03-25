@@ -8,8 +8,8 @@ tags:
   - developer-experience
   - spring-boot
   - ease-of-use
-last_updated: May 31, 2024
-version: 1.2
+last_updated: March 24, 2025
+version: 1.4
 ---
 
 # Core Stability Roadmap
@@ -50,10 +50,11 @@ A stable application with:
      - Rename handler files like `handlers/health.rs` to `handlers/core_health.rs`
      - Rename utility files like `utils/api_client.rs` to `utils/core_api_client.rs`
    - [ ] Update all imports and references to reflect new naming pattern
+   - [ ] Remove old non-prefixed files (backward compatibility is not needed)
    - [ ] Create user-extensible "shadow" files in app directory for customization
    - [ ] Document naming conventions and extension points
    
-   *Updated at: Started May 31, 2024*
+   *Updated at: June 14, 2024*
 
 2. **Router Module Fixes**
    - [x] Create missing `app_router.rs` file in the core router module
@@ -71,8 +72,15 @@ A stable application with:
    - [x] Clean up any unnecessary imports
    - [x] Ensure proper module visibility
    - [ ] Create clear separation between core and user implementation
+   - [ ] Remove all backward compatibility code (not needed per latest requirements)
+   - [ ] **Eliminate mod.rs files and centralize module declarations**
+     - Move all module declarations to lib.rs
+     - Remove all mod.rs files from the codebase
+     - Use inline module declarations (e.g., `mod core { pub mod models { ... } }`)
+     - Maintain explicit visibility controls and re-exports in lib.rs
+     - Update imports across the codebase to reflect new module structure
    
-   *Updated at: May 31, 2024*
+   *Updated at: March 24, 2025*
 
 4. **Error Handling Improvements**
    - [x] Fix ServiceError implementation to include Repository errors
@@ -147,9 +155,15 @@ A stable application with:
    
    *Updated at: Not started*
 
+## Implementation Notes
+- **Backward Compatibility**: Backward compatibility is NOT needed per project requirements. Old non-prefixed files should be removed once their core_* replacements are complete.
+- **File Naming**: All core framework files should use the core_* prefix without exception.
+- **Module Structure**: Clear separation between framework code and user extension points should be maintained.
+- **Module Organization**: All module declarations should be centralized in lib.rs without using mod.rs files to reduce file clutter and simplify the codebase structure.
+
 ## Implementation Status
 - **Overall Progress**: 30% complete
-- **Last Updated**: May 31, 2024
+- **Last Updated**: March 24, 2025
 - **Next Milestone**: Finish module structure cleanup and enhance health endpoints
 - **Current Focus**: Health endpoint enhancement and examples module
 

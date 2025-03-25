@@ -9,8 +9,9 @@ use crate::core::{
     auth::EntraAuthLayer,
     config::app_config::AppConfig,
     handlers::{
-        self, actuator, docs,
-        health::{detailed_health_handler, health_handler},
+        self, actuator,
+        core_health::{detailed_health_handler, health_handler},
+        docs,
     },
     models::{DetailedHealthResponse, HealthCheckResponse},
 };

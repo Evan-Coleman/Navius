@@ -27,6 +27,68 @@ fn main() {
 }
 ```
 
+## Module Organization
+
+### Spring Boot (Java)
+
+Java Spring Boot follows a package-based organization where components are organized by feature or layer:
+
+```
+com.example.demo/
+├── DemoApplication.java
+├── config/
+│   └── SecurityConfig.java
+├── controller/
+│   └── UserController.java
+├── service/
+│   └── UserService.java
+├── repository/
+│   └── UserRepository.java
+└── model/
+    └── User.java
+```
+
+### Navius (Rust)
+
+Navius uses a flat module structure with centralized declarations in lib.rs:
+
+```rust
+// In lib.rs
+mod core {
+    pub mod router {
+        pub mod core_router;
+        pub mod core_app_router;
+        
+        pub use core_router::*;
+        pub use core_app_router::*;
+    }
+    
+    pub mod models { /* ... */ }
+    pub mod handlers { /* ... */ }
+}
+
+mod app {
+    pub mod api { /* ... */ }
+    pub mod services { /* ... */ }
+}
+
+// Directory structure
+src/
+├── lib.rs
+├── main.rs
+├── core/
+│   ├── router/
+│   │   ├── core_router.rs
+│   │   └── core_app_router.rs
+│   └── models/
+│       └── core_response.rs
+└── app/
+    └── api/
+        └── examples.rs
+```
+
+This approach eliminates the need for mod.rs files in each directory, reducing file clutter and making the module structure more immediately apparent in a single location.
+
 ## Simple Health Endpoint
 
 ### Spring Boot (Java)

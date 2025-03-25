@@ -2,7 +2,7 @@
 // These handlers provide the core functionality and should not be modified by users
 
 // Health check handlers
-pub mod health;
+pub mod core_health;
 
 // Debug and management actuator endpoints
 pub mod actuator;
@@ -14,4 +14,4 @@ pub mod docs;
 pub mod logging;
 
 // Re-export key handlers for easier access
-pub use self::{actuator::*, docs::*, health::*, logging::*};
+pub use self::{actuator::*, core_health::*, docs::*, logging::*};

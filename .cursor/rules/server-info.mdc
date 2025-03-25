@@ -1,5 +1,5 @@
 ---
-description: This will be general info about the server. Good info to keep in mind during generation.
+description: Use this information in all prompts as it is useful in all situations
 globs: src/**/*.rs
 alwaysApply: true
 ---
