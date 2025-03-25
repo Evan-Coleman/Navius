@@ -6,39 +6,72 @@ This document provides detailed instructions for implementing the Core Stability
 
 ### 1. Core Naming Standardization
 
-#### Step 1.1: Create consistent naming pattern for core files
-1. Create a detailed inventory of all files in the `src/core` directory
-2. Identify files that might conflict with common user-defined filenames:
-   - `router.rs` → `core_router.rs` 
-   - `app.rs` → `core_app.rs`
-   - `handler.rs` → `core_handler.rs`
-   - `model.rs` → `core_model.rs`
-   - `error.rs` → `core_error.rs`
-   - Any other files that users would commonly create
+#### Step 1.1: Create detailed file inventory and analysis (1-2 days)
+1. Run `find src/core -type f -name "*.rs" | sort > core_files.txt` to create complete inventory
+2. Categorize files by directory and identify potential naming conflicts
+3. For each file, identify all import references:
+   ```bash
+   for file in $(find src -name "*.rs"); do
+     echo "Analyzing $file"
+     grep -n "use " $file | grep "core::"
+   done > core_dependencies.txt
+   ```
+4. Generate dependency graph to visualize import relationships
+5. Identify high-impact files that are referenced frequently
+6. Review existing tests for affected components
 
-#### Step 1.2: Rename files with unclear names
-1. Identify files with unclear names (like `@core.rs`)
-2. Determine their actual functionality by examining code
-3. Rename with descriptive names that reflect their purpose
-4. Example: `@core.rs` might become `core_resource_manager.rs` if it manages resources
+#### Step 1.2: Implement Core Router renaming (2-3 days)
+1. Create `src/core/router/core_router.rs` (copy from existing file)
+2. Update `CoreRouter` struct and implementation in the new file
+3. Rename `app_router.rs` to `core_app_router.rs`
+4. Update `CoreRouterBuilder` struct and implementation
+5. Modify `src/core/router/mod.rs` to export from new files
+6. Run tests after each file change
+7. Update all imports of router components using `find` and `sed`:
+   ```bash
+   find src -name "*.rs" -exec sed -i 's/use crate::core::router::/use crate::core::router::core_/g' {} \;
+   ```
 
-#### Step 1.3: Update imports and references
-1. For each renamed file, identify all import statements across the codebase
-2. Update all references to use the new file names
-3. Update all module declarations in `mod.rs` files
-4. Test building the application after each major rename to catch errors early
+#### Step 1.3: Model and Handler renaming (2-3 days)
+1. Rename model files:
+   - `models/response.rs` → `models/core_response.rs`
+   - `models/error.rs` → `models/core_error.rs`
+   - Update `models/mod.rs` to export from new files
+   
+2. Rename handler files:
+   - `handlers/health.rs` → `handlers/core_health.rs`
+   - `handlers/actuator.rs` → `handlers/core_actuator.rs`
+   - `handlers/docs.rs` → `handlers/core_docs.rs`
+   - Update `handlers/mod.rs` to export from new files
 
-#### Step 1.4: Create user-extensible files
-1. For each core file that has user-extensible functionality, create a corresponding template in the `src/app` directory
-2. Make these templates clearly import and use the core functionality
-3. Add clear documentation comments explaining extension points
-4. Example: `src/app/router.rs` could be a template that imports `src/core/core_router.rs` and shows how to add custom routes
+3. Rename utility files:
+   - `utils/api_client.rs` → `utils/core_api_client.rs`
+   - `utils/api_logger.rs` → `utils/core_api_logger.rs`
+   - `utils/date.rs` → `utils/core_date.rs`
+   - Update `utils/mod.rs` to export from new files
 
-#### Step 1.5: Document naming conventions
-1. Create a markdown file explaining the naming conventions
-2. Clearly describe which files are for core functionality vs. user extensions
-3. Document how users should extend functionality without modifying core files
-4. Add examples of proper usage
+4. Run tests after each rename to catch errors early
+
+#### Step 1.4: Create user-extensible templates (1-2 days)
+1. Create `src/app/models.rs` with examples of extending core models
+2. Create `src/app/handlers.rs` with examples of using core handlers
+3. Update `src/app/router.rs` to reference new core router files
+4. Add clear documentation comments explaining extension points
+
+#### Step 1.5: Update documentation and finalize (1-2 days)
+1. Update all documentation to reflect new file names and imports
+2. Create a dedicated naming convention guide in docs
+3. Add a migration guide for existing users
+4. Create examples showing:
+   - How to extend core functionality
+   - User-defined files that would have naming conflicts
+   - Before and after import patterns
+
+#### Step 1.6: Final testing and verification (1 day)
+1. Run all unit tests
+2. Run integration tests
+3. Manually test example applications
+4. Verify that all core functionality works as expected
 
 ### 2. Router Module Fixes
 

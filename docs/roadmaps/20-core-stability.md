@@ -44,13 +44,16 @@ A stable application with:
 ### Phase 1: Fix Build Errors and Core Structure
 1. **Core Naming Standardization (HIGH PRIORITY)**
    - [ ] Create consistent naming pattern for core files with `core_` prefix
-   - [ ] Rename `router.rs` to `core_router.rs` to avoid conflicts with user-defined routers
-   - [ ] Rename `@core.rs` and other unclear filenames with descriptive names
+     - Rename generic files like `router.rs` to `core_router.rs` to avoid conflicts
+     - Rename `router/app_router.rs` to `router/core_app_router.rs`
+     - Rename model files like `models/response.rs` to `models/core_response.rs`
+     - Rename handler files like `handlers/health.rs` to `handlers/core_health.rs`
+     - Rename utility files like `utils/api_client.rs` to `utils/core_api_client.rs`
    - [ ] Update all imports and references to reflect new naming pattern
    - [ ] Create user-extensible "shadow" files in app directory for customization
    - [ ] Document naming conventions and extension points
    
-   *Updated at: Not started*
+   *Updated at: Started May 31, 2024*
 
 2. **Router Module Fixes**
    - [x] Create missing `app_router.rs` file in the core router module
