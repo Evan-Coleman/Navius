@@ -69,14 +69,43 @@ impl EntraTokenClient {
 
     /// Create a new token client from the application configuration
     pub fn from_config(config: &AppConfig) -> Self {
-        let tenant_id = &config.auth.entra.tenant_id;
-        let client_id = &config.auth.entra.client_id;
+        // Get the default provider config
+        let provider_name = &config.auth.default_provider;
+        let provider_config = config
+            .auth
+            .providers
+            .get(provider_name)
+            .expect("Default provider configuration not found");
+
+        // Get tenant ID from provider specific config
+        let tenant_id = provider_config
+            .provider_specific
+            .get("tenant_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+
+        let client_id = &provider_config.client_id;
         let client_secret =
             std::env::var(constants::auth::env_vars::CLIENT_SECRET).unwrap_or_default();
 
-        // Use URL formats from config
-        let auth_url_format = &config.auth.entra.authorize_url_format;
-        let token_url_format = &config.auth.entra.token_url_format;
+        // Get URL formats from provider specific config
+        let auth_url_format = provider_config
+            .provider_specific
+            .get("authorize_url_format")
+            .and_then(|v| v.as_str())
+            .unwrap_or_else(|| {
+                let fmt = crate::core::config::app_config::default_authorize_url_format();
+                Box::leak(fmt.into_boxed_str())
+            });
+
+        let token_url_format = provider_config
+            .provider_specific
+            .get("token_url_format")
+            .and_then(|v| v.as_str())
+            .unwrap_or_else(|| {
+                let fmt = crate::core::config::app_config::default_token_url_format();
+                Box::leak(fmt.into_boxed_str())
+            });
 
         let auth_url_str = auth_url_format.replace("{}", tenant_id);
         let token_url_str = token_url_format.replace("{}", tenant_id);

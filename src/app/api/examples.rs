@@ -362,7 +362,7 @@ impl HealthService {
 ///
 /// This shows how a user can extend the simple /health endpoint with custom checks
 /// in a Spring Boot-like way.
-pub async fn custom_health_handler(State(state): State<Arc<AppState>>) -> Json<Value> {
+pub async fn custom_health_handler(State(_state): State<Arc<AppState>>) -> Json<Value> {
     // Create a health service with custom indicators
     let mut health_service = HealthService::new();
 

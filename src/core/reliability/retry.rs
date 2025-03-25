@@ -51,8 +51,7 @@ use tower::{Layer, Service};
 use tracing::{debug, info, warn};
 
 use rand::SeedableRng;
-use rand::prelude::*;
-use rand_chacha::ChaCha8Rng;
+use rand::rngs::SmallRng;
 
 use crate::core::config::app_config::RetryConfig as AppConfigRetryConfig;
 use crate::core::error::AppError;
@@ -61,12 +60,16 @@ use crate::core::error::{ErrorResponse, ErrorType};
 use tower::ServiceBuilder;
 use tower::retry::Policy;
 use tower::retry::RetryLayer as TowerRetryLayer;
-use tower::retry::backoff::ExponentialBackoff as TowerExponentialBackoff;
-use tower::util::Either;
 use tower_http::classify::{ServerErrorsAsFailures, SharedClassifier};
 
 // Define the Error type that's used in the Policy implementation
 type Error = Box<dyn std::error::Error + Send + Sync>;
+
+// RetryAction enum for the Policy implementation
+pub enum RetryAction {
+    Retry,
+    Return,
+}
 
 // Helper for creating Ready futures
 fn ready<T>(value: T) -> Ready<T> {
@@ -83,21 +86,20 @@ pub type RetryLayer = tower::retry::RetryLayer<RetryPolicy>;
 pub struct RetryPolicy {
     max_attempts: u32,
     retry_status_codes: Vec<u16>,
-    backoff: TowerExponentialBackoff,
+    current_attempts: u32,
+    base_delay: Duration,
+    max_delay: Duration,
 }
 
 impl RetryPolicy {
-    pub fn new() -> Self {
+    pub fn new(max_attempts: u32) -> Self {
         Self {
-            max_attempts: 3,
+            max_attempts,
             retry_status_codes: vec![500, 502, 503, 504],
-            backoff: TowerExponentialBackoff::from_millis(100),
+            current_attempts: 0,
+            base_delay: Duration::from_millis(100),
+            max_delay: Duration::from_secs(1),
         }
-    }
-
-    pub fn with_max_attempts(mut self, max_attempts: u32) -> Self {
-        self.max_attempts = max_attempts;
-        self
     }
 
     pub fn with_status_codes(mut self, status_codes: Vec<u16>) -> Self {
@@ -105,53 +107,79 @@ impl RetryPolicy {
         self
     }
 
-    pub fn with_backoff(mut self, backoff: TowerExponentialBackoff) -> Self {
-        self.backoff = backoff;
+    pub fn with_backoff(mut self, base_delay: Duration, max_delay: Duration) -> Self {
+        self.base_delay = base_delay;
+        self.max_delay = max_delay;
         self
+    }
+
+    // Calculate backoff delay using exponential backoff with jitter
+    fn get_backoff_duration(&self) -> Duration {
+        let base = self.base_delay.as_millis() as f64;
+        let attempt = self.current_attempts as f64;
+
+        // Exponential backoff: base * 2^attempt
+        let exp_backoff = base * 2.0_f64.powf(attempt);
+
+        // Apply jitter (0.5-1.5 of the calculated value)
+        let jitter = 0.5 + rand::random::<f64>();
+        let with_jitter = exp_backoff * jitter;
+
+        // Cap at max_delay
+        let capped = with_jitter.min(self.max_delay.as_millis() as f64);
+
+        Duration::from_millis(capped as u64)
     }
 }
 
-impl<B> Policy<Request<B>, Response<axum::body::Body>, Error> for RetryPolicy {
-    type Future = Either<Ready<Self::RetryAction>, Ready<Self::RetryAction>>;
+impl<B> Policy<Request<B>, Response<axum::body::Body>, Error> for RetryPolicy
+where
+    B: Clone + Send + 'static,
+{
+    type Future = Ready<()>;
 
     fn retry(
-        &self,
-        req: &Request<B>,
-        result: Result<&Response<B>, &Error>,
+        &mut self,
+        _req: &mut Request<B>,
+        result: &mut std::result::Result<Response<axum::body::Body>, Error>,
     ) -> Option<Self::Future> {
-        match result {
-            Ok(response) => {
-                if self
-                    .retry_status_codes
-                    .contains(&response.status().as_u16())
-                {
-                    Some(Either::A(ready(RetryAction::Retry)))
-                } else {
-                    None
-                }
-            }
-            Err(_) => Some(Either::B(ready(RetryAction::Retry))),
+        self.current_attempts += 1;
+
+        if self.current_attempts >= self.max_attempts {
+            return None;
         }
+
+        let should_retry = match result {
+            Ok(response) => self
+                .retry_status_codes
+                .contains(&response.status().as_u16()),
+            Err(_) => true,
+        };
+
+        if should_retry { Some(ready(())) } else { None }
     }
 
-    fn clone_request(&self, req: &Request<B>) -> Option<Request<B>> {
-        Some(req.try_clone().ok()?)
+    fn clone_request(&mut self, req: &Request<B>) -> Option<Request<B>> {
+        Some(req.clone())
     }
 }
 
 /// Configuration parameters for retry behavior
 #[derive(Clone)]
 pub struct RetryConfig {
+    /// Whether retries are enabled
+    pub enabled: bool,
+
     /// Total maximum attempts (initial request + retries)
     /// Example: 3 = 1 initial + 2 retries
     pub max_attempts: usize,
 
     /// Base delay between retry attempts. With exponential backoff,
     /// this is multiplied by 2^(attempt number)
-    pub base_delay: Duration,
+    pub base_delay: u64,
 
     /// Maximum delay cap for backoff calculations
-    pub max_delay: Duration,
+    pub max_delay: u64,
 
     /// Use exponential backoff (true) or fixed delays (false)
     pub use_exponential_backoff: bool,
@@ -171,30 +199,26 @@ impl RetryConfig {
                 .iter()
                 .map(|&s| s.as_u16())
                 .collect(),
-            backoff: TowerExponentialBackoff::new(self.base_delay)
-                .max_delay(self.max_delay)
-                .factor(2),
+            current_attempts: 0,
+            base_delay: Duration::from_millis(self.base_delay),
+            max_delay: Duration::from_millis(self.max_delay),
         };
 
-        RetryLayer::new(policy).max_retries(self.max_attempts)
+        RetryLayer::new(policy)
     }
 
     /// Validate the retry configuration
-    pub fn validate(&self) -> Result<(), AppError> {
+    pub fn validate(&self) -> Result<()> {
         if self.max_attempts == 0 {
-            return Err(AppError::new(ErrorResponse::new(
-                ErrorType::ConfigurationError,
-                "max_attempts must be at least 1".to_string(),
-            )));
+            return Err(AppError::validation_error(
+                "max_attempts must be at least 1",
+            ));
         }
 
         if self.base_delay > self.max_delay {
-            return Err(AppError::new(ErrorResponse::new(
-                ErrorType::ConfigurationError,
-                format!(
-                    "base_delay ({:?}) cannot exceed max_delay ({:?})",
-                    self.base_delay, self.max_delay
-                ),
+            return Err(AppError::validation_error(format!(
+                "base_delay ({}) cannot exceed max_delay ({})",
+                self.base_delay, self.max_delay
             )));
         }
 
@@ -206,8 +230,8 @@ impl Default for RetryConfig {
     fn default() -> Self {
         Self {
             max_attempts: 3,
-            base_delay: Duration::from_millis(100),
-            max_delay: Duration::from_secs(1),
+            base_delay: 100,
+            max_delay: 1000,
             use_exponential_backoff: true,
             retry_status_codes: vec![
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -216,6 +240,7 @@ impl Default for RetryConfig {
                 StatusCode::GATEWAY_TIMEOUT,
                 StatusCode::TOO_MANY_REQUESTS,
             ],
+            enabled: true,
         }
     }
 }
@@ -235,31 +260,21 @@ impl std::error::Error for RetryError {}
 
 pub fn build_retry_policy(config: &RetryConfig) -> Result<RetryPolicy> {
     if !config.enabled {
-        return Err(AppError::ConfigurationError(
-            "Retry policy is not enabled".to_string(),
-        ));
+        return Err(AppError::validation_error("Retry policy is not enabled"));
     }
 
-    let mut policy = RetryPolicy::new()
-        .with_max_attempts(config.max_attempts as u32)
+    let policy = RetryPolicy::new(config.max_attempts as u32)
         .with_status_codes(
             config
                 .retry_status_codes
                 .iter()
                 .map(|&s| s.as_u16())
                 .collect(),
+        )
+        .with_backoff(
+            Duration::from_millis(config.base_delay),
+            Duration::from_millis(config.max_delay),
         );
-
-    let backoff = if config.use_exponential_backoff {
-        TowerExponentialBackoff::from_millis(config.base_delay)
-            .max_delay(Duration::from_millis(config.max_delay))
-    } else {
-        TowerExponentialBackoff::from_millis(config.base_delay)
-            .factor(1.0)
-            .max_delay(Duration::from_millis(config.max_delay))
-    };
-
-    policy = policy.with_backoff(backoff);
 
     Ok(policy)
 }

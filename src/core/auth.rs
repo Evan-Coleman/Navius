@@ -14,12 +14,15 @@ pub mod mock;
 pub mod models;
 pub mod providers;
 
+use serde::Deserialize;
+use std::collections::HashMap;
+
 // Re-export commonly used items
 pub use self::{
     claims::StandardClaims,
     client::EntraTokenClient,
     error::AuthError,
-    interfaces::{TokenClient, TokenValidationResult},
+    interfaces::{TokenClient as InterfaceTokenClient, TokenValidationResult},
     middleware::{
         AuthMiddleware, EntraAuthConfig, EntraAuthLayer, Permission, PermissionRequirement, Role,
         RoleRequirement, auth_middleware, require_auth, require_roles, role_from_string,

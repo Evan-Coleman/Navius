@@ -15,7 +15,7 @@ use crate::core::{
 /// of the application is running.
 ///
 /// Models the Spring Boot Actuator info endpoint structure.
-pub async fn info(State(state): State<Arc<AppState>>) -> Json<Value> {
+pub async fn info(State(_state): State<Arc<AppState>>) -> Json<Value> {
     info!("📊 Getting application info");
 
     // Create Spring Boot-style info response with sections

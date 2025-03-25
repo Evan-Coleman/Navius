@@ -142,7 +142,7 @@ impl EntraProvider {
         }
     }
 
-    async fn validate_token_internal(&self, token: &str) -> Result<StandardClaims, AuthError> {
+    async fn validate_token_internal(&self, _token: &str) -> Result<StandardClaims, AuthError> {
         // Safely acquire the read lock
         let cache_entry = match self.jwks_cache.read() {
             Ok(guard) => guard.clone(), // Clone the Option to avoid holding the lock

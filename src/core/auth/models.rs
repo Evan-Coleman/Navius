@@ -80,7 +80,7 @@ pub struct StandardClaims {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RoleMappings {
+pub struct EntraRoleMappings {
     pub entra: HashMap<String, String>,
     pub google: HashMap<String, String>,
 }

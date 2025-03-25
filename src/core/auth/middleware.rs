@@ -167,6 +167,8 @@ pub struct EntraAuthConfig {
     role_mappings: HashMap<String, Vec<String>>,
     pub validate_token: bool,
     pub tenant_id: String,
+    audience: String,
+    validation_leeway: Duration,
 }
 
 /// OpenID Connect configuration response
@@ -191,6 +193,8 @@ impl Default for EntraAuthConfig {
             role_mappings: HashMap::new(),
             validate_token: true,
             tenant_id: String::new(),
+            audience: String::new(),
+            validation_leeway: Duration::from_secs(30),
         }
     }
 }
@@ -214,6 +218,14 @@ impl EntraAuthConfig {
             role_mappings: common_config.role_mappings.clone(),
             validate_token: true,
             tenant_id: common_config.tenant_id.clone(),
+            audience: common_config.audience.clone(),
+            validation_leeway: Duration::from_secs(
+                common_config
+                    .provider_specific
+                    .get("validation_leeway")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(30),
+            ),
         }
     }
 
@@ -540,9 +552,22 @@ pub struct EntraAuthLayer {
 
 impl EntraAuthLayer {
     /// Create a new EntraAuthLayer from AppConfig
-    pub fn from_app_config(config: &AppConfig) -> Self {
+    pub fn from_app_config(_config: &AppConfig) -> Self {
         Self {
-            config: EntraAuthConfig::default(),
+            config: EntraAuthConfig {
+                required_roles: RoleRequirement::None,
+                required_permissions: PermissionRequirement::None,
+                client: Client::new(),
+                jwks_uri: String::new(),
+                jwks_cache: Arc::new(Mutex::new(None)),
+                debug_validation: false,
+                issuer_url_formats: Vec::new(),
+                role_mappings: HashMap::new(),
+                validate_token: true,
+                tenant_id: String::new(),
+                audience: String::new(),
+                validation_leeway: Duration::from_secs(30),
+            },
         }
     }
 
@@ -582,7 +607,7 @@ impl EntraAuthLayer {
     }
 
     /// Create a new auth layer from app config with added role requirements
-    pub fn from_app_config_with_roles(config: &AppConfig, roles: RoleRequirement) -> Self {
+    pub fn from_app_config_with_roles(_config: &AppConfig, roles: RoleRequirement) -> Self {
         Self::new(EntraAuthConfig::default().with_role_requirement(roles))
     }
 
@@ -594,7 +619,34 @@ impl EntraAuthLayer {
             .get(&config.auth.default_provider)
             .expect("Default provider not found in configuration");
 
-        Self::new(config).with_role_requirement(RoleRequirement::Any(roles))
+        // Create EntraAuthConfig from provider config
+        let auth_config = EntraAuthConfig {
+            required_roles: RoleRequirement::Any(roles),
+            required_permissions: PermissionRequirement::None,
+            client: Client::new(),
+            jwks_uri: provider_config.jwks_uri.clone(),
+            jwks_cache: Arc::new(Mutex::new(None)),
+            debug_validation: config.auth.debug,
+            issuer_url_formats: vec![provider_config.issuer_url.clone()],
+            role_mappings: provider_config.role_mappings.clone(),
+            validate_token: true,
+            tenant_id: provider_config
+                .provider_specific
+                .get("tenant_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string(),
+            audience: provider_config.audience.clone(),
+            validation_leeway: Duration::from_secs(
+                provider_config
+                    .provider_specific
+                    .get("validation_leeway")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(30),
+            ),
+        };
+
+        Self::new(auth_config)
     }
 
     /// Create a new auth layer from app config requiring all of the specified roles
@@ -778,7 +830,7 @@ async fn validate_token_wrapper(
     // Set up issuer validation with multiple accepted issuers
     let mut issuers = Vec::new();
     for format in &config.issuer_url_formats {
-        issuers.push(format.replace("{}", &config.role_mappings.tenant_id));
+        issuers.push(format.replace("{}", &config.tenant_id));
     }
     validation.set_issuer(&issuers);
 
@@ -1390,11 +1442,18 @@ impl AuthLayer {
     }
 
     pub fn with_provider(&self, name: &str) -> AuthMiddlewareBuilder {
+        let _provider = self
+            .provider_registry
+            .get_provider(name)
+            .expect(&format!("Provider {} not found", name));
+
+        let provider_arc = self
+            .provider_registry
+            .get_provider_arc(name)
+            .expect(&format!("Provider {} not found", name));
+
         AuthMiddlewareBuilder {
-            provider: self
-                .provider_registry
-                .get_provider(name)
-                .expect("Provider not found"),
+            provider: provider_arc,
             role_requirement: RoleRequirement::None,
             permission_requirement: PermissionRequirement::None,
         }
@@ -1405,13 +1464,13 @@ impl AuthLayer {
     }
 }
 
-pub struct AuthMiddlewareBuilder<'a> {
-    provider: &'a dyn OAuthProvider,
+pub struct AuthMiddlewareBuilder {
+    provider: Arc<dyn OAuthProvider>,
     role_requirement: RoleRequirement,
     permission_requirement: PermissionRequirement,
 }
 
-impl<'a> AuthMiddlewareBuilder<'a> {
+impl AuthMiddlewareBuilder {
     pub fn with_roles(mut self, requirement: RoleRequirement) -> Self {
         self.role_requirement = requirement;
         self
@@ -1431,7 +1490,7 @@ impl<'a> AuthMiddlewareBuilder<'a> {
         let role_req = self.role_requirement.clone();
         let perm_req = self.permission_requirement.clone();
 
-        tower::service_fn(move |service| AuthMiddleware {
+        tower::layer::layer_fn(move |service| AuthMiddleware {
             inner: service,
             provider: provider.clone(),
             role_requirement: role_req.clone(),
@@ -1442,9 +1501,13 @@ impl<'a> AuthMiddlewareBuilder<'a> {
 
 // Add the missing AuthMiddleware struct
 #[derive(Clone)]
-struct AuthMiddleware<S> {
+pub struct AuthMiddleware<S> {
     inner: S,
     provider: Arc<dyn OAuthProvider>,
     role_requirement: RoleRequirement,
     permission_requirement: PermissionRequirement,
+}
+
+impl<S> AuthMiddleware<S> {
+    // ... existing code ...
 }

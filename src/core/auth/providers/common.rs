@@ -81,13 +81,17 @@ impl ProviderRegistry {
         self.providers.get(name).map(|p| p.as_ref())
     }
 
+    pub fn get_provider_arc(&self, name: &str) -> Option<Arc<dyn OAuthProvider>> {
+        self.providers.get(name).cloned()
+    }
+
     pub fn default_provider(&self) -> &dyn OAuthProvider {
         self.get_provider(&self.default_provider)
             .expect("Default provider not found")
     }
 
-    pub fn initialize(config: AuthConfig) -> Result<Self, AuthError> {
-        let mut providers = HashMap::new();
+    pub fn initialize(config: AuthConfig) -> anyhow::Result<Self> {
+        let mut providers: HashMap<String, Arc<dyn OAuthProvider>> = HashMap::new();
 
         for (name, provider_config) in &config.providers {
             if provider_config.enabled {
@@ -115,8 +119,8 @@ impl ProviderRegistry {
         })
     }
 
-    pub fn from_app_config(config: &AppConfig) -> Result<Self, AuthError> {
-        let mut registry = ProviderRegistry::initialize(config.auth.clone())?;
+    pub fn from_app_config(config: &AppConfig) -> anyhow::Result<Self> {
+        let registry = Self::initialize(config.auth.clone())?;
 
         if config.auth.debug {
             debug!(
@@ -179,7 +183,7 @@ pub struct RefreshLimiter {
 }
 
 impl RefreshLimiter {
-    pub fn new(requests: u32, per_seconds: u32) -> Self {
+    pub fn new(_requests: u32, per_seconds: u32) -> Self {
         let quota = Quota::with_period(Duration::from_secs(per_seconds.into()))
             .unwrap()
             .allow_burst(nonzero!(10u32));
@@ -258,7 +262,7 @@ pub struct CircuitBreaker {
 }
 
 impl CircuitBreaker {
-    fn new(failure_threshold: u32, reset_timeout: Duration) -> Self {
+    fn new(_failure_threshold: u32, _reset_timeout: Duration) -> Self {
         let (tx, _) = watch::channel(CircuitState::Closed);
 
         Self {

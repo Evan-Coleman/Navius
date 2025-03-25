@@ -13,6 +13,8 @@ pub mod metrics;
 pub mod rate_limit;
 pub mod retry;
 
+use crate::core::reliability::retry::RetryPolicy;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -62,10 +64,15 @@ use crate::core::reliability::rate_limit::{ConcurrencyLimitError, RateLimitError
 use crate::core::reliability::retry::RetryLayer;
 use axum::Router;
 use axum::body::HttpBody;
+use axum::extract::Request;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use serde_json::json;
+use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
-use tower::{BoxError, Layer, Service, ServiceBuilder};
+use tower::util::MapErr;
+use tower::{BoxError, Layer, Service, ServiceBuilder, ServiceExt};
 use tower_http::timeout::TimeoutLayer;
 use tracing::error;
 use tracing::{info, warn};
@@ -82,47 +89,47 @@ use crate::core::utils::request_id::get_req_id;
 use tower::retry::backoff::ExponentialBackoff;
 
 /// Apply reliability middleware to the router based on configuration
-pub fn apply_reliability(mut router: Router, config: &ReliabilityConfig) -> Result<Router> {
-    let mut service_builder = ServiceBuilder::new();
+pub fn apply_reliability(
+    router: Router,
+    config: &ReliabilityConfig,
+) -> std::result::Result<Router, AppError> {
+    // Create a service builder to chain all the layers
+    let mut builder = tower::ServiceBuilder::new();
 
     // Add timeout layer if enabled
     if config.timeout.enabled {
-        let layer = build_timeout_layer(&config.timeout)?;
-        if let Some(layer) = layer {
-            service_builder = service_builder.layer(layer);
+        if let Some(layer) = build_timeout_layer(&config.timeout)? {
+            builder = builder.layer(layer);
         }
     }
 
     // Add circuit breaker if enabled
     if config.circuit_breaker.enabled {
-        let layer = build_circuit_breaker_layer(&config.circuit_breaker)?;
-        if let Some(layer) = layer {
-            service_builder = service_builder.layer(layer);
+        if let Some(layer) = build_circuit_breaker_layer(&config.circuit_breaker)? {
+            builder = builder.layer(layer);
         }
     }
 
     // Add rate limiting if enabled
     if config.rate_limit.enabled {
-        let layer = build_rate_limit_layer(&config.rate_limit)?;
-        if let Some(layer) = layer {
-            service_builder = service_builder.layer(layer);
+        if let Some(layer) = build_rate_limit_layer(&config.rate_limit)? {
+            builder = builder.layer(layer);
         }
     }
 
     // Add concurrency limiting if enabled
     if config.concurrency.enabled {
-        let layer = build_concurrency_layer(&config.concurrency)?;
-        if let Some(layer) = layer {
-            service_builder = service_builder.layer(layer);
+        if let Some(layer) = build_concurrency_layer(&config.concurrency)? {
+            builder = builder.layer(layer);
         }
     }
 
-    // Apply all middleware layers at once
-    Ok(router.layer(service_builder.into_inner()))
+    // Return the router with all layers applied
+    Ok(router.layer(builder.into_inner()))
 }
 
 /// Build the retry layer based on configuration
-fn build_retry_layer(config: &RetryConfig) -> Result<Option<RetryLayer<RetryPolicy>>, AppError> {
+fn build_retry_layer(config: &RetryConfig) -> Result<Option<RetryLayer>, AppError> {
     if !config.enabled {
         info!("Request retries are disabled");
         return Ok(None);
