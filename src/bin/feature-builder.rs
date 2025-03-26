@@ -1,7 +1,10 @@
 use navius::core::config::app_config::{AppConfig, load_config as app_load_config};
-use navius::core::features::{FeatureConfig, FeatureRegistry};
-use std::collections::HashSet;
-use std::path::Path;
+use navius::core::features::{
+    BuildConfig, ContainerConfig, FeatureConfig, FeatureRegistry, PackageManager, VersionInfo,
+};
+use std::collections::{HashMap, HashSet};
+use std::env;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
@@ -18,6 +21,9 @@ fn main() {
         "disable" if args.len() >= 3 => disable_feature(&args[2]),
         "status" => show_status(),
         "build" => build_with_features(),
+        "package" => package_with_features(),
+        "container" => create_container(),
+        "update" if args.len() >= 3 => create_update_package(&args[2]),
         "save" if args.len() >= 3 => save_config(&args[2]),
         "load" if args.len() >= 3 => load_config(&args[2]),
         "reset" => reset_to_defaults(),
@@ -33,6 +39,15 @@ fn print_usage() {
     println!("  feature-builder enable <feature>    - Enable a feature and its dependencies");
     println!("  feature-builder disable <feature>   - Disable a feature if possible");
     println!("  feature-builder build               - Build with selected features");
+    println!(
+        "  feature-builder package             - Create optimized package with selected features"
+    );
+    println!(
+        "  feature-builder container           - Create container image with selected features"
+    );
+    println!(
+        "  feature-builder update <output_dir> - Create update package with selected features"
+    );
     println!("  feature-builder save <file>         - Save current feature config");
     println!("  feature-builder load <file>         - Load feature config from file");
     println!("  feature-builder reset               - Reset to default features");
@@ -277,4 +292,152 @@ fn reset_to_defaults() {
 
     // Save to config file
     save_to_config_file(&registry);
+}
+
+fn package_with_features() {
+    let (_, registry) = load_and_create_registry();
+
+    println!("Creating optimized package with selected features...");
+
+    // Get current directory for source path
+    let source_path = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    // Configure build options
+    let build_config = BuildConfig::new(source_path.clone(), source_path)
+        .with_optimization("release")
+        .with_features(registry.get_selected())
+        .with_version(get_version_info());
+
+    // Create package manager
+    let package_manager = PackageManager::new(registry, build_config);
+
+    // Build the package
+    match package_manager.build_package() {
+        Ok(binary_path) => {
+            println!("Package built successfully!");
+            println!("Binary path: {:?}", binary_path);
+        }
+        Err(e) => {
+            println!("Failed to build package: {}", e);
+        }
+    }
+}
+
+fn create_container() {
+    let (_, registry) = load_and_create_registry();
+
+    println!("Creating container image with selected features...");
+
+    // Get current directory for source path
+    let source_path = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    // Configure container options
+    let container_config = ContainerConfig {
+        base_image: "debian:bullseye-slim".to_string(),
+        tags: vec![format!("navius-server:{}", env!("CARGO_PKG_VERSION"))],
+        env_vars: vec![],
+        ports: vec![8080, 8081],
+        labels: HashMap::from([
+            (
+                "org.opencontainers.image.title".to_string(),
+                "Navius Server".to_string(),
+            ),
+            (
+                "org.opencontainers.image.version".to_string(),
+                env!("CARGO_PKG_VERSION").to_string(),
+            ),
+            (
+                "org.opencontainers.image.vendor".to_string(),
+                "Navius".to_string(),
+            ),
+        ]),
+    };
+
+    // Configure build options
+    let build_config = BuildConfig::new(source_path.clone(), source_path)
+        .with_optimization("release")
+        .with_features(registry.get_selected())
+        .with_version(get_version_info())
+        .with_container(container_config);
+
+    // Create package manager
+    let package_manager = PackageManager::new(registry, build_config);
+
+    // Build the container
+    match package_manager.create_container() {
+        Ok(tag) => {
+            println!("Container built successfully!");
+            println!("Image tag: {}", tag);
+            println!("\nYou can run it with:");
+            println!("docker run -p 8080:8080 -p 8081:8081 {}", tag);
+        }
+        Err(e) => {
+            println!("Failed to build container: {}", e);
+        }
+    }
+}
+
+fn create_update_package(output_dir: &str) {
+    let (_, registry) = load_and_create_registry();
+
+    println!("Creating update package with selected features...");
+
+    // Get current directory for source path
+    let source_path = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let output_path = PathBuf::from(output_dir);
+
+    // Configure build options
+    let build_config = BuildConfig::new(source_path.clone(), source_path)
+        .with_optimization("release")
+        .with_features(registry.get_selected())
+        .with_version(get_version_info());
+
+    // Create package manager
+    let package_manager = PackageManager::new(registry, build_config);
+
+    // Create update package
+    match package_manager.create_update_package(&output_path) {
+        Ok(package_path) => {
+            println!("Update package created successfully!");
+            println!("Package path: {:?}", package_path);
+        }
+        Err(e) => {
+            println!("Failed to create update package: {}", e);
+        }
+    }
+}
+
+fn get_version_info() -> VersionInfo {
+    // Get version from environment
+    let version_str = env!("CARGO_PKG_VERSION");
+    let parts: Vec<&str> = version_str.split('.').collect();
+
+    let major = parts.get(0).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let minor = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(1);
+    let patch = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
+
+    // Try to get git commit hash
+    let commit = get_git_commit();
+
+    VersionInfo {
+        major,
+        minor,
+        patch,
+        build: Some(format!("build-{}", chrono::Utc::now().format("%Y%m%d%H%M"))),
+        commit,
+    }
+}
+
+fn get_git_commit() -> Option<String> {
+    let output = Command::new("git")
+        .args(["rev-parse", "--short", "HEAD"])
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            let hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !hash.is_empty() { Some(hash) } else { None }
+        }
+        _ => None,
+    }
 }

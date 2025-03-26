@@ -122,3 +122,117 @@ fn test_runtime_features() {
     let status = runtime.get_feature_status("unknown_feature");
     assert_eq!(status, None);
 }
+
+#[cfg(test)]
+mod feature_selection_tests {
+    // ... existing tests ...
+}
+
+#[cfg(test)]
+mod packaging_tests {
+    use super::super::features::FeatureRegistry;
+    use super::super::packaging::{BuildConfig, ContainerConfig, PackageManager, VersionInfo};
+    use std::collections::{HashMap, HashSet};
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    /// Setup function to create test resources
+    fn setup() -> (TempDir, FeatureRegistry, BuildConfig) {
+        let temp_dir = TempDir::new().unwrap();
+        let output_path = temp_dir.path().to_path_buf();
+        let source_path = std::env::current_dir().unwrap();
+
+        let mut registry = FeatureRegistry::new();
+
+        // Enable core features for the test
+        registry.select("core").unwrap();
+        registry.select("metrics").unwrap();
+
+        let build_config = BuildConfig::new(source_path, output_path)
+            .with_optimization("debug") // Use debug for faster tests
+            .with_features(registry.get_selected())
+            .with_version(VersionInfo::default());
+
+        (temp_dir, registry, build_config)
+    }
+
+    #[test]
+    fn test_build_config_creation() {
+        let (_, _, config) = setup();
+
+        assert_eq!(config.optimization_level, "debug");
+        assert!(config.features.contains("core"));
+        assert!(config.features.contains("metrics"));
+        assert!(config.container.is_none());
+    }
+
+    #[test]
+    fn test_build_command_generation() {
+        let (_, _, config) = setup();
+
+        let cmd = config.generate_build_command();
+
+        assert_eq!(cmd[0], "cargo");
+        assert_eq!(cmd[1], "build");
+
+        // Check for features parameter
+        let features_index = cmd.iter().position(|arg| arg == "--features").unwrap();
+        let features = &cmd[features_index + 1];
+        assert!(features.contains("core"));
+        assert!(features.contains("metrics"));
+    }
+
+    #[test]
+    fn test_container_config() {
+        let (_, _, config) = setup();
+
+        let container_config = ContainerConfig {
+            base_image: "rust:slim".to_string(),
+            tags: vec!["test:latest".to_string()],
+            env_vars: vec![],
+            ports: vec![8080],
+            labels: HashMap::new(),
+        };
+
+        let config_with_container = config.with_container(container_config);
+
+        assert!(config_with_container.container.is_some());
+        if let Some(container) = &config_with_container.container {
+            assert_eq!(container.base_image, "rust:slim");
+            assert_eq!(container.tags[0], "test:latest");
+            assert_eq!(container.ports[0], 8080);
+        }
+    }
+
+    #[test]
+    fn test_version_info() {
+        let version = VersionInfo {
+            major: 1,
+            minor: 2,
+            patch: 3,
+            build: Some("test".to_string()),
+            commit: Some("abc123".to_string()),
+        };
+
+        assert_eq!(version.major, 1);
+        assert_eq!(version.minor, 2);
+        assert_eq!(version.patch, 3);
+        assert_eq!(version.build, Some("test".to_string()));
+        assert_eq!(version.commit, Some("abc123".to_string()));
+    }
+
+    #[test]
+    fn test_package_manager_creation() {
+        let (_, registry, config) = setup();
+
+        let package_manager = PackageManager::new(registry, config);
+
+        // This is mostly a compilation test, just to ensure the types match up
+        assert!(true);
+    }
+
+    // NOTE: More comprehensive tests for package_manager.build_package(),
+    // create_container(), and create_update_package() would typically be
+    // implemented as integration tests with mocks for the build commands
+    // since we don't want to actually run cargo build in unit tests
+}
