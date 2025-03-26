@@ -8,12 +8,6 @@ use crate::core::{
     services::health::HealthService,
 };
 
-/// Ultra-minimal health check endpoint for simple monitoring
-/// Returns a simple JSON status object like Spring Boot's /health endpoint
-pub async fn simple_health_handler() -> Json<Value> {
-    Json(json!({ "status": "UP" }))
-}
-
 /// Simple health check endpoint
 pub async fn health_handler() -> Json<HealthCheckResponse> {
     let version = env!("CARGO_PKG_VERSION").to_string();
@@ -79,11 +73,5 @@ mod tests {
         assert!(components.contains_key("diskSpace"));
         assert!(components.contains_key("env"));
         assert!(components.contains_key("services"));
-    }
-
-    #[tokio::test]
-    async fn test_simple_health_handler() {
-        let response = simple_health_handler().await;
-        assert_eq!(response.0.get("status").unwrap(), "UP");
     }
 }

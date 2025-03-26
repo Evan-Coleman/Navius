@@ -136,29 +136,12 @@ pub mod core {
 
 /// Application components that can be extended by users
 pub mod app {
-    // API endpoints and examples
-    pub mod api {
-        // Example Spring Boot-like implementations
-        pub mod examples;
-
-        pub use examples::*;
-    }
+    // API endpoints
+    pub mod api;
 
     // Service implementations
     pub mod services;
 }
-
-// Examples module
-pub mod examples;
-
-// ===============================================================================
-// Examples Module - Can be enabled/disabled with feature flag
-// ===============================================================================
-
-/// Examples that demonstrate how to use the framework
-/// These can be optionally included or removed
-#[cfg(feature = "examples")]
-pub mod examples_feature_flagged;
 
 // ===============================================================================
 // Convenience Re-exports - For easier access to common components
@@ -193,15 +176,6 @@ pub mod api {
 pub mod handlers {
     pub use crate::app::api::*;
     pub use crate::core::handlers::*;
-}
-
-/// Spring Boot-like annotation macros
-pub mod macros {
-    // Import from examples for now until we have the actual implementation
-    pub use crate::examples::controllers::user_controller::{
-        Controller, EndpointMapping, RequestMapping, RestController,
-    };
-    pub use crate::examples::services::cached_user_service::{CacheEvict, Cacheable, Service};
 }
 
 /// Data models and schemas
@@ -243,7 +217,6 @@ pub mod mockable {
 }
 
 // Direct re-exports for commonly used types
-pub use crate::app::api::examples as app_examples;
 pub use crate::core::error::*;
 pub use crate::core::models::*;
 pub use crate::core::services::error as core_service_error;

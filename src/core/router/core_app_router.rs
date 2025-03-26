@@ -10,7 +10,7 @@ use std::time::SystemTime;
 
 use crate::core::{
     auth::TokenClient, cache::cache_manager::CacheRegistry, config::app_config::AppConfig,
-    handlers::core_health::simple_health_handler, utils::api_resource::ApiResourceRegistry,
+    utils::api_resource::ApiResourceRegistry,
 };
 
 /// ServiceRegistry for dependency injection
@@ -181,11 +181,8 @@ impl RouterBuilder {
     pub fn build(self) -> Router {
         let state = Arc::new(self.app_state);
 
-        // Create public routes that don't require authentication
-        let public_routes = Router::new().route("/health", get(simple_health_handler));
-
-        // Build the final router
-        Router::new().merge(public_routes).with_state(state)
+        // Delegate route creation to CoreRouter
+        crate::core::router::core_router::CoreRouter::create_core_routes(state)
     }
 }
 

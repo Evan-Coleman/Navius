@@ -37,8 +37,11 @@ impl CoreRouter {
         // Public core routes - accessible without authentication
         let public_routes = Router::new().route("/health", get(health_handler));
 
-        // Actuator routes - for metrics, health checks, docs, and admin functions
-        let actuator_routes = Router::new()
+        // Create actuator routes
+        let mut actuator_routes = Router::new();
+
+        // Add all actuator routes
+        actuator_routes = actuator_routes
             .route("/health", get(detailed_health_handler))
             .route("/info", get(core_actuator::info))
             .route("/docs", get(core_docs::swagger_ui_handler))
@@ -51,7 +54,7 @@ impl CoreRouter {
             actuator_routes
         };
 
-        // Return only the core routes
+        // Return the final router with all routes
         Router::new()
             .merge(public_routes)
             .nest("/actuator", actuator_routes)

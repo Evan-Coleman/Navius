@@ -27,7 +27,7 @@ app:
 # Authentication settings
 auth:
   # Enable/disable authentication (override with AUTH_ENABLED)
-  enabled: true
+  enabled: false
   # Enable/disable debug mode (override with AUTH_DEBUG or DEBUG_AUTH)
   debug: false
   # Entra ID (Azure AD) settings
@@ -48,6 +48,7 @@ auth:
       role_mappings:
         admin: ["Application.Admin"]
         read_only: ["Application.Read"]
+        full_access: ["Application.FullAccess"]
       provider_specific:
         entra_tenant_id: "${ENTRA_TENANT_ID}"
         entra_token_version: "2.0"
