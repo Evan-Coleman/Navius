@@ -108,4 +108,7 @@ fn format_date(config: &Config, format_type: &str) -> String {
 println!("Simple date: {}", format_date(config, "simple")); // 03/22/2025
 println!("Formal date: {}", format_date(config, "formal")); // March 22, 2025
 println!("Verbose date: {}", format_date(config, "verbose")); // 2025-03-22T12:34:56.789Z
-``` 
+```
+
+### Updated At / Updated On / ETC
+ - For updating these always use today's date as retrieved from the system.

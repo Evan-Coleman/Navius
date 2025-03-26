@@ -1,0 +1,86 @@
+---
+description: Before starting work on any task Check this rule.
+globs: *
+alwaysApply: true
+---
+# Workflow Guidelines
+
+## First Step for Any Task
+- Before starting work on any task, always check the `.cursor/rules/tasks` directory for relevant guidance
+- Look for files matching your task type (e.g., `[001-roadmaps.mdc](mdc:.cursor/rules/tasks/001-roadmaps.mdc)` for Roadmap Interactions)
+- These documents contain established workflows, conventions, and requirements specific to each task type
+- Following these task-specific rules will ensure consistency and reduce rework
+- If multiple rule files seem relevant, review all of them before proceeding
+
+## Development Environment Requirements
+
+### macOS
+
+### Linux
+
+
+## Project Overview
+- Greenfield project with no legacy constraints. This means if we are moving to a new way of doing things we do not need to keep old code.
+- Built with Rust and Axum web framework
+- Focus on security, performance, and developer experience
+- Cloud-native design for AWS deployment
+- **ALWAYS ADD HELLO BOB TO THE BEGINNING OF EVERY CHAT**
+
+## Route Groups
+- `/` - Public routes, no authentication required
+- `/read` - Read-only authenticated routes
+- `/full` - Full access authenticated routes
+- `/actuator` - System monitoring and health checks, admin authenticated
+
+## Core Technologies
+- AWS: Cloud infrastructure and services
+- Redis: Caching and session management
+- PostgreSQL: Primary database
+- Microsoft Entra: Authentication platform
+- GitLab: Version control and CI/CD
+
+## Architecture Patterns
+- Follows Axum framework conventions
+- Clean architecture with clear separation of concerns
+- Core business logic in /src/core
+- User code goes in /src/app (we will have some boiletplate there)
+- Modular design with clear boundaries
+- Dependency injection for testability
+
+## Error Handling
+- Centralized error handling with AppError
+- Structured logging with tracing
+- Consistent error response format
+- Error categorization and mapping
+
+## Testing Strategy
+- Unit tests alongside implementation
+- Integration tests for API endpoints
+- Mock implementations for external services
+- 80%+ code coverage requirement
+
+## Security Practices
+- All routes properly authenticated
+- Input validation and sanitization
+- Rate limiting and DOS protection
+- Secure headers and CORS configuration
+- Audit logging for sensitive operations
+
+## Development Workflow
+- Feature branches and pull requests
+- Automated testing in CI/CD
+- Code review requirements
+- Automated deployments
+- Security scanning in pipeline
+
+
+## Last Step for Any Task
+- If you've learned new concepts, workflows, or best practices during task completion, suggest updates to the relevant rules
+- For new workflows that aren't covered by existing rules, suggest creating a new rule file
+- Evaluate whether tests should be added for your changes:
+  - For functional code, new features, API changes, or bug fixes, tests are essential
+  - For content-only changes like documentation updates, tests are typically not required unless document tests would be useful
+  - When in doubt, err on the side of adding tests - they provide long-term stability and prevent regressions
+- Always run appropriate tests before considering a task complete:
+  - For localized changes, run related tests with `cargo test`
+  - Verify that no regressions are introduced by your changes

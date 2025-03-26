@@ -21,7 +21,6 @@ auth:
   providers:
     entra:
       circuit_breaker:
-        failure_threshold: 5  # Number of consecutive failures before opening
         reset_timeout_seconds: 60  # Time before attempting to close
 ```
 

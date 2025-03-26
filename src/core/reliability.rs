@@ -215,8 +215,8 @@ pub fn apply_reliability(router: Router, config: &ReliabilityConfig) -> Router {
     // Add circuit breaker if enabled
     if config.circuit_breaker.enabled {
         info!(
-            "Applying circuit breaker middleware with threshold: {}",
-            config.circuit_breaker.failure_threshold
+            "Applying circuit breaker middleware with failure percentage threshold: {}%",
+            config.circuit_breaker.failure_percentage
         );
         // Circuit breaker implementation here
     }
@@ -283,28 +283,19 @@ fn build_circuit_breaker_layer(
         return Ok(None);
     }
 
-    if config.use_consecutive_failures {
-        info!(
-            "Configuring circuit breaker (consecutive failures mode): threshold={}, reset_timeout={}ms, success_threshold={}",
-            config.failure_threshold, config.reset_timeout_ms, config.success_threshold
-        );
-    } else {
-        info!(
-            "Configuring circuit breaker (rolling window mode): window={}s, failure_percentage={}%, reset_timeout={}ms, success_threshold={}",
-            config.window_seconds,
-            config.failure_percentage,
-            config.reset_timeout_ms,
-            config.success_threshold
-        );
-    }
+    info!(
+        "Configuring circuit breaker: window={}s, failure_percentage={}%, reset_timeout={}ms, success_threshold={}",
+        config.window_seconds,
+        config.failure_percentage,
+        config.reset_timeout_ms,
+        config.success_threshold
+    );
 
     Ok(Some(circuit_breaker::CircuitBreakerLayer::new_with_config(
-        config.failure_threshold,
         Duration::from_millis(config.reset_timeout_ms),
         config.success_threshold,
         config.window_seconds,
         config.failure_percentage,
-        config.use_consecutive_failures,
         config.failure_status_codes.clone(),
     )))
 }

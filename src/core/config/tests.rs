@@ -79,7 +79,8 @@ fn test_default_reliability_config() {
     assert_eq!(reliability.retry.base_delay_ms, 100);
 
     assert_eq!(reliability.circuit_breaker.enabled, true);
-    assert_eq!(reliability.circuit_breaker.failure_threshold, 5);
+    assert_eq!(reliability.circuit_breaker.window_seconds, 60);
+    assert_eq!(reliability.circuit_breaker.failure_percentage, 50);
 
     assert_eq!(reliability.rate_limit.enabled, true);
     assert_eq!(reliability.rate_limit.requests_per_window, 100);

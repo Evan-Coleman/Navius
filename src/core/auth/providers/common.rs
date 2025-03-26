@@ -262,9 +262,8 @@ pub struct CircuitBreaker {
 }
 
 impl CircuitBreaker {
-    fn new(_failure_threshold: u32, _reset_timeout: Duration) -> Self {
+    fn new(_reset_timeout: Duration) -> Self {
         let (tx, _) = watch::channel(CircuitState::Closed);
-
         Self {
             state: Arc::new(tx),
         }

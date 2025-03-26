@@ -807,7 +807,6 @@ impl<T: ApiResource> ResourceCache<T> {
     }
 }
 
-// Add missing methods to CacheRegistry
 impl CacheRegistry {
     pub fn record_cache_metrics(&self, resource_type: &str, current_size: usize) {
         if self.enabled {

@@ -160,10 +160,6 @@ pub struct CircuitBreakerConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
 
-    /// Number of consecutive failures before opening the circuit (legacy mode)
-    #[serde(default = "default_failure_threshold")]
-    pub failure_threshold: u32,
-
     /// Time window in seconds for tracking failure rate
     #[serde(default = "default_window_seconds")]
     pub window_seconds: u64,
@@ -171,10 +167,6 @@ pub struct CircuitBreakerConfig {
     /// Failure percentage threshold (0-100) that triggers the circuit breaker
     #[serde(default = "default_failure_percentage")]
     pub failure_percentage: u8,
-
-    /// Whether to use the legacy consecutive failures mode (false = use rolling window)
-    #[serde(default = "default_false")]
-    pub use_consecutive_failures: bool,
 
     /// HTTP status codes that should be considered failures
     #[serde(default = "default_failure_status_codes")]
@@ -250,10 +242,8 @@ impl Default for CircuitBreakerConfig {
     fn default() -> Self {
         Self {
             enabled: default_true(),
-            failure_threshold: default_failure_threshold(),
             window_seconds: default_window_seconds(),
             failure_percentage: default_failure_percentage(),
-            use_consecutive_failures: default_false(),
             failure_status_codes: default_failure_status_codes(),
             reset_timeout_ms: default_reset_timeout(),
             success_threshold: default_success_threshold(),
@@ -308,10 +298,6 @@ fn default_retry_delay() -> u64 {
 
 fn default_retry_max_delay() -> u64 {
     1000
-}
-
-fn default_failure_threshold() -> u32 {
-    5
 }
 
 fn default_reset_timeout() -> u64 {
@@ -649,8 +635,6 @@ pub fn load_config() -> Result<AppConfig, ConfigError> {
         .add_source(Environment::with_prefix("RELIABILITY").separator("_"))
         // Add specific environment variables for Entra ID auth
         .add_source(Environment::with_prefix("NAVIUS").separator("_"))
-        // Add legacy environment variables
-        .add_source(Environment::default().try_parsing(true))
         // Build the config
         .build()?;
 

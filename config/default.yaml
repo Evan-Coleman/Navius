@@ -56,7 +56,6 @@ auth:
         max_requests: 5
         per_seconds: 60
       circuit_breaker:
-        failure_threshold: 5
         reset_timeout_seconds: 60
 
     google:
