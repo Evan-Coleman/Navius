@@ -270,7 +270,7 @@ mod tests {
     #[test]
     async fn test_database_service() {
         // Create a service registry
-        let mut registry = ServiceRegistry::new();
+        let registry = ServiceRegistry::new();
 
         // Create a database service
         let db_service = DatabaseServiceProvider::create(DatabaseConfig::default(), &registry)
