@@ -1,6 +1,10 @@
 {
   "selected_features": [
-
+    "error_handling",
+    "metrics",
+    "advanced_metrics",
+    "config",
+    "core"
   ],
   "build_config": {}
 }

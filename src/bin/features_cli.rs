@@ -138,17 +138,21 @@ fn manual_feature_selection(registry: &mut FeatureRegistry) -> Result<(), Featur
     println!("{}", "Select Features".green().bold());
 
     // Get all features and categorize them
-    let mut features = registry.feature_list();
+    let all_features: Vec<FeatureInfo> = registry
+        .feature_list()
+        .into_iter()
+        .map(|f| f.clone())
+        .collect();
 
     // First, we'll separate required features from optional ones
-    let mut optional_features: Vec<&FeatureInfo> = Vec::new();
-    let mut required_features: Vec<&FeatureInfo> = Vec::new();
+    let mut optional_features: Vec<FeatureInfo> = Vec::new();
+    let mut required_features: Vec<FeatureInfo> = Vec::new();
 
-    for feature in &features {
+    for feature in &all_features {
         if is_required_feature(feature) {
-            required_features.push(feature);
+            required_features.push(feature.clone());
         } else {
-            optional_features.push(feature);
+            optional_features.push(feature.clone());
         }
     }
 
@@ -160,18 +164,9 @@ fn manual_feature_selection(registry: &mut FeatureRegistry) -> Result<(), Featur
     let mut display_items: Vec<String> = Vec::new();
     let mut selection_indices: Vec<usize> = Vec::new();
 
-    // Build a mapping of feature name to its dependencies for display
-    let mut feature_dependencies: HashMap<String, Vec<String>> = HashMap::new();
-    for feature in &features {
-        feature_dependencies.insert(feature.name.clone(), feature.dependencies.clone());
-    }
-
     // Track currently enabled features
-    let enabled_features: HashSet<String> = registry
-        .get_enabled_features()
-        .iter()
-        .map(|s| s.clone())
-        .collect();
+    let enabled_features: HashSet<String> =
+        registry.get_enabled_features().iter().cloned().collect();
 
     // Add optional features to selection list
     for (i, feature) in optional_features.iter().enumerate() {
@@ -194,69 +189,103 @@ fn manual_feature_selection(registry: &mut FeatureRegistry) -> Result<(), Featur
 
     // Show the feature selection interface
     let theme = ColorfulTheme::default();
-    let selections = MultiSelect::with_theme(&theme)
-        .with_prompt("Select features to enable (space to toggle, enter to confirm)")
-        .items(&display_items)
-        .defaults(
-            &selection_indices
-                .iter()
-                .map(|i| *i < display_items.len())
-                .collect::<Vec<bool>>(),
-        )
-        .interact()
-        .unwrap_or_else(|_| selection_indices.clone());
 
-    // Convert selections back to feature names
-    let mut selected_optional_features: HashSet<String> = HashSet::new();
-    for &index in &selections {
-        if index < optional_features.len() {
-            selected_optional_features.insert(optional_features[index].name.clone());
+    // Create a vector of booleans representing selection state
+    let mut default_states = vec![false; display_items.len()];
+    for &idx in &selection_indices {
+        if idx < display_items.len() {
+            default_states[idx] = true;
         }
     }
 
-    // Add all required features to the final selection
+    let selections = MultiSelect::with_theme(&theme)
+        .with_prompt("Select features to enable (space to toggle, enter to confirm)")
+        .items(&display_items)
+        .defaults(&default_states)
+        .interact()
+        .unwrap_or_else(|_| selection_indices.clone());
+
+    // Convert selections back to feature names and include required features
     let mut selected_features: HashSet<String> = HashSet::new();
+
+    // First add all required features
     for feature in &required_features {
         selected_features.insert(feature.name.clone());
     }
 
-    // Now process the optional features with dependency resolution
-    // First, track all dependencies for each feature
-    let mut feature_to_dependents: HashMap<String, Vec<String>> = HashMap::new();
-    for feature in &features {
-        for dep in &feature.dependencies {
-            feature_to_dependents
-                .entry(dep.clone())
-                .or_default()
-                .push(feature.name.clone());
-        }
-    }
+    // Then add selected optional features
+    for &index in &selections {
+        if index < optional_features.len() {
+            let feature = &optional_features[index];
+            selected_features.insert(feature.name.clone());
 
-    // For each selected optional feature, also enable its dependencies
-    for feature_name in &selected_optional_features {
-        selected_features.insert(feature_name.clone());
-
-        // Also add all of its dependencies
-        if let Some(feature_info) = registry.get_feature_info(feature_name) {
-            for dep in &feature_info.dependencies {
+            // Also add all dependencies
+            for dep in &feature.dependencies {
                 selected_features.insert(dep.clone());
             }
         }
     }
 
-    // For each unselected dependency, also disable dependent features
-    let all_feature_names: HashSet<String> = features.iter().map(|f| f.name.clone()).collect();
-    for feature_name in all_feature_names.difference(&selected_features) {
-        // If this feature has dependents, they need to be disabled too
-        if let Some(dependents) = feature_to_dependents.get(feature_name) {
-            for dependent in dependents {
-                selected_features.remove(dependent);
-            }
+    // Validation: Check for dependency violations before applying changes
+    let metrics_deselected =
+        registry.feature_is_enabled("metrics") && !selected_features.contains("metrics");
+    let advanced_metrics_enabled = registry.feature_is_enabled("advanced_metrics");
+    let advanced_metrics_selected = selected_features.contains("advanced_metrics");
+    let advanced_metrics_deselected = advanced_metrics_enabled && !advanced_metrics_selected;
+
+    // If both are being deselected, show an informative message but allow it
+    if metrics_deselected && advanced_metrics_deselected {
+        println!(
+            "{}",
+            "ℹ️  INFO: Disabling both metrics and advanced_metrics together.".bright_blue()
+        );
+        println!("This is the correct way to disable features with dependencies.");
+    }
+    // If metrics is being deselected while advanced_metrics is still enabled (and not being deselected)
+    else if metrics_deselected && advanced_metrics_enabled && !advanced_metrics_deselected {
+        // Option 1: Block the action
+        if !Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt("Disable advanced_metrics as well? (Required to disable metrics)")
+            .default(true)
+            .interact()
+            .unwrap_or(false)
+        {
+            println!("❌ Cancelled. No changes were made.");
+            pause_for_user();
+            return Ok(()); // Exit without making changes
         }
+
+        // User chose to disable both
+        println!(
+            "{}",
+            "ℹ️  Disabling both metrics and advanced_metrics.".yellow()
+        );
+
+        // Remove from selected_features
+        selected_features.remove("advanced_metrics");
+        selected_features.remove("metrics");
+
+        // Directly disable in registry - this fixes a bug where registry changes weren't being applied
+        registry.disable_feature("advanced_metrics")?;
+        registry.disable_feature("metrics")?;
+        println!("✓ Manually disabled: advanced_metrics");
+        println!("✓ Manually disabled: metrics");
+    }
+    // If advanced_metrics is being enabled, ensure metrics is also enabled
+    else if advanced_metrics_selected && !selected_features.contains("metrics") {
+        println!(
+            "{}",
+            "ℹ️  Auto-enabling metrics which is required by advanced_metrics.".yellow()
+        );
+        selected_features.insert("metrics".to_string());
     }
 
-    // Update registry with selections
-    update_registry_selections(registry, selected_features)?;
+    // Update registry with selections and save
+    update_registry_selections(registry, selected_features.clone())?;
+    save_feature_configuration(registry)?;
+
+    // Get the updated lists after applying changes
+    let enabled_list: HashSet<String> = registry.get_enabled_features().iter().cloned().collect();
 
     clear_screen();
     print_header();
@@ -265,51 +294,71 @@ fn manual_feature_selection(registry: &mut FeatureRegistry) -> Result<(), Featur
     println!("{}", "Feature Configuration Updated".green().bold());
     println!();
 
-    // Display the enabled features
-    println!("{}", "Enabled Features:".green());
-    let mut enabled_list: Vec<String> = registry.get_enabled_features().iter().cloned().collect();
-    enabled_list.sort();
+    // First display optional enabled features
+    println!("{}", "Enabled Optional Features:".green());
+    let mut sorted_enabled: Vec<String> = enabled_list
+        .iter()
+        .filter(|name| {
+            if let Some(feature) = registry.get_feature_info(name) {
+                !is_required_feature(feature)
+            } else {
+                true
+            }
+        })
+        .cloned()
+        .collect();
+    sorted_enabled.sort();
 
-    for feature_name in &enabled_list {
+    for feature_name in &sorted_enabled {
         let feature_info = registry.get_feature_info(feature_name).unwrap();
-        if is_required_feature(feature_info) {
-            println!(
-                "  [✓] {} ({} KB) - REQUIRED",
-                feature_name.yellow(),
-                feature_info.size_impact
-            );
-        } else {
-            println!("  [✓] {} ({} KB)", feature_name, feature_info.size_impact);
-        }
+        println!("  [✓] {} ({} KB)", feature_name, feature_info.size_impact);
     }
 
     // Display the disabled features
     println!();
     println!("{}", "Disabled Features:".red());
-    let disabled_list: Vec<String> = features
-        .iter()
-        .map(|f| f.name.clone())
-        .filter(|name| !enabled_list.contains(name))
+    let all_feature_names: HashSet<String> = all_features.iter().map(|f| f.name.clone()).collect();
+    let mut disabled_list: Vec<String> = all_feature_names
+        .difference(&enabled_list)
+        .filter(|name| {
+            if let Some(feature) = registry.get_feature_info(name) {
+                !is_required_feature(feature)
+            } else {
+                true
+            }
+        })
+        .cloned()
         .collect();
+
+    disabled_list.sort();
 
     for feature_name in disabled_list {
         let feature_info = registry.get_feature_info(&feature_name).unwrap();
         println!("  [ ] {} ({} KB)", feature_name, feature_info.size_impact);
     }
 
-    println!();
-    println!("✅ Feature configuration saved!");
-
-    // Show the required features at the bottom
+    // Always show required features at the bottom
     println!();
     println!("{}", "Required Features (Always Enabled):".yellow().bold());
-    for feature in &required_features {
+    let mut required_list: Vec<String> = registry
+        .feature_list()
+        .iter()
+        .filter(|f| is_required_feature(f))
+        .map(|f| f.name.clone())
+        .collect();
+    required_list.sort();
+
+    for feature_name in required_list {
+        let feature_info = registry.get_feature_info(&feature_name).unwrap();
         println!(
             "  [✓] {} ({} KB)",
-            feature.name.yellow(),
-            feature.size_impact
+            feature_name.yellow(),
+            feature_info.size_impact
         );
     }
+
+    println!();
+    println!("✅ Feature configuration saved!");
 
     pause_for_user();
 
@@ -337,17 +386,59 @@ fn update_registry_selections(
     let mut to_disable = Vec::new();
     let mut to_enable = Vec::new();
 
+    // Build dependency graph
+    let mut dependents: HashMap<String, Vec<String>> = HashMap::new();
     for feature_name in &feature_names {
-        let feature_info = registry.get_feature_info(feature_name).unwrap();
+        if let Some(feature) = registry.get_feature_info(feature_name) {
+            for dep in &feature.dependencies {
+                dependents
+                    .entry(dep.clone())
+                    .or_default()
+                    .push(feature_name.clone());
+            }
+        }
+    }
+
+    // Identify features to disable - any currently enabled feature not in selections
+    let currently_enabled: HashSet<String> =
+        registry.get_enabled_features().iter().cloned().collect();
+    for feature_name in currently_enabled.iter() {
+        let feature_info = match registry.get_feature_info(feature_name) {
+            Some(info) => info,
+            None => continue,
+        };
+
         let is_required = is_required_feature(feature_info);
 
-        if registry.feature_is_enabled(feature_name) {
-            // Don't disable required features
-            if !selections.contains(feature_name) && !is_required {
-                to_disable.push(feature_name.clone());
-            }
-        } else if selections.contains(feature_name) || is_required {
-            // Enable selected features and required features
+        // Skip required features
+        if is_required {
+            continue;
+        }
+
+        // If the feature is enabled but not in selections, disable it
+        if !selections.contains(feature_name) {
+            to_disable.push(feature_name.clone());
+        }
+    }
+
+    // Identify features to enable - any feature in selections not currently enabled
+    for feature_name in selections.iter() {
+        if !currently_enabled.contains(feature_name) {
+            to_enable.push(feature_name.clone());
+        }
+    }
+
+    // Make sure all required features are enabled
+    for feature_name in &feature_names {
+        let feature_info = match registry.get_feature_info(feature_name) {
+            Some(info) => info,
+            None => continue,
+        };
+
+        if is_required_feature(feature_info)
+            && !to_enable.contains(feature_name)
+            && !currently_enabled.contains(feature_name)
+        {
             to_enable.push(feature_name.clone());
         }
     }
@@ -356,7 +447,29 @@ fn update_registry_selections(
     let mut operation_errors = Vec::new();
 
     // First disable features (do this first to avoid dependency conflicts)
-    for feature_name in &to_disable {
+    // We need to sort to_disable so that dependent features are disabled before their dependencies
+    // For example, advanced_metrics should be disabled before metrics
+
+    // Sort the to_disable list so dependents are disabled before dependencies
+    let mut sorted_to_disable = to_disable.clone();
+    sorted_to_disable.sort_by(|a, b| {
+        // Try to get the dependency relationship between a and b
+        let a_depends_on_b = dependents.get(b).map_or(false, |deps| deps.contains(a));
+        let b_depends_on_a = dependents.get(a).map_or(false, |deps| deps.contains(b));
+
+        if a_depends_on_b {
+            // a depends on b, so a should be disabled first
+            std::cmp::Ordering::Less
+        } else if b_depends_on_a {
+            // b depends on a, so b should be disabled first
+            std::cmp::Ordering::Greater
+        } else {
+            // No direct dependency, just use alphabetical order
+            a.cmp(b)
+        }
+    });
+
+    for feature_name in &sorted_to_disable {
         match registry.disable_feature(feature_name) {
             Ok(_) => println!("✓ Disabled: {}", feature_name),
             Err(e) => {
@@ -441,10 +554,61 @@ fn disable_feature_interactive(
         ));
     }
 
-    // Disable the feature
-    let result = match registry.disable_feature(feature) {
+    // Check if any other enabled feature depends on this one
+    let mut dependent_features = Vec::new();
+    for (feature_name, other_feature) in registry.feature_list().iter().map(|f| (f.name.clone(), f))
+    {
+        if registry.feature_is_enabled(&feature_name)
+            && other_feature.dependencies.contains(&feature.to_string())
+        {
+            dependent_features.push(feature_name);
+        }
+    }
+
+    // If there are dependent features, ask the user if they want to disable them too
+    if !dependent_features.is_empty() {
+        // Special case warning for metrics when advanced_metrics depends on it
+        if feature == "metrics" && dependent_features.contains(&"advanced_metrics".to_string()) {
+            println!(
+                "{}",
+                "⚠️  WARNING: Advanced metrics depends on basic metrics!"
+                    .bright_red()
+                    .bold()
+            );
+            println!("Disabling metrics will also disable advanced metrics functionality.");
+        }
+
+        println!("⚠️  The following enabled features depend on {}:", feature);
+        for dep in &dependent_features {
+            println!("   - {}", dep);
+        }
+
+        let confirm = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(&format!("Disable {} and all dependent features?", feature))
+            .interact()
+            .unwrap_or(false);
+
+        if !confirm {
+            println!("❌ Aborted. No features were disabled.");
+            return Ok(());
+        }
+
+        // User confirmed, so disable all dependent features first
+        for dep_feature in &dependent_features {
+            match registry.disable_feature(dep_feature) {
+                Ok(_) => println!("✓ Disabled dependent feature: {}", dep_feature),
+                Err(e) => {
+                    println!("❌ Error disabling {}: {}", dep_feature, e);
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    // Now disable the requested feature
+    match registry.disable_feature(feature) {
         Ok(_) => {
-            println!("✅ Feature disabled successfully!");
+            println!("✅ Feature {} disabled successfully!", feature);
 
             // Save the configuration to disk
             save_feature_configuration(registry)?;
@@ -452,18 +616,9 @@ fn disable_feature_interactive(
         }
         Err(e) => {
             println!("❌ Error: {}", e);
-
-            // Show more info for dependency errors
-            if let FeatureError::DependencyRequired(_, dependent) = &e {
-                println!("⚠️  Required by: {}", dependent.yellow());
-                println!("Disable that feature first.");
-            }
-
             Err(e)
         }
-    };
-
-    result
+    }
 }
 
 /// Pause and wait for user to continue
@@ -787,6 +942,17 @@ fn load_feature_registry() -> Result<FeatureRegistry, FeatureError> {
         .map(|f| f.name.clone())
         .collect();
 
+    // First disable all features to start from a clean slate
+    let feature_names: Vec<String> = registry
+        .feature_list()
+        .iter()
+        .map(|f| f.name.clone())
+        .collect();
+
+    for feature_name in &feature_names {
+        let _ = registry.disable_feature(feature_name);
+    }
+
     // Try to load enabled features from config file
     let config_result = FeatureConfig::load_default();
 
@@ -794,47 +960,40 @@ fn load_feature_registry() -> Result<FeatureRegistry, FeatureError> {
         Ok(config) => {
             // If we have saved selections in the config file, use those
             if !config.selected_features.is_empty() {
-                // First, disable all features to start from a clean slate
-                // We need to collect names first to avoid borrowing issues
-                let feature_names: Vec<String> = registry
-                    .feature_list()
-                    .iter()
-                    .map(|f| f.name.clone())
-                    .collect();
-
-                for feature_name in &feature_names {
-                    let _ = registry.disable_feature(feature_name);
-                }
-
                 // Create a combined set of features to enable - from config plus required
                 let mut features_to_enable = config.selected_features.clone();
                 for req_feature in &required_features {
                     features_to_enable.insert(req_feature.clone());
                 }
 
-                // Then enable only the ones specified in the config plus required ones
-                for feature in &features_to_enable {
-                    match registry.enable_feature(feature) {
-                        Ok(_) => {}
-                        Err(e) => {
-                            println!(
-                                "⚠️ Warning: Failed to enable feature '{}' from saved config: {}",
-                                feature, e
-                            );
+                // Enable features in dependency order
+                let mut enabled = HashSet::new();
+                let mut retry_count = 0;
+                let max_retries = features_to_enable.len() * 2; // Avoid infinite loops
+
+                while enabled.len() < features_to_enable.len() && retry_count < max_retries {
+                    for feature in &features_to_enable {
+                        if !enabled.contains(feature) {
+                            if let Ok(_) = registry.enable_feature(feature) {
+                                enabled.insert(feature.clone());
+                            }
                         }
                     }
+                    retry_count += 1;
                 }
+
+                // Save the configuration to ensure it's in sync
+                save_feature_configuration(&registry)?;
                 println!("✅ Loaded feature configuration from file");
             } else {
-                // If config file exists but is empty, save the default selections plus required
+                // If config file exists but is empty, enable required features
                 ensure_required_features_enabled(&mut registry, &required_features)?;
                 save_feature_configuration(&registry)?;
                 println!("✅ Updated empty configuration with defaults");
             }
         }
         Err(_) => {
-            // No existing config found - save the default selections plus required
-            ensure_default_features_enabled(&mut registry)?;
+            // No existing config found - enable required features
             ensure_required_features_enabled(&mut registry, &required_features)?;
             save_feature_configuration(&registry)?;
             println!("✅ Created new feature configuration");
@@ -884,13 +1043,8 @@ fn save_feature_configuration(registry: &FeatureRegistry) -> Result<(), FeatureE
         build_config: std::collections::HashMap::new(),
     };
 
-    // Save to default location
-    let result = config.save_default();
-    if let Err(e) = &result {
-        println!("⚠️ Error saving configuration: {}", e);
-    }
-
-    result
+    // Save the configuration
+    config.save_default()
 }
 
 /// Apply feature configuration to the project
