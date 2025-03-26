@@ -1,6 +1,6 @@
 ---
 description: Guidelines for managing Rust dependencies and crates
-globs: Cargo.toml, Cargo.lock
+globs: **/Cargo.toml, **/Cargo.lock
 alwaysApply: false
 ---
 # Dependency Management Guidelines

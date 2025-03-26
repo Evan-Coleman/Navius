@@ -1,6 +1,6 @@
 ---
 description: Standards and best practices for API development
-globs: src/routes/**/*.rs, src/handlers/**/*.rs
+globs: src/**/routes/**/*.rs, src/**/handlers/**/*.rs, src/app/api/**/*.rs
 alwaysApply: false
 ---
 # API Standards

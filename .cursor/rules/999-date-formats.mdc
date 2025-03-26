@@ -112,3 +112,8 @@ println!("Verbose date: {}", format_date(config, "verbose")); // 2025-03-22T12:3
 
 ### Updated At / Updated On / ETC
  - For updating these always use today's date as retrieved from the system.
+      - Example : "*Updated at: March 26, 2025 - 75% complete, implemented cache integration tests*"
+         - The problem is that this was updated with the system date + 1 day. It just needs to be the system date.
+ - For Creating new files, functions, comments, etc Always Use today's date as retrived from the system.
+   - Example : "# Dependency Injection Enhancements - May 30, 2025"
+      - Once again, this did not use the system date, but instead a random date in the future.

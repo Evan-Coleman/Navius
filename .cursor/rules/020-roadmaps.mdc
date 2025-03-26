@@ -1,7 +1,7 @@
 ---
 description: When working with files in the docs/roadmaps folder.
-globs: /docs/roadmaps
-alwaysApply: true
+globs: docs/roadmaps/**/*
+alwaysApply: false
 ---
 ## When being asked to implement something in a roadmap follow these instructions. Also, always add the ##PROMPT_ENHANCER to requests.
 

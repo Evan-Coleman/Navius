@@ -1,6 +1,6 @@
 ---
 description: when dealing with modules, module exports, lib.rs, and mod.rs files
-globs:
+globs: **/mod.rs/**, **/mod.rs, /mod.rs/**, mod.rs
 alwaysApply: true
 ---
 

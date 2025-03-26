@@ -276,13 +276,32 @@ impl IntoResponse for AppError {
 impl From<CoreServiceError> for AppError {
     fn from(err: CoreServiceError) -> Self {
         match err {
-            CoreServiceError::Validation(msg) => Self::ValidationError(msg),
-            CoreServiceError::Other(msg) => Self::InternalServerError(msg),
+            CoreServiceError::InitializationError(msg) => {
+                Self::InternalServerError(format!("Service initialization error: {}", msg))
+            }
             CoreServiceError::NotFound(msg) => Self::NotFoundError(msg),
+            CoreServiceError::MissingDependency(msg) => {
+                Self::InternalServerError(format!("Missing dependency: {}", msg))
+            }
+            CoreServiceError::CircularDependency(msg) => {
+                Self::InternalServerError(format!("Circular dependency: {}", msg))
+            }
+            CoreServiceError::Unavailable(msg) => {
+                Self::InternalServerError(format!("Service unavailable: {}", msg))
+            }
+            CoreServiceError::Timeout(msg) => {
+                Self::InternalServerError(format!("Service timeout: {}", msg))
+            }
+            CoreServiceError::ConfigurationError(msg) => Self::ConfigurationError(msg),
+            CoreServiceError::ConversionError(msg) => {
+                Self::InternalServerError(format!("Conversion error: {}", msg))
+            }
+            CoreServiceError::Validation(msg) => Self::ValidationError(msg),
             CoreServiceError::Conflict(msg) => Self::ConflictError(msg),
             CoreServiceError::Repository(msg) => {
                 Self::InternalServerError(format!("Repository error: {}", msg))
             }
+            CoreServiceError::Other(msg) => Self::InternalServerError(msg),
         }
     }
 }

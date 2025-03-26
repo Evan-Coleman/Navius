@@ -1,70 +1,100 @@
 use crate::core::error::AppError;
-use std::fmt;
+use std::error::Error;
+use std::fmt::{self, Display, Formatter};
 
-/// Error type for service operations
+/// Error type for service-related operations
 #[derive(Debug)]
 pub enum ServiceError {
-    /// Input validation errors
-    Validation(String),
-    /// Resource not found errors
+    /// Error when initializing a service
+    InitializationError(String),
+
+    /// Error when a service is not found
     NotFound(String),
-    /// Resource conflict errors
+
+    /// Error when a dependency is missing
+    MissingDependency(String),
+
+    /// Error when a circular dependency is detected
+    CircularDependency(String),
+
+    /// Error when a service is not available or not responsive
+    Unavailable(String),
+
+    /// Error when a service operation times out
+    Timeout(String),
+
+    /// Error when configuration is invalid
+    ConfigurationError(String),
+
+    /// Conversion error
+    ConversionError(String),
+
+    /// Validation errors
+    Validation(String),
+
+    /// Conflict errors
     Conflict(String),
+
     /// Repository/database errors
     Repository(String),
-    /// Other service errors
+
+    /// Generic error with a message
     Other(String),
 }
 
-impl fmt::Display for ServiceError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for ServiceError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
+            ServiceError::InitializationError(msg) => {
+                write!(f, "Service initialization error: {}", msg)
+            }
+            ServiceError::NotFound(msg) => write!(f, "Service not found: {}", msg),
+            ServiceError::MissingDependency(msg) => write!(f, "Missing dependency: {}", msg),
+            ServiceError::CircularDependency(msg) => {
+                write!(f, "Circular dependency detected: {}", msg)
+            }
+            ServiceError::Unavailable(msg) => write!(f, "Service unavailable: {}", msg),
+            ServiceError::Timeout(msg) => write!(f, "Service operation timed out: {}", msg),
+            ServiceError::ConfigurationError(msg) => {
+                write!(f, "Service configuration error: {}", msg)
+            }
+            ServiceError::ConversionError(msg) => write!(f, "Conversion error: {}", msg),
             ServiceError::Validation(msg) => write!(f, "Validation error: {}", msg),
-            ServiceError::NotFound(msg) => write!(f, "Not found: {}", msg),
-            ServiceError::Conflict(msg) => write!(f, "Conflict: {}", msg),
+            ServiceError::Conflict(msg) => write!(f, "Conflict error: {}", msg),
             ServiceError::Repository(msg) => write!(f, "Repository error: {}", msg),
             ServiceError::Other(msg) => write!(f, "Service error: {}", msg),
         }
     }
 }
 
-impl From<AppError> for ServiceError {
-    fn from(err: AppError) -> Self {
-        match err {
-            AppError::ValidationError(msg) => ServiceError::Validation(msg),
-            AppError::NotFound(msg) => ServiceError::NotFound(msg),
-            AppError::NotFoundError(msg) => ServiceError::NotFound(msg),
-            AppError::ConflictError(msg) => ServiceError::Conflict(msg),
-            AppError::ConfigError(_) => ServiceError::Other("Configuration error".to_string()),
-            AppError::ClientError(e) => ServiceError::Other(format!("HTTP client error: {}", e)),
-            AppError::IoError(e) => ServiceError::Other(format!("IO error: {}", e)),
-            AppError::AuthenticationError(msg) => {
-                ServiceError::Other(format!("Authentication error: {}", msg))
-            }
-            AppError::AuthorizationError(msg) => {
-                ServiceError::Other(format!("Authorization error: {}", msg))
-            }
-            AppError::BadRequest(msg) => ServiceError::Validation(msg),
-            AppError::Unauthorized(msg) => ServiceError::Other(format!("Unauthorized: {}", msg)),
-            AppError::Forbidden(msg) => ServiceError::Other(format!("Forbidden: {}", msg)),
-            AppError::RateLimited(msg) => ServiceError::Other(format!("Rate limited: {}", msg)),
-            AppError::InternalServerError(msg) => ServiceError::Other(msg),
-            AppError::ConfigurationError(msg) => {
-                ServiceError::Other(format!("Configuration error: {}", msg))
-            }
-            AppError::CacheError(msg) => ServiceError::Other(format!("Cache error: {}", msg)),
-            AppError::NetworkError(msg) => ServiceError::Other(format!("Network error: {}", msg)),
-            AppError::ExternalServiceError(msg) => {
-                ServiceError::Other(format!("External service error: {}", msg))
-            }
-            AppError::NotImplementedError(msg) => {
-                ServiceError::Other(format!("Not implemented: {}", msg))
-            }
-        }
+impl Error for ServiceError {}
+
+impl From<&str> for ServiceError {
+    fn from(msg: &str) -> Self {
+        ServiceError::Other(msg.to_string())
     }
 }
 
-impl std::error::Error for ServiceError {}
+impl From<String> for ServiceError {
+    fn from(msg: String) -> Self {
+        ServiceError::Other(msg)
+    }
+}
+
+// Helper macro to implement From for various error types
+macro_rules! impl_from_error {
+    ($error_type:ty, $variant:ident) => {
+        impl From<$error_type> for ServiceError {
+            fn from(error: $error_type) -> Self {
+                ServiceError::$variant(error.to_string())
+            }
+        }
+    };
+}
+
+// Implement From for common error types
+impl_from_error!(std::io::Error, Other);
+impl_from_error!(serde_json::Error, ConversionError);
 
 /// Type alias for service results
 pub type ServiceResult<T> = Result<T, ServiceError>;
@@ -75,27 +105,28 @@ mod tests {
 
     #[test]
     fn test_service_error_display() {
-        let err = ServiceError::NotFound("User not found".to_string());
-        assert_eq!(err.to_string(), "Not found: User not found");
+        let error = ServiceError::NotFound("test service".to_string());
+        assert_eq!(format!("{}", error), "Service not found: test service");
+
+        let error = ServiceError::InitializationError("failed to connect".to_string());
+        assert_eq!(
+            format!("{}", error),
+            "Service initialization error: failed to connect"
+        );
     }
 
     #[test]
-    fn test_service_error_to_app_error() {
-        let service_err = ServiceError::NotFound("Resource not found".to_string());
-        let app_err: AppError = service_err.into();
-        match app_err {
-            AppError::NotFoundError(msg) => assert_eq!(msg, "Resource not found"),
-            _ => panic!("Wrong error variant"),
-        }
+    fn test_service_error_from_str() {
+        let error: ServiceError = "test error".into();
+        assert!(matches!(error, ServiceError::Other(_)));
+        assert_eq!(format!("{}", error), "Service error: test error");
     }
 
     #[test]
-    fn test_app_error_to_service_error() {
-        let app_err = AppError::ValidationError("Invalid input".to_string());
-        let service_err: ServiceError = app_err.into();
-        match service_err {
-            ServiceError::Validation(msg) => assert_eq!(msg, "Invalid input"),
-            _ => panic!("Wrong error variant"),
-        }
+    fn test_service_error_from_io_error() {
+        let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let error: ServiceError = io_error.into();
+        assert!(matches!(error, ServiceError::Other(_)));
+        assert!(format!("{}", error).contains("file not found"));
     }
 }

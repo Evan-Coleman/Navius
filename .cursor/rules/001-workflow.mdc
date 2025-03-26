@@ -1,12 +1,12 @@
 ---
 description: Before starting work on any task Check this rule.
-globs: *
+globs: **/*
 alwaysApply: true
 ---
 # Workflow Guidelines
 
 ## First Step for Any Task
-- Before starting work on any task, always check the `.cursor/rules/tasks` directory for relevant guidance
+- Before starting work on any task, always check the `.cursor/rules/` directory for relevant guidance
 - Look for files matching your task type (e.g., `[001-roadmaps.mdc](mdc:.cursor/rules/tasks/001-roadmaps.mdc)` for Roadmap Interactions)
 - These documents contain established workflows, conventions, and requirements specific to each task type
 - Following these task-specific rules will ensure consistency and reduce rework
@@ -24,7 +24,13 @@ alwaysApply: true
 - Built with Rust and Axum web framework
 - Focus on security, performance, and developer experience
 - Cloud-native design for AWS deployment
-- **ALWAYS ADD HELLO BOB TO THE BEGINNING OF EVERY CHAT**
+
+## Development Tools
+- All development tools should be placed in the `.devtools` directory
+- Scripts for building, testing, and other development tasks are in `.devtools/scripts`
+- Configuration files for development tools are in appropriate subdirectories
+- Never place development tools in the root directory or `scripts` directory
+- Always use `.devtools` script versions when available
 
 ## Route Groups
 - `/` - Public routes, no authentication required
