@@ -5,7 +5,7 @@ use colored::Colorize;
 use dialoguer::{Confirm, MultiSelect, Select, theme::ColorfulTheme};
 use indicatif::{ProgressBar, ProgressStyle};
 
-use navius::core::features::{FeatureError, FeatureInfo, FeatureRegistry};
+use navius::core::features::{FeatureConfig, FeatureError, FeatureInfo, FeatureRegistry};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create colored header
@@ -42,9 +42,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .subcommand(Command::new("status").about("Show current feature status"))
         .subcommand(Command::new("interactive").about("Start interactive mode"))
+        .subcommand(Command::new("apply").about(
+            "Apply feature configuration to the actual project (generates config for cargo build)",
+        ))
         .get_matches();
 
-    // Load feature registry
+    // Load feature registry from existing config if available, otherwise create new
     let mut registry = load_feature_registry()?;
 
     // Process commands
@@ -54,6 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(("disable", sub_matches)) => disable_feature(&mut registry, sub_matches)?,
         Some(("status", _)) => show_feature_status(&registry),
         Some(("interactive", _)) => show_interactive_menu(&mut registry)?,
+        Some(("apply", _)) => apply_feature_configuration(&registry)?,
         _ => {
             // No subcommand provided, show interactive menu
             show_interactive_menu(&mut registry)?;
@@ -235,6 +239,9 @@ fn update_registry_selections(
 
     progress.finish_with_message("✅ Features updated successfully!".to_string());
 
+    // Save the configuration to disk
+    save_feature_configuration(registry)?;
+
     Ok(())
 }
 
@@ -273,78 +280,77 @@ fn enable_feature_interactive(
     registry: &mut FeatureRegistry,
     feature: &str,
 ) -> Result<(), FeatureError> {
-    // Show spinner while enabling
-    let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.green} {msg}")
-            .unwrap(),
-    );
-    spinner.set_message(format!("Enabling feature: {}...", feature));
-    spinner.enable_steady_tick(Duration::from_millis(80));
+    println!("\n{}", format!("Enabling feature: {}", feature).green());
 
     // Enable the feature
-    match registry.enable_feature(feature) {
-        Ok(_) => {
-            let message = format!("✅ Successfully enabled feature: {}", feature);
-            spinner.finish_with_message(message);
+    let result = registry.enable_feature(feature);
 
-            // Show dependencies that were also enabled
-            if let Some(info) = registry.get_feature(feature) {
-                if !info.dependencies.is_empty() {
-                    println!("Dependencies also enabled:");
-                    for dep in &info.dependencies {
-                        println!("  - {}", dep.blue());
-                    }
-                }
-            }
+    match &result {
+        Ok(_) => {
+            println!("✅ Feature enabled successfully!");
+
+            let enabled_count = registry.get_enabled_features().len();
+            let total_count = registry.feature_list().len();
+
+            println!(
+                "Current configuration has {} of {} features enabled",
+                enabled_count, total_count
+            );
+
+            // Save the configuration to disk
+            save_feature_configuration(registry)?;
         }
         Err(e) => {
-            let error_message = format!("❌ Error enabling feature: {}", e);
-            spinner.finish_with_message(error_message);
-            return Err(e);
+            println!("❌ Error: {}", e);
+
+            // Show more info for dependency errors
+            if let FeatureError::MissingDependency(_, missing) = e {
+                println!("\n⚠️  Missing required dependency: {}", missing.yellow());
+                println!("   Enable that feature first.");
+            }
         }
     }
 
-    Ok(())
+    result
 }
 
-/// Disable a feature interactively
+/// Disable feature (interactive mode)
 fn disable_feature_interactive(
     registry: &mut FeatureRegistry,
     feature: &str,
 ) -> Result<(), FeatureError> {
-    // Show spinner while disabling
-    let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.red} {msg}")
-            .unwrap(),
-    );
-    spinner.set_message(format!("Disabling feature: {}...", feature));
-    spinner.enable_steady_tick(Duration::from_millis(80));
+    println!("\n{}", format!("Disabling feature: {}", feature).yellow());
 
     // Disable the feature
-    match registry.disable_feature(feature) {
+    let result = registry.disable_feature(feature);
+
+    match &result {
         Ok(_) => {
-            let success_message = format!("✅ Successfully disabled feature: {}", feature);
-            spinner.finish_with_message(success_message);
+            println!("✅ Feature disabled successfully!");
+
+            let enabled_count = registry.get_enabled_features().len();
+            let total_count = registry.feature_list().len();
+
+            println!(
+                "Current configuration has {} of {} features enabled",
+                enabled_count, total_count
+            );
+
+            // Save the configuration to disk
+            save_feature_configuration(registry)?;
         }
         Err(e) => {
-            let error_message = format!("❌ Error disabling feature: {}", e);
-            spinner.finish_with_message(error_message);
+            println!("❌ Error: {}", e);
 
             // Show more info for dependency errors
             if let FeatureError::DependencyRequired(_, dependent) = &e {
                 println!("\n⚠️  The feature is required by: {}", dependent.yellow());
                 println!("   You must disable that feature first.");
             }
-
-            return Err(e);
         }
     }
 
-    Ok(())
+    result
 }
 
 /// Pause and wait for user to continue
@@ -454,25 +460,11 @@ fn enable_feature(
     registry: &mut FeatureRegistry,
     matches: &clap::ArgMatches,
 ) -> Result<(), FeatureError> {
-    let feature_name = matches.get_one::<String>("feature").unwrap();
+    let feature = matches
+        .get_one::<String>("feature")
+        .expect("Required argument");
 
-    println!("Enabling feature: {}", feature_name.yellow());
-
-    match registry.enable_feature(feature_name) {
-        Ok(_) => {
-            println!("{}", "✅ Feature enabled successfully!".green());
-            println!(
-                "Current configuration has {} of {} features enabled",
-                registry.get_enabled_features().len(),
-                registry.feature_list().len()
-            );
-            Ok(())
-        }
-        Err(e) => {
-            println!("{}: {}", "❌ Error enabling feature".red(), e);
-            Err(e)
-        }
-    }
+    enable_feature_interactive(registry, feature)
 }
 
 /// Disable a specific feature
@@ -480,32 +472,11 @@ fn disable_feature(
     registry: &mut FeatureRegistry,
     matches: &clap::ArgMatches,
 ) -> Result<(), FeatureError> {
-    let feature_name = matches.get_one::<String>("feature").unwrap();
+    let feature = matches
+        .get_one::<String>("feature")
+        .expect("Required argument");
 
-    println!("Disabling feature: {}", feature_name.yellow());
-
-    match registry.disable_feature(feature_name) {
-        Ok(_) => {
-            println!("{}", "✅ Feature disabled successfully!".green());
-            println!(
-                "Current configuration has {} of {} features enabled",
-                registry.get_enabled_features().len(),
-                registry.feature_list().len()
-            );
-            Ok(())
-        }
-        Err(e) => {
-            println!("{}: {}", "❌ Error disabling feature".red(), e);
-
-            // Show more info for dependency errors
-            if let FeatureError::DependencyRequired(_, dependent) = &e {
-                println!("\n⚠️  The feature is required by: {}", dependent.yellow());
-                println!("   You must disable that feature first.");
-            }
-
-            Err(e)
-        }
-    }
+    disable_feature_interactive(registry, feature)
 }
 
 /// Show current feature status
@@ -552,16 +523,112 @@ fn show_feature_status(registry: &FeatureRegistry) {
     }
 }
 
-/// Load a sample feature registry for testing
+/// Load a feature registry from config file or create new one if not found
 fn load_feature_registry() -> Result<FeatureRegistry, FeatureError> {
-    // Create an empty feature registry
-    let mut registry = FeatureRegistry::new();
+    // Try to load from config file first
+    let config_result = FeatureConfig::load_default();
 
-    // Add some sample features
-    add_sample_features(&mut registry)?;
+    match config_result {
+        Ok(config) => {
+            // Create an empty feature registry
+            let mut registry = FeatureRegistry::new();
 
-    // Return the registry
-    Ok(registry)
+            // Add sample features
+            add_sample_features(&mut registry)?;
+
+            // Update registry with saved selections
+            for feature in &config.selected_features {
+                // Ignore errors in case feature no longer exists
+                let _ = registry.enable_feature(feature);
+            }
+
+            println!("✅ Loaded feature configuration from file");
+            Ok(registry)
+        }
+        Err(_) => {
+            // Create a new registry with default features
+            let mut registry = FeatureRegistry::new();
+            add_sample_features(&mut registry)?;
+
+            // Save the initial configuration
+            save_feature_configuration(&registry)?;
+
+            println!("✅ Created new feature configuration");
+            Ok(registry)
+        }
+    }
+}
+
+/// Save feature configuration to disk
+fn save_feature_configuration(registry: &FeatureRegistry) -> Result<(), FeatureError> {
+    // Create configuration from registry
+    let config = FeatureConfig::from_registry(registry);
+
+    // Save to default location
+    config.save_default()?;
+
+    Ok(())
+}
+
+/// Apply feature configuration to the project
+fn apply_feature_configuration(registry: &FeatureRegistry) -> Result<(), FeatureError> {
+    // Create configuration from registry
+    let config = FeatureConfig::from_registry(registry);
+
+    // Save the configuration
+    config.save_default()?;
+
+    // Generate and display Cargo build command
+    let flags = config.generate_build_flags();
+    let cmd = format!("cargo build {}", flags.join(" "));
+
+    println!("\n{}", "Feature configuration applied!".green().bold());
+    println!("\nTo build with these features, run:");
+    println!("{}", cmd.cyan());
+
+    // Ask if user wants to build now
+    let theme = ColorfulTheme::default();
+    if Confirm::with_theme(&theme)
+        .with_prompt("Do you want to build the project now with these features?")
+        .default(false)
+        .interact()
+        .unwrap_or(false)
+    {
+        // Run the build command
+        println!("\n{}", "Building project...".green());
+
+        let progress = ProgressBar::new_spinner();
+        progress.set_style(
+            ProgressStyle::default_spinner()
+                .template("{spinner:.green} {msg}")
+                .unwrap(),
+        );
+        progress.set_message("Building with custom features...");
+
+        // Execute the build command
+        let output = std::process::Command::new("cargo")
+            .arg("build")
+            .args(flags)
+            .output();
+
+        match output {
+            Ok(output) => {
+                if output.status.success() {
+                    progress.finish_with_message("✅ Build successful!".to_string());
+                    println!("{}", String::from_utf8_lossy(&output.stdout));
+                } else {
+                    progress.finish_with_message("❌ Build failed!".to_string());
+                    println!("{}", String::from_utf8_lossy(&output.stderr));
+                }
+            }
+            Err(e) => {
+                progress.finish_with_message("❌ Failed to execute build command!".to_string());
+                println!("Error: {}", e);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Add sample features to the registry

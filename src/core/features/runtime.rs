@@ -1,3 +1,4 @@
+use crate::core::features::FeatureConfig;
 use std::collections::{HashMap, HashSet};
 
 /// Runtime feature flags for dynamic behavior
@@ -50,6 +51,15 @@ impl RuntimeFeatures {
         default_status.insert("error_handling".to_string(), true);
         default_status.insert("config".to_string(), true);
 
+        // Try to load from config file first
+        if let Ok(config) = FeatureConfig::load_default() {
+            // Initialize enabled features from config
+            return Self {
+                enabled_features: config.selected_features,
+                default_status,
+            };
+        }
+
         // Initialize enabled features from defaults
         let enabled_features = default_status
             .iter()
@@ -67,13 +77,18 @@ impl RuntimeFeatures {
         self.enabled_features.contains(feature)
     }
 
+    /// Get a list of all enabled features
+    pub fn get_enabled_features(&self) -> &HashSet<String> {
+        &self.enabled_features
+    }
+
     /// Enable a feature at runtime
-    pub fn enable_feature(&mut self, feature: &str) {
+    pub fn enable(&mut self, feature: &str) {
         self.enabled_features.insert(feature.to_string());
     }
 
     /// Disable a feature at runtime
-    pub fn disable_feature(&mut self, feature: &str) {
+    pub fn disable(&mut self, feature: &str) {
         self.enabled_features.remove(feature);
     }
 
@@ -81,9 +96,9 @@ impl RuntimeFeatures {
     pub fn reset_feature(&mut self, feature: &str) {
         if let Some(default) = self.default_status.get(feature) {
             if *default {
-                self.enable_feature(feature);
+                self.enable(feature);
             } else {
-                self.disable_feature(feature);
+                self.disable(feature);
             }
         }
     }
