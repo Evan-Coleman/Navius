@@ -13,6 +13,7 @@ use tracing::{debug, error, info};
 use crate::core::auth::interfaces::{TokenClient, TokenValidationResult};
 use crate::core::auth::models::{JwtClaims, TokenResponse, UserProfile};
 use crate::core::config::app_config::AppConfig;
+use crate::core::config::app_config::ProviderConfig;
 use crate::core::config::constants;
 use crate::core::error::AppError;
 
@@ -268,18 +269,21 @@ impl TokenClient for EntraTokenClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::config::app_config::{AppConfig, ProviderConfig};
+    use std::collections::HashMap;
     use std::env;
     use std::time::{Duration, SystemTime};
 
     #[test]
     fn test_token_client_creation() {
-        // Test creating a client directly with credentials
+        // Create token client
         let client = EntraTokenClient::new(
             "test-tenant-placeholder",
             "test-client-placeholder",
             "test-secret-placeholder",
         );
 
+        // Check that it's properly initialized
         assert_eq!(client.client_id.as_str(), "test-client-placeholder");
         assert_eq!(
             client.client_secret.secret().as_str(),
@@ -299,8 +303,29 @@ mod tests {
         // Create minimal config
         let mut config = AppConfig::default();
         config.auth.enabled = true;
-        config.auth.entra.tenant_id = "config-tenant-placeholder".to_string();
-        config.auth.entra.client_id = "config-client-placeholder".to_string();
+
+        // Add a provider for Entra
+        let mut provider_config = ProviderConfig {
+            enabled: true,
+            client_id: "config-client-placeholder".to_string(),
+            jwks_uri: "https://login.microsoftonline.com/tenant/discovery/v2.0/keys".to_string(),
+            issuer_url: "https://login.microsoftonline.com/tenant/v2.0".to_string(),
+            audience: "api://default".to_string(),
+            role_mappings: HashMap::new(),
+            provider_specific: HashMap::new(),
+        };
+
+        // Add tenant_id to provider specific config
+        provider_config.provider_specific.insert(
+            "tenant_id".to_string(),
+            serde_yaml::Value::String("config-tenant-placeholder".to_string()),
+        );
+
+        config.auth.default_provider = "entra".to_string();
+        config
+            .auth
+            .providers
+            .insert("entra".to_string(), provider_config);
 
         // Create client from config
         let client = EntraTokenClient::from_config(&config);

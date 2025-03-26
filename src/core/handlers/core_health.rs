@@ -81,9 +81,9 @@ mod tests {
         assert!(components.contains_key("services"));
     }
 
-    #[test]
-    fn test_simple_health_handler() {
-        let response = simple_health_handler();
+    #[tokio::test]
+    async fn test_simple_health_handler() {
+        let response = simple_health_handler().await;
         assert_eq!(response.0.get("status").unwrap(), "UP");
     }
 }

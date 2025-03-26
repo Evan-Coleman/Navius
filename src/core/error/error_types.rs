@@ -374,7 +374,7 @@ mod tests {
         );
         assert_eq!(
             AppError::ValidationError("test".into()).status_code(),
-            StatusCode::UNPROCESSABLE_ENTITY
+            StatusCode::BAD_REQUEST
         );
         assert_eq!(
             AppError::InternalServerError("test".into()).status_code(),

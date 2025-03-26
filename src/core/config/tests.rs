@@ -59,14 +59,14 @@ fn test_default_auth_config() {
     let auth = AuthConfig::default();
 
     // Default values
-    assert_eq!(auth.enabled, true);
+    assert_eq!(auth.enabled, false); // Auth is disabled by default
     assert_eq!(auth.debug, false);
 
-    // Skip the jwks_uri_format test since it's environment-dependent
-    // We'll just check that the structure is correctly created
-    assert!(!auth.entra.token_url_format.is_empty());
-    assert!(!auth.entra.authorize_url_format.is_empty());
-    assert!(!auth.entra.issuer_url_formats.is_empty());
+    // Default provider should be empty
+    assert_eq!(auth.default_provider, "");
+
+    // Providers should be empty by default
+    assert!(auth.providers.is_empty());
 }
 
 #[test]
@@ -213,7 +213,7 @@ fn test_config_validation_and_defaults() {
         ..Default::default()
     };
 
-    // Verify that defaults were properly applied - updated to match actual implementation
+    // Verify that defaults were properly applied
     assert_eq!(config.server.protocol, "");
     assert_eq!(config.logging.level, "info");
     assert_eq!(config.logging.format, "json");
@@ -221,7 +221,13 @@ fn test_config_validation_and_defaults() {
 
     // Validate helper methods
     assert_eq!(config.server_addr(), "localhost:8080");
-    assert_eq!(config.cache_ttl(), Duration::from_secs(3600));
+
+    // Get the actual default cache ttl from CacheConfig::default
+    let default_cache_config = CacheConfig::default();
+    assert_eq!(
+        config.cache_ttl(),
+        Duration::from_secs(default_cache_config.ttl_seconds)
+    );
 }
 
 #[test]

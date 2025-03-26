@@ -232,7 +232,8 @@ mod tests {
 
     #[test]
     fn test_error_response() {
-        let response = ApiResponse::error(StatusCode::BAD_REQUEST, "Invalid input".to_string());
+        let response: ApiResponse<()> =
+            ApiResponse::<()>::error(StatusCode::BAD_REQUEST, "Invalid input".to_string());
 
         assert!(response.data.is_none());
         assert_eq!(response.metadata.status, 400);
@@ -285,8 +286,8 @@ mod tests {
         let response = ApiResponse::success("test data").into_response();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let response = ApiResponse::error(StatusCode::BAD_REQUEST, "Invalid input".to_string())
-            .into_response();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let response: ApiResponse<()> =
+            ApiResponse::<()>::error(StatusCode::BAD_REQUEST, "Invalid input".to_string());
+        assert_eq!(response.into_response().status(), StatusCode::BAD_REQUEST);
     }
 }

@@ -19,7 +19,10 @@ use crate::{
     utils::api_resource::ApiResourceRegistry,
 };
 
+use crate::core::auth::MockTokenClient;
+use crate::core::cache::CacheRegistry;
 use crate::core::models::DependencyStatus;
+use crate::core::router::ServiceRegistry;
 
 /// Trait for API resources that can be cached and managed
 pub trait ApiResource: Clone + Send + Sync + 'static {
@@ -358,14 +361,32 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::body::Body;
-    use axum::http::{Request, Response, StatusCode};
-    use axum::routing::get;
+    use crate::core::{
+        auth::mock::MockTokenClient,
+        cache::CacheRegistry,
+        config::app_config::AppConfig,
+        error::AppError,
+        router::{AppState, core_app_router::ServiceRegistry},
+        utils::api_resource::ApiResourceRegistry,
+    };
+    use axum::{
+        body::{self, Body},
+        extract::Path,
+        http::{Request, StatusCode},
+        response::Json,
+        routing::{Router, get},
+    };
     use futures::future::BoxFuture;
     use metrics_exporter_prometheus::PrometheusBuilder;
     use serde::{Deserialize, Serialize};
-    use std::sync::atomic::AtomicUsize;
-    use tower::{BoxError, Service, ServiceExt};
+    use std::{
+        result::Result as StdResult,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+    };
+    use tower::ServiceExt;
 
     // Mock API resource for testing
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -476,7 +497,7 @@ mod tests {
 
         // Get the response body
         let body = response.into_body();
-        let body_bytes = hyper::body::to_bytes(body).await.unwrap();
+        let body_bytes = body::to_bytes(body, usize::MAX).await.unwrap();
         let resource: MockResource = serde_json::from_slice(&body_bytes).unwrap();
 
         // Verify the resource data

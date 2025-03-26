@@ -8,33 +8,30 @@
 //!
 //! ## Example
 //!
-//! ```rust
-//! use axum::Router;
-//! use std::time::Duration;
-//! use crate::core::reliability::retry::RetryConfig;
+//! ```
+//! use axum::http::StatusCode;
+//! use navius::core::reliability::retry::RetryConfig;
 //!
 //! let retry_config = RetryConfig {
 //!     max_attempts: 3,
-//!     base_delay: Duration::from_millis(100),
-//!     max_delay: Duration::from_secs(1),
+//!     base_delay: 100, // milliseconds
+//!     max_delay: 1000, // milliseconds
 //!     use_exponential_backoff: true,
 //!     retry_status_codes: vec![
 //!         StatusCode::INTERNAL_SERVER_ERROR,
 //!         StatusCode::BAD_GATEWAY
 //!     ],
+//!     enabled: true,
 //! };
-//!
-//! let app = Router::new()
-//!     .layer(retry_config.layer());
 //! ```
 //!
 //! ## Example with Default Configuration
 //!
-//! ```rust
-//! use crate::core::reliability::retry::RetryConfig;
+//! ```
+//! use navius::core::reliability::retry::RetryConfig;
 //!
-//! let app = Router::new()
-//!     .layer(RetryConfig::default().layer());
+//! // Create a default retry configuration
+//! let retry_config = RetryConfig::default();
 //! ```
 
 use std::future::Future;

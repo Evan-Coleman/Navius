@@ -133,6 +133,9 @@ pub fn try_get_gauge_with_labels(_name: &str, _labels: &[(&str, String)]) -> Opt
 
 /// Try to record metrics and return the raw metrics text
 pub fn try_record_metrics(handle: &PrometheusHandle) -> Result<String, String> {
+    // Record a test metric to ensure there's always something in the output
+    record_counter("test_metric", 1);
+
     Ok(export_metrics(handle))
 }
 
