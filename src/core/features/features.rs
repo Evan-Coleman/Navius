@@ -69,6 +69,9 @@ pub struct FeatureRegistry {
 
     /// Current selection
     pub(crate) selected: HashSet<String>,
+
+    /// Enabled features
+    pub(crate) enabled_features: HashSet<String>,
 }
 
 impl FeatureRegistry {
@@ -78,6 +81,7 @@ impl FeatureRegistry {
             features: HashMap::new(),
             groups: HashMap::new(),
             selected: HashSet::new(),
+            enabled_features: HashSet::new(),
         };
 
         // Register core features (always enabled)
@@ -402,5 +406,141 @@ impl FeatureRegistry {
     /// Get feature information by name
     pub fn get_feature_info(&self, name: &str) -> Option<&FeatureInfo> {
         self.features.get(name)
+    }
+
+    /// Get a list of all registered features
+    pub fn feature_list(&self) -> Vec<&FeatureInfo> {
+        self.features.values().collect()
+    }
+
+    /// Get the enabled features
+    pub fn get_enabled_features(&self) -> &HashSet<String> {
+        &self.enabled_features
+    }
+
+    /// Get information about a specific feature
+    pub fn get_feature(&self, name: &str) -> Option<&FeatureInfo> {
+        self.features.get(name)
+    }
+
+    /// Check if a feature is enabled
+    pub fn feature_is_enabled(&self, name: &str) -> bool {
+        self.enabled_features.contains(name)
+    }
+
+    /// Enable a feature and its dependencies
+    pub fn enable_feature(&mut self, name: &str) -> Result<(), FeatureError> {
+        // Check feature exists
+        if !self.features.contains_key(name) {
+            return Err(FeatureError::UnknownFeature(name.to_string()));
+        }
+
+        // Add to enabled set
+        self.enabled_features.insert(name.to_string());
+
+        // Enable dependencies
+        let dependencies = {
+            if let Some(feature) = self.features.get(name) {
+                feature.dependencies.clone()
+            } else {
+                vec![]
+            }
+        };
+
+        for dep in dependencies {
+            self.enable_feature(&dep)?;
+        }
+
+        Ok(())
+    }
+
+    /// Disable a feature if no other features depend on it
+    pub fn disable_feature(&mut self, name: &str) -> Result<(), FeatureError> {
+        // Check feature exists
+        if !self.features.contains_key(name) {
+            return Err(FeatureError::UnknownFeature(name.to_string()));
+        }
+
+        // Check if any enabled feature depends on this one
+        for (feature_name, feature) in &self.features {
+            if self.enabled_features.contains(feature_name)
+                && feature.dependencies.contains(&name.to_string())
+            {
+                return Err(FeatureError::DependencyRequired(
+                    name.to_string(),
+                    feature_name.to_string(),
+                ));
+            }
+        }
+
+        // Remove from enabled set
+        self.enabled_features.remove(name);
+
+        Ok(())
+    }
+}
+
+mod errors;
+mod features;
+mod runtime;
+
+pub use errors::FeatureError;
+pub use features::{
+    BuildConfig, ContainerConfig, Feature, FeatureInfo, FeatureRegistry, PackageManager,
+    VersionInfo,
+};
+pub use runtime::RuntimeFeatures;
+
+/// Extension trait for FeatureRegistry that provides convenient methods for feature management
+pub trait FeatureRegistryExt {
+    /// Get a list of all available features
+    fn features(&self) -> Vec<FeatureInfo>;
+
+    /// Get the number of registered features
+    fn feature_count(&self) -> usize;
+
+    /// Get a list of all enabled features
+    fn enabled_features(&self) -> Vec<String>;
+
+    /// Get information about a specific feature
+    fn get_feature_info(&self, name: &str) -> Option<FeatureInfo>;
+
+    /// Check if a feature is enabled
+    fn is_enabled(&self, name: &str) -> bool;
+
+    /// Enable a feature
+    fn enable(&mut self, name: &str) -> Result<(), FeatureError>;
+
+    /// Disable a feature
+    fn disable(&mut self, name: &str) -> Result<(), FeatureError>;
+}
+
+impl FeatureRegistryExt for FeatureRegistry {
+    fn features(&self) -> Vec<FeatureInfo> {
+        self.feature_list()
+    }
+
+    fn feature_count(&self) -> usize {
+        self.feature_list().len()
+    }
+
+    fn enabled_features(&self) -> Vec<String> {
+        self.get_enabled_features().iter().cloned().collect()
+    }
+
+    fn get_feature_info(&self, name: &str) -> Option<FeatureInfo> {
+        self.get_feature(name).cloned()
+    }
+
+    fn is_enabled(&self, name: &str) -> bool {
+        self.feature_is_enabled(name)
+    }
+
+    fn enable(&mut self, name: &str) -> Result<(), FeatureError> {
+        self.enable_feature(name)
+    }
+
+    fn disable(&mut self, name: &str) -> Result<(), FeatureError> {
+        self.disable_feature(name)
     }
 }

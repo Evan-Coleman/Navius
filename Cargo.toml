@@ -81,6 +81,12 @@ nonzero_ext = "0.3.0"
 # New dependency
 regex = "1.11.1"
 
+# Add these for the CLI tool
+clap = "4.5.32"       # Command line argument parsing
+colored = "3.0.0"     # Colored terminal output
+indicatif = "0.17.11"  # Progress bars and spinners
+dialoguer = "0.11.0"   # Interactive CLI dialogs
+
 [dev-dependencies]
 # HTTP Mocking
 mockito = "1.7.0"

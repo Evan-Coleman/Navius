@@ -2507,11 +2507,12 @@ Update your YAML configuration files to include feature settings:
 # In config/default.yaml
 features:
   enabled:
-    - "core"
-    - "metrics"
-    - "caching"
-    - "auth"
+    - "core"           # Core functionality (always enabled)
+    - "metrics"        # Basic metrics
+    - "caching"        # Caching functionality
+    - "auth"           # Authentication
   config:
+    # Feature-specific configuration
     advanced_metrics:
       histogram_buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0]
       export_interval_seconds: 15
