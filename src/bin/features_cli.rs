@@ -1,11 +1,14 @@
 use std::{collections::HashMap, collections::HashSet, io::Write, path::PathBuf, time::Duration};
 
-use clap::{Arg, Command};
+use clap::{Arg, ArgMatches, Command};
 use colored::Colorize;
 use dialoguer::{Confirm, MultiSelect, Select, theme::ColorfulTheme};
 use indicatif::{ProgressBar, ProgressStyle};
 
-use navius::core::features::{FeatureConfig, FeatureError, FeatureInfo, FeatureRegistry};
+use navius::core::features::{
+    BuildConfig, DependencyAnalyzer, FeatureConfig, FeatureError, FeatureInfo, FeatureRegistry,
+    FeatureRegistryExt,
+};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse command line arguments
@@ -42,6 +45,46 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .subcommand(Command::new("apply").about(
             "Apply feature configuration to the actual project (generates config for cargo build)",
         ))
+        .subcommand(
+            Command::new("analyze-deps")
+                .about("Analyze dependencies for selected features")
+                .arg(
+                    Arg::new("output")
+                        .short('o')
+                        .long("output")
+                        .help("Output directory for dependency analysis")
+                        .default_value("./analysis"),
+                )
+                .arg(
+                    Arg::new("format")
+                        .short('f')
+                        .long("format")
+                        .help("Output format (text, markdown)")
+                        .default_value("markdown"),
+                ),
+        )
+        .subcommand(
+            Command::new("build")
+                .about("Build with selected features")
+                .arg(
+                    Arg::new("release")
+                        .short('r')
+                        .long("release")
+                        .help("Build in release mode"),
+                )
+                .arg(
+                    Arg::new("optimize-deps")
+                        .short('d')
+                        .long("optimize-deps")
+                        .help("Optimize dependencies based on selected features"),
+                )
+                .arg(
+                    Arg::new("target")
+                        .short('t')
+                        .long("target")
+                        .help("Build for specific target"),
+                ),
+        )
         .get_matches();
 
     // Create colored header
@@ -49,20 +92,46 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     print_header();
 
     // Load feature registry from existing config if available, otherwise create new
-    let mut registry = load_feature_registry()?;
+    let mut registry = match load_feature_registry() {
+        Ok(reg) => reg,
+        Err(e) => {
+            eprintln!("Error loading feature registry: {}", e);
+            eprintln!("Creating a new registry with default features...");
+            let mut reg = FeatureRegistry::new();
+            if let Err(e) = add_sample_features(&mut reg) {
+                eprintln!("Error adding sample features: {}", e);
+                return Err(Box::new(e));
+            }
+            reg
+        }
+    };
 
     // Process commands
-    match matches.subcommand() {
-        Some(("list", sub_matches)) => list_features(&registry, sub_matches),
-        Some(("enable", sub_matches)) => enable_feature(&mut registry, sub_matches)?,
-        Some(("disable", sub_matches)) => disable_feature(&mut registry, sub_matches)?,
-        Some(("status", _)) => show_feature_status(&registry),
-        Some(("interactive", _)) => show_interactive_menu(&mut registry)?,
-        Some(("apply", _)) => apply_feature_configuration(&registry)?,
+    let result = match matches.subcommand() {
+        Some(("list", sub_matches)) => {
+            list_features(&registry, sub_matches);
+            Ok(())
+        }
+        Some(("enable", sub_matches)) => enable_feature(&mut registry, sub_matches),
+        Some(("disable", sub_matches)) => disable_feature(&mut registry, sub_matches),
+        Some(("status", _)) => {
+            show_feature_status(&registry);
+            Ok(())
+        }
+        Some(("interactive", _)) => show_interactive_menu(&mut registry),
+        Some(("apply", _)) => apply_feature_configuration(&registry),
+        Some(("analyze-deps", sub_matches)) => handle_dependency_analysis(&registry, sub_matches),
+        Some(("build", sub_matches)) => handle_build(&registry, sub_matches),
         _ => {
             // No subcommand provided, show interactive menu
-            show_interactive_menu(&mut registry)?;
+            show_interactive_menu(&mut registry)
         }
+    };
+
+    // Handle any errors
+    if let Err(e) = result {
+        eprintln!("Error: {}", e);
+        return Err(Box::new(e));
     }
 
     Ok(())
@@ -89,7 +158,7 @@ fn show_interactive_menu(registry: &mut FeatureRegistry) -> Result<(), FeatureEr
             .default(0)
             .items(&items)
             .interact()
-            .unwrap_or(3); // Default to Exit if interaction fails
+            .map_err(|e| FeatureError::IoError(format!("Failed to display menu: {}", e)))?;
 
         match selection {
             0 => {
@@ -203,7 +272,7 @@ fn manual_feature_selection(registry: &mut FeatureRegistry) -> Result<(), Featur
         .items(&display_items)
         .defaults(&default_states)
         .interact()
-        .unwrap_or_else(|_| selection_indices.clone());
+        .map_err(|e| FeatureError::IoError(format!("Failed to display selection menu: {}", e)))?;
 
     // Convert selections back to feature names and include required features
     let mut selected_features: HashSet<String> = HashSet::new();
@@ -214,9 +283,9 @@ fn manual_feature_selection(registry: &mut FeatureRegistry) -> Result<(), Featur
     }
 
     // Then add selected optional features
-    for &index in &selections {
-        if index < optional_features.len() {
-            let feature = &optional_features[index];
+    for &idx in &selections {
+        if idx < optional_features.len() {
+            let feature = &optional_features[idx];
             selected_features.insert(feature.name.clone());
 
             // Also add all dependencies
@@ -692,7 +761,8 @@ fn list_features_interactive(registry: &FeatureRegistry) {
 
 /// List all available features
 fn list_features(registry: &FeatureRegistry, matches: &clap::ArgMatches) {
-    let format = matches.get_one::<String>("format").unwrap();
+    let format_str = "text".to_string();
+    let format = matches.get_one::<String>("format").unwrap_or(&format_str);
 
     match format.as_str() {
         "json" => {
@@ -830,7 +900,7 @@ fn enable_feature(
 ) -> Result<(), FeatureError> {
     let feature = matches
         .get_one::<String>("feature")
-        .expect("Required argument");
+        .ok_or_else(|| FeatureError::UnknownFeature("Missing feature argument".to_string()))?;
 
     // Check if the feature is already enabled
     if registry.feature_is_enabled(feature) {
@@ -848,7 +918,7 @@ fn disable_feature(
 ) -> Result<(), FeatureError> {
     let feature = matches
         .get_one::<String>("feature")
-        .expect("Required argument");
+        .ok_or_else(|| FeatureError::UnknownFeature("Missing feature argument".to_string()))?;
 
     // Check if the feature is already disabled
     if !registry.feature_is_enabled(feature) {
@@ -1070,7 +1140,7 @@ fn apply_feature_configuration(registry: &FeatureRegistry) -> Result<(), Feature
         .default(1)
         .items(&build_options)
         .interact()
-        .unwrap_or(1);
+        .map_err(|e| FeatureError::IoError(format!("Failed to display prompt: {}", e)))?;
 
     if build_choice == 0 {
         // Run the build command
@@ -1080,7 +1150,11 @@ fn apply_feature_configuration(registry: &FeatureRegistry) -> Result<(), Feature
         progress.set_style(
             ProgressStyle::default_spinner()
                 .template("{spinner:.green} {msg}")
-                .unwrap(),
+                .map_err(|e| {
+                    eprintln!("Warning: Failed to set progress style: {}", e);
+                    ProgressStyle::default_spinner()
+                })
+                .unwrap_or_else(|_| ProgressStyle::default_spinner()),
         );
         progress.set_message("Building with custom features...");
 
@@ -1223,4 +1297,181 @@ fn build_interactive_menu(_registry: &FeatureRegistry) -> Vec<String> {
     ];
 
     menu_items
+}
+
+/// Add dependency analysis command to the CLI
+fn add_dependency_analysis_command(app: Command) -> Command {
+    app.subcommand(
+        Command::new("analyze-deps")
+            .about("Analyze dependencies for selected features")
+            .arg(
+                Arg::new("output")
+                    .short('o')
+                    .long("output")
+                    .help("Output directory for dependency analysis")
+                    .default_value("./analysis"),
+            )
+            .arg(
+                Arg::new("format")
+                    .short('f')
+                    .long("format")
+                    .help("Output format (text, markdown)")
+                    .default_value("markdown"),
+            ),
+    )
+}
+
+/// Handle dependency analysis command
+fn handle_dependency_analysis(
+    registry: &FeatureRegistry,
+    matches: &ArgMatches,
+) -> Result<(), FeatureError> {
+    let output_dir = matches
+        .get_one::<String>("output")
+        .ok_or_else(|| FeatureError::IoError("Missing output directory parameter".to_string()))?;
+    let format = matches
+        .get_one::<String>("format")
+        .ok_or_else(|| FeatureError::IoError("Missing format parameter".to_string()))?;
+
+    // Create output directory
+    std::fs::create_dir_all(output_dir)
+        .map_err(|e| FeatureError::IoError(format!("Failed to create output directory: {}", e)))?;
+
+    // Create dependency analyzer
+    let analyzer = DependencyAnalyzer::new(
+        std::env::current_dir()
+            .map_err(|e| FeatureError::IoError(format!("Failed to get current directory: {}", e)))?
+            .join("Cargo.toml"),
+        registry.get_enabled_features().clone(),
+    )?;
+
+    // Generate dependency tree
+    let tree = analyzer.generate_dependency_tree();
+
+    // Write analysis results
+    let output_file = PathBuf::from(output_dir).join(match format.as_str() {
+        "markdown" => "dependency_analysis.md",
+        _ => "dependency_analysis.txt",
+    });
+
+    std::fs::write(&output_file, tree)
+        .map_err(|e| FeatureError::IoError(format!("Failed to write analysis: {}", e)))?;
+
+    println!("✅ Dependency analysis completed!");
+    println!("📊 Results written to: {}", output_file.display());
+
+    // Show summary
+    println!("\nSummary:");
+    println!(
+        "- Required dependencies: {}",
+        analyzer.get_required_dependencies().len()
+    );
+    println!(
+        "- Removable dependencies: {}",
+        analyzer.get_removable_dependencies().len()
+    );
+
+    Ok(())
+}
+
+/// Update build command to support dependency optimization
+fn update_build_command(app: Command) -> Command {
+    app.subcommand(
+        Command::new("build")
+            .about("Build with selected features")
+            .arg(
+                Arg::new("release")
+                    .short('r')
+                    .long("release")
+                    .help("Build in release mode"),
+            )
+            .arg(
+                Arg::new("optimize-deps")
+                    .short('d')
+                    .long("optimize-deps")
+                    .help("Optimize dependencies based on selected features"),
+            )
+            .arg(
+                Arg::new("target")
+                    .short('t')
+                    .long("target")
+                    .help("Build for specific target"),
+            ),
+    )
+}
+
+/// Handle build command with dependency optimization
+fn handle_build(registry: &FeatureRegistry, matches: &ArgMatches) -> Result<(), FeatureError> {
+    let release_mode = matches.contains_id("release");
+    let optimize_deps = matches.contains_id("optimize-deps");
+    let target = matches.get_one::<String>("target").map(|s| s.as_str());
+
+    // Show build configuration
+    println!("\n{}\n", "Build Configuration:".green().bold());
+    println!(
+        "Mode: {}",
+        if release_mode {
+            "release".green()
+        } else {
+            "debug".yellow()
+        }
+    );
+    println!(
+        "Dependency optimization: {}",
+        if optimize_deps {
+            "enabled".green()
+        } else {
+            "disabled".yellow()
+        }
+    );
+    if let Some(t) = target {
+        println!("Target: {}", t.blue());
+    }
+
+    // Create build configuration
+    let current_dir = std::env::current_dir()
+        .map_err(|e| FeatureError::IoError(format!("Failed to get current directory: {}", e)))?;
+
+    let build_config = BuildConfig::new(current_dir.clone(), current_dir.join("target"))
+        .with_features(registry.get_enabled_features().clone())
+        .with_optimization(if release_mode { "release" } else { "debug" })
+        .with_target(target)
+        .with_dependency_optimization(optimize_deps);
+
+    // Show progress
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg}")
+            .map_err(|e| {
+                eprintln!("Warning: Failed to set spinner style: {}", e);
+                ProgressStyle::default_spinner()
+            })
+            .unwrap_or_else(|_| ProgressStyle::default_spinner()),
+    );
+    spinner.set_message("Building...");
+    spinner.enable_steady_tick(Duration::from_millis(80));
+
+    // Execute build
+    match build_config.execute_build() {
+        Ok(_) => {
+            spinner.finish_with_message("✅ Build completed successfully!");
+
+            if optimize_deps {
+                println!("\nDependency analysis available at:");
+                println!(
+                    "  {}",
+                    current_dir
+                        .join("target/optimized_build/dependency_tree.md")
+                        .display()
+                );
+            }
+        }
+        Err(e) => {
+            spinner.finish_with_message(format!("❌ Build failed: {}", e));
+            return Err(e);
+        }
+    }
+
+    Ok(())
 }

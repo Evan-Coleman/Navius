@@ -480,27 +480,27 @@ impl FeatureRegistry {
     }
 }
 
-/// Extension trait for FeatureRegistry that provides convenient methods for feature management
+/// Feature registry extension methods for easier access
 pub trait FeatureRegistryExt {
-    /// Get a list of all available features
+    /// Get all available features
     fn features(&self) -> Vec<&FeatureInfo>;
 
-    /// Get the number of registered features
+    /// Get the total number of features
     fn feature_count(&self) -> usize;
 
-    /// Get a list of all enabled features
-    fn enabled_features(&self) -> Vec<String>;
+    /// Get set of enabled features
+    fn enabled_features(&self) -> &std::collections::HashSet<String>;
 
-    /// Get information about a specific feature
+    /// Get feature info by name
     fn get_feature_info(&self, name: &str) -> Option<&FeatureInfo>;
 
     /// Check if a feature is enabled
     fn is_enabled(&self, name: &str) -> bool;
 
-    /// Enable a feature
+    /// Enable a feature and its dependencies
     fn enable(&mut self, name: &str) -> Result<(), FeatureError>;
 
-    /// Disable a feature
+    /// Disable a feature if no other features depend on it
     fn disable(&mut self, name: &str) -> Result<(), FeatureError>;
 }
 
@@ -513,8 +513,8 @@ impl FeatureRegistryExt for FeatureRegistry {
         self.feature_list().len()
     }
 
-    fn enabled_features(&self) -> Vec<String> {
-        self.get_enabled_features().iter().cloned().collect()
+    fn enabled_features(&self) -> &HashSet<String> {
+        self.get_enabled_features()
     }
 
     fn get_feature_info(&self, name: &str) -> Option<&FeatureInfo> {

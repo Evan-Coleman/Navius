@@ -4,6 +4,7 @@
 
 // Declare submodules
 pub mod config;
+pub mod dependency_analyzer;
 pub mod documentation;
 pub mod features;
 pub mod macros;
@@ -12,34 +13,15 @@ pub mod runtime;
 
 // Re-export the feature registry and related types
 pub use self::config::FeatureConfig;
+pub use self::dependency_analyzer::DependencyAnalyzer;
 pub use self::documentation::{DocConfig, DocGenerator, DocTemplate};
-pub use self::features::{FeatureError, FeatureInfo, FeatureRegistry};
+pub use self::features::{FeatureError, FeatureInfo, FeatureRegistry, FeatureRegistryExt};
 pub use self::packaging::{BuildConfig, ContainerConfig, PackageManager, VersionInfo};
 pub use self::runtime::RuntimeFeatures;
 
-/// Feature registry extension methods for easier access
-pub trait FeatureRegistryExt {
-    /// Get all available features
-    fn features(&self) -> Vec<&FeatureInfo>;
-
-    /// Get the total number of features
-    fn feature_count(&self) -> usize;
-
-    /// Get set of enabled features
-    fn enabled_features(&self) -> &std::collections::HashSet<String>;
-
-    /// Get feature info by name
-    fn get_feature_info(&self, name: &str) -> Option<&FeatureInfo>;
-
-    /// Check if a feature is enabled
-    fn is_enabled(&self, name: &str) -> bool;
-
-    /// Enable a feature and its dependencies
-    fn enable(&mut self, name: &str) -> Result<(), FeatureError>;
-
-    /// Disable a feature if no other features depend on it
-    fn disable(&mut self, name: &str) -> Result<(), FeatureError>;
-}
+// Re-export test utilities for integration tests
+#[cfg(test)]
+pub use self::features::test_utils;
 
 // Testing utilities
 #[cfg(test)]

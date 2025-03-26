@@ -2,9 +2,9 @@
 //!
 //! Provides tools for creating optimized server packages based on selected features.
 
-use crate::core::features::{FeatureError, FeatureRegistry};
+use crate::core::features::{DependencyAnalyzer, FeatureError, FeatureRegistry};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -34,6 +34,9 @@ pub struct BuildConfig {
 
     /// Container configuration
     pub container: Option<ContainerConfig>,
+
+    /// Whether to optimize dependencies
+    pub optimize_dependencies: bool,
 }
 
 /// Version information for package tracking
@@ -96,6 +99,7 @@ impl BuildConfig {
             additional_flags: Vec::new(),
             version: VersionInfo::default(),
             container: None,
+            optimize_dependencies: false,
         }
     }
 
@@ -135,6 +139,45 @@ impl BuildConfig {
         self
     }
 
+    /// Enable dependency optimization
+    pub fn with_dependency_optimization(mut self, optimize: bool) -> Self {
+        self.optimize_dependencies = optimize;
+        self
+    }
+
+    /// Generate Cargo.toml with selected features
+    pub fn generate_cargo_toml(&self) -> Result<(), FeatureError> {
+        if self.optimize_dependencies {
+            // Create dependency analyzer
+            let analyzer = DependencyAnalyzer::new(
+                self.source_path.join("Cargo.toml"),
+                self.features.clone(),
+            )?;
+
+            // Generate optimized Cargo.toml
+            let optimized_toml = analyzer.generate_optimized_toml()?;
+
+            // Create optimized build directory
+            let build_dir = self.output_path.join("optimized_build");
+            std::fs::create_dir_all(&build_dir).map_err(|e| {
+                FeatureError::IoError(format!("Failed to create build directory: {}", e))
+            })?;
+
+            // Write optimized Cargo.toml
+            std::fs::write(build_dir.join("Cargo.toml"), optimized_toml).map_err(|e| {
+                FeatureError::IoError(format!("Failed to write optimized Cargo.toml: {}", e))
+            })?;
+
+            // Generate dependency tree visualization
+            let tree = analyzer.generate_dependency_tree();
+            std::fs::write(build_dir.join("dependency_tree.md"), tree).map_err(|e| {
+                FeatureError::IoError(format!("Failed to write dependency tree: {}", e))
+            })?;
+        }
+
+        Ok(())
+    }
+
     /// Generate build command
     pub fn generate_build_command(&self) -> Vec<String> {
         let mut cmd = vec!["cargo".to_string(), "build".to_string()];
@@ -165,32 +208,31 @@ impl BuildConfig {
 
     /// Execute build
     pub fn execute_build(&self) -> Result<PathBuf, FeatureError> {
-        println!("Building with features: {:?}", self.features);
+        // Generate optimized Cargo.toml if requested
+        self.generate_cargo_toml()?;
 
-        // Create command from configuration
-        let mut cmd_parts = self.generate_build_command();
-        let cmd_name = cmd_parts.remove(0);
+        // Get build command
+        let build_cmd = self.generate_build_command();
 
-        // Execute the build command
-        let status = Command::new(cmd_name)
-            .args(&cmd_parts)
-            .current_dir(&self.source_path)
+        // Execute build command
+        let status = std::process::Command::new(&build_cmd[0])
+            .args(&build_cmd[1..])
+            .current_dir(if self.optimize_dependencies {
+                self.output_path.join("optimized_build")
+            } else {
+                self.source_path.clone()
+            })
             .status()
-            .map_err(|e| FeatureError::BuildError(format!("Failed to execute build: {}", e)))?;
+            .map_err(|e| {
+                FeatureError::BuildError(format!("Failed to execute build command: {}", e))
+            })?;
 
         if !status.success() {
             return Err(FeatureError::BuildError("Build command failed".to_string()));
         }
 
         // Get the binary path
-        let binary_path = self.get_binary_path()?;
-
-        // Optimize the binary if in release mode
-        if self.optimization_level == "release" {
-            self.optimize_binary(&binary_path)?;
-        }
-
-        Ok(binary_path)
+        self.get_binary_path()
     }
 
     /// Get the path to the built binary

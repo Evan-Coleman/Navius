@@ -1882,6 +1882,7 @@ dependencies = [
  "test-context",
  "thiserror 2.0.12",
  "tokio",
+ "toml",
  "tower",
  "tower-http",
  "tracing",

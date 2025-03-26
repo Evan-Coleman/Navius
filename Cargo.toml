@@ -86,6 +86,7 @@ clap = "4.5.32"       # Command line argument parsing
 colored = "3.0.0"     # Colored terminal output
 indicatif = "0.17.11"  # Progress bars and spinners
 dialoguer = "0.11.0"   # Interactive CLI dialogs
+toml = "0.8.20"       # TOML parsing for dependency analysis
 
 [dev-dependencies]
 # HTTP Mocking
