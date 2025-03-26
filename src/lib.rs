@@ -49,6 +49,9 @@ pub mod core {
     // Error handling
     pub mod error;
 
+    // Feature selection and customization system
+    pub mod features;
+
     // API request handlers
     pub mod handlers {
         // Health check handlers
@@ -115,6 +118,7 @@ pub mod core {
     pub use self::cache::cache_manager::{CacheRegistry, get_resource_cache, init_cache_registry};
     pub use self::config::app_config::{AppConfig, load_config};
     pub use self::error::{AppError, Result};
+    pub use self::features::{FeatureConfig, FeatureRegistry, RuntimeFeatures};
     pub use self::metrics::{init_metrics, metrics_endpoint_handler, try_record_metrics};
     pub use self::reliability::apply_reliability;
     pub use self::router::CoreRouter;
@@ -221,3 +225,8 @@ pub use crate::core::error::*;
 pub use crate::core::models::*;
 pub use crate::core::services::error as core_service_error;
 pub use crate::core::services::health::HealthService as CoreHealthService;
+
+/// Feature selection and customization
+pub mod features {
+    pub use crate::core::features::*;
+}

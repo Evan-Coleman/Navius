@@ -84,6 +84,27 @@ logging:
   level: "info"
   format: "json"
 
+# Feature configuration
+# Controls which optional features are enabled
+features:
+  # List of features to enable by default
+  enabled: 
+    - "core"           # Required core functionality
+    - "error_handling" # Error handling system
+    - "config"         # Configuration system
+    - "auth"           # Authentication system
+    - "metrics"        # Basic metrics
+    - "caching"        # Caching functionality
+    - "reliability"    # Reliability features
+  
+  # Feature-specific configuration
+  config:
+    # Advanced metrics configuration (when enabled)
+    advanced_metrics:
+      histogram_buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0]
+      export_interval_seconds: 15
+      enable_process_metrics: true
+
 # Date format configuration
 # These settings control how dates are displayed throughout the application
 date_formats:

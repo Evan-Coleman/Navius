@@ -1,0 +1,12 @@
+{
+  "selected_features": [
+    "core",
+    "metrics",
+    "reliability",
+    "caching",
+    "error_handling",
+    "auth",
+    "config"
+  ],
+  "build_config": {}
+}

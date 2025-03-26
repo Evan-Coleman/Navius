@@ -13,9 +13,19 @@ categories = ["web-programming", "asynchronous"]
 
 # Feature flags
 [features]
-default = []
+default = ["metrics", "caching", "auth", "reliability"]
 production = []
 examples = []
+
+# Server Customization System features
+metrics = []
+advanced_metrics = ["metrics"]
+caching = []
+auth = []
+reliability = []
+core = []
+error_handling = ["core"]
+config = ["core"]
 
 # Suppress specific warnings
 [lints.rust]
@@ -87,6 +97,7 @@ test-context = "0.4.1"
 assert_matches = "1.5.0"
 once_cell = "1.21.1"
 mockall = "0.13.1"
+tempfile = "3.19.1"
 
 [build-dependencies]
 # Don't need full regex crate, just simple string manipulation

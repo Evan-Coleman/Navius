@@ -21,6 +21,7 @@ alwaysApply: false
  - According to the [template-for-updating.md](mdc:docs/roadmaps/template-for-updating.md) file, please update the roadmap you are working on to correctly indicate (not started, started, finished, abandoned) and finally update the updated at time so we know when that particular feature was last worked on.
  - Check to see if any updates to the base project level readme, or anywhere else that might need updating.
  - Ensure all tests are passing with `cargo test`
+ - Make sure the readme is up to date "docs/roadmaps/README.md"
 
 
 ##PROMPT_ENHANCER

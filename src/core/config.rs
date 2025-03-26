@@ -44,6 +44,7 @@ impl Default for AppConfig {
             reliability: ReliabilityConfig::default(),
             openapi: app_config::OpenApiConfig::default(),
             endpoint_security: app_config::EndpointSecurityConfig::default(),
+            features: app_config::FeaturesConfig::default(),
         }
     }
 }

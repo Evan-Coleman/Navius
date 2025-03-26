@@ -3,6 +3,7 @@ use config::{Config, ConfigError, Environment, File};
 use dotenvy::dotenv;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::env;
 use std::path::Path;
 use std::time::Duration;
@@ -512,7 +513,7 @@ fn default_health_details() -> bool {
     true
 }
 
-/// Main application configuration
+/// Application configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     /// Server configuration
@@ -550,6 +551,31 @@ pub struct AppConfig {
     /// Endpoint security configuration
     #[serde(default)]
     pub endpoint_security: EndpointSecurityConfig,
+
+    /// Feature flags and configuration
+    #[serde(default)]
+    pub features: FeaturesConfig,
+}
+
+/// Feature flags and configurations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeaturesConfig {
+    /// Selected features to enable
+    #[serde(default)]
+    pub enabled: Vec<String>,
+
+    /// Feature-specific configuration
+    #[serde(default)]
+    pub config: HashMap<String, serde_yaml::Value>,
+}
+
+impl Default for FeaturesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: Vec::new(),
+            config: HashMap::new(),
+        }
+    }
 }
 
 /// Application metadata configuration
@@ -589,6 +615,11 @@ impl AppConfig {
 
     pub fn api_url(&self) -> &str {
         &self.api.base_url
+    }
+
+    /// Get enabled features
+    pub fn enabled_features(&self) -> HashSet<String> {
+        self.features.enabled.iter().cloned().collect()
     }
 }
 

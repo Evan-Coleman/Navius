@@ -99,6 +99,69 @@ impl_from_error!(serde_json::Error, ConversionError);
 /// Type alias for service results
 pub type ServiceResult<T> = Result<T, ServiceError>;
 
+// Add constructor methods for ServiceError
+impl ServiceError {
+    /// Create a new initialization error
+    pub fn initialization_error<S: Into<String>>(msg: S) -> Self {
+        ServiceError::InitializationError(msg.into())
+    }
+
+    /// Create a new not found error
+    pub fn not_found<S: Into<String>>(msg: S) -> Self {
+        ServiceError::NotFound(msg.into())
+    }
+
+    /// Create a new missing dependency error
+    pub fn missing_dependency<S: Into<String>>(msg: S) -> Self {
+        ServiceError::MissingDependency(msg.into())
+    }
+
+    /// Create a new circular dependency error
+    pub fn circular_dependency<S: Into<String>>(msg: S) -> Self {
+        ServiceError::CircularDependency(msg.into())
+    }
+
+    /// Create a new unavailable error
+    pub fn unavailable<S: Into<String>>(msg: S) -> Self {
+        ServiceError::Unavailable(msg.into())
+    }
+
+    /// Create a new timeout error
+    pub fn timeout<S: Into<String>>(msg: S) -> Self {
+        ServiceError::Timeout(msg.into())
+    }
+
+    /// Create a new configuration error
+    pub fn configuration_error<S: Into<String>>(msg: S) -> Self {
+        ServiceError::ConfigurationError(msg.into())
+    }
+
+    /// Create a new conversion error
+    pub fn conversion_error<S: Into<String>>(msg: S) -> Self {
+        ServiceError::ConversionError(msg.into())
+    }
+
+    /// Create a new validation error
+    pub fn validation<S: Into<String>>(msg: S) -> Self {
+        ServiceError::Validation(msg.into())
+    }
+
+    /// Create a new conflict error
+    pub fn conflict<S: Into<String>>(msg: S) -> Self {
+        ServiceError::Conflict(msg.into())
+    }
+
+    /// Create a new repository error
+    pub fn repository<S: Into<String>>(msg: S) -> Self {
+        ServiceError::Repository(msg.into())
+    }
+
+    /// Create a new generic error
+    pub fn other<S: Into<String>>(msg: S) -> Self {
+        ServiceError::Other(msg.into())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

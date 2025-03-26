@@ -12,6 +12,7 @@ pub mod config; // Now points to config.rs instead of config/mod.rs
 pub mod core_logger;
 pub mod core_middleware;
 pub mod error;
+pub mod features; // Feature selection and customization system
 pub mod handlers;
 pub mod macros;
 pub mod metrics;
