@@ -239,68 +239,245 @@ mod packaging_tests {
 
 #[cfg(test)]
 mod documentation_tests {
-    use super::super::documentation::{DocConfig, DocGenerator};
-    use super::super::features::FeatureRegistry;
+    use std::collections::{HashMap, HashSet};
+    use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
 
-    /// Setup function to create test resources
-    fn setup() -> (TempDir, TempDir, FeatureRegistry) {
+    use crate::core::features::{
+        DocConfig, DocGenerator, DocTemplate, FeatureInfo, FeatureRegistry,
+    };
+
+    /// Create a test feature registry with sample features
+    fn create_test_registry() -> FeatureRegistry {
+        let mut registry = FeatureRegistry::new();
+
+        // Add test features
+        registry
+            .register(FeatureInfo {
+                name: "core".to_string(),
+                description: "Core functionality".to_string(),
+                dependencies: vec![],
+                default_enabled: true,
+                category: "core".to_string(),
+                tags: vec!["essential".to_string()],
+                size_impact: 100,
+            })
+            .unwrap();
+
+        registry
+            .register(FeatureInfo {
+                name: "metrics".to_string(),
+                description: "Metrics collection and reporting".to_string(),
+                dependencies: vec!["core".to_string()],
+                default_enabled: true,
+                category: "monitoring".to_string(),
+                tags: vec!["performance".to_string(), "monitoring".to_string()],
+                size_impact: 50,
+            })
+            .unwrap();
+
+        registry
+            .register(FeatureInfo {
+                name: "caching".to_string(),
+                description: "Data caching capabilities".to_string(),
+                dependencies: vec!["core".to_string()],
+                default_enabled: false,
+                category: "performance".to_string(),
+                tags: vec!["performance".to_string(), "optimization".to_string()],
+                size_impact: 75,
+            })
+            .unwrap();
+
+        // Enable features
+        registry.enable("core").unwrap();
+        registry.enable("metrics").unwrap();
+
+        registry
+    }
+
+    /// Setup test environment with temporary directories
+    fn setup_test_environment() -> (FeatureRegistry, TempDir, TempDir, DocConfig) {
+        let registry = create_test_registry();
+
+        // Create temporary directories for output and templates
         let output_dir = TempDir::new().unwrap();
         let template_dir = TempDir::new().unwrap();
 
-        // Create a feature registry
-        let mut registry = FeatureRegistry::new();
+        // Create test config
+        let config = DocConfig {
+            output_dir: output_dir.path().to_path_buf(),
+            template_dir: template_dir.path().to_path_buf(),
+            version: "1.0.0".to_string(),
+            generate_api_reference: true,
+            generate_config_examples: true,
+            generate_feature_docs: true,
+        };
 
-        // Enable some features for testing
-        registry.select("core").unwrap();
-        registry.select("metrics").unwrap();
+        (registry, output_dir, template_dir, config)
+    }
 
-        (output_dir, template_dir, registry)
+    /// Create a sample template for testing
+    fn create_sample_template(template_dir: &PathBuf, name: &str, content: &str) {
+        fs::write(template_dir.join(format!("{}.md", name)), content).unwrap();
     }
 
     #[test]
     fn test_doc_generator_creation() {
-        let (output_dir, template_dir, registry) = setup();
+        let (registry, _output_dir, _template_dir, config) = setup_test_environment();
 
-        let config = DocConfig {
-            output_dir: output_dir.path().to_path_buf(),
-            template_dir: template_dir.path().to_path_buf(),
-            version: "0.1.0".to_string(),
-            generate_api_reference: true,
-            generate_config_examples: true,
-            generate_feature_docs: true,
-        };
-
-        let result = DocGenerator::new(registry, config);
-        assert!(result.is_ok());
+        let generator = DocGenerator::new(registry, config);
+        assert!(generator.is_ok());
     }
 
     #[test]
-    fn test_versioned_docs() {
-        let (output_dir, template_dir, registry) = setup();
+    fn test_feature_docs_generation() {
+        let (registry, output_dir, template_dir, config) = setup_test_environment();
 
-        let config = DocConfig {
-            output_dir: output_dir.path().to_path_buf(),
-            template_dir: template_dir.path().to_path_buf(),
-            version: "0.1.0".to_string(),
-            generate_api_reference: true,
-            generate_config_examples: true,
-            generate_feature_docs: true,
-        };
+        // Create sample feature template
+        create_sample_template(
+            &template_dir.path().to_path_buf(),
+            "feature-generic",
+            "# {{feature.name}} Feature\n\n{{feature.description}}\n\n{{feature.dependencies}}\n",
+        );
 
+        // Initialize generator and generate docs
         let generator = DocGenerator::new(registry, config).unwrap();
-
-        // Test generating a versioned set of docs
-        let version_tag = "v0.1.0";
-        let result = generator.generate_versioned(version_tag);
+        let result = generator.generate();
 
         assert!(result.is_ok());
 
-        if let Ok(path) = result {
-            assert!(path.exists());
-            assert!(path.ends_with(format!("versions/{}", version_tag)));
-        }
+        // Check that feature docs directory was created
+        let feature_docs_dir = output_dir.path().join("features");
+        assert!(feature_docs_dir.exists());
+
+        // Check that feature index was created
+        let feature_index = feature_docs_dir.join("index.md");
+        assert!(feature_index.exists());
+
+        // Check that feature files were created
+        let core_doc = feature_docs_dir.join("core.md");
+        let metrics_doc = feature_docs_dir.join("metrics.md");
+
+        assert!(core_doc.exists());
+        assert!(metrics_doc.exists());
+
+        // Check content of the docs
+        let core_content = fs::read_to_string(core_doc).unwrap();
+        assert!(core_content.contains("Core Feature"));
+        assert!(core_content.contains("Core functionality"));
+
+        let metrics_content = fs::read_to_string(metrics_doc).unwrap();
+        assert!(metrics_content.contains("Metrics Feature"));
+        assert!(metrics_content.contains("Metrics collection and reporting"));
+        assert!(metrics_content.contains("This feature depends on"));
+    }
+
+    #[test]
+    fn test_api_reference_generation() {
+        let (registry, output_dir, template_dir, config) = setup_test_environment();
+
+        // Create sample API template
+        create_sample_template(
+            &template_dir.path().to_path_buf(),
+            "api-reference",
+            "# API Reference\n\n## Features\n\n{{feature_apis}}\n\n## Enabled Features\n\n{{enabled_features}}\n",
+        );
+
+        // Initialize generator and generate docs
+        let generator = DocGenerator::new(registry, config).unwrap();
+        let result = generator.generate_api_reference();
+
+        assert!(result.is_ok());
+
+        // Check that API docs directory was created
+        let api_docs_dir = output_dir.path().join("api");
+        assert!(api_docs_dir.exists());
+
+        // Check that API index was created
+        let api_index = api_docs_dir.join("index.md");
+        assert!(api_index.exists());
+
+        // Check content of the API reference
+        let api_content = fs::read_to_string(api_index).unwrap();
+        assert!(api_content.contains("API Reference"));
+        assert!(api_content.contains("core"));
+        assert!(api_content.contains("metrics"));
+
+        // Check that feature-specific API files were created
+        let core_api = api_docs_dir.join("core.md");
+        let metrics_api = api_docs_dir.join("metrics.md");
+
+        assert!(core_api.exists());
+        assert!(metrics_api.exists());
+    }
+
+    #[test]
+    fn test_comprehensive_api_doc_generation() {
+        let (registry, _output_dir, _template_dir, _config) = setup_test_environment();
+
+        // Get a feature for testing
+        let feature = FeatureInfo {
+            name: "test_feature".to_string(),
+            description: "Test feature for API docs".to_string(),
+            dependencies: vec!["core".to_string()],
+            default_enabled: true,
+            category: "core".to_string(),
+            tags: vec!["test".to_string(), "api".to_string()],
+            size_impact: 10,
+        };
+
+        // Create generator directly for this test
+        let generator = DocGenerator::new(registry, DocConfig::default()).unwrap();
+
+        // Generate API doc for the feature
+        let result = generator.generate_comprehensive_api_doc(&feature);
+
+        assert!(result.is_ok());
+        let content = result.unwrap();
+
+        // Check content
+        assert!(content.contains("# test_feature API Reference"));
+        assert!(content.contains("Test feature for API docs"));
+        assert!(content.contains("**Category**: core"));
+        assert!(content.contains("**Tags**: test, api"));
+        assert!(content.contains("This feature depends on:"));
+        assert!(content.contains("- [core](core.md)"));
+        assert!(content.contains("## API Details"));
+        assert!(content.contains("### Module Structure"));
+        assert!(content.contains("### Public Functions"));
+        assert!(content.contains("## Example Usage"));
+    }
+
+    #[test]
+    fn test_template_rendering() {
+        let (registry, _output_dir, _template_dir, _config) = setup_test_environment();
+
+        // Create generator directly for this test
+        let generator = DocGenerator::new(registry, DocConfig::default()).unwrap();
+
+        // Create a test template with variables
+        let template =
+            "# {{title}}\n\n{{description}}\n\n- Feature: {{feature}}\n- Version: {{version}}";
+
+        // Create context with test values
+        let mut context = HashMap::new();
+        context.insert("title".to_string(), "Test Document".to_string());
+        context.insert("description".to_string(), "This is a test".to_string());
+        context.insert("feature".to_string(), "test_feature".to_string());
+        context.insert("version".to_string(), "1.0.0".to_string());
+
+        // Render the template
+        let result = generator.render_template(template, &context);
+
+        assert!(result.is_ok());
+        let rendered = result.unwrap();
+
+        // Check rendered content
+        assert_eq!(
+            rendered,
+            "# Test Document\n\nThis is a test\n\n- Feature: test_feature\n- Version: 1.0.0"
+        );
     }
 }
 

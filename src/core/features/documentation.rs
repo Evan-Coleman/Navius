@@ -2,7 +2,7 @@
 //!
 //! Provides tools for generating documentation based on enabled features.
 
-use crate::core::features::{FeatureError, FeatureInfo, FeatureRegistry};
+use crate::core::features::{FeatureError, FeatureInfo, FeatureRegistry, FeatureRegistryExt};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -379,194 +379,728 @@ The following metrics are always available:
     fn generate_feature_docs(&self) -> Result<(), FeatureError> {
         println!("Generating feature-specific documentation...");
 
-        // Create features directory
-        let features_dir = self.config.output_dir.join("features");
-        if !features_dir.exists() {
-            fs::create_dir_all(&features_dir).map_err(|e| {
-                FeatureError::IoError(format!("Failed to create features directory: {}", e))
-            })?;
-        }
+        // Create output directory for feature docs
+        let feature_docs_dir = self.config.output_dir.join("features");
+        fs::create_dir_all(&feature_docs_dir).map_err(|e| {
+            FeatureError::IoError(format!("Failed to create feature docs directory: {}", e))
+        })?;
 
-        // Generate a list of all features with documentation
-        let mut feature_list = Vec::new();
+        // Get enabled features - use get_selected() instead of get_enabled()
+        let enabled_features: HashSet<String> = self.registry.get_selected().clone();
 
-        // Get selected features
-        let selected_features = self.registry.get_selected();
+        // Track generated docs
+        let mut generated_features = HashSet::new();
 
-        // Process each template
-        for template in self.templates.values() {
-            // Check if all required features are enabled
-            if !template.required_features.is_empty() {
-                let all_required = template
-                    .required_features
-                    .iter()
-                    .all(|f| selected_features.contains(f));
+        // Generate documentation for each enabled feature
+        for feature_name in &enabled_features {
+            let feature_info = self
+                .registry
+                .get_feature_info(feature_name)
+                .ok_or_else(|| FeatureError::UnknownFeature(feature_name.clone()))?;
 
-                if !all_required {
-                    // Skip this template if not all required features are enabled
-                    continue;
-                }
+            // Skip features we've already generated docs for
+            if generated_features.contains(feature_name) {
+                continue;
             }
 
-            // If the template is for a feature, add it to the feature docs
-            if template.name.starts_with("features/") || template.name.contains("feature") {
-                // Create context for template rendering
-                let context = self.create_feature_context(&selected_features);
+            // Generate documentation for this feature
+            self.generate_feature_doc(&feature_info, &feature_docs_dir)?;
+            generated_features.insert(feature_name.clone());
 
-                // Render the template
-                let content = self.render_template(&template.content, &context)?;
+            // Generate documentation for related features (dependencies and dependents)
+            self.generate_related_features_docs(
+                &feature_info,
+                &feature_docs_dir,
+                &mut generated_features,
+            )?;
+        }
 
-                // Get just the feature name from the template name
-                let feature_name = template.name.split('/').last().unwrap_or(&template.name);
+        // Generate feature index
+        self.generate_feature_index(&feature_docs_dir, &enabled_features)?;
 
-                // Write the feature documentation
-                let output_path = features_dir.join(format!("{}.md", feature_name));
-                fs::write(&output_path, content).map_err(|e| {
-                    FeatureError::IoError(format!("Failed to write feature documentation: {}", e))
+        println!("✅ Feature documentation generated successfully.");
+        Ok(())
+    }
+
+    /// Generate documentation for a specific feature
+    fn generate_feature_doc(
+        &self,
+        feature_info: &FeatureInfo,
+        output_dir: &Path,
+    ) -> Result<(), FeatureError> {
+        println!(
+            "Generating documentation for feature: {}",
+            feature_info.name
+        );
+
+        // Look for a feature-specific template first
+        let template_name = format!("feature-{}", feature_info.name);
+        let template_content = if let Some(template) = self.templates.get(&template_name) {
+            template.content.clone()
+        } else if let Some(template) = self.templates.get("feature-generic") {
+            template.content.clone()
+        } else {
+            // Create default template if no template exists
+            let default_template = format!(
+                "# {} Feature\n\n## Overview\n\n{}\n\n## Configuration\n\n```yaml\n{}: {{}}\n```\n\n## API Reference\n\n## Examples\n\n",
+                feature_info.name, feature_info.description, feature_info.name
+            );
+            default_template
+        };
+
+        // Create context for template rendering
+        let mut context = self.create_base_context();
+        context.insert("feature.name".to_string(), feature_info.name.clone());
+        context.insert(
+            "feature.description".to_string(),
+            feature_info.description.clone(),
+        );
+        context.insert(
+            "feature.category".to_string(),
+            feature_info.category.clone(),
+        );
+
+        // Add dependencies list
+        let dependencies = if feature_info.dependencies.is_empty() {
+            "This feature has no dependencies.".to_string()
+        } else {
+            let mut deps = String::from("This feature depends on:\n\n");
+            for dep in &feature_info.dependencies {
+                deps.push_str(&format!("- [{}](./{})\n", dep, dep));
+            }
+            deps
+        };
+        context.insert("feature.dependencies".to_string(), dependencies);
+
+        // Add tags
+        let tags = if feature_info.tags.is_empty() {
+            "".to_string()
+        } else {
+            let mut tag_list = String::from("**Tags**: ");
+            tag_list.push_str(&feature_info.tags.join(", "));
+            tag_list
+        };
+        context.insert("feature.tags".to_string(), tags);
+
+        // Render the template
+        let rendered = self.render_template(&template_content, &context)?;
+
+        // Write rendered content to file
+        let output_file = output_dir.join(format!("{}.md", feature_info.name));
+        fs::write(&output_file, rendered).map_err(|e| {
+            FeatureError::IoError(format!("Failed to write feature documentation: {}", e))
+        })?;
+
+        Ok(())
+    }
+
+    /// Generate documentation for related features (dependencies and dependents)
+    fn generate_related_features_docs(
+        &self,
+        feature_info: &FeatureInfo,
+        output_dir: &Path,
+        generated_features: &mut HashSet<String>,
+    ) -> Result<(), FeatureError> {
+        // Generate docs for dependencies
+        for dep_name in &feature_info.dependencies {
+            let dep_name_owned = dep_name.to_string();
+            if !generated_features.contains(&dep_name_owned) {
+                if let Some(dep_info) = self.registry.get_feature_info(&dep_name_owned) {
+                    self.generate_feature_doc(&dep_info, output_dir)
+                        .map_err(|e| {
+                            FeatureError::IoError(format!(
+                                "Failed to generate documentation for dependency {}: {}",
+                                dep_name_owned, e
+                            ))
+                        })?;
+                    generated_features.insert(dep_name_owned);
+                }
+            }
+        }
+
+        // Get dependents (features that depend on this one)
+        // Since get_dependent_features doesn't exist, find them manually
+        let dependent_features = self.find_dependent_features(&feature_info.name);
+
+        for dep_name in &dependent_features {
+            let dep_name_owned = dep_name.to_string();
+            if !generated_features.contains(&dep_name_owned) {
+                if let Some(dep_info) = self.registry.get_feature_info(&dep_name_owned) {
+                    self.generate_feature_doc(&dep_info, output_dir)
+                        .map_err(|e| {
+                            FeatureError::IoError(format!(
+                                "Failed to generate documentation for dependent feature {}: {}",
+                                dep_name_owned, e
+                            ))
+                        })?;
+                    generated_features.insert(dep_name_owned);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Find features that depend on a given feature
+    fn find_dependent_features(&self, feature_name: &str) -> Vec<String> {
+        let mut dependents = Vec::new();
+
+        // Get all features and check if they depend on the given feature
+        for feature in self.registry.features() {
+            if feature.dependencies.contains(&feature_name.to_string()) {
+                dependents.push(feature.name.clone());
+            }
+        }
+
+        dependents
+    }
+
+    /// Generate an index of all features
+    fn generate_feature_index(
+        &self,
+        output_dir: &Path,
+        enabled_features: &HashSet<String>,
+    ) -> Result<(), FeatureError> {
+        println!("Generating feature index...");
+
+        // Create content for feature index
+        let mut content = String::from("# Feature Index\n\n");
+        content.push_str(
+            "This document provides an overview of all available features in the system.\n\n",
+        );
+
+        // Group features by category with error handling
+        let mut features_by_category: HashMap<String, Vec<&FeatureInfo>> = HashMap::new();
+
+        for feature in self.registry.features() {
+            features_by_category
+                .entry(feature.category.clone())
+                .or_default()
+                .push(feature);
+        }
+
+        // Add each category and its features
+        for (category, features) in features_by_category {
+            // Add category header
+            content.push_str(&format!("## {}\n\n", category));
+
+            for feature in features {
+                // Determine feature status with proper string ownership
+                let status = if enabled_features.contains(&feature.name) {
+                    "✅ Enabled".to_owned()
+                } else {
+                    "❌ Disabled".to_owned()
+                };
+
+                // Convert tags to a string, handling empty tags gracefully
+                let tags_string = if feature.tags.is_empty() {
+                    "none".to_owned()
+                } else {
+                    feature.tags.join(", ")
+                };
+
+                // Format feature documentation with error handling for each field
+                let feature_doc = format!(
+                    "### [{}](./{}.md)\n\n{}\n\n**Status**: {} | **Tags**: {}\n\n",
+                    feature.name, feature.name, feature.description, status, tags_string
+                );
+
+                content.push_str(&feature_doc);
+            }
+        }
+
+        // Write to file with detailed error handling
+        let output_file = output_dir.join("index.md");
+
+        // Ensure the output directory exists
+        if let Some(parent) = output_file.parent() {
+            if !parent.exists() {
+                fs::create_dir_all(parent).map_err(|e| {
+                    FeatureError::IoError(format!(
+                        "Failed to create directory {:?} for feature index: {}",
+                        parent, e
+                    ))
                 })?;
+            }
+        }
 
-                println!("Generated feature documentation: {}", feature_name);
+        // Write the content with detailed error handling
+        fs::write(&output_file, &content).map_err(|e| {
+            FeatureError::IoError(format!(
+                "Failed to write feature index at {:?}: {}. Error details: {}",
+                output_file,
+                e,
+                e.to_string()
+            ))
+        })?;
 
-                // Add to feature list
-                feature_list.push(format!(
-                    "- [{}](features/{}.md)",
-                    feature_name, feature_name
+        println!(
+            "✅ Feature index generated successfully at: {:?}",
+            output_file
+        );
+        Ok(())
+    }
+
+    /// Generate API reference documentation for enabled features
+    fn generate_api_reference(&self) -> Result<(), FeatureError> {
+        println!("Generating API reference documentation...");
+
+        // Create output directory for API docs
+        let api_docs_dir = self.config.output_dir.join("api");
+        fs::create_dir_all(&api_docs_dir).map_err(|e| {
+            FeatureError::IoError(format!("Failed to create API docs directory: {}", e))
+        })?;
+
+        // Get enabled features - use get_selected() instead of get_enabled()
+        let enabled_features = self.registry.get_selected();
+
+        // Load API reference templates
+        let api_template_name = "api-reference";
+        let api_template = if let Some(template) = self.templates.get(api_template_name) {
+            template.content.clone()
+        } else {
+            // Create default API reference template if not found
+            String::from(
+                "# API Reference\n\n## Core API\n\n## Feature-Specific APIs\n\n{{feature_apis}}\n",
+            )
+        };
+
+        // Generate API sections for each feature
+        let mut feature_apis = String::new();
+
+        // Group features by category
+        let mut features_by_category: HashMap<String, Vec<String>> = HashMap::new();
+
+        for feature_name in &enabled_features {
+            if let Some(feature) = self.registry.get_feature_info(feature_name) {
+                features_by_category
+                    .entry(feature.category.clone())
+                    .or_default()
+                    .push(feature_name.to_string()); // Convert &str to String explicitly
+            }
+        }
+
+        // Add API sections for each category
+        for (category, feature_names) in &features_by_category {
+            feature_apis.push_str(&format!("### {}\n\n", category));
+
+            for feature_name in feature_names {
+                // Try to find feature-specific API template
+                let api_key = format!("api-{}", feature_name);
+                let api_content = if let Some(template) = self.templates.get(&api_key) {
+                    // Use the specific template
+                    template.content.clone()
+                } else {
+                    // Generate a standard API section
+                    self.generate_standard_api_section(feature_name)?
+                };
+
+                feature_apis.push_str(&api_content);
+                feature_apis.push_str("\n\n");
+            }
+        }
+
+        // Create context for rendering
+        let mut context = self.create_base_context();
+        context.insert("feature_apis".to_string(), feature_apis);
+
+        // Insert list of enabled features
+        let enabled_list = enabled_features
+            .iter()
+            .map(|f| format!("- {}", f))
+            .collect::<Vec<String>>()
+            .join("\n");
+        context.insert("enabled_features".to_string(), enabled_list);
+
+        // Render the main API reference template
+        let rendered = self.render_template(&api_template, &context)?;
+
+        // Write to file
+        let output_file = api_docs_dir.join("index.md");
+        fs::write(&output_file, rendered)
+            .map_err(|e| FeatureError::IoError(format!("Failed to write API reference: {}", e)))?;
+
+        // Generate feature-specific API reference files
+        self.generate_feature_api_files(&api_docs_dir, &enabled_features)?;
+
+        println!("✅ API reference documentation generated successfully.");
+        Ok(())
+    }
+
+    /// Generate standard API section for a feature
+    fn generate_standard_api_section(&self, feature_name: &str) -> Result<String, FeatureError> {
+        let feature = self
+            .registry
+            .get_feature_info(feature_name)
+            .ok_or_else(|| FeatureError::UnknownFeature(feature_name.to_string()))?;
+
+        let mut content = format!("### {} API\n\n", feature_name);
+        content.push_str(&format!("{}\n\n", feature.description));
+
+        // Add example usage
+        content.push_str("#### Example Usage\n\n");
+        content.push_str("```rust\n");
+
+        // Generate different example code based on feature category
+        match feature.category.as_str() {
+            "core" => {
+                content.push_str(&format!("// Core feature: {}\n", feature_name));
+                content.push_str(&format!("use navius::core::{}::*;\n\n", feature_name));
+                content.push_str(&format!("let result = {}::initialize();\n", feature_name));
+            }
+            "api" => {
+                content.push_str(&format!("// API feature: {}\n", feature_name));
+                content.push_str("use navius::core::api::*;\n\n");
+                content.push_str(&format!("let router = build_router();\n"));
+                content.push_str(&format!("router.route({}_routes());\n", feature_name));
+            }
+            "security" => {
+                content.push_str(&format!("// Security feature: {}\n", feature_name));
+                content.push_str("use navius::core::security::*;\n\n");
+                content.push_str(&format!("let guard = {}::create_guard();\n", feature_name));
+                content.push_str(&format!("router.with(guard);\n"));
+            }
+            _ => {
+                content.push_str(&format!("// Feature: {}\n", feature_name));
+                content.push_str(&format!(
+                    "use navius::core::features::{}::*;\n\n",
+                    feature_name
+                ));
+                content.push_str(&format!("let feature = {}::new();\n", feature_name));
+                content.push_str(&format!("feature.initialize();\n"));
+            }
+        }
+
+        content.push_str("```\n\n");
+
+        // Add common operations
+        content.push_str("#### Common Operations\n\n");
+        content.push_str("| Operation | Description |\n");
+        content.push_str("|-----------|-------------|\n");
+        content.push_str(&format!(
+            "| `{}::initialize()` | Initialize the feature |\n",
+            feature_name
+        ));
+        content.push_str(&format!(
+            "| `{}::configure(config)` | Configure the feature |\n",
+            feature_name
+        ));
+
+        // Add feature-specific operations based on category
+        match feature.category.as_str() {
+            "core" => {
+                content.push_str(&format!(
+                    "| `{}::start()` | Start the core service |\n",
+                    feature_name
+                ));
+                content.push_str(&format!(
+                    "| `{}::stop()` | Stop the core service |\n",
+                    feature_name
+                ));
+            }
+            "api" => {
+                content.push_str(&format!(
+                    "| `{}::routes()` | Get API routes |\n",
+                    feature_name
+                ));
+                content.push_str(&format!(
+                    "| `{}::handlers()` | Get API handlers |\n",
+                    feature_name
+                ));
+            }
+            "security" => {
+                content.push_str(&format!(
+                    "| `{}::verify(token)` | Verify security token |\n",
+                    feature_name
+                ));
+                content.push_str(&format!(
+                    "| `{}::authorize(user, resource)` | Check authorization |\n",
+                    feature_name
+                ));
+            }
+            _ => {
+                content.push_str(&format!(
+                    "| `{}::enable()` | Enable the feature |\n",
+                    feature_name
+                ));
+                content.push_str(&format!(
+                    "| `{}::disable()` | Disable the feature |\n",
+                    feature_name
                 ));
             }
         }
 
-        // Generate features index
-        let features_index = format!(
-            "# Feature Documentation\n\nThis documentation covers the following enabled features:\n\n{}\n",
-            feature_list.join("\n")
-        );
-
-        fs::write(features_dir.join("index.md"), features_index)
-            .map_err(|e| FeatureError::IoError(format!("Failed to write features index: {}", e)))?;
-
-        println!("Generated features index");
-
-        Ok(())
+        Ok(content)
     }
 
-    /// Generate API reference documentation
-    fn generate_api_reference(&self) -> Result<(), FeatureError> {
-        println!("Generating API reference documentation...");
-
-        // Create API reference directory
-        let api_dir = self.config.output_dir.join("api");
-        if !api_dir.exists() {
-            fs::create_dir_all(&api_dir).map_err(|e| {
-                FeatureError::IoError(format!("Failed to create API directory: {}", e))
-            })?;
-        }
-
-        // Generate API index with enabled features
-        let selected_features = self.registry.get_selected();
-        let mut api_endpoints = Vec::new();
-
-        // Define API endpoints for each feature
-        // In a real implementation, this would read from API documentation
-        // or generate it from code analysis
-        if selected_features.contains("metrics") {
-            api_endpoints
-                .push("## Metrics API\n\n- `GET /metrics` - Retrieve metrics in Prometheus format");
-        }
-
-        if selected_features.contains("health") {
-            api_endpoints.push("## Health API\n\n- `GET /health` - Retrieve health status");
-        }
-
-        if selected_features.contains("auth") {
-            api_endpoints.push("## Authentication API\n\n- `POST /auth/login` - Authenticate user\n- `POST /auth/refresh` - Refresh authentication token");
-        }
-
-        // Generate the API index
-        let api_index = format!(
-            "# API Reference\n\nThis API reference includes endpoints for enabled features only.\n\n{}\n",
-            api_endpoints.join("\n\n")
-        );
-
-        fs::write(api_dir.join("index.md"), api_index)
-            .map_err(|e| FeatureError::IoError(format!("Failed to write API index: {}", e)))?;
-
-        println!("Generated API reference");
-
-        Ok(())
-    }
-
-    /// Generate configuration examples
-    fn generate_config_examples(&self) -> Result<(), FeatureError> {
-        println!("Generating configuration examples...");
-
-        // Create configuration directory
-        let config_dir = self.config.output_dir.join("config");
-        if !config_dir.exists() {
-            fs::create_dir_all(&config_dir).map_err(|e| {
-                FeatureError::IoError(format!("Failed to create config directory: {}", e))
-            })?;
-        }
-
-        // Generate configuration examples for each environment
-        self.generate_config_example("development", &config_dir)?;
-        self.generate_config_example("production", &config_dir)?;
-        self.generate_config_example("testing", &config_dir)?;
-
-        // Generate configuration index
-        let config_index = r#"# Configuration Examples
-
-This directory contains configuration examples for different environments:
-
-- [Development Configuration](development.md)
-- [Production Configuration](production.md)
-- [Testing Configuration](testing.md)
-
-These examples include only configuration for enabled features.
-"#;
-
-        fs::write(config_dir.join("index.md"), config_index)
-            .map_err(|e| FeatureError::IoError(format!("Failed to write config index: {}", e)))?;
-
-        println!("Generated configuration examples");
-
-        Ok(())
-    }
-
-    /// Generate configuration example for a specific environment
-    fn generate_config_example(
+    /// Generate detailed API files for each feature
+    fn generate_feature_api_files(
         &self,
-        environment: &str,
-        config_dir: &Path,
+        output_dir: &Path,
+        enabled_features: &HashSet<String>,
     ) -> Result<(), FeatureError> {
-        let selected_features = self.registry.get_selected();
-        let mut config_sections = Vec::new();
+        for feature_name in enabled_features {
+            let feature = self
+                .registry
+                .get_feature_info(feature_name)
+                .ok_or_else(|| FeatureError::UnknownFeature(feature_name.to_string()))?;
 
-        // Add standard configuration
-        config_sections.push(format!("# {} Configuration\n", environment.to_uppercase()));
-        config_sections.push("```yaml\n# Server configuration\nserver:\n  host: \"0.0.0.0\"\n  port: 8080\n  \n# Logging configuration\nlogging:\n  level: \"info\"\n  format: \"json\"\n```\n".to_string());
+            // Template selection
+            let template_name = format!("api-{}-detailed", feature_name);
+            let api_content = if let Some(template) = self.templates.get(&template_name) {
+                // Use the specific template
+                template.content.clone()
+            } else {
+                // Generate a comprehensive API doc
+                self.generate_comprehensive_api_doc(&feature)?
+            };
 
-        // Add feature-specific configuration
-        if selected_features.contains("metrics") {
-            config_sections.push("## Metrics Configuration\n\n```yaml\nmetrics:\n  enabled: true\n  endpoint: \"/metrics\"\n  port: 8081\n```\n".to_string());
+            // Create context for rendering
+            let mut context = self.create_base_context();
+            context.insert("feature.name".to_string(), feature.name.clone());
+            context.insert(
+                "feature.description".to_string(),
+                feature.description.clone(),
+            );
+            context.insert("feature.category".to_string(), feature.category.clone());
+
+            // Render the template
+            let rendered = self.render_template(&api_content, &context)?;
+
+            // Write to file
+            let output_file = output_dir.join(format!("{}.md", feature_name));
+            fs::write(&output_file, rendered).map_err(|e| {
+                FeatureError::IoError(format!("Failed to write feature API doc: {}", e))
+            })?;
         }
-
-        if selected_features.contains("auth") {
-            config_sections.push("## Authentication Configuration\n\n```yaml\nauth:\n  enabled: true\n  jwt_secret: \"<your-secret-here>\"\n  token_expiry: 3600\n```\n".to_string());
-        }
-
-        if selected_features.contains("caching") {
-            config_sections.push("## Caching Configuration\n\n```yaml\ncaching:\n  enabled: true\n  redis_url: \"redis://localhost:6379\"\n  default_ttl: 300\n```\n".to_string());
-        }
-
-        // Write the configuration example
-        let content = config_sections.join("\n");
-        fs::write(config_dir.join(format!("{}.md", environment)), content).map_err(|e| {
-            FeatureError::IoError(format!("Failed to write {} config: {}", environment, e))
-        })?;
-
-        println!("Generated {} configuration example", environment);
 
         Ok(())
+    }
+
+    /// Generate comprehensive API documentation for a feature
+    fn generate_comprehensive_api_doc(
+        &self,
+        feature: &FeatureInfo,
+    ) -> Result<String, FeatureError> {
+        let mut content = format!("# {} API Reference\n\n", feature.name);
+        content.push_str(&format!("## Overview\n\n{}\n\n", feature.description));
+
+        // Category and tags
+        content.push_str(&format!("**Category**: {}\n\n", feature.category));
+
+        if !feature.tags.is_empty() {
+            content.push_str(&format!("**Tags**: {}\n\n", feature.tags.join(", ")));
+        }
+
+        // Dependencies
+        if !feature.dependencies.is_empty() {
+            content.push_str("## Dependencies\n\n");
+            content.push_str("This feature depends on:\n\n");
+
+            for dep in &feature.dependencies {
+                content.push_str(&format!("- [{0}]({0}.md)\n", dep));
+            }
+            content.push_str("\n");
+        }
+
+        // API details
+        content.push_str("## API Details\n\n");
+
+        // Module structure
+        content.push_str("### Module Structure\n\n");
+        content.push_str("```rust\n");
+        content.push_str(&format!("navius::core::{}::\n", feature.name));
+        content.push_str("├── types       // Type definitions\n");
+        content.push_str("├── errors      // Error types\n");
+        content.push_str("├── config      // Configuration\n");
+        content.push_str("└── api         // Public API\n");
+        content.push_str("```\n\n");
+
+        // Public functions
+        content.push_str("### Public Functions\n\n");
+        content.push_str("```rust\n");
+
+        // Add standard functions based on feature category
+        match feature.category.as_str() {
+            "core" => {
+                content.push_str(&format!("/// Initialize the {} feature\n", feature.name));
+                content.push_str(&format!(
+                    "pub fn initialize() -> Result<(), Error> {{}}\n\n"
+                ));
+
+                content.push_str(&format!("/// Configure the {} feature\n", feature.name));
+                content.push_str(&format!(
+                    "pub fn configure(config: {}Config) -> Result<(), Error> {{}}\n\n",
+                    feature.name
+                ));
+
+                content.push_str(&format!("/// Start the {} service\n", feature.name));
+                content.push_str(&format!("pub fn start() -> Result<(), Error> {{}}\n\n"));
+
+                content.push_str(&format!("/// Stop the {} service\n", feature.name));
+                content.push_str(&format!("pub fn stop() -> Result<(), Error> {{}}\n"));
+            }
+            "api" => {
+                content.push_str(&format!("/// Get routes for the {} API\n", feature.name));
+                content.push_str(&format!("pub fn routes() -> Router {{}}\n\n"));
+
+                content.push_str(&format!("/// Get handlers for the {} API\n", feature.name));
+                content.push_str(&format!("pub fn handlers() -> Handlers {{}}\n\n"));
+
+                content.push_str(&format!("/// Handle {} requests\n", feature.name));
+                content.push_str(&format!(
+                    "pub async fn handle(req: Request) -> Response {{}}\n"
+                ));
+            }
+            "security" => {
+                content.push_str(&format!(
+                    "/// Create a security guard for the {} feature\n",
+                    feature.name
+                ));
+                content.push_str(&format!("pub fn create_guard() -> Guard {{}}\n\n"));
+
+                content.push_str("/// Verify a security token\n");
+                content.push_str(&format!(
+                    "pub fn verify(token: &str) -> Result<Claims, Error> {{}}\n\n"
+                ));
+
+                content.push_str("/// Check authorization\n");
+                content.push_str(&format!(
+                    "pub fn authorize(user: &User, resource: &Resource) -> Result<(), Error> {{}}\n"
+                ));
+            }
+            _ => {
+                content.push_str(&format!(
+                    "/// Create a new instance of the {} feature\n",
+                    feature.name
+                ));
+                content.push_str(&format!("pub fn new() -> {} {{}}\n\n", feature.name));
+
+                content.push_str(&format!("/// Initialize the {} feature\n", feature.name));
+                content.push_str(&format!(
+                    "pub fn initialize(&self) -> Result<(), Error> {{}}\n\n"
+                ));
+
+                content.push_str(&format!("/// Enable the {} feature\n", feature.name));
+                content.push_str(&format!(
+                    "pub fn enable(&mut self) -> Result<(), Error> {{}}\n\n"
+                ));
+
+                content.push_str(&format!("/// Disable the {} feature\n", feature.name));
+                content.push_str(&format!(
+                    "pub fn disable(&mut self) -> Result<(), Error> {{}}\n"
+                ));
+            }
+        }
+        content.push_str("```\n\n");
+
+        // Example usage
+        content.push_str("## Example Usage\n\n");
+        content.push_str("```rust\n");
+
+        // Generate different example code based on feature category
+        match feature.category.as_str() {
+            "core" => {
+                content.push_str(&format!("use navius::core::{}::*;\n\n", feature.name));
+                content.push_str("fn main() -> Result<(), Error> {\n");
+                content.push_str(&format!("    // Initialize the {} feature\n", feature.name));
+                content.push_str(&format!("    {}::initialize()?;\n\n", feature.name));
+                content.push_str(&format!("    // Configure the feature\n"));
+                content.push_str(&format!("    let config = {}Config {{\n", feature.name));
+                content.push_str(&format!("        // Configure options\n"));
+                content.push_str(&format!("        enabled: true,\n"));
+                content.push_str(&format!("        // ... other options\n"));
+                content.push_str(&format!("    }};\n"));
+                content.push_str(&format!("    {}::configure(config)?;\n\n", feature.name));
+                content.push_str(&format!("    // Start the service\n"));
+                content.push_str(&format!("    {}::start()?;\n\n", feature.name));
+                content.push_str(&format!("    // ... application code ...\n\n"));
+                content.push_str(&format!("    // Stop the service when done\n"));
+                content.push_str(&format!("    {}::stop()?;\n\n", feature.name));
+                content.push_str(&format!("    Ok(())\n"));
+                content.push_str(&format!("}}"));
+            }
+            "api" => {
+                content.push_str(&format!("use navius::core::api::*;\n"));
+                content.push_str(&format!("use navius::core::{}::*;\n\n", feature.name));
+                content.push_str("async fn configure_api() {\n");
+                content.push_str(&format!("    // Get a router instance\n"));
+                content.push_str(&format!("    let mut app = Router::new();\n\n"));
+                content.push_str(&format!("    // Add routes for the {} API\n", feature.name));
+                content.push_str(&format!(
+                    "    let {}_routes = {}::routes();\n",
+                    feature.name, feature.name
+                ));
+                content.push_str(&format!(
+                    "    app = app.nest(\"/{}\", {}_routes);\n\n",
+                    feature.name, feature.name
+                ));
+                content.push_str(&format!("    // ... configure other API routes ...\n\n"));
+                content.push_str(&format!("    // Build the application\n"));
+                content.push_str(&format!("    let app = app.build();\n"));
+                content.push_str(&format!("}}"));
+            }
+            "security" => {
+                content.push_str(&format!("use navius::core::security::*;\n"));
+                content.push_str(&format!("use navius::core::{}::*;\n\n", feature.name));
+                content.push_str("async fn configure_security(router: &mut Router) {\n");
+                content.push_str(&format!("    // Create a security guard\n"));
+                content.push_str(&format!(
+                    "    let guard = {}::create_guard();\n\n",
+                    feature.name
+                ));
+                content.push_str(&format!("    // Apply the guard to protected routes\n"));
+                content.push_str(&format!(
+                    "    router.route(\"/protected\", get(protected_handler))\n"
+                ));
+                content.push_str(&format!("        .with(guard);\n\n"));
+                content.push_str(&format!("    // Verify a token\n"));
+                content.push_str(&format!("    let token = \"user_token_here\";\n"));
+                content.push_str(&format!("    match {}::verify(token) {{\n", feature.name));
+                content.push_str(&format!(
+                    "        Ok(claims) => println!(\"Valid token: {{:?}}\", claims),\n"
+                ));
+                content.push_str(&format!(
+                    "        Err(e) => println!(\"Invalid token: {{}}\", e),\n"
+                ));
+                content.push_str(&format!("    }}\n"));
+                content.push_str(&format!("}}"));
+            }
+            _ => {
+                content.push_str(&format!(
+                    "use navius::core::features::{}::*;\n\n",
+                    feature.name
+                ));
+                content.push_str("fn main() -> Result<(), Error> {\n");
+                content.push_str(&format!("    // Create a new instance of the feature\n"));
+                content.push_str(&format!(
+                    "    let mut {} = {}::new();\n\n",
+                    feature.name.to_lowercase(),
+                    feature.name
+                ));
+                content.push_str(&format!("    // Initialize the feature\n"));
+                content.push_str(&format!(
+                    "    {}.initialize()?;\n\n",
+                    feature.name.to_lowercase()
+                ));
+                content.push_str(&format!("    // Enable the feature\n"));
+                content.push_str(&format!(
+                    "    {}.enable()?;\n\n",
+                    feature.name.to_lowercase()
+                ));
+                content.push_str(&format!("    // ... use the feature ...\n\n"));
+                content.push_str(&format!("    // Disable when done\n"));
+                content.push_str(&format!(
+                    "    {}.disable()?;\n\n",
+                    feature.name.to_lowercase()
+                ));
+                content.push_str(&format!("    Ok(())\n"));
+                content.push_str(&format!("}}"));
+            }
+        }
+        content.push_str("\n```\n\n");
+
+        Ok(content)
     }
 
     /// Create base context for template rendering
@@ -681,6 +1215,78 @@ These examples include only configuration for enabled features.
         );
 
         Ok(versioned_dir)
+    }
+
+    /// Generate configuration examples
+    fn generate_config_examples(&self) -> Result<(), FeatureError> {
+        println!("Generating configuration examples...");
+
+        // Create configuration directory
+        let config_dir = self.config.output_dir.join("config");
+        if !config_dir.exists() {
+            fs::create_dir_all(&config_dir).map_err(|e| {
+                FeatureError::IoError(format!("Failed to create config directory: {}", e))
+            })?;
+        }
+
+        // Generate configuration examples for each environment
+        self.generate_config_example("development", &config_dir)?;
+        self.generate_config_example("production", &config_dir)?;
+        self.generate_config_example("testing", &config_dir)?;
+
+        // Generate configuration index
+        let config_index = r#"# Configuration Examples
+
+This directory contains configuration examples for different environments:
+
+- [Development Configuration](development.md)
+- [Production Configuration](production.md)
+- [Testing Configuration](testing.md)
+
+These examples include only configuration for enabled features.
+"#;
+
+        fs::write(config_dir.join("index.md"), config_index)
+            .map_err(|e| FeatureError::IoError(format!("Failed to write config index: {}", e)))?;
+
+        println!("Generated configuration examples");
+        Ok(())
+    }
+
+    /// Generate configuration example for a specific environment
+    fn generate_config_example(
+        &self,
+        environment: &str,
+        config_dir: &Path,
+    ) -> Result<(), FeatureError> {
+        let selected_features = self.registry.get_selected();
+        let mut config_sections = Vec::new();
+
+        // Add standard configuration
+        config_sections.push(format!("# {} Configuration\n", environment.to_uppercase()));
+        config_sections.push("```yaml\n# Server configuration\nserver:\n  host: \"0.0.0.0\"\n  port: 8080\n  \n# Logging configuration\nlogging:\n  level: \"info\"\n  format: \"json\"\n```\n".to_string());
+
+        // Add feature-specific configuration
+        if selected_features.contains("metrics") {
+            config_sections.push("## Metrics Configuration\n\n```yaml\nmetrics:\n  enabled: true\n  endpoint: \"/metrics\"\n  port: 8081\n```\n".to_string());
+        }
+
+        if selected_features.contains("auth") {
+            config_sections.push("## Authentication Configuration\n\n```yaml\nauth:\n  enabled: true\n  jwt_secret: \"<your-secret-here>\"\n  token_expiry: 3600\n```\n".to_string());
+        }
+
+        if selected_features.contains("caching") {
+            config_sections.push("## Caching Configuration\n\n```yaml\ncaching:\n  enabled: true\n  redis_url: \"redis://localhost:6379\"\n  default_ttl: 300\n```\n".to_string());
+        }
+
+        // Write the configuration example
+        let content = config_sections.join("\n");
+        fs::write(config_dir.join(format!("{}.md", environment)), content).map_err(|e| {
+            FeatureError::IoError(format!("Failed to write {} config: {}", environment, e))
+        })?;
+
+        println!("Generated {} configuration example", environment);
+        Ok(())
     }
 }
 

@@ -19,10 +19,6 @@ pub use self::features::{FeatureError, FeatureInfo, FeatureRegistry, FeatureRegi
 pub use self::packaging::{BuildConfig, ContainerConfig, PackageManager, VersionInfo};
 pub use self::runtime::RuntimeFeatures;
 
-// Re-export test utilities for integration tests
-#[cfg(test)]
-pub use self::features::test_utils;
-
 // Testing utilities
 #[cfg(test)]
 pub mod test_utils {
