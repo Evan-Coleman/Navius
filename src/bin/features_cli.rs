@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::PathBuf, time::Duration};
+use std::{collections::HashMap, collections::HashSet, io::Write, path::PathBuf, time::Duration};
 
 use clap::{Arg, Command};
 use colored::Colorize;
@@ -75,95 +75,55 @@ fn clear_screen() {
 
 /// Show interactive menu for the CLI
 fn show_interactive_menu(registry: &mut FeatureRegistry) -> Result<(), FeatureError> {
-    let theme = ColorfulTheme::default();
-
     loop {
         clear_screen();
         print_header();
         println!("{}", "Navius Feature Management".green().bold());
 
-        // Check if all features are enabled or disabled
-        let features = registry.feature_list();
-        let enabled_count = registry.get_enabled_features().len();
-        let all_enabled = enabled_count == features.len();
-        let all_disabled = enabled_count == 0;
+        // Menu options
+        let items = build_interactive_menu(registry);
 
-        // Define menu items conditionally
-        let mut items = vec!["Select Features", "Show Feature Status"];
-
-        // Only show Enable Feature if there are features to enable
-        if !all_enabled {
-            items.push("Enable Feature");
-        }
-
-        // Only show Disable Feature if there are features to disable
-        if !all_disabled {
-            items.push("Disable Feature");
-        }
-
-        // Always show these options
-        items.push("Apply Configuration");
-        items.push("Exit");
-
-        // Show menu and get selection
-        let selection = Select::with_theme(&theme)
+        // Use the dialoguer Select component for interactive arrow key selection
+        let selection = Select::with_theme(&ColorfulTheme::default())
             .with_prompt("Choose an action")
             .default(0)
             .items(&items)
             .interact()
-            .unwrap_or(items.len() - 1); // Default to Exit on error
+            .unwrap_or(3); // Default to Exit if interaction fails
 
-        // Process selection - we need to map these based on which items are available
-        match items[selection] {
-            "Select Features" => {
-                interactive_feature_selection(registry)?;
+        match selection {
+            0 => {
+                clear_screen();
+                print_header();
+                let result = manual_feature_selection(registry);
+                if let Err(e) = result {
+                    eprintln!("Error: {}", e);
+                    pause_for_user();
+                }
             }
-            "Show Feature Status" => {
+            1 => {
                 clear_screen();
                 print_header();
                 show_feature_status(registry);
                 pause_for_user();
             }
-            "Enable Feature" => {
+            2 => {
                 clear_screen();
                 print_header();
-                println!("{}", "Enable Feature".green().bold());
-
-                let feature =
-                    prompt_for_feature(registry, "Select a feature to enable:", false, true);
-                if let Some(feature_name) = feature {
-                    let result = enable_feature_interactive(registry, &feature_name);
-                    if let Err(e) = result {
-                        println!("❌ Error: {}", e);
-                    }
+                if let Err(e) = apply_feature_configuration(registry) {
+                    eprintln!("Error: {}", e);
+                } else {
+                    println!("✅ Configuration applied");
                 }
                 pause_for_user();
             }
-            "Disable Feature" => {
-                clear_screen();
-                print_header();
-                println!("{}", "Disable Feature".yellow().bold());
-
-                let feature =
-                    prompt_for_feature(registry, "Select a feature to disable:", true, false);
-                if let Some(feature_name) = feature {
-                    let result = disable_feature_interactive(registry, &feature_name);
-                    if let Err(e) = result {
-                        println!("❌ Error: {}", e);
-                    }
-                }
-                pause_for_user();
-            }
-            "Apply Configuration" => {
-                clear_screen();
-                print_header();
-                apply_feature_configuration(registry)?;
-                pause_for_user();
-            }
-            "Exit" | _ => {
-                clear_screen();
-                println!("👋 Goodbye!");
+            3 => {
+                println!("Exiting...");
                 break;
+            }
+            _ => {
+                println!("Invalid choice. Please try again.");
+                pause_for_user();
             }
         }
     }
@@ -171,70 +131,194 @@ fn show_interactive_menu(registry: &mut FeatureRegistry) -> Result<(), FeatureEr
     Ok(())
 }
 
-/// Interactive feature selection
-fn interactive_feature_selection(registry: &mut FeatureRegistry) -> Result<(), FeatureError> {
-    let theme = ColorfulTheme::default();
-
+/// Manual feature selection using MultiSelect
+fn manual_feature_selection(registry: &mut FeatureRegistry) -> Result<(), FeatureError> {
     clear_screen();
     print_header();
     println!("{}", "Select Features".green().bold());
 
-    // Get all features
-    let features = registry.feature_list();
+    // Get all features and categorize them
+    let mut features = registry.feature_list();
 
-    // Prepare for selection
-    let mut items: Vec<String> = Vec::new();
-    for f in &features {
-        let status = if registry.feature_is_enabled(&f.name) {
-            "[✓]"
+    // First, we'll separate required features from optional ones
+    let mut optional_features: Vec<&FeatureInfo> = Vec::new();
+    let mut required_features: Vec<&FeatureInfo> = Vec::new();
+
+    for feature in &features {
+        if is_required_feature(feature) {
+            required_features.push(feature);
         } else {
-            "[ ]"
-        };
-        items.push(format!("{} {} - {}", status, f.name, f.description));
+            optional_features.push(feature);
+        }
     }
 
-    // Mark currently enabled features
-    let defaults: Vec<bool> = features
+    // Sort features by name within each group
+    optional_features.sort_by(|a, b| a.name.cmp(&b.name));
+    required_features.sort_by(|a, b| a.name.cmp(&b.name));
+
+    // Create display items for MultiSelect with current enabled status
+    let mut display_items: Vec<String> = Vec::new();
+    let mut selection_indices: Vec<usize> = Vec::new();
+
+    // Build a mapping of feature name to its dependencies for display
+    let mut feature_dependencies: HashMap<String, Vec<String>> = HashMap::new();
+    for feature in &features {
+        feature_dependencies.insert(feature.name.clone(), feature.dependencies.clone());
+    }
+
+    // Track currently enabled features
+    let enabled_features: HashSet<String> = registry
+        .get_enabled_features()
         .iter()
-        .map(|f| registry.feature_is_enabled(&f.name))
+        .map(|s| s.clone())
         .collect();
 
-    // Show selection menu
+    // Add optional features to selection list
+    for (i, feature) in optional_features.iter().enumerate() {
+        // Format display string with size and dependencies
+        let mut display = format!("{} ({} KB)", feature.name, feature.size_impact);
+
+        // Add dependency information if any
+        if !feature.dependencies.is_empty() {
+            display.push_str(" - Requires ");
+            display.push_str(&feature.dependencies.join(", "));
+        }
+
+        display_items.push(display);
+
+        // Mark as selected if currently enabled
+        if enabled_features.contains(&feature.name) {
+            selection_indices.push(i);
+        }
+    }
+
+    // Show the feature selection interface
+    let theme = ColorfulTheme::default();
     let selections = MultiSelect::with_theme(&theme)
-        .with_prompt("Use space to toggle, enter to confirm")
-        .items(&items)
-        .defaults(&defaults)
+        .with_prompt("Select features to enable (space to toggle, enter to confirm)")
+        .items(&display_items)
+        .defaults(
+            &selection_indices
+                .iter()
+                .map(|i| *i < display_items.len())
+                .collect::<Vec<bool>>(),
+        )
         .interact()
-        .unwrap_or_default();
+        .unwrap_or_else(|_| selection_indices.clone());
 
-    if selections.is_empty() {
-        println!("No features selected or operation cancelled");
-        return Ok(());
+    // Convert selections back to feature names
+    let mut selected_optional_features: HashSet<String> = HashSet::new();
+    for &index in &selections {
+        if index < optional_features.len() {
+            selected_optional_features.insert(optional_features[index].name.clone());
+        }
     }
 
-    // Convert selections to feature set
+    // Add all required features to the final selection
     let mut selected_features: HashSet<String> = HashSet::new();
-    for i in selections {
-        selected_features.insert(features[i].name.clone());
+    for feature in &required_features {
+        selected_features.insert(feature.name.clone());
     }
 
-    // Update registry with new selections
+    // Now process the optional features with dependency resolution
+    // First, track all dependencies for each feature
+    let mut feature_to_dependents: HashMap<String, Vec<String>> = HashMap::new();
+    for feature in &features {
+        for dep in &feature.dependencies {
+            feature_to_dependents
+                .entry(dep.clone())
+                .or_default()
+                .push(feature.name.clone());
+        }
+    }
+
+    // For each selected optional feature, also enable its dependencies
+    for feature_name in &selected_optional_features {
+        selected_features.insert(feature_name.clone());
+
+        // Also add all of its dependencies
+        if let Some(feature_info) = registry.get_feature_info(feature_name) {
+            for dep in &feature_info.dependencies {
+                selected_features.insert(dep.clone());
+            }
+        }
+    }
+
+    // For each unselected dependency, also disable dependent features
+    let all_feature_names: HashSet<String> = features.iter().map(|f| f.name.clone()).collect();
+    for feature_name in all_feature_names.difference(&selected_features) {
+        // If this feature has dependents, they need to be disabled too
+        if let Some(dependents) = feature_to_dependents.get(feature_name) {
+            for dependent in dependents {
+                selected_features.remove(dependent);
+            }
+        }
+    }
+
+    // Update registry with selections
     update_registry_selections(registry, selected_features)?;
 
-    // Ask to save with Select instead of Confirm
-    let save_options = vec!["Yes, save configuration", "No, discard changes"];
-    let save_choice = Select::with_theme(&theme)
-        .with_prompt("Save these feature selections?")
-        .default(0)
-        .items(&save_options)
-        .interact()
-        .unwrap_or(1);
+    clear_screen();
+    print_header();
 
-    if save_choice == 0 {
-        println!("✅ Feature configuration saved!");
+    // Show which features are now enabled and disabled
+    println!("{}", "Feature Configuration Updated".green().bold());
+    println!();
+
+    // Display the enabled features
+    println!("{}", "Enabled Features:".green());
+    let mut enabled_list: Vec<String> = registry.get_enabled_features().iter().cloned().collect();
+    enabled_list.sort();
+
+    for feature_name in &enabled_list {
+        let feature_info = registry.get_feature_info(feature_name).unwrap();
+        if is_required_feature(feature_info) {
+            println!(
+                "  [✓] {} ({} KB) - REQUIRED",
+                feature_name.yellow(),
+                feature_info.size_impact
+            );
+        } else {
+            println!("  [✓] {} ({} KB)", feature_name, feature_info.size_impact);
+        }
     }
 
+    // Display the disabled features
+    println!();
+    println!("{}", "Disabled Features:".red());
+    let disabled_list: Vec<String> = features
+        .iter()
+        .map(|f| f.name.clone())
+        .filter(|name| !enabled_list.contains(name))
+        .collect();
+
+    for feature_name in disabled_list {
+        let feature_info = registry.get_feature_info(&feature_name).unwrap();
+        println!("  [ ] {} ({} KB)", feature_name, feature_info.size_impact);
+    }
+
+    println!();
+    println!("✅ Feature configuration saved!");
+
+    // Show the required features at the bottom
+    println!();
+    println!("{}", "Required Features (Always Enabled):".yellow().bold());
+    for feature in &required_features {
+        println!(
+            "  [✓] {} ({} KB)",
+            feature.name.yellow(),
+            feature.size_impact
+        );
+    }
+
+    pause_for_user();
+
     Ok(())
+}
+
+/// Helper function to determine if a feature is required
+fn is_required_feature(feature: &FeatureInfo) -> bool {
+    feature.tags.contains(&"required".to_string())
 }
 
 /// Update registry with new selections
@@ -254,13 +338,16 @@ fn update_registry_selections(
     let mut to_enable = Vec::new();
 
     for feature_name in &feature_names {
-        if registry.feature_is_enabled(feature_name) && !selections.contains(feature_name) {
-            to_disable.push(feature_name.clone());
-        }
-    }
+        let feature_info = registry.get_feature_info(feature_name).unwrap();
+        let is_required = is_required_feature(feature_info);
 
-    for feature_name in &selections {
-        if !registry.feature_is_enabled(feature_name) {
+        if registry.feature_is_enabled(feature_name) {
+            // Don't disable required features
+            if !selections.contains(feature_name) && !is_required {
+                to_disable.push(feature_name.clone());
+            }
+        } else if selections.contains(feature_name) || is_required {
+            // Enable selected features and required features
             to_enable.push(feature_name.clone());
         }
     }
@@ -305,73 +392,6 @@ fn update_registry_selections(
     Ok(())
 }
 
-/// Prompt for a feature name with filtering based on enabled status
-fn prompt_for_feature(
-    registry: &FeatureRegistry,
-    prompt: &str,
-    only_enabled: bool,
-    only_disabled: bool,
-) -> Option<String> {
-    let theme = ColorfulTheme::default();
-
-    // Get feature names filtered by enabled/disabled status
-    let mut available_features: Vec<(String, bool)> = Vec::new();
-
-    for feature in registry.feature_list() {
-        let is_enabled = registry.feature_is_enabled(&feature.name);
-
-        // Apply filters based on the operation
-        if (only_enabled && is_enabled)
-            || (only_disabled && !is_enabled)
-            || (!only_enabled && !only_disabled)
-        {
-            available_features.push((feature.name.clone(), is_enabled));
-        }
-    }
-
-    // Check if we have any features to select
-    if available_features.is_empty() {
-        if only_enabled {
-            println!("No enabled features available to disable.");
-        } else if only_disabled {
-            println!("No disabled features available to enable.");
-        } else {
-            println!("No features available to select.");
-        }
-        return None;
-    }
-
-    // Format feature names with their status
-    let display_items: Vec<String> = available_features
-        .iter()
-        .map(|(name, is_enabled)| {
-            if *is_enabled {
-                format!("{} (enabled)", name)
-            } else {
-                name.clone()
-            }
-        })
-        .collect();
-
-    // Extract just the feature names for the result
-    let feature_names: Vec<String> = available_features
-        .iter()
-        .map(|(name, _)| name.clone())
-        .collect();
-
-    // Show selection
-    let selection = Select::with_theme(&theme)
-        .with_prompt(prompt)
-        .default(0)
-        .items(&display_items)
-        .interact();
-
-    match selection {
-        Ok(index) => Some(feature_names[index].clone()),
-        Err(_) => None,
-    }
-}
-
 /// Enable a feature interactively
 fn enable_feature_interactive(
     registry: &mut FeatureRegistry,
@@ -411,6 +431,16 @@ fn disable_feature_interactive(
 ) -> Result<(), FeatureError> {
     println!("Disabling feature: {}", feature.yellow());
 
+    // Check if feature is required
+    let feature_info = registry.get_feature_info(feature).unwrap();
+    if is_required_feature(feature_info) {
+        println!("❌ Cannot disable required feature: {}", feature);
+        return Err(FeatureError::DependencyRequired(
+            feature.to_string(),
+            "system core".to_string(),
+        ));
+    }
+
     // Disable the feature
     let result = match registry.disable_feature(feature) {
         Ok(_) => {
@@ -448,6 +478,63 @@ fn print_header() {
     println!("{}", "=== NAVIUS FEATURE CUSTOMIZATION ===".bright_blue());
 }
 
+/// List all features function - customized for interactive mode
+fn list_features_interactive(registry: &FeatureRegistry) {
+    println!("{}", "Available Features".green().bold());
+    println!("{}", "=================".green());
+
+    // Get and sort features
+    let mut features = registry.feature_list();
+    features.sort_by(|a, b| {
+        let a_required = is_required_feature(a);
+        let b_required = is_required_feature(b);
+
+        // Use a safe comparison approach
+        match (a_required, b_required) {
+            (true, false) => std::cmp::Ordering::Greater,
+            (false, true) => std::cmp::Ordering::Less,
+            _ => a.name.cmp(&b.name), // If both have same required status, sort by name
+        }
+    });
+
+    // Display features with colors and status indicators
+    for feature in features {
+        let is_enabled = registry.feature_is_enabled(&feature.name);
+        let is_required = is_required_feature(&feature);
+
+        let status = if is_enabled {
+            "[✓]".green()
+        } else {
+            "[ ]".red()
+        };
+
+        let name = if is_required {
+            format!("{} (required)", feature.name).yellow()
+        } else {
+            feature.name.normal()
+        };
+
+        println!("{} {} - {}", status, name, feature.description);
+
+        // Show dependencies
+        if !feature.dependencies.is_empty() {
+            println!(
+                "   Dependencies: {}",
+                feature.dependencies.join(", ").blue()
+            );
+        }
+
+        // Show size impact (it's a usize, not an Option)
+        println!(
+            "   Size Impact: {}",
+            format!("{} KB", feature.size_impact).cyan()
+        );
+
+        // Empty line between features for readability
+        println!();
+    }
+}
+
 /// List all available features
 fn list_features(registry: &FeatureRegistry, matches: &clap::ArgMatches) {
     let format = matches.get_one::<String>("format").unwrap();
@@ -458,7 +545,20 @@ fn list_features(registry: &FeatureRegistry, matches: &clap::ArgMatches) {
             println!("{{");
             println!("  \"features\": [");
 
-            let features = registry.feature_list();
+            // Get sorted features
+            let mut features = registry.feature_list();
+            features.sort_by(|a, b| {
+                let a_required = is_required_feature(a);
+                let b_required = is_required_feature(b);
+
+                // Use a safe comparison approach
+                match (a_required, b_required) {
+                    (true, false) => std::cmp::Ordering::Greater,
+                    (false, true) => std::cmp::Ordering::Less,
+                    _ => a.name.cmp(&b.name), // If both have same required status, sort by name
+                }
+            });
+
             for (i, feature) in features.iter().enumerate() {
                 println!("    {{");
                 println!("      \"name\": \"{}\",", feature.name);
@@ -482,7 +582,21 @@ fn list_features(registry: &FeatureRegistry, matches: &clap::ArgMatches) {
             // Simple YAML output
             println!("features:");
 
-            for feature in registry.feature_list() {
+            // Get sorted features
+            let mut features = registry.feature_list();
+            features.sort_by(|a, b| {
+                let a_required = is_required_feature(a);
+                let b_required = is_required_feature(b);
+
+                // Use a safe comparison approach
+                match (a_required, b_required) {
+                    (true, false) => std::cmp::Ordering::Greater,
+                    (false, true) => std::cmp::Ordering::Less,
+                    _ => a.name.cmp(&b.name), // If both have same required status, sort by name
+                }
+            });
+
+            for feature in features {
                 println!("  - name: {}", feature.name);
                 println!("    description: {}", feature.description);
                 println!(
@@ -500,28 +614,55 @@ fn list_features(registry: &FeatureRegistry, matches: &clap::ArgMatches) {
             println!("{}", "Available Features:".green().bold());
             println!("{}", "=".repeat(60));
 
+            // Group features by category
+            let mut categories: std::collections::HashMap<String, Vec<FeatureInfo>> =
+                std::collections::HashMap::new();
+
             for feature in registry.feature_list() {
-                let status = if registry.feature_is_enabled(&feature.name) {
-                    "✅ ENABLED ".green()
-                } else {
-                    "❌ DISABLED".red()
-                };
+                categories
+                    .entry(feature.category.clone())
+                    .or_default()
+                    .push(feature.clone());
+            }
 
-                println!(
-                    "{} - {} ({})",
-                    status,
-                    feature.name.yellow(),
-                    feature.description
-                );
+            // Display features by category, with required features at bottom
+            for (category, mut features) in categories {
+                println!("{}", category.cyan().bold());
 
-                if !feature.dependencies.is_empty() {
+                // Sort features by required status using a safe comparison
+                features.sort_by(|a, b| {
+                    let a_required = is_required_feature(a);
+                    let b_required = is_required_feature(b);
+
+                    // Use a safe comparison approach
+                    match (a_required, b_required) {
+                        (true, false) => std::cmp::Ordering::Greater,
+                        (false, true) => std::cmp::Ordering::Less,
+                        _ => a.name.cmp(&b.name), // If both have same required status, sort by name
+                    }
+                });
+
+                for feature in features {
+                    let status = if registry.feature_is_enabled(&feature.name) {
+                        "✅".green()
+                    } else {
+                        "❌".red()
+                    };
+
+                    let required_label = if is_required_feature(&feature) {
+                        " (required)"
+                    } else {
+                        ""
+                    };
+
                     println!(
-                        "   {}",
-                        format!("Dependencies: {}", feature.dependencies.join(", ")).dimmed()
+                        "{} {}{} - {}",
+                        status,
+                        feature.name,
+                        required_label.yellow(),
+                        feature.description
                     );
                 }
-
-                println!();
             }
         }
     }
@@ -589,9 +730,22 @@ fn show_feature_status(registry: &FeatureRegistry) {
             .push(feature.clone());
     }
 
-    // Display features by category
-    for (category, features) in categories {
+    // Display features by category, with required features at bottom
+    for (category, mut features) in categories {
         println!("{}", category.cyan().bold());
+
+        // Sort features by required status using a safe comparison
+        features.sort_by(|a, b| {
+            let a_required = is_required_feature(a);
+            let b_required = is_required_feature(b);
+
+            // Use a safe comparison approach
+            match (a_required, b_required) {
+                (true, false) => std::cmp::Ordering::Greater,
+                (false, true) => std::cmp::Ordering::Less,
+                _ => a.name.cmp(&b.name), // If both have same required status, sort by name
+            }
+        });
 
         for feature in features {
             let status = if registry.feature_is_enabled(&feature.name) {
@@ -600,64 +754,143 @@ fn show_feature_status(registry: &FeatureRegistry) {
                 "❌".red()
             };
 
-            println!("{} {} - {}", status, feature.name, feature.description);
+            let required_label = if is_required_feature(&feature) {
+                " (required)"
+            } else {
+                ""
+            };
+
+            println!(
+                "{} {}{} - {}",
+                status,
+                feature.name,
+                required_label.yellow(),
+                feature.description
+            );
         }
     }
 }
 
 /// Load a feature registry from config file or create new one if not found
 fn load_feature_registry() -> Result<FeatureRegistry, FeatureError> {
-    // Try to load from config file first
+    // Create a fresh registry first with default feature definitions
+    let mut registry = FeatureRegistry::new();
+
+    // Add sample features - this just defines them but doesn't enable them yet
+    add_sample_features(&mut registry)?;
+
+    // Get list of required features
+    let required_features: HashSet<String> = registry
+        .feature_list()
+        .iter()
+        .filter(|f| is_required_feature(f))
+        .map(|f| f.name.clone())
+        .collect();
+
+    // Try to load enabled features from config file
     let config_result = FeatureConfig::load_default();
 
     match config_result {
         Ok(config) => {
-            // Create a fresh registry
-            let mut registry = FeatureRegistry::new();
+            // If we have saved selections in the config file, use those
+            if !config.selected_features.is_empty() {
+                // First, disable all features to start from a clean slate
+                // We need to collect names first to avoid borrowing issues
+                let feature_names: Vec<String> = registry
+                    .feature_list()
+                    .iter()
+                    .map(|f| f.name.clone())
+                    .collect();
 
-            // Add sample features
-            add_sample_features(&mut registry)?;
+                for feature_name in &feature_names {
+                    let _ = registry.disable_feature(feature_name);
+                }
 
-            // Update registry with saved selections (with clear error reporting)
-            for feature in &config.selected_features {
-                match registry.enable_feature(feature) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        println!(
-                            "⚠️ Warning: Failed to enable feature '{}' from saved config: {}",
-                            feature, e
-                        );
+                // Create a combined set of features to enable - from config plus required
+                let mut features_to_enable = config.selected_features.clone();
+                for req_feature in &required_features {
+                    features_to_enable.insert(req_feature.clone());
+                }
+
+                // Then enable only the ones specified in the config plus required ones
+                for feature in &features_to_enable {
+                    match registry.enable_feature(feature) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            println!(
+                                "⚠️ Warning: Failed to enable feature '{}' from saved config: {}",
+                                feature, e
+                            );
+                        }
                     }
                 }
+                println!("✅ Loaded feature configuration from file");
+            } else {
+                // If config file exists but is empty, save the default selections plus required
+                ensure_required_features_enabled(&mut registry, &required_features)?;
+                save_feature_configuration(&registry)?;
+                println!("✅ Updated empty configuration with defaults");
             }
-
-            println!("✅ Loaded feature configuration from file");
-            Ok(registry)
         }
-        Err(e) => {
-            println!("ℹ️ Could not load existing configuration: {}", e);
-            // Create a new registry with default features
-            let mut registry = FeatureRegistry::new();
-            add_sample_features(&mut registry)?;
-
-            // Save the initial configuration
+        Err(_) => {
+            // No existing config found - save the default selections plus required
+            ensure_default_features_enabled(&mut registry)?;
+            ensure_required_features_enabled(&mut registry, &required_features)?;
             save_feature_configuration(&registry)?;
-
             println!("✅ Created new feature configuration");
-            Ok(registry)
         }
     }
+
+    Ok(registry)
+}
+
+/// Ensure required features are enabled
+fn ensure_required_features_enabled(
+    registry: &mut FeatureRegistry,
+    required_features: &HashSet<String>,
+) -> Result<(), FeatureError> {
+    for feature in required_features {
+        if !registry.feature_is_enabled(feature) {
+            match registry.enable_feature(feature) {
+                Ok(_) => println!("✓ Enabled required feature: {}", feature),
+                Err(e) => return Err(e),
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Ensure default features are enabled
+fn ensure_default_features_enabled(registry: &mut FeatureRegistry) -> Result<(), FeatureError> {
+    registry.enable_feature("core")?;
+    registry.enable_feature("metrics")?;
+    registry.enable_feature("auth")?;
+    registry.enable_feature("caching")?;
+    Ok(())
 }
 
 /// Save feature configuration to disk
 fn save_feature_configuration(registry: &FeatureRegistry) -> Result<(), FeatureError> {
-    // Create configuration from registry
-    let config = FeatureConfig::from_registry(registry);
+    // Get list of currently enabled features
+    let selected_features = registry
+        .get_enabled_features()
+        .iter()
+        .cloned()
+        .collect::<HashSet<_>>();
+
+    // Create a new config with these selected features
+    let config = FeatureConfig {
+        selected_features,
+        build_config: std::collections::HashMap::new(),
+    };
 
     // Save to default location
-    config.save_default()?;
+    let result = config.save_default();
+    if let Err(e) = &result {
+        println!("⚠️ Error saving configuration: {}", e);
+    }
 
-    Ok(())
+    result
 }
 
 /// Apply feature configuration to the project
@@ -732,10 +965,34 @@ fn add_sample_features(registry: &mut FeatureRegistry) -> Result<(), FeatureErro
         category: "Core".to_string(),
         dependencies: vec![],
         default_enabled: true,
-        tags: vec!["essential".to_string()],
+        tags: vec!["essential".to_string(), "required".to_string()], // Add required tag
         size_impact: 100,
     };
     registry.register(core_info);
+
+    // Error handling (also required)
+    let error_handling_info = FeatureInfo {
+        name: "error_handling".to_string(),
+        description: "Error handling and reporting".to_string(),
+        category: "Essential".to_string(),
+        dependencies: vec![],
+        default_enabled: true, // Changed to true since it's required
+        tags: vec!["essential".to_string(), "required".to_string()], // Add required tag
+        size_impact: 150,
+    };
+    registry.register(error_handling_info);
+
+    // Config system (also required)
+    let config_info = FeatureInfo {
+        name: "config".to_string(),
+        description: "Configuration system".to_string(),
+        category: "Essential".to_string(),
+        dependencies: vec![],
+        default_enabled: true, // Changed to true since it's required
+        tags: vec!["essential".to_string(), "required".to_string()], // Add required tag
+        size_impact: 180,
+    };
+    registry.register(config_info);
 
     // Metrics
     let metrics_info = FeatureInfo {
@@ -785,30 +1042,6 @@ fn add_sample_features(registry: &mut FeatureRegistry) -> Result<(), FeatureErro
     };
     registry.register(auth_info);
 
-    // Error handling
-    let error_handling_info = FeatureInfo {
-        name: "error_handling".to_string(),
-        description: "Error handling and reporting".to_string(),
-        category: "Essential".to_string(),
-        dependencies: vec![],
-        default_enabled: false,
-        tags: vec!["essential".to_string()],
-        size_impact: 150,
-    };
-    registry.register(error_handling_info);
-
-    // Config system
-    let config_info = FeatureInfo {
-        name: "config".to_string(),
-        description: "Configuration system".to_string(),
-        category: "Essential".to_string(),
-        dependencies: vec![],
-        default_enabled: false,
-        tags: vec!["essential".to_string()],
-        size_impact: 180,
-    };
-    registry.register(config_info);
-
     // Reliability
     let reliability_info = FeatureInfo {
         name: "reliability".to_string(),
@@ -821,11 +1054,19 @@ fn add_sample_features(registry: &mut FeatureRegistry) -> Result<(), FeatureErro
     };
     registry.register(reliability_info);
 
-    // Enable some features by default
-    registry.enable_feature("core")?;
-    registry.enable_feature("metrics")?;
-    registry.enable_feature("auth")?;
-    registry.enable_feature("caching")?;
-
+    // We'll let load_feature_registry handle enabling default features
     Ok(())
+}
+
+/// Build the main interactive menu
+fn build_interactive_menu(_registry: &FeatureRegistry) -> Vec<String> {
+    // Create menu items
+    let menu_items = vec![
+        "Select Features (Interactive)".to_string(),
+        "Show Feature Status".to_string(),
+        "Apply Configuration".to_string(),
+        "Exit".to_string(),
+    ];
+
+    menu_items
 }
