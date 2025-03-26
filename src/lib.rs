@@ -228,5 +228,5 @@ pub use crate::core::services::health::HealthService as CoreHealthService;
 
 /// Feature selection and customization
 pub mod features {
-    pub use crate::core::features_root::*;
+    pub use crate::core::features::*;
 }

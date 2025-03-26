@@ -480,21 +480,10 @@ impl FeatureRegistry {
     }
 }
 
-mod errors;
-mod features;
-mod runtime;
-
-pub use errors::FeatureError;
-pub use features::{
-    BuildConfig, ContainerConfig, Feature, FeatureInfo, FeatureRegistry, PackageManager,
-    VersionInfo,
-};
-pub use runtime::RuntimeFeatures;
-
 /// Extension trait for FeatureRegistry that provides convenient methods for feature management
 pub trait FeatureRegistryExt {
     /// Get a list of all available features
-    fn features(&self) -> Vec<FeatureInfo>;
+    fn features(&self) -> Vec<&FeatureInfo>;
 
     /// Get the number of registered features
     fn feature_count(&self) -> usize;
@@ -503,7 +492,7 @@ pub trait FeatureRegistryExt {
     fn enabled_features(&self) -> Vec<String>;
 
     /// Get information about a specific feature
-    fn get_feature_info(&self, name: &str) -> Option<FeatureInfo>;
+    fn get_feature_info(&self, name: &str) -> Option<&FeatureInfo>;
 
     /// Check if a feature is enabled
     fn is_enabled(&self, name: &str) -> bool;
@@ -516,7 +505,7 @@ pub trait FeatureRegistryExt {
 }
 
 impl FeatureRegistryExt for FeatureRegistry {
-    fn features(&self) -> Vec<FeatureInfo> {
+    fn features(&self) -> Vec<&FeatureInfo> {
         self.feature_list()
     }
 
@@ -528,8 +517,8 @@ impl FeatureRegistryExt for FeatureRegistry {
         self.get_enabled_features().iter().cloned().collect()
     }
 
-    fn get_feature_info(&self, name: &str) -> Option<FeatureInfo> {
-        self.get_feature(name).cloned()
+    fn get_feature_info(&self, name: &str) -> Option<&FeatureInfo> {
+        self.get_feature(name)
     }
 
     fn is_enabled(&self, name: &str) -> bool {
