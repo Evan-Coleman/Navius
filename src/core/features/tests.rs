@@ -236,3 +236,70 @@ mod packaging_tests {
     // implemented as integration tests with mocks for the build commands
     // since we don't want to actually run cargo build in unit tests
 }
+
+#[cfg(test)]
+mod documentation_tests {
+    use super::super::documentation::{DocConfig, DocGenerator};
+    use super::super::features::FeatureRegistry;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    /// Setup function to create test resources
+    fn setup() -> (TempDir, TempDir, FeatureRegistry) {
+        let output_dir = TempDir::new().unwrap();
+        let template_dir = TempDir::new().unwrap();
+
+        // Create a feature registry
+        let mut registry = FeatureRegistry::new();
+
+        // Enable some features for testing
+        registry.select("core").unwrap();
+        registry.select("metrics").unwrap();
+
+        (output_dir, template_dir, registry)
+    }
+
+    #[test]
+    fn test_doc_generator_creation() {
+        let (output_dir, template_dir, registry) = setup();
+
+        let config = DocConfig {
+            output_dir: output_dir.path().to_path_buf(),
+            template_dir: template_dir.path().to_path_buf(),
+            version: "0.1.0".to_string(),
+            generate_api_reference: true,
+            generate_config_examples: true,
+            generate_feature_docs: true,
+        };
+
+        let result = DocGenerator::new(registry, config);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_versioned_docs() {
+        let (output_dir, template_dir, registry) = setup();
+
+        let config = DocConfig {
+            output_dir: output_dir.path().to_path_buf(),
+            template_dir: template_dir.path().to_path_buf(),
+            version: "0.1.0".to_string(),
+            generate_api_reference: true,
+            generate_config_examples: true,
+            generate_feature_docs: true,
+        };
+
+        let generator = DocGenerator::new(registry, config).unwrap();
+
+        // Test generating a versioned set of docs
+        let version_tag = "v0.1.0";
+        let result = generator.generate_versioned(version_tag);
+
+        assert!(result.is_ok());
+
+        if let Ok(path) = result {
+            assert!(path.exists());
+            assert!(path.ends_with(format!("versions/{}", version_tag)));
+        }
+    }
+}

@@ -4,6 +4,7 @@
 
 // Declare submodules
 pub mod config;
+pub mod documentation;
 pub mod features;
 pub mod macros;
 pub mod packaging;
@@ -11,6 +12,7 @@ pub mod runtime;
 
 // Re-export the feature registry and related types
 pub use self::config::FeatureConfig;
+pub use self::documentation::{DocConfig, DocGenerator, DocTemplate};
 pub use self::features::{FeatureError, FeatureInfo, FeatureRegistry};
 pub use self::packaging::{BuildConfig, ContainerConfig, PackageManager, VersionInfo};
 pub use self::runtime::RuntimeFeatures;

@@ -1,6 +1,7 @@
 use navius::core::config::app_config::{AppConfig, load_config as app_load_config};
 use navius::core::features::{
-    BuildConfig, ContainerConfig, FeatureConfig, FeatureRegistry, PackageManager, VersionInfo,
+    BuildConfig, ContainerConfig, DocConfig, DocGenerator, FeatureConfig, FeatureRegistry,
+    PackageManager, VersionInfo,
 };
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -24,6 +25,8 @@ fn main() {
         "package" => package_with_features(),
         "container" => create_container(),
         "update" if args.len() >= 3 => create_update_package(&args[2]),
+        "docs" => generate_documentation(),
+        "docs:version" if args.len() >= 3 => generate_versioned_docs(&args[2]),
         "save" if args.len() >= 3 => save_config(&args[2]),
         "load" if args.len() >= 3 => load_config(&args[2]),
         "reset" => reset_to_defaults(),
@@ -48,6 +51,8 @@ fn print_usage() {
     println!(
         "  feature-builder update <output_dir> - Create update package with selected features"
     );
+    println!("  feature-builder docs                - Generate documentation for enabled features");
+    println!("  feature-builder docs:version <tag>  - Generate versioned documentation");
     println!("  feature-builder save <file>         - Save current feature config");
     println!("  feature-builder load <file>         - Load feature config from file");
     println!("  feature-builder reset               - Reset to default features");
@@ -439,5 +444,62 @@ fn get_git_commit() -> Option<String> {
             if !hash.is_empty() { Some(hash) } else { None }
         }
         _ => None,
+    }
+}
+
+fn generate_documentation() {
+    let (_, registry) = load_and_create_registry();
+
+    println!("Generating documentation for selected features...");
+
+    // Use default doc configuration
+    let config = DocConfig::default();
+
+    // Create documentation generator
+    match DocGenerator::new(registry, config) {
+        Ok(generator) => {
+            // Generate documentation
+            match generator.generate() {
+                Ok(()) => {
+                    println!("Documentation generated successfully!");
+                    println!("Output directory: {:?}", generator.config.output_dir);
+                }
+                Err(e) => {
+                    println!("Failed to generate documentation: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            println!("Failed to create documentation generator: {}", e);
+        }
+    }
+}
+
+fn generate_versioned_docs(version_tag: &str) {
+    let (_, registry) = load_and_create_registry();
+
+    println!("Generating versioned documentation for selected features...");
+    println!("Version tag: {}", version_tag);
+
+    // Use default doc configuration
+    let config = DocConfig::default();
+
+    // Create documentation generator
+    match DocGenerator::new(registry, config) {
+        Ok(generator) => {
+            // Generate versioned documentation
+            match generator.generate_versioned(version_tag) {
+                Ok(output_dir) => {
+                    println!("Versioned documentation generated successfully!");
+                    println!("Output directory: {:?}", output_dir);
+                }
+                Err(e) => {
+                    println!("Failed to generate versioned documentation: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            println!("Failed to create documentation generator: {}", e);
+        }
     }
 }
