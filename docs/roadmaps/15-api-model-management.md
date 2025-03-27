@@ -8,7 +8,7 @@ tags:
   - code-generation
   - openapi
   - integration
-last_updated: May 30, 2024
+last_updated: March 26, 2025
 version: 1.0
 ---
 # API Model Management Roadmap
@@ -107,7 +107,7 @@ This roadmap outlines the implementation of a hybrid approach to API model manag
 
 ## Implementation Status
 - **Overall Progress**: 0% complete
-- **Last Updated**: May 30, 2024
+- **Last Updated**: March 26, 2025
 - **Next Milestone**: Analysis and initial setup
 - **Current Focus**: Initial planning
 

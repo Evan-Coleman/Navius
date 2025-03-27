@@ -3,14 +3,14 @@ title: Test Coverage Roadmap
 description: A plan for achieving and maintaining high test coverage across the Navius application
 category: Testing
 tags: [testing, quality, reliability]
-last_updated: May 30, 2024
+last_updated: March 26, 2025
 version: 0.5.0
 ---
 
 # Test Coverage Roadmap
 
 **Version**: 0.5.0  
-**Last Updated**: May 30, 2024  
+**Last Updated**: March 26, 2025  
 **Status**: In Progress
 
 ## Overview

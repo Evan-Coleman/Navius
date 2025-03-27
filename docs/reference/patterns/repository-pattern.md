@@ -10,7 +10,7 @@ tags:
 related:
   - examples/repository-pattern-example.md
   - roadmaps/25-generic-service-implementations.md
-last_updated: May 30, 2024
+last_updated: March 26, 2025
 version: 1.0
 ---
 
