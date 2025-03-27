@@ -67,6 +67,7 @@ Navius is a modern, secure, and performant web framework built with Rust and Axu
 - **Two-Tier Caching**: Fast in-memory cache with persistent Redis fallback
 - **Server Customization**: Feature selection for optimized deployment
 - **Generic Repositories**: Type-safe repository pattern for domain entities
+- **Generic Logging Service**: Pluggable logging providers with structured logging
 
 ## Getting Help
 
@@ -156,6 +157,7 @@ Technical reference documentation:
   - [Error Handling](reference/patterns/error-handling-patterns.md) - Error handling approaches
   - [Testing Patterns](reference/patterns/testing-patterns.md) - Testing best practices
   - [Repository Pattern](reference/patterns/repository-pattern.md) - Entity repository pattern
+  - [Logging Service Pattern](reference/patterns/logging-service-pattern.md) - Generic logging service implementations
 
 - [Standards](reference/standards/README.md) - Code and documentation standards
   - [Naming Conventions](reference/standards/naming-conventions.md) - Naming guidelines
@@ -204,6 +206,7 @@ Practical code examples:
 - [Two-Tier Cache Implementation](examples/two-tier-cache-example.md) - Implementing two-tier caching
 - [Server Customization System](examples/server-customization-example.md) - Using the feature system
 - [Repository Pattern Example](examples/repository-pattern-example.md) - Implementing the generic repository pattern
+- [Logging Service Example](examples/logging-service-example.md) - Using the generic logging service
 
 ## 🔍 Documentation Search
 

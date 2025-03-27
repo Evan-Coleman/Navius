@@ -71,6 +71,7 @@
   - [Error Handling](reference/patterns/error-handling-patterns.md)
   - [Testing Patterns](reference/patterns/testing-patterns.md)
   - [Repository Pattern](reference/patterns/repository-pattern.md)
+  - [Logging Service Pattern](reference/patterns/logging-service-pattern.md)
 
 - [Standards](reference/standards/README.md)
   - [Naming Conventions](reference/standards/naming-conventions.md)
@@ -112,4 +113,5 @@
 - [Spring Boot Comparison](examples/20_spring-boot-comparison.md)
 - [Two-Tier Cache Implementation](examples/two-tier-cache-example.md)
 - [Server Customization System](examples/server-customization-example.md)
-- [Repository Pattern Example](examples/repository-pattern-example.md) 
+- [Repository Pattern Example](examples/repository-pattern-example.md)
+- [Logging Service Example](examples/logging-service-example.md) 

@@ -26,7 +26,7 @@ This directory contains roadmaps for enhancing the Navius framework to match the
 
 - [Template for Updates](template-for-updating.md) - Guidelines for updating roadmaps
 - [Server Customization System](26-server-customization-system.md) - **Foundation priority** (96% complete)
-- [Generic Service Implementations](25-generic-service-implementations.md) - **Top priority** (0% complete)
+- [Generic Service Implementations](25-generic-service-implementations.md) - **Top priority** (71% complete)
 - [Testing Framework](03-testing-framework.md) - Current focus area (35% complete)
 - [Enhanced Caching](07-enhanced-caching.md) - Active development (40% complete)
 - [Dependency Injection](01-dependency-injection.md) - High priority focus area
@@ -38,7 +38,7 @@ This directory contains roadmaps for enhancing the Navius framework to match the
 | ID | Roadmap | Status | Priority | Dependencies |
 |----|---------|--------|----------|--------------|
 | 17 | [Server Customization System](26-server-customization-system.md) | 96% | **Critical** | None |
-| 16 | [Generic Service Implementations](25-generic-service-implementations.md) | 0% | **Critical** | None |
+| 16 | [Generic Service Implementations](25-generic-service-implementations.md) | 71% | **Critical** | None |
 | 03 | [Testing Framework](03-testing-framework.md) | 35% | High | None |
 | 07 | [Enhanced Caching](07-enhanced-caching.md) | 40% | High | 02, 04 |
 | 01 | [Dependency Injection](01-dependency-injection.md) | 0% | High | None |
@@ -67,13 +67,13 @@ This directory contains roadmaps for enhancing the Navius framework to match the
 
 ### Overall Progress
 ```
-[████████░░] 40% Complete
+[███████░░░] 52% Complete
 ```
 
 | Component | Progress | Status | Next Milestone |
 |-----------|----------|--------|----------------|
 | Server Customization | 96% | 🔄 In Progress | CLI Visualization |
-| Generic Services | 0% | 🔄 Starting | Database Interface Definition |
+| Generic Services | 71% | 🔄 In Progress | Observability Service Generalization |
 | Project Structure | 100% | ✅ Complete | N/A |
 | Testing Framework | 35% | 🔄 In Progress | API Resource Testing |
 | Enhanced Caching | 40% | 🔄 In Progress | Cache Monitoring and Metrics |
