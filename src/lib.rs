@@ -66,10 +66,14 @@ pub mod core {
         // Logging middleware
         pub mod core_logging;
 
+        // Health dashboard handler
+        pub mod health_dashboard_handler;
+
         pub use core_actuator::*;
         pub use core_docs::*;
         pub use core_health::*;
         pub use core_logging::*;
+        pub use health_dashboard_handler::*;
     }
 
     // Metrics collection and reporting

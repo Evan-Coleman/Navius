@@ -41,6 +41,11 @@ impl ServiceRegistry {
             .get(&type_id)
             .and_then(|s| s.downcast_ref::<T>())
     }
+
+    /// Get the count of registered services
+    pub fn service_count(&self) -> usize {
+        self.services.len()
+    }
 }
 
 /// Application state shared across all routes

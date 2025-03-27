@@ -5,6 +5,9 @@ use axum::{
 use metrics_exporter_prometheus::PrometheusBuilder;
 use std::{sync::Arc, time::SystemTime};
 
+use crate::core::handlers::health_dashboard_handler::{
+    clear_dashboard_history, health_dashboard_handler, register_dynamic_indicator,
+};
 use crate::core::{
     auth::middleware::EntraAuthLayer,
     config::app_config::AppConfig,
@@ -45,7 +48,11 @@ impl CoreRouter {
             .route("/health", get(detailed_health_handler))
             .route("/info", get(core_actuator::info))
             .route("/docs", get(core_docs::swagger_ui_handler))
-            .route("/docs/{*file}", get(core_docs::openapi_spec_handler));
+            .route("/docs/{*file}", get(core_docs::openapi_spec_handler))
+            // Add health dashboard routes
+            .route("/dashboard", get(health_dashboard_handler))
+            .route("/dashboard/history/clear", get(clear_dashboard_history))
+            .route("/dashboard/register", post(register_dynamic_indicator));
 
         // Apply authentication layers if enabled
         let actuator_routes = if auth_enabled {

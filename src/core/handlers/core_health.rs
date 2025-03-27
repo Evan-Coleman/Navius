@@ -5,7 +5,11 @@ use std::{sync::Arc, time::SystemTime};
 use crate::core::{
     models::{DependencyStatus, DetailedHealthResponse, HealthCheckResponse},
     router::AppState,
-    services::health::HealthService,
+    services::{
+        health::HealthService,
+        health_indicators::CoreHealthIndicatorProvider,
+        health_provider::{HealthConfig, HealthIndicatorProviderRegistry, HealthServiceV2},
+    },
 };
 
 /// Simple health check endpoint
@@ -23,8 +27,14 @@ pub async fn health_handler() -> Json<HealthCheckResponse> {
 /// Detailed health check that follows Spring Boot Actuator format
 /// Returns components with their statuses and details
 pub async fn detailed_health_handler(State(state): State<Arc<AppState>>) -> Json<Value> {
-    // Create health service with default indicators
-    let health_service = HealthService::new();
+    // Create health service with provider system
+    let mut registry = HealthIndicatorProviderRegistry::new();
+
+    // Register the core health indicators provider
+    registry.register(Box::new(CoreHealthIndicatorProvider));
+
+    // Create the health service with default config
+    let health_service = HealthServiceV2::new(Arc::new(registry), HealthConfig::default());
 
     // Get health status from service
     match health_service.check_health(&state).await {
