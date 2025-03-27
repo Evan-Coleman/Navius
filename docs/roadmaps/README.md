@@ -225,3 +225,8 @@ Currently available implementation guides:
 - [Semantic Versioning](https://semver.org/)
 - [Conventional Commits](https://www.conventionalcommits.org/)
 - [Testing Best Practices](https://doc.rust-lang.org/book/ch11-00-testing.html) 
+
+## Documentation Roadmaps
+
+- [30_documentation-reorganization-roadmap.md](30_documentation-reorganization-roadmap.md) - Strategic plan for restructuring Navius documentation
+- [30_documentation-reorganization-instructions.md](30_documentation-reorganization-instructions.md) - Implementation instructions for documentation restructuring
