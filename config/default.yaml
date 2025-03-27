@@ -27,7 +27,7 @@ app:
 # Authentication settings
 auth:
   # Enable/disable authentication (override with AUTH_ENABLED)
-  enabled: true
+  enabled: false
   # Enable/disable debug mode (override with AUTH_DEBUG or DEBUG_AUTH)
   debug: false
   # Entra ID (Azure AD) settings
@@ -37,30 +37,33 @@ auth:
   # - NAVIUS_AUDIENCE
   # - NAVIUS_SCOPE
   # - NAVIUS_TOKEN_URL
-  entra:
-    # URL formats for Entra ID (Microsoft Azure AD)
-    jwks_uri_format: "https://login.microsoftonline.com/{}/discovery/v2.0/keys"
-    authorize_url_format: "https://login.microsoftonline.com/{}/oauth2/v2.0/authorize"
-    token_url_format: "https://login.microsoftonline.com/{}/oauth2/v2.0/token"
-    # Issuer URL formats (used for validation)
-    issuer_url_formats:
-      - "https://login.microsoftonline.com/{}/v2.0"
-      - "https://login.microsoftonline.com/{}/v2.0/"
-      - "https://sts.windows.net/{}"
-      - "https://sts.windows.net/{}/"
-      - "https://login.microsoftonline.com/{}"
-      - "https://login.microsoftonline.com/{}/"
-    # Admin roles - users with these roles can access admin endpoints
-    admin_roles:
-      - "admin"
-    # Read-only roles - users with these roles can access read-only endpoints
-    read_only_roles:
-      - "read"
-      - "full"
-      - "admin"
-    # Full access roles - users with these roles can access full access endpoints
-    full_access_roles:
-      - "full"
+  default_provider: "entra"
+  providers:
+    entra:
+      enabled: true
+      client_id: "${ENTRA_CLIENT_ID}"
+      jwks_uri: "https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys"
+      issuer_url: "https://sts.windows.net/{tenant}/v2.0"
+      audience: "api://${CLIENT_ID}"
+      role_mappings:
+        admin: ["Application.Admin"]
+        read_only: ["Application.Read"]
+        full_access: ["Application.FullAccess"]
+      provider_specific:
+        entra_tenant_id: "${ENTRA_TENANT_ID}"
+        entra_token_version: "2.0"
+      refresh_rate_limit:
+        max_requests: 5
+        per_seconds: 60
+      circuit_breaker:
+        reset_timeout_seconds: 60
+
+    google:
+      enabled: false
+      client_id: "${GOOGLE_CLIENT_ID}"
+      jwks_uri: "https://www.googleapis.com/oauth2/v3/certs"
+      issuer_url: "https://accounts.google.com"
+      audience: "${GOOGLE_CLIENT_ID}.apps.googleusercontent.com"
 
 cache:
   enabled: true
@@ -80,6 +83,27 @@ openapi:
 logging:
   level: "info"
   format: "json"
+
+# Feature configuration
+# Controls which optional features are enabled
+features:
+  # List of features to enable by default
+  enabled: 
+    - "core"           # Required core functionality
+    - "error_handling" # Error handling system
+    - "config"         # Configuration system
+    - "auth"           # Authentication system
+    - "metrics"        # Basic metrics
+    - "caching"        # Caching functionality
+    - "reliability"    # Reliability features
+  
+  # Feature-specific configuration
+  config:
+    # Advanced metrics configuration (when enabled)
+    advanced_metrics:
+      histogram_buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0]
+      export_interval_seconds: 15
+      enable_process_metrics: true
 
 # Date format configuration
 # These settings control how dates are displayed throughout the application

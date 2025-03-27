@@ -19,8 +19,11 @@ ignored_fields = ["tags", "category", "related", "last_updated", "version"]
 
 [preprocessor.index]
 
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
 [build]
-build-dir = "../target/book"
+build-dir = "book"
 create-missing = false
 
 [output.html]
@@ -31,7 +34,7 @@ git-repository-icon = "fa-gitlab"
 site-url = "/navius/"
 home-url = "/navius/"
 additional-css = ["theme/custom.css"]
-additional-js = ["theme/custom.js"]
+additional-js = ["theme/custom.js", "theme/mermaid.min.js", "theme/mermaid-init.js"]
 
 [output.html.search]
 enable = true

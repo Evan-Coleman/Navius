@@ -51,13 +51,8 @@ struct CircuitBreakerState {
     /// Current state of the circuit
     state: CircuitState,
 
-    /// Legacy consecutive failures mode
-    /// Number of consecutive failures in the current window
-    failure_count: u32,
     /// Number of consecutive successes in half-open state
     success_count: u32,
-    /// Number of consecutive failures needed to trip the circuit
-    failure_threshold: u32,
 
     /// Rolling window mode
     /// History of request results within the rolling window
@@ -66,8 +61,6 @@ struct CircuitBreakerState {
     window_duration: Duration,
     /// Failure percentage threshold (0-100) that triggers the circuit breaker
     failure_percentage: u8,
-    /// Whether to use the legacy consecutive failures mode (false = use rolling window)
-    use_consecutive_failures: bool,
     /// HTTP status codes that should be considered failures
     failure_status_codes: Vec<u16>,
 
@@ -83,26 +76,21 @@ struct CircuitBreakerState {
 impl CircuitBreakerState {
     /// Create a new circuit breaker state
     fn new(
-        failure_threshold: u32,
         reset_timeout: Duration,
         success_threshold: u32,
         window_seconds: u64,
         failure_percentage: u8,
-        use_consecutive_failures: bool,
         failure_status_codes: Vec<u16>,
     ) -> Self {
         Self {
             state: CircuitState::Closed,
-            failure_count: 0,
             success_count: 0,
-            failure_threshold,
             success_threshold,
             reset_timeout,
             opened_at: None,
             request_history: VecDeque::new(),
             window_duration: Duration::from_secs(window_seconds),
             failure_percentage,
-            use_consecutive_failures,
             failure_status_codes,
         }
     }
@@ -135,59 +123,18 @@ impl CircuitBreakerState {
 
     /// Record a successful request
     fn record_success(&mut self) {
-        if self.use_consecutive_failures {
-            self.record_success_legacy();
-        } else {
-            // Add this success to the history
-            self.request_history.push_back(RequestResult {
-                timestamp: Instant::now(),
-                success: true,
-            });
+        // Add this success to the history
+        self.request_history.push_back(RequestResult {
+            timestamp: Instant::now(),
+            success: true,
+        });
 
-            // Prune old entries
-            self.prune_history();
+        // Prune old entries
+        self.prune_history();
 
-            match self.state {
-                CircuitState::Closed => {
-                    // Nothing to do in closed state for success
-                }
-                CircuitState::HalfOpen => {
-                    // In half-open state, increment success count
-                    self.success_count += 1;
-
-                    // If we've reached the success threshold, close the circuit
-                    if self.success_count >= self.success_threshold {
-                        info!(
-                            "Circuit breaker state transition: {} -> CLOSED (success threshold reached)",
-                            self.state
-                        );
-                        self.state = CircuitState::Closed;
-                        self.success_count = 0;
-                    }
-                }
-                CircuitState::Open => {
-                    // Shouldn't happen, but handle anyway by checking if we should transition to half-open
-                    if let Some(opened_at) = self.opened_at {
-                        if opened_at.elapsed() >= self.reset_timeout {
-                            info!(
-                                "Circuit breaker state transition: {} -> HALF-OPEN (reset timeout elapsed)",
-                                self.state
-                            );
-                            self.state = CircuitState::HalfOpen;
-                            self.success_count = 1; // Count this success
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /// Legacy implementation of record_success
-    fn record_success_legacy(&mut self) {
         match self.state {
             CircuitState::Closed => {
-                // Reset failure count on success
-                self.failure_count = 0;
+                // Nothing to do in closed state for success
             }
             CircuitState::HalfOpen => {
                 // In half-open state, increment success count
@@ -200,7 +147,6 @@ impl CircuitBreakerState {
                         self.state
                     );
                     self.state = CircuitState::Closed;
-                    self.failure_count = 0;
                     self.success_count = 0;
                 }
             }
@@ -222,63 +168,25 @@ impl CircuitBreakerState {
 
     /// Record a failed request
     fn record_failure(&mut self) {
-        if self.use_consecutive_failures {
-            self.record_failure_legacy();
-        } else {
-            // Add this failure to the history
-            self.request_history.push_back(RequestResult {
-                timestamp: Instant::now(),
-                success: false,
-            });
+        // Add this failure to the history
+        self.request_history.push_back(RequestResult {
+            timestamp: Instant::now(),
+            success: false,
+        });
 
-            // Prune old entries
-            self.prune_history();
+        // Prune old entries
+        self.prune_history();
 
-            match self.state {
-                CircuitState::Closed => {
-                    // Calculate the current failure percentage
-                    let failure_percentage = self.calculate_failure_percentage();
-
-                    // Check if we've exceeded the threshold
-                    if failure_percentage >= self.failure_percentage as f32 {
-                        warn!(
-                            "Circuit breaker state transition: {} -> OPEN (failure percentage {:.1}% exceeds threshold {}%)",
-                            self.state, failure_percentage, self.failure_percentage
-                        );
-                        self.state = CircuitState::Open;
-                        self.opened_at = Some(Instant::now());
-                    }
-                }
-                CircuitState::HalfOpen => {
-                    // In half-open state, any failure opens the circuit again
-                    warn!(
-                        "Circuit breaker state transition: {} -> OPEN (failure in half-open state)",
-                        self.state
-                    );
-                    self.state = CircuitState::Open;
-                    self.success_count = 0;
-                    self.opened_at = Some(Instant::now());
-                }
-                CircuitState::Open => {
-                    // Already open, reset the opened_at time
-                    self.opened_at = Some(Instant::now());
-                }
-            }
-        }
-    }
-
-    /// Legacy implementation of record_failure
-    fn record_failure_legacy(&mut self) {
         match self.state {
             CircuitState::Closed => {
-                // Increment failure count
-                self.failure_count += 1;
+                // Calculate the current failure percentage
+                let failure_percentage = self.calculate_failure_percentage();
 
-                // If we've reached the failure threshold, open the circuit
-                if self.failure_count >= self.failure_threshold {
+                // Check if we've exceeded the threshold
+                if failure_percentage >= self.failure_percentage as f32 {
                     warn!(
-                        "Circuit breaker state transition: {} -> OPEN (failure threshold reached: {})",
-                        self.state, self.failure_threshold
+                        "Circuit breaker state transition: {} -> OPEN (failure percentage {:.1}% exceeds threshold {}%)",
+                        self.state, failure_percentage, self.failure_percentage
                     );
                     self.state = CircuitState::Open;
                     self.opened_at = Some(Instant::now());
@@ -327,37 +235,31 @@ pub struct CircuitBreakerLayer {
 }
 
 impl CircuitBreakerLayer {
-    /// Create a new circuit breaker layer with legacy consecutive failures behavior
-    pub fn new(failure_threshold: u32, reset_timeout: Duration, success_threshold: u32) -> Self {
+    /// Create a new circuit breaker layer
+    pub fn new(reset_timeout: Duration, success_threshold: u32) -> Self {
         Self::new_with_config(
-            failure_threshold,
             reset_timeout,
             success_threshold,
             60,
             50,
-            true,
             vec![500, 502, 503, 504],
         )
     }
 
     /// Create a new circuit breaker layer with full configuration
     pub fn new_with_config(
-        failure_threshold: u32,
         reset_timeout: Duration,
         success_threshold: u32,
         window_seconds: u64,
         failure_percentage: u8,
-        use_consecutive_failures: bool,
         failure_status_codes: Vec<u16>,
     ) -> Self {
         Self {
             state: Arc::new(Mutex::new(CircuitBreakerState::new(
-                failure_threshold,
                 reset_timeout,
                 success_threshold,
                 window_seconds,
                 failure_percentage,
-                use_consecutive_failures,
                 failure_status_codes,
             ))),
         }
@@ -384,28 +286,25 @@ pub struct CircuitBreakerService<S> {
 
 /// Add this error type definition
 #[derive(Debug)]
-pub enum CircuitBreakerError {
-    CircuitOpen,
-    ServiceError(Box<dyn StdError + Send + Sync>),
+pub struct CircuitBreakerError {
+    pub reset_timeout: Duration,
+    pub failure_rate: f32,
 }
 
 impl fmt::Display for CircuitBreakerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            CircuitBreakerError::CircuitOpen => {
-                write!(f, "Circuit is open, requests are not allowed")
-            }
-            CircuitBreakerError::ServiceError(e) => write!(f, "Service error: {}", e),
-        }
+        write!(
+            f,
+            "Circuit breaker is open. Failure rate: {:.2}%, reset in: {}s",
+            self.failure_rate * 100.0,
+            self.reset_timeout.as_secs()
+        )
     }
 }
 
 impl StdError for CircuitBreakerError {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
-        match self {
-            CircuitBreakerError::CircuitOpen => None,
-            CircuitBreakerError::ServiceError(e) => Some(e.as_ref()),
-        }
+        None
     }
 }
 
@@ -430,7 +329,10 @@ where
                 debug!("Circuit breaker moving from OPEN to HALF_OPEN state");
             } else {
                 // Circuit is still open, request should be rejected
-                return Poll::Ready(Err(Box::new(CircuitBreakerError::CircuitOpen) as _));
+                return Poll::Ready(Err(Box::new(CircuitBreakerError {
+                    reset_timeout: state.reset_timeout,
+                    failure_rate: state.calculate_failure_percentage(),
+                }) as _));
             }
         }
 
@@ -444,9 +346,10 @@ where
         if state.state == CircuitState::Open {
             if !state.check_transition_to_half_open() {
                 debug!("Circuit breaker is OPEN, failing request fast");
-                return futures::future::ready(
-                    Err(Box::new(CircuitBreakerError::CircuitOpen) as _),
-                )
+                return futures::future::ready(Err(Box::new(CircuitBreakerError {
+                    reset_timeout: state.reset_timeout,
+                    failure_rate: state.calculate_failure_percentage(),
+                }) as _))
                 .boxed();
             }
 
@@ -468,7 +371,9 @@ where
         // Process the response
         async move {
             // Call the inner service and convert any errors
-            let result = future.await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>);
+            let result = future
+                .await
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>);
 
             // Update circuit breaker state based on result
             let mut state = state_clone.lock().unwrap();
@@ -481,8 +386,10 @@ where
                     if is_failure {
                         // Record failure
                         state.record_failure();
-                        debug!("Circuit breaker recorded failure, consecutive={}, total={}, percentage={}%",
-                               state.failure_count, state.failure_count, state.calculate_failure_percentage());
+                        debug!(
+                            "Circuit breaker recorded failure, failure rate={}%",
+                            state.calculate_failure_percentage()
+                        );
                     } else {
                         // Record success
                         let old_state = state.state;
@@ -490,20 +397,26 @@ where
 
                         // Log state transition if it happened
                         if old_state != state.state {
-                            info!("Circuit breaker state changed: {:?} -> {:?}", old_state, state.state);
+                            info!(
+                                "Circuit breaker state changed: {:?} -> {:?}",
+                                old_state, state.state
+                            );
                         }
                     }
                 }
                 Err(_) => {
                     // Record failure for error
                     state.record_failure();
-                    debug!("Circuit breaker recorded error as failure, consecutive={}, total={}, percentage={}%",
-                           state.failure_count, state.failure_count, state.calculate_failure_percentage());
+                    debug!(
+                        "Circuit breaker recorded error as failure, failure rate={}%",
+                        state.calculate_failure_percentage()
+                    );
                 }
             }
 
             result
-        }.boxed()
+        }
+        .boxed()
     }
 }
 
@@ -538,4 +451,11 @@ where
             Poll::Pending => Poll::Pending,
         }
     }
+}
+
+/// Add missing config type
+#[derive(Debug, Clone)]
+pub struct CircuitBreakerConfig {
+    pub reset_timeout_secs: u64,
+    pub success_threshold: u32,
 }

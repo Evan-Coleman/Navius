@@ -35,9 +35,6 @@ reliability:
     reset_timeout_ms: 30000
     # Number of successful requests in half-open state to close circuit
     success_threshold: 2
-    # Legacy Circuit Breaker Settings (Consecutive Failures Mode)
-    # use_consecutive_failures: true
-    # failure_threshold: 5
 
   # Rate Limiting
   rate_limit:

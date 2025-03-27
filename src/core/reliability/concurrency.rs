@@ -125,6 +125,7 @@ where
     S::Future: Send + 'static,
     ReqBody: Send + 'static,
     ResBody: Send + 'static,
+    ResBody: From<axum::body::Body>,
 {
     type Response = Response<ResBody>;
     type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -158,24 +159,18 @@ where
         let mut state = self.tracker.lock().unwrap();
         if !state.try_acquire() {
             debug!("Concurrency limit reached, rejecting request");
-            // Create a response using axum's response builder
-            // We'll use a type conversion to handle the body type
-            // Unused variable is intentional here, we're just creating the error
-            let _response = Response::builder()
-                .status(StatusCode::SERVICE_UNAVAILABLE)
+
+            // Create a 429 Too Many Requests response
+            let response = Response::builder()
+                .status(StatusCode::TOO_MANY_REQUESTS)
                 .header("Retry-After", "5")
-                .body(axum::body::Body::from(
+                .body(ResBody::from(axum::body::Body::from(
                     "Server is at maximum capacity. Please try again later.",
-                ))
+                )))
                 .unwrap();
 
-            // Convert the response to the expected type using a boxed future
-            return futures::future::ready(Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Service is at capacity",
-            ))
-                as Box<dyn std::error::Error + Send + Sync>))
-            .boxed();
+            // Return the response directly
+            return futures::future::ready(Ok(response)).boxed();
         }
         drop(state);
 
@@ -264,3 +259,16 @@ where
         }
     }
 }
+
+#[derive(Debug)]
+pub struct ConcurrencyLimitError {
+    pub limit: usize,
+}
+
+impl std::fmt::Display for ConcurrencyLimitError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Concurrency limit of {} exceeded", self.limit)
+    }
+}
+
+impl std::error::Error for ConcurrencyLimitError {}

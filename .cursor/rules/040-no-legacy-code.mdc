@@ -1,0 +1,92 @@
+---
+description: Before starting work on any task Check this rule.
+globs: **/*
+alwaysApply: true
+---
+
+# No Legacy Code Rule
+
+## Overview
+This rule establishes our policy against maintaining legacy code and deprecated implementations in the codebase. We follow a complete replacement approach rather than maintaining multiple implementations in parallel.
+
+## Core Principles
+
+### Immediate Replacement, Not Deprecation (✅)
+- When refactoring or upgrading components, completely replace the old implementation
+- Do not mark code as `#[deprecated]` - remove it instead
+- Users of the codebase should only see the current, recommended implementation
+
+### No Legacy Support Burden (✅)
+- We do not maintain multiple versions of the same functionality
+- Breaking changes are acceptable when improving the codebase
+- Document migration paths but don't maintain the old code
+
+### Implementation Guide
+
+#### When Changing API or Implementation
+1. Create the new implementation in its own module/file
+2. Update all existing usages to the new implementation
+3. Delete the old implementation entirely
+4. Update tests to only test the new implementation
+5. Document the migration in CHANGELOG.md
+
+#### Exceptions
+- Public API stability may require temporary `deprecated` markers for one release cycle, but no longer
+- Any deprecated code must have a removal date specified
+- Third-party libraries with legacy support needs must be contained in adapter modules
+
+## Examples
+
+### Good Pattern (✅)
+```rust
+// OLD: my_module.rs
+pub fn old_function() {
+    // Old implementation
+}
+
+// STEP 1: Create new implementation in new_module.rs
+pub fn new_function() {
+    // New implementation
+}
+
+// STEP 2: Update all usages to new_function
+// STEP 3: Delete my_module.rs entirely
+```
+
+### Bad Pattern (❌)
+```rust
+// Keeping old functions around with deprecated markers
+#[deprecated(since = "1.0.0", note = "Use new_function instead")]
+pub fn old_function() {
+    // Legacy implementation still maintained
+}
+
+pub fn new_function() {
+    // New implementation
+}
+```
+
+## Benefits
+- Reduced maintenance burden
+- Cleaner codebase without technical debt
+- Forces users to migrate to the latest patterns
+- Eliminates confusion from multiple ways to do the same thing
+- Ensures all new code follows current best practices
+
+## Common Mistakes to Avoid
+- Creating adapter layers that hide legacy implementations
+- Maintaining compatibility shims indefinitely
+- Keeping old code "just in case" someone still uses it
+- Not providing clear migration paths in documentation
+- Letting temporary compatibility layers become permanent
+
+## Tooling and Enforcement
+- CI pipeline should check for `#[deprecated]` markers and fail
+- Code reviews should reject PRs with legacy code maintenance
+- Consider automating migration scripts for major refactorings
+
+## Documentation Requirements
+Instead of maintaining legacy code, create thorough documentation:
+1. Document breaking changes in CHANGELOG.md
+2. Provide clear migration examples
+3. Create upgrade guides for significant changes 

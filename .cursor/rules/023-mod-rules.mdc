@@ -1,0 +1,115 @@
+---
+description: when dealing with modules, module exports, lib.rs, and mod.rs files
+globs: **/mod.rs/**, **/mod.rs, /mod.rs/**, mod.rs
+alwaysApply: true
+---
+
+# Module Organization Rules
+
+## Module Structure Guidelines
+
+### Preferred Approach (✅)
+Use the Rust 2018 module system where each module is a separate file with the module name:
+
+```
+src/
+├── lib.rs
+├── main.rs
+├── core/
+│   ├── error.rs        # module 'error'
+│   ├── config.rs       # module 'config'
+│   └── handlers/
+│       ├── health.rs   # module 'health'
+│       └── auth.rs     # module 'auth'
+```
+
+### Discouraged Approach (❌)
+Do not use `mod.rs` files:
+
+```
+src/
+├── lib.rs
+├── main.rs
+├── core/
+│   ├── mod.rs         # Don't use this!
+│   ├── error/
+│   │   └── mod.rs     # Don't use this!
+│   └── handlers/
+│       └── mod.rs     # Don't use this!
+```
+
+## Module Declaration Rules
+
+1. **File Names = Module Names**
+   - The file name should exactly match the module name used in `mod` declarations
+   - Example: `pub mod error;` in `lib.rs` → file should be `error.rs`
+
+2. **Directory Organization**
+   - If a module has submodules, create a directory with the module name
+   - Put the module's code in a file with the same name as the directory
+   - Example:
+     ```
+     handlers/
+     ├── handlers.rs    # main handlers module code
+     ├── health.rs      # health submodule
+     └── auth.rs        # auth submodule
+     ```
+
+3. **Module Declarations**
+   - Declare submodules in the parent module file
+   - Example in `handlers.rs`:
+     ```rust
+     pub mod health;
+     pub mod auth;
+     ```
+
+4. **Re-exports**
+   - Use `pub use` statements in the parent module to re-export items
+   - This creates a clean public API
+   - Example:
+     ```rust
+     pub use self::health::HealthCheck;
+     pub use self::auth::AuthGuard;
+     ```
+
+## Benefits
+
+1. **Cleaner Directory Structure**
+   - No need for `mod.rs` files cluttering directories
+   - Easier to find modules as they match directory names
+   - More intuitive for developers coming from other languages
+
+2. **Better IDE Support**
+   - Files are named after their modules
+   - Easier to navigate in IDEs and editors
+   - Better symbol resolution
+
+3. **Simplified Imports**
+   - More straightforward import paths
+   - No confusion between `mod.rs` and module files
+
+## Migration Guide
+
+When converting from `mod.rs` style to the new style:
+
+1. Move the contents of `mod.rs` to a file named after the module
+2. Delete the `mod.rs` file
+3. Update any imports that referenced the old path
+4. Run `cargo check` to verify everything still works
+
+Example:
+```bash
+# Before
+src/core/handlers/mod.rs
+
+# After
+src/core/handlers.rs
+```
+
+## Enforcement
+
+- CI should check for and fail if any `mod.rs` files are found
+- Use the following command in CI to check:
+  ```bash
+  find src -name "mod.rs" -type f | grep . && exit 1 || exit 0
+  ``` 

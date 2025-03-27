@@ -15,7 +15,7 @@ tags:
   - performance
   - security
   - testing
-last_updated: March 23, 2025
+last_updated: March 26, 2024
 version: 1.0
 ---
 # Navius Framework Roadmaps
@@ -25,7 +25,11 @@ This directory contains roadmaps for enhancing the Navius framework to match the
 ## Quick Links
 
 - [Template for Updates](template-for-updating.md) - Guidelines for updating roadmaps
+- [Server Customization System](26-server-customization-system.md) - **Foundation priority** (96% complete)
+- [Generic Service Implementations](25-generic-service-implementations.md) - **Top priority** (0% complete)
 - [Testing Framework](03-testing-framework.md) - Current focus area (35% complete)
+- [Enhanced Caching](07-enhanced-caching.md) - Active development (40% complete)
+- [Dependency Injection](01-dependency-injection.md) - High priority focus area
 - [Project Status Dashboard](#current-implementation-status) - Overall project status
 - [Roadmap Instructions](roadmap-instructions/README.md) - Implementation guides for roadmaps
 
@@ -33,18 +37,20 @@ This directory contains roadmaps for enhancing the Navius framework to match the
 
 | ID | Roadmap | Status | Priority | Dependencies |
 |----|---------|--------|----------|--------------|
-| 01 | [Dependency Injection](01-dependency-injection.md) | 0% | High | None |
-| 02 | [Database Integration](02-database-integration.md) | 0% | High | 01 |
+| 17 | [Server Customization System](26-server-customization-system.md) | 96% | **Critical** | None |
+| 16 | [Generic Service Implementations](25-generic-service-implementations.md) | 0% | **Critical** | None |
 | 03 | [Testing Framework](03-testing-framework.md) | 35% | High | None |
-| 04 | [AWS Integration](04-aws-integration.md) | 0% | Medium | 01 |
+| 07 | [Enhanced Caching](07-enhanced-caching.md) | 40% | High | 02, 04 |
+| 01 | [Dependency Injection](01-dependency-injection.md) | 0% | High | None |
+| 10 | [Developer Experience](10-developer-experience.md) | 10% | High | None |
 | 05 | [Data Validation](05-data-validation.md) | 0% | High | None |
+| 12 | [Documentation Overhaul](12_document_overhaul.md) | 0% | Medium | None |
+| 11 | [Security Features](11-security-features.md) | 0% | High | None |
+| 02 | [Database Integration](02-database-integration.md) | 0% | High | 01 |
+| 04 | [AWS Integration](04-aws-integration.md) | 0% | Medium | 01 |
 | 06 | [Resilience Patterns](06-resilience-patterns.md) | 0% | Medium | 04 |
-| 07 | [Enhanced Caching](07-enhanced-caching.md) | 0% | Medium | 02, 04 |
 | 08 | [API Versioning](08-api-versioning.md) | 0% | Low | 05 |
 | 09 | [Declarative Features](09-declarative-features.md) | 0% | Low | 01 |
-| 10 | [Developer Experience](10-developer-experience.md) | 10% | High | None |
-| 11 | [Security Features](11-security-features.md) | 0% | High | None |
-| 12 | [Documentation Overhaul](12_document_overhaul.md) | 0% | Medium | None |
 | 15 | [API Model Management](15-api-model-management.md) | 0% | High | None |
 
 ## Completed Roadmaps
@@ -61,15 +67,20 @@ This directory contains roadmaps for enhancing the Navius framework to match the
 
 ### Overall Progress
 ```
-[████████░░] 35% Complete
+[████████░░] 40% Complete
 ```
 
 | Component | Progress | Status | Next Milestone |
 |-----------|----------|--------|----------------|
+| Server Customization | 96% | 🔄 In Progress | CLI Visualization |
+| Generic Services | 0% | 🔄 Starting | Database Interface Definition |
 | Project Structure | 100% | ✅ Complete | N/A |
 | Testing Framework | 35% | 🔄 In Progress | API Resource Testing |
+| Enhanced Caching | 40% | 🔄 In Progress | Cache Monitoring and Metrics |
+| Dependency Injection | 0% | 🔄 Starting | AppState Builder |
 | Developer Experience | 10% | 🔄 In Progress | Local Dev Environment |
-| Core Features | 0% | ⏳ Not Started | DI Implementation |
+| Data Validation | 0% | 🔄 Starting | Validation Framework |
+| Security Features | 0% | ⏳ Not Started | Auth Implementation |
 | Documentation | 0% | ⏳ Not Started | Documentation Audit |
 
 ### Testing Coverage
@@ -92,23 +103,41 @@ This directory contains roadmaps for enhancing the Navius framework to match the
    - Add database operation integration tests
    - Target: Maintain 98% core coverage
 
-2. **Developer Experience**
-   - Complete Docker Compose setup
-   - Implement hot reload
-   - Add development testing tools
-   - Target: Reach 40% completion
-
-3. **Dependency Injection**
+2. **Dependency Injection**
    - Implement AppState builder
    - Define service traits
    - Add error handling
    - Target: Reach 30% completion
 
-4. **Documentation Overhaul**
+3. **Developer Experience**
+   - Complete Docker Compose setup
+   - Implement hot reload
+   - Add development testing tools
+   - Target: Reach 40% completion
+
+4. **Data Validation**
+   - Define validation framework
+   - Implement input validation decorators
+   - Add schema-based validation
+   - Target: Reach 25% completion
+
+5. **Enhanced Caching**
+   - Improve monitoring and metrics
+   - Implement cache consistency mechanisms 
+   - Optimize cache performance
+   - Target: Reach 60% completion
+
+6. **Documentation Overhaul**
    - Complete documentation audit
    - Define document standards
    - Start reorganizing documentation structure
    - Target: Reach 25% completion
+
+7. **Security Features**
+   - Begin auth implementation
+   - Define security boundaries
+   - Implement core security utilities
+   - Target: Reach 20% completion
 
 ### Roadmap Dependencies
 

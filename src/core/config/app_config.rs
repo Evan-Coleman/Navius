@@ -2,6 +2,8 @@ use super::constants;
 use config::{Config, ConfigError, Environment, File};
 use dotenvy::dotenv;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::env;
 use std::path::Path;
 use std::time::Duration;
@@ -28,28 +30,6 @@ pub struct CacheConfig {
     pub reconnect_interval_seconds: u64,
 }
 
-/// Database configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DatabaseConfig {
-    pub enabled: bool,
-    pub url: String,
-    pub max_connections: u32,
-    pub connect_timeout_seconds: u64,
-    pub idle_timeout_seconds: Option<u64>,
-}
-
-impl Default for DatabaseConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            url: "postgres://postgres:postgres@localhost:5432/app".to_string(),
-            max_connections: 10,
-            connect_timeout_seconds: 30,
-            idle_timeout_seconds: Some(300),
-        }
-    }
-}
-
 /// API configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiConfig {
@@ -74,82 +54,24 @@ impl Default for ApiConfig {
     }
 }
 
-/// Entra ID (Azure AD) authentication configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EntraConfig {
-    /// Tenant ID (from environment variable)
-    #[serde(default)]
-    pub tenant_id: String,
-
-    /// Client ID (from environment variable)
-    #[serde(default)]
-    pub client_id: String,
-
-    /// Audience (from environment variable)
-    #[serde(default)]
-    pub audience: String,
-
-    /// Scope (from environment variable)
-    #[serde(default)]
-    pub scope: String,
-
-    /// Token URL (from environment variable)
-    #[serde(default)]
-    pub token_url: String,
-
-    /// JWKS URI format (for key discovery)
-    #[serde(default = "default_jwks_uri_format")]
-    pub jwks_uri_format: String,
-
-    /// Authorize URL format
-    #[serde(default = "default_authorize_url_format")]
-    pub authorize_url_format: String,
-
-    /// Token URL format
-    #[serde(default = "default_token_url_format")]
-    pub token_url_format: String,
-
-    /// Issuer URL formats
-    #[serde(default = "default_issuer_url_formats")]
-    pub issuer_url_formats: Vec<String>,
-
-    /// Admin roles (users with these roles can access admin endpoints)
-    pub admin_roles: Vec<String>,
-
-    /// Read-only roles (users with these roles can access read-only endpoints)
-    pub read_only_roles: Vec<String>,
-
-    /// Full access roles (users with these roles can access full access endpoints)
-    pub full_access_roles: Vec<String>,
-}
-
 /// Authentication configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthConfig {
+    #[serde(default)]
     pub enabled: bool,
+    pub default_provider: String,
+    pub providers: HashMap<String, ProviderConfig>,
+    #[serde(default)]
     pub debug: bool,
-    pub entra: EntraConfig,
 }
 
 impl Default for AuthConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
+            default_provider: String::new(),
+            providers: HashMap::new(),
             debug: false,
-            entra: EntraConfig {
-                tenant_id: env::var(constants::auth::env_vars::TENANT_ID).unwrap_or_default(),
-                client_id: env::var(constants::auth::env_vars::CLIENT_ID).unwrap_or_default(),
-                audience: env::var(constants::auth::env_vars::AUDIENCE).unwrap_or_default(),
-                scope: env::var(constants::auth::env_vars::SCOPE).unwrap_or_default(),
-                token_url: env::var(constants::auth::env_vars::TOKEN_URL).unwrap_or_default(),
-                jwks_uri_format: default_jwks_uri_format(),
-                authorize_url_format: default_authorize_url_format(),
-                token_url_format: default_token_url_format(),
-                issuer_url_formats: default_issuer_url_formats(),
-                admin_roles: Vec::new(),
-                read_only_roles: Vec::new(),
-                full_access_roles: Vec::new(),
-            },
         }
     }
 }
@@ -239,10 +161,6 @@ pub struct CircuitBreakerConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
 
-    /// Number of consecutive failures before opening the circuit (legacy mode)
-    #[serde(default = "default_failure_threshold")]
-    pub failure_threshold: u32,
-
     /// Time window in seconds for tracking failure rate
     #[serde(default = "default_window_seconds")]
     pub window_seconds: u64,
@@ -250,10 +168,6 @@ pub struct CircuitBreakerConfig {
     /// Failure percentage threshold (0-100) that triggers the circuit breaker
     #[serde(default = "default_failure_percentage")]
     pub failure_percentage: u8,
-
-    /// Whether to use the legacy consecutive failures mode (false = use rolling window)
-    #[serde(default = "default_false")]
-    pub use_consecutive_failures: bool,
 
     /// HTTP status codes that should be considered failures
     #[serde(default = "default_failure_status_codes")]
@@ -329,10 +243,8 @@ impl Default for CircuitBreakerConfig {
     fn default() -> Self {
         Self {
             enabled: default_true(),
-            failure_threshold: default_failure_threshold(),
             window_seconds: default_window_seconds(),
             failure_percentage: default_failure_percentage(),
-            use_consecutive_failures: default_false(),
             failure_status_codes: default_failure_status_codes(),
             reset_timeout_ms: default_reset_timeout(),
             success_threshold: default_success_threshold(),
@@ -387,10 +299,6 @@ fn default_retry_delay() -> u64 {
 
 fn default_retry_max_delay() -> u64 {
     1000
-}
-
-fn default_failure_threshold() -> u32 {
-    5
 }
 
 fn default_reset_timeout() -> u64 {
@@ -605,7 +513,7 @@ fn default_health_details() -> bool {
     true
 }
 
-/// Main application configuration
+/// Application configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     /// Server configuration
@@ -636,10 +544,6 @@ pub struct AppConfig {
     #[serde(default)]
     pub cache: CacheConfig,
 
-    /// Database configuration
-    #[serde(default)]
-    pub database: DatabaseConfig,
-
     /// Environment type (development, testing, staging, production)
     #[serde(default)]
     pub environment: EnvironmentType,
@@ -647,6 +551,31 @@ pub struct AppConfig {
     /// Endpoint security configuration
     #[serde(default)]
     pub endpoint_security: EndpointSecurityConfig,
+
+    /// Feature flags and configuration
+    #[serde(default)]
+    pub features: FeaturesConfig,
+}
+
+/// Feature flags and configurations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeaturesConfig {
+    /// Selected features to enable
+    #[serde(default)]
+    pub enabled: Vec<String>,
+
+    /// Feature-specific configuration
+    #[serde(default)]
+    pub config: HashMap<String, serde_yaml::Value>,
+}
+
+impl Default for FeaturesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: Vec::new(),
+            config: HashMap::new(),
+        }
+    }
 }
 
 /// Application metadata configuration
@@ -684,13 +613,13 @@ impl AppConfig {
         format!("/actuator/docs/{}", self.openapi.spec_file)
     }
 
-    /// Get the petstore API URL
-    pub fn petstore_api_url(&self) -> String {
-        self.api.base_url.clone()
-    }
-
     pub fn api_url(&self) -> &str {
         &self.api.base_url
+    }
+
+    /// Get enabled features
+    pub fn enabled_features(&self) -> HashSet<String> {
+        self.features.enabled.iter().cloned().collect()
     }
 }
 
@@ -737,8 +666,6 @@ pub fn load_config() -> Result<AppConfig, ConfigError> {
         .add_source(Environment::with_prefix("RELIABILITY").separator("_"))
         // Add specific environment variables for Entra ID auth
         .add_source(Environment::with_prefix("NAVIUS").separator("_"))
-        // Add legacy environment variables
-        .add_source(Environment::default().try_parsing(true))
         // Build the config
         .build()?;
 
@@ -747,53 +674,83 @@ pub fn load_config() -> Result<AppConfig, ConfigError> {
 
     // Validate critical configuration values
     if app_config.auth.enabled {
-        // Check roles configuration - panic if no roles are configured
-        if app_config.auth.entra.admin_roles.is_empty() {
-            panic!("No admin roles configured. Please specify admin_roles in configuration.");
-        }
+        // Get the default provider config
+        let default_provider = app_config.auth.default_provider.clone();
+        if let Some(provider_config) = app_config.auth.providers.get(&default_provider) {
+            // Check roles configuration - panic if no roles are configured
+            if provider_config
+                .role_mappings
+                .get("admin")
+                .unwrap_or(&Vec::new())
+                .is_empty()
+            {
+                panic!("No admin roles configured. Please specify admin_roles in configuration.");
+            }
 
-        if app_config.auth.entra.read_only_roles.is_empty() {
-            panic!(
-                "No read-only roles configured. Please specify read_only_roles in configuration."
-            );
-        }
+            if provider_config
+                .role_mappings
+                .get("read_only")
+                .unwrap_or(&Vec::new())
+                .is_empty()
+            {
+                panic!(
+                    "No read-only roles configured. Please specify read_only_roles in configuration."
+                );
+            }
 
-        if app_config.auth.entra.full_access_roles.is_empty() {
-            panic!(
-                "No full access roles configured. Please specify full_access_roles in configuration."
-            );
+            if provider_config
+                .role_mappings
+                .get("full_access")
+                .unwrap_or(&Vec::new())
+                .is_empty()
+            {
+                panic!(
+                    "No full access roles configured. Please specify full_access_roles in configuration."
+                );
+            }
         }
     }
 
-    // Manually set Entra ID configuration from environment variables if they exist
+    // Manually set provider configuration from environment variables if they exist
     // This ensures the environment variables are properly mapped to the configuration
-    if let Ok(tenant_id) = env::var(constants::auth::env_vars::TENANT_ID) {
-        if !tenant_id.is_empty() {
-            app_config.auth.entra.tenant_id = tenant_id;
+    let default_provider = app_config.auth.default_provider.clone();
+    if let Some(provider_config) = app_config.auth.providers.get_mut(&default_provider) {
+        if let Ok(tenant_id) = env::var(constants::auth::env_vars::TENANT_ID) {
+            if !tenant_id.is_empty() {
+                provider_config.provider_specific.insert(
+                    "tenant_id".to_string(),
+                    serde_yaml::Value::String(tenant_id),
+                );
+            }
         }
-    }
 
-    if let Ok(client_id) = env::var(constants::auth::env_vars::CLIENT_ID) {
-        if !client_id.is_empty() {
-            app_config.auth.entra.client_id = client_id;
+        if let Ok(client_id) = env::var(constants::auth::env_vars::CLIENT_ID) {
+            if !client_id.is_empty() {
+                provider_config.client_id = client_id;
+            }
         }
-    }
 
-    if let Ok(audience) = env::var(constants::auth::env_vars::AUDIENCE) {
-        if !audience.is_empty() {
-            app_config.auth.entra.audience = audience;
+        if let Ok(audience) = env::var(constants::auth::env_vars::AUDIENCE) {
+            if !audience.is_empty() {
+                provider_config.audience = audience;
+            }
         }
-    }
 
-    if let Ok(scope) = env::var(constants::auth::env_vars::SCOPE) {
-        if !scope.is_empty() {
-            app_config.auth.entra.scope = scope;
+        if let Ok(scope) = env::var(constants::auth::env_vars::SCOPE) {
+            if !scope.is_empty() {
+                provider_config
+                    .provider_specific
+                    .insert("scope".to_string(), serde_yaml::Value::String(scope));
+            }
         }
-    }
 
-    if let Ok(token_url) = env::var(constants::auth::env_vars::TOKEN_URL) {
-        if !token_url.is_empty() {
-            app_config.auth.entra.token_url = token_url;
+        if let Ok(token_url) = env::var(constants::auth::env_vars::TOKEN_URL) {
+            if !token_url.is_empty() {
+                provider_config.provider_specific.insert(
+                    "token_url".to_string(),
+                    serde_yaml::Value::String(token_url),
+                );
+            }
         }
     }
 
@@ -808,4 +765,20 @@ pub fn load_config() -> Result<AppConfig, ConfigError> {
 
 fn default_reconnect_interval() -> u64 {
     30
+}
+
+// Define the missing RoleMappings type
+pub type RoleMappings = HashMap<String, Vec<String>>;
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ProviderConfig {
+    pub enabled: bool,
+    pub client_id: String,
+    pub jwks_uri: String,
+    pub issuer_url: String,
+    pub audience: String,
+    #[serde(default)]
+    pub role_mappings: RoleMappings,
+    #[serde(default)]
+    pub provider_specific: HashMap<String, serde_yaml::Value>,
 }

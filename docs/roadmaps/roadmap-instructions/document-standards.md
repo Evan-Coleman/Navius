@@ -371,8 +371,3 @@ When implementing this standard:
    - Update version numbers on significant changes
    - Keep last_updated field current
    - Archive outdated versions
-
-4. **Maintain backwards compatibility**
-   - Redirect old documentation URLs
-   - Provide deprecation notices
-   - Keep legacy formats until transition complete 

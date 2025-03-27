@@ -236,7 +236,6 @@ Navius implements circuit breaking to prevent cascading failures:
 let circuit_breaker = CircuitBreaker::new(
     "petstore",
     CircuitBreakerConfig {
-        failure_threshold: 5,
         success_threshold: 2,
         timeout_ms: 1000,
         half_open_timeout_ms: 5000,

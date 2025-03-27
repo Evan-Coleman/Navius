@@ -4,13 +4,14 @@ use axum::{
 };
 use metrics::{counter, gauge};
 use serde::{Serialize, de::DeserializeOwned};
+use std::any::type_name;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::{
     any::Any,
     fmt::{Debug, Display},
     sync::Arc,
 };
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     core::{router::AppState, utils::api_logger},
@@ -18,10 +19,15 @@ use crate::{
     utils::api_resource::ApiResourceRegistry,
 };
 
+use crate::core::auth::MockTokenClient;
+use crate::core::cache::CacheRegistry;
+use crate::core::models::DependencyStatus;
+use crate::core::router::ServiceRegistry;
+
 /// Trait for API resources that can be cached and managed
 pub trait ApiResource: Clone + Send + Sync + 'static {
     /// The type used for resource identification
-    type Id: Display + Clone;
+    type Id: Display + Clone + Send + Sync;
 
     /// The string representation of the resource type (e.g., "user", "account")
     fn resource_type() -> &'static str;
@@ -34,10 +40,21 @@ pub trait ApiResource: Clone + Send + Sync + 'static {
 pub type BoxFuture<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
 
 /// Register a resource type with the registry
-pub fn register_resource<R: ApiResource + 'static>(registry: &Option<Arc<ApiResourceRegistry>>) {
-    if let Some(registry) = registry {
-        registry.register_resource::<R>();
-    }
+pub fn register_resource<R: ApiResource + 'static>(
+    registry: &Arc<ApiResourceRegistry>,
+) -> std::result::Result<(), String> {
+    // Create a simple health check function that just returns UP status
+    let health_check = |_state: &Arc<AppState>| {
+        Box::pin(async {
+            DependencyStatus {
+                name: format!("{} ({})", R::api_name(), R::resource_type()),
+                status: "UP".to_string(),
+                details: None,
+            }
+        }) as futures::future::BoxFuture<'static, DependencyStatus>
+    };
+
+    registry.register::<R, _>(health_check)
 }
 
 /// Options for configuring the API handler's behavior
@@ -140,52 +157,68 @@ where
                 ))
             })?;
 
-            // Check cache first if enabled
-            if options.use_cache {
-                if let Some(registry) = &state.cache_registry {
-                    // Use the resource type from the ApiResource trait
-                    let resource_type = R::resource_type();
+            // Special rule for caching: if cache_registry is present we try to use cache manager
+            if let Some(registry) = &state.cache_registry {
+                let cache_key = registry.create_key::<R>(&id);
+                if cache_key.is_none() {
+                    if options.detailed_logging {
+                        debug!(
+                            "Skipping cache - can't create key for resource type {}",
+                            type_name::<R>()
+                        );
+                    }
+                } else {
+                    let cache_key = cache_key.unwrap();
+                    if options.detailed_logging {
+                        debug!("Cache key: {}", cache_key);
+                    }
 
-                    // Convert ID to string for cache key
-                    let cache_key = id.to_string();
+                    // Skip cache handling if cache is not enabled
+                    if !options.use_cache {
+                        debug!("Skipping cache - caching is disabled for this resource");
+                        // Continue to fetch resource directly
+                    } else {
+                        // Try to fetch from cache
+                        let cache_key = cache_key.clone();
+                        let state_clone = state.clone();
+                        let id_clone = id.clone();
+                        let fetch_fn_clone = fetch_fn.clone();
+                        let _options = options.clone();
 
-                    // Try to fetch from cache using the generic get_or_fetch function
-                    let fetch_closure = || async {
-                        // Call the original fetch function and convert AppError to String
-                        fetch_fn(&state, id.clone())
+                        let fetch_closure = move || {
+                            let state = state_clone.clone();
+                            let id = id_clone.clone();
+                            let fetch_fn = fetch_fn_clone.clone();
+                            let _options = _options.clone();
+
+                            async move {
+                                // This way we avoid infinite recursion in case fetch() calls get() internally
+                                match fetch_fn(&state, id).await {
+                                    Ok(resource) => Ok(resource),
+                                    Err(e) => Err(e.to_string()),
+                                }
+                            }
+                        };
+
+                        match registry
+                            .get_or_fetch::<R, _, _>(cache_key, fetch_closure)
                             .await
-                            .map_err(|e| e.to_string())
-                    };
-
-                    match crate::core::cache::get_or_fetch::<R, _, _>(
-                        registry,
-                        resource_type,
-                        &cache_key,
-                        fetch_closure,
-                    )
-                    .await
-                    {
-                        Ok(resource) => {
-                            // Remove the generic logging here as it's redundant with resource handler
-                            // The fetch_resource_handler will log with more specific info
-                            return Ok(Json(resource));
-                        }
-                        Err(e) => {
-                            // Convert the string error back to an AppError
-                            return Err(AppError::ExternalServiceError(format!(
-                                "Failed to fetch {} {} from {}: {}",
-                                resource_type,
-                                id_str,
-                                if crate::core::cache::last_fetch_from_cache() {
-                                    "cache"
-                                } else {
-                                    "API"
-                                },
-                                e
-                            )));
+                        {
+                            Ok(resource) => {
+                                if options.detailed_logging {
+                                    debug!("Found in cache!");
+                                }
+                                return Ok(Json(resource));
+                            }
+                            Err(err) => {
+                                error!("Error getting resource from cache: {}", err);
+                                // Continue to fetch resource directly
+                            }
                         }
                     }
                 }
+            } else if options.detailed_logging {
+                debug!("Skipping cache - registry is not available");
             }
 
             // If not in cache or cache is disabled, fetch the resource
@@ -203,150 +236,14 @@ where
                 fetch_fn(&state, id.clone()).await?
             };
 
-            // Store in new cache registry if enabled
-            if options.use_cache {
-                if let Some(registry) = &state.cache_registry {
-                    // Get the resource type and create a cache key
-                    let resource_type = R::resource_type();
-                    let cache_key = id.to_string();
-
-                    // Try to store the resource in the registry
-                    let store_result = match crate::core::cache::get_resource_cache::<R>(
-                        registry,
-                        resource_type,
-                    ) {
-                        Some(cache) => {
-                            // Resource type is registered, store in cache
-                            if options.detailed_logging {
-                                info!("➕ Storing {} {} in registry cache", resource_type, id_str);
-                            }
-
-                            // Create a closure to store the resource
-                            let store_fn = || async {
-                                // Store directly in the cache
-                                cache
-                                    .cache
-                                    .insert(cache_key.clone(), resource.clone())
-                                    .await;
-
-                                // Increment counters
-                                counter!("cache_entries_created", "resource_type" => resource_type.to_string()).increment(1);
-                                let new_count = cache
-                                    .active_entries
-                                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
-                                    + 1;
-
-                                // Update metrics
-                                let current_size = cache.cache.entry_count();
-                                gauge!("cache_current_size", "resource_type" => resource_type.to_string()).set(current_size as f64);
-                                gauge!("cache_active_entries", "resource_type" => resource_type.to_string()).set(new_count as f64);
-
-                                if options.detailed_logging {
-                                    debug!(
-                                        "➕ Added {} ID: {} to registry cache (size: {}, active: {})",
-                                        resource_type, id_str, current_size, new_count
-                                    );
-                                }
-
-                                Ok(())
-                            };
-
-                            // Execute the store function
-                            store_fn().await
-                        }
-                        None => {
-                            // Resource type is not registered, try to register it
-                            if options.detailed_logging {
-                                info!(
-                                    "🔍 No cache found for {} in registry, attempting to register",
-                                    resource_type
-                                );
-                            }
-
-                            // Try to register the resource type
-                            match crate::utils::api_resource::register_resource::<R>(&state, None) {
-                                Ok(_) => {
-                                    // Successfully registered, now try to get the cache again
-                                    match crate::core::cache::get_resource_cache::<R>(
-                                        registry,
-                                        resource_type,
-                                    ) {
-                                        Some(new_cache) => {
-                                            // Store in the newly registered cache
-                                            if options.detailed_logging {
-                                                info!(
-                                                    "➕ Storing {} {} in newly registered cache",
-                                                    resource_type, id_str
-                                                );
-                                            }
-
-                                            // Store directly in the cache
-                                            new_cache
-                                                .cache
-                                                .insert(cache_key.clone(), resource.clone())
-                                                .await;
-
-                                            // Increment counters
-                                            counter!("cache_entries_created", "resource_type" => resource_type.to_string()).increment(1);
-                                            let new_count = new_cache
-                                                .active_entries
-                                                .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
-                                                + 1;
-
-                                            // Update metrics
-                                            let current_size = new_cache.cache.entry_count();
-                                            gauge!("cache_current_size", "resource_type" => resource_type.to_string()).set(current_size as f64);
-                                            gauge!("cache_active_entries", "resource_type" => resource_type.to_string()).set(new_count as f64);
-
-                                            if options.detailed_logging {
-                                                debug!(
-                                                    "➕ Added {} ID: {} to newly registered cache (size: {}, active: {})",
-                                                    resource_type, id_str, current_size, new_count
-                                                );
-                                            }
-
-                                            Ok(())
-                                        }
-                                        None => {
-                                            // Still can't get the cache, log the error
-                                            if options.detailed_logging {
-                                                warn!(
-                                                    "❌ Failed to get cache for {} after registration",
-                                                    resource_type
-                                                );
-                                            }
-                                            Err("Failed to get cache after registration"
-                                                .to_string())
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    // Failed to register the resource type
-                                    if options.detailed_logging {
-                                        warn!(
-                                            "❌ Failed to register {} in cache registry: {}",
-                                            resource_type, e
-                                        );
-                                    }
-                                    Err(e)
-                                }
-                            }
-                        }
-                    };
-
-                    // Log any errors but continue - we don't want to fail the request if caching fails
-                    if let Err(e) = store_result {
-                        debug!(
-                            "❌ Failed to store {} {} in registry cache: {}",
-                            resource_type, id_str, e
-                        );
-                    }
-
+            // Store in cache if we have a cache registry
+            if let Some(registry) = &state.cache_registry {
+                if let Some(cache_key) = registry.create_key::<R>(&id) {
                     if options.detailed_logging {
-                        info!(
-                            "📅 Cache TTL for {} {} set to {} seconds (in registry)",
-                            resource_type, id_str, options.cache_ttl_seconds
-                        );
+                        debug!("Storing resource {} in cache", id);
+                    }
+                    if let Err(err) = registry.store::<R>(cache_key, resource.clone()).await {
+                        error!("Failed to store resource in cache: {}", err);
                     }
                 }
             }
@@ -464,14 +361,32 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::body::Body;
-    use axum::http::{Request, Response, StatusCode};
-    use axum::routing::get;
+    use crate::core::{
+        auth::mock::MockTokenClient,
+        cache::CacheRegistry,
+        config::app_config::AppConfig,
+        error::AppError,
+        router::{AppState, core_app_router::ServiceRegistry},
+        utils::api_resource::ApiResourceRegistry,
+    };
+    use axum::{
+        body::{self, Body},
+        extract::Path,
+        http::{Request, StatusCode},
+        response::Json,
+        routing::{Router, get},
+    };
     use futures::future::BoxFuture;
     use metrics_exporter_prometheus::PrometheusBuilder;
     use serde::{Deserialize, Serialize};
-    use std::sync::atomic::AtomicUsize;
-    use tower::{BoxError, Service, ServiceExt};
+    use std::{
+        result::Result as StdResult,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+    };
+    use tower::ServiceExt;
 
     // Mock API resource for testing
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -532,7 +447,6 @@ mod tests {
             start_time: std::time::SystemTime::now(),
             cache_registry: Some(Arc::new(CacheRegistry::new())),
             client: Some(reqwest::Client::new()),
-            db_pool: None,
             token_client: Some(Arc::new(MockTokenClient::default())),
             metrics_handle: Some(metrics_handle),
             resource_registry: Some(Arc::new(ApiResourceRegistry::new())),
@@ -583,7 +497,7 @@ mod tests {
 
         // Get the response body
         let body = response.into_body();
-        let body_bytes = hyper::body::to_bytes(body).await.unwrap();
+        let body_bytes = body::to_bytes(body, usize::MAX).await.unwrap();
         let resource: MockResource = serde_json::from_slice(&body_bytes).unwrap();
 
         // Verify the resource data
@@ -603,7 +517,6 @@ mod tests {
             start_time: std::time::SystemTime::now(),
             cache_registry: Some(Arc::new(CacheRegistry::new())),
             client: Some(reqwest::Client::new()),
-            db_pool: None,
             token_client: Some(Arc::new(MockTokenClient::default())),
             metrics_handle: Some(PrometheusBuilder::new().build_recorder().handle()),
             resource_registry: Some(Arc::new(ApiResourceRegistry::new())),
@@ -645,7 +558,6 @@ mod tests {
             start_time: std::time::SystemTime::now(),
             cache_registry: Some(Arc::new(CacheRegistry::new())),
             client: Some(reqwest::Client::new()),
-            db_pool: None,
             token_client: Some(Arc::new(MockTokenClient::default())),
             metrics_handle: Some(PrometheusBuilder::new().build_recorder().handle()),
             resource_registry: Some(Arc::new(ApiResourceRegistry::new())),
@@ -700,7 +612,6 @@ mod tests {
             start_time: std::time::SystemTime::now(),
             cache_registry: Some(Arc::new(CacheRegistry::new())),
             client: Some(reqwest::Client::new()),
-            db_pool: None,
             token_client: Some(Arc::new(MockTokenClient::default())),
             metrics_handle: Some(PrometheusBuilder::new().build_recorder().handle()),
             resource_registry: Some(Arc::new(ApiResourceRegistry::new())),

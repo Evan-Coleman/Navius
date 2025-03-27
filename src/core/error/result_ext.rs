@@ -17,9 +17,6 @@ pub trait ResultExt<T, E> {
     /// Convert any error to an AppError::ExternalServiceError
     fn external_err(self) -> Result<T>;
 
-    /// Convert any error to an AppError::DatabaseError
-    fn db_err(self) -> Result<T>;
-
     /// Convert any error to an AppError::CacheError
     fn cache_err(self) -> Result<T>;
 
@@ -61,13 +58,6 @@ where
         self.map_err(|e| {
             error!("External service error: {}", e);
             AppError::ExternalServiceError(e.to_string())
-        })
-    }
-
-    fn db_err(self) -> Result<T> {
-        self.map_err(|e| {
-            error!("Database error: {}", e);
-            AppError::DatabaseError(e.to_string())
         })
     }
 
@@ -184,19 +174,6 @@ mod tests {
                 assert!(msg.contains("test error"));
             }
             _ => panic!("Expected ExternalServiceError variant"),
-        }
-    }
-
-    #[test]
-    fn test_db_err_conversion() {
-        let result: std::result::Result<(), IoError> = Err(test_error());
-        let app_result = result.db_err();
-
-        match app_result {
-            Err(AppError::DatabaseError(msg)) => {
-                assert!(msg.contains("test error"));
-            }
-            _ => panic!("Expected DatabaseError variant"),
         }
     }
 

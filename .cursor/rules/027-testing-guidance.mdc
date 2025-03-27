@@ -1,0 +1,51 @@
+---
+description: if you are making, editing, or dealing with test issues reference this
+globs: 
+alwaysApply: true
+---
+# Testing Guidelines
+
+## General Testing Philosophy
+- Tests should be thorough but focused - test one clear behavior per test
+- Follow AAA pattern: Arrange, Act, Assert
+- Tests should be isolated and not depend on the order of execution
+- Aim for 80% coverage minimum, with critical security and core logic paths at 100%
+- Use mocks sparingly and prefer explicit test doubles when needed
+
+## Unit Test Structure
+- Place unit tests in the same file as the implementation using `#[cfg(test)]` module
+- Use descriptive test names that explain what is being tested and expected behavior
+- Group tests logically by function or feature they're testing
+- Include both happy path and error path tests
+
+## Test Types
+- Unit tests: Test individual functions in isolation
+- Integration tests: Test interactions between modules
+- Doc tests: Use documentation examples as tests (`cargo test --doc`)
+- Property tests: Use proptest for functions with many input variations
+
+## Test Utilities
+- Use the common test utilities in `/tests/common/mod.rs`
+- For test data, prefer realistic examples that match production scenarios
+- Create test fixtures instead of duplicating test setup
+- Use table-driven tests for multiple similar test cases
+
+## Async Testing
+- Use `#[tokio::test]` for async tests
+- Prefer `async/await` over `.await.unwrap()` chains
+- Test timeout behavior with explicit timeout annotations
+
+## CI Integration
+- All PRs must include tests for new features
+- Tests must pass before merge
+- Run all tests locally before pushing changes
+
+## Error Handling Tests
+- Test all error paths, not just happy paths
+- Verify error messages are user-friendly and clear
+- Test that errors are properly categorized by severity
+
+## Authentication and Security Tests
+- Thoroughly test permission boundaries
+- Test both authenticated and unauthenticated scenarios
+- Verify proper token validation and refresh processes

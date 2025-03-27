@@ -57,3 +57,7 @@ config.*.yaml
 
 # Make sure proptest regression files are not ignored
 !**/proptest-regressions/
+
+# mdBook output
+/docs/book/
+/public/

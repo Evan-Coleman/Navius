@@ -12,6 +12,7 @@ use axum::http::{Request, StatusCode};
 use axum::response::{IntoResponse, Response};
 use futures::{FutureExt, TryFutureExt, future::BoxFuture};
 use pin_project::pin_project;
+use thiserror::Error;
 use tower::{Layer, Service};
 use tracing::{debug, info, warn};
 
@@ -285,4 +286,37 @@ where
             Poll::Pending => Poll::Pending,
         }
     }
+}
+
+#[derive(Debug)]
+pub struct RateLimitError {
+    pub retry_after: Duration,
+    pub rate_limit: u32,
+    pub window_duration: Duration,
+}
+
+impl std::fmt::Display for RateLimitError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Rate limit exceeded. Limit: {} requests per {}s. Try again in {}s",
+            self.rate_limit,
+            self.window_duration.as_secs(),
+            self.retry_after.as_secs()
+        )
+    }
+}
+
+impl std::error::Error for RateLimitError {}
+
+#[derive(Debug)]
+pub struct ConcurrencyLimitError {
+    pub current_connections: usize,
+    pub max_connections: usize,
+}
+
+#[derive(Debug)]
+pub struct RetryError {
+    pub attempts: u32,
+    pub final_status: StatusCode,
 }

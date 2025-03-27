@@ -4,8 +4,11 @@ use std::fmt::Debug;
 use std::sync::{Arc, RwLock};
 use tracing::{debug, info};
 
+use crate::core::auth::MockTokenClient;
+use crate::core::cache::CacheRegistry;
 use crate::core::models::DependencyStatus;
 use crate::core::router::AppState;
+use crate::core::router::ServiceRegistry;
 use crate::core::utils::api_resource::ApiResource;
 
 /// Type for a health check function
@@ -185,11 +188,15 @@ impl ApiResourceError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::auth::MockTokenClient;
+    use crate::core::cache::CacheRegistry;
+    use crate::core::router::ServiceRegistry;
     use crate::core::utils::api_resource::ApiResource;
     use serde::{Deserialize, Serialize};
     use std::collections::BTreeMap;
     use std::future::Future;
     use std::pin::Pin;
+    use std::sync::Arc;
 
     // A mock implementation of ApiResource for testing
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -324,7 +331,6 @@ mod tests {
             start_time: std::time::SystemTime::now(),
             cache_registry: Some(Arc::new(CacheRegistry::default())),
             client: Some(reqwest::Client::new()),
-            db_pool: None,
             token_client: Some(Arc::new(MockTokenClient::default())),
             metrics_handle: Some(
                 metrics_exporter_prometheus::PrometheusBuilder::new()

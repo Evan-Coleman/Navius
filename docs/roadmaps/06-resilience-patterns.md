@@ -256,7 +256,6 @@ use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CircuitBreakerConfig {
-    pub failure_threshold: u32,
     pub reset_timeout: Duration,
     pub half_open_timeout: Duration,
 }
@@ -358,7 +357,6 @@ mod tests {
     #[tokio::test]
     async fn test_circuit_breaker() {
         let config = CircuitBreakerConfig {
-            failure_threshold: 3,
             reset_timeout: Duration::from_secs(5),
             half_open_timeout: Duration::from_secs(1),
         };

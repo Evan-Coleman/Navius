@@ -50,12 +50,10 @@ mod tests {
         // Test with enabled config
         let config = CircuitBreakerConfig {
             enabled: true,
-            failure_threshold: 5,
             reset_timeout_ms: 30000,
             success_threshold: 2,
             window_seconds: 60,
             failure_percentage: 50,
-            use_consecutive_failures: true,
             failure_status_codes: vec![500, 503],
         };
 
@@ -169,12 +167,10 @@ mod tests {
 
         #[test]
         fn test_circuit_breaker_config_random_values(
-            failure_threshold in 1u32..20u32,
             reset_timeout_ms in 100u64..60000u64,
             success_threshold in 1u32..10u32,
             window_seconds in 1u64..300u64,
             failure_percentage in 10u8..100u8,
-            use_consecutive_failures in proptest::bool::ANY,
             failure_codes_count in 1usize..5usize
         ) {
             // Generate random status codes between 400-599 for failure detection
@@ -187,12 +183,10 @@ mod tests {
 
             let config = CircuitBreakerConfig {
                 enabled: true,
-                failure_threshold,
                 reset_timeout_ms,
                 success_threshold,
                 window_seconds,
                 failure_percentage,
-                use_consecutive_failures,
                 failure_status_codes,
             };
 
@@ -213,7 +207,6 @@ mod tests {
             start_time: SystemTime::now(),
             cache_registry: Some(Arc::new(CacheRegistry::default())),
             client: Some(Client::new()),
-            db_pool: None,
             token_client: Some(Arc::new(MockTokenClient::new())),
             metrics_handle: Some(metrics_handle),
             resource_registry: Some(Arc::new(ApiResourceRegistry::new())),

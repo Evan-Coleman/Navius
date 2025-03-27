@@ -6,7 +6,9 @@ use uuid::Uuid;
 
 use crate::core::{
     auth::{
-        client::{TokenClient, TokenValidationResult},
+        TokenClient,
+        error::AuthError,
+        interfaces::{TokenClient as InterfacesTokenClient, TokenValidationResult},
         models::{JwtClaims, TokenResponse, UserProfile},
     },
     error::AppError,
@@ -56,8 +58,20 @@ impl MockTokenClient {
     }
 }
 
-#[async_trait]
 impl TokenClient for MockTokenClient {
+    fn get_token(&self, _resource: &str) -> Result<String, AuthError> {
+        if self.validation_should_succeed {
+            Ok("mock_access_token".to_string())
+        } else {
+            Err(AuthError::ValidationFailed(
+                "Invalid credentials".to_string(),
+            ))
+        }
+    }
+}
+
+#[async_trait]
+impl InterfacesTokenClient for MockTokenClient {
     async fn get_token(&self, _username: &str, _password: &str) -> Result<TokenResponse, AppError> {
         if self.validation_should_succeed {
             Ok(TokenResponse {

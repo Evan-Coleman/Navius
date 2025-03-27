@@ -1,3 +1,5 @@
+use crate::app;
+use crate::core::services::error::ServiceError as CoreServiceError;
 use axum::{
     Json,
     response::{IntoResponse, Response},
@@ -20,6 +22,17 @@ pub struct ErrorResponse {
     pub error_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<String>,
+}
+
+impl ErrorResponse {
+    pub fn new(error_type: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            code: 500, // Default to internal server error
+            message: message.into(),
+            error_type: error_type.into(),
+            details: None,
+        }
+    }
 }
 
 // Error severity levels
@@ -72,9 +85,6 @@ pub enum AppError {
     #[error("External service error: {0}")]
     ExternalServiceError(String),
 
-    #[error("Database error: {0}")]
-    DatabaseError(String),
-
     #[error("Cache error: {0}")]
     CacheError(String),
 
@@ -83,6 +93,27 @@ pub enum AppError {
 
     #[error("Internal server error: {0}")]
     InternalServerError(String),
+
+    #[error("Authentication error: {0}")]
+    AuthenticationError(String),
+
+    #[error("Authorization error: {0}")]
+    AuthorizationError(String),
+
+    #[error("Configuration error: {0}")]
+    ConfigurationError(String),
+
+    #[error("Not implemented: {0}")]
+    NotImplementedError(String),
+
+    #[error("Conflict error: {0}")]
+    ConflictError(String),
+
+    #[error("Not found error: {0}")]
+    NotFoundError(String),
+
+    #[error("Network error: {0}")]
+    NetworkError(String),
 }
 
 impl AppError {
@@ -98,49 +129,67 @@ impl AppError {
             AppError::CacheError(_) => ErrorSeverity::Medium,
             AppError::ClientError(_) => ErrorSeverity::Medium,
             AppError::ExternalServiceError(_) => ErrorSeverity::High,
-            AppError::DatabaseError(_) => ErrorSeverity::High,
             AppError::ConfigError(_) => ErrorSeverity::High,
             AppError::IoError(_) => ErrorSeverity::High,
             AppError::InternalServerError(_) => ErrorSeverity::High,
+            AppError::AuthenticationError(_) => ErrorSeverity::High,
+            AppError::AuthorizationError(_) => ErrorSeverity::High,
+            AppError::ConfigurationError(_) => ErrorSeverity::High,
+            AppError::NotImplementedError(_) => ErrorSeverity::High,
+            AppError::ConflictError(_) => ErrorSeverity::Medium,
+            AppError::NotFoundError(_) => ErrorSeverity::Low,
+            AppError::NetworkError(_) => ErrorSeverity::Medium,
         }
     }
 
-    // Get the error type as a string
+    // Get a string representation of the error type
     pub fn error_type(&self) -> String {
         match self {
-            AppError::ConfigError(_) => "config_error",
-            AppError::ClientError(_) => "client_error",
-            AppError::IoError(_) => "io_error",
             AppError::NotFound(_) => "not_found",
             AppError::BadRequest(_) => "bad_request",
+            AppError::ValidationError(_) => "validation_error",
             AppError::Unauthorized(_) => "unauthorized",
             AppError::Forbidden(_) => "forbidden",
             AppError::RateLimited(_) => "rate_limited",
-            AppError::ExternalServiceError(_) => "external_service_error",
-            AppError::DatabaseError(_) => "database_error",
             AppError::CacheError(_) => "cache_error",
-            AppError::ValidationError(_) => "validation_error",
-            AppError::InternalServerError(_) => "internal_error",
+            AppError::ClientError(_) => "client_error",
+            AppError::ExternalServiceError(_) => "external_service_error",
+            AppError::ConfigError(_) => "config_error",
+            AppError::IoError(_) => "io_error",
+            AppError::InternalServerError(_) => "internal_server_error",
+            AppError::AuthenticationError(_) => "authentication_error",
+            AppError::AuthorizationError(_) => "authorization_error",
+            AppError::ConfigurationError(_) => "configuration_error",
+            AppError::NotImplementedError(_) => "not_implemented_error",
+            AppError::ConflictError(_) => "conflict_error",
+            AppError::NotFoundError(_) => "not_found_error",
+            AppError::NetworkError(_) => "network_error",
         }
         .to_string()
     }
 
-    // Get HTTP status code for the error
+    // Map the error to an HTTP status code
     pub fn status_code(&self) -> StatusCode {
         match self {
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
             AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            AppError::ValidationError(_) => StatusCode::BAD_REQUEST,
             AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             AppError::Forbidden(_) => StatusCode::FORBIDDEN,
             AppError::RateLimited(_) => StatusCode::TOO_MANY_REQUESTS,
-            AppError::ClientError(_) => StatusCode::BAD_GATEWAY,
+            AppError::CacheError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::ClientError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::ExternalServiceError(_) => StatusCode::BAD_GATEWAY,
             AppError::ConfigError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::IoError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            AppError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            AppError::CacheError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            AppError::ValidationError(_) => StatusCode::UNPROCESSABLE_ENTITY,
             AppError::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::AuthenticationError(_) => StatusCode::UNAUTHORIZED,
+            AppError::AuthorizationError(_) => StatusCode::FORBIDDEN,
+            AppError::ConfigurationError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::NotImplementedError(_) => StatusCode::NOT_IMPLEMENTED,
+            AppError::ConflictError(_) => StatusCode::CONFLICT,
+            AppError::NotFoundError(_) => StatusCode::NOT_FOUND,
+            AppError::NetworkError(_) => StatusCode::BAD_GATEWAY,
         }
     }
 
@@ -160,16 +209,20 @@ impl AppError {
         Self::ValidationError(message.into())
     }
 
-    pub fn database_error(message: impl Into<String>) -> Self {
-        Self::DatabaseError(message.into())
-    }
-
     pub fn unauthorized(message: impl Into<String>) -> Self {
         Self::Unauthorized(message.into())
     }
 
     pub fn forbidden(message: impl Into<String>) -> Self {
         Self::Forbidden(message.into())
+    }
+
+    pub fn conflict_error(message: impl Into<String>) -> Self {
+        Self::ConflictError(message.into())
+    }
+
+    pub fn not_found_error(message: impl Into<String>) -> Self {
+        Self::NotFoundError(message.into())
     }
 }
 
@@ -220,17 +273,35 @@ impl IntoResponse for AppError {
     }
 }
 
-impl From<crate::app::services::error::ServiceError> for AppError {
-    fn from(err: crate::app::services::error::ServiceError) -> Self {
-        use crate::app::services::error::ServiceError;
-
+impl From<CoreServiceError> for AppError {
+    fn from(err: CoreServiceError) -> Self {
         match err {
-            ServiceError::PetNotFound => Self::NotFound("Pet not found".to_string()),
-            ServiceError::UserNotFound => Self::NotFound("User not found".to_string()),
-            ServiceError::UsernameExists => Self::BadRequest("Username already exists".to_string()),
-            ServiceError::EmailExists => Self::BadRequest("Email already exists".to_string()),
-            ServiceError::ValidationError(msg) => Self::ValidationError(msg),
-            ServiceError::DatabaseError(msg) => Self::DatabaseError(msg),
+            CoreServiceError::InitializationError(msg) => {
+                Self::InternalServerError(format!("Service initialization error: {}", msg))
+            }
+            CoreServiceError::NotFound(msg) => Self::NotFoundError(msg),
+            CoreServiceError::MissingDependency(msg) => {
+                Self::InternalServerError(format!("Missing dependency: {}", msg))
+            }
+            CoreServiceError::CircularDependency(msg) => {
+                Self::InternalServerError(format!("Circular dependency: {}", msg))
+            }
+            CoreServiceError::Unavailable(msg) => {
+                Self::InternalServerError(format!("Service unavailable: {}", msg))
+            }
+            CoreServiceError::Timeout(msg) => {
+                Self::InternalServerError(format!("Service timeout: {}", msg))
+            }
+            CoreServiceError::ConfigurationError(msg) => Self::ConfigurationError(msg),
+            CoreServiceError::ConversionError(msg) => {
+                Self::InternalServerError(format!("Conversion error: {}", msg))
+            }
+            CoreServiceError::Validation(msg) => Self::ValidationError(msg),
+            CoreServiceError::Conflict(msg) => Self::ConflictError(msg),
+            CoreServiceError::Repository(msg) => {
+                Self::InternalServerError(format!("Repository error: {}", msg))
+            }
+            CoreServiceError::Other(msg) => Self::InternalServerError(msg),
         }
     }
 }
@@ -272,10 +343,6 @@ mod tests {
             ErrorSeverity::Medium
         );
 
-        assert_eq!(
-            AppError::DatabaseError("test".into()).severity(),
-            ErrorSeverity::High
-        );
         assert_eq!(
             AppError::InternalServerError("test".into()).severity(),
             ErrorSeverity::High
@@ -326,7 +393,7 @@ mod tests {
         );
         assert_eq!(
             AppError::ValidationError("test".into()).status_code(),
-            StatusCode::UNPROCESSABLE_ENTITY
+            StatusCode::BAD_REQUEST
         );
         assert_eq!(
             AppError::InternalServerError("test".into()).status_code(),

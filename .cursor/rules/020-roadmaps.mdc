@@ -1,0 +1,42 @@
+---
+description: When working with files in the docs/roadmaps folder.
+globs: docs/roadmaps/**/*
+alwaysApply: false
+---
+## When being asked to implement something in a roadmap follow these instructions. Also, always add the ##PROMPT_ENHANCER to requests.
+
+# First Steps
+ - Read the [template-for-updating.md](mdc:docs/roadmaps/template-for-updating.md) file to understand the format and steps to take in the process.
+ - Let us know that you are adding enhancements from this rule file.
+
+# Second Steps
+ - If asked to work on a specific roadmap and specific step please work through the implementation slowly and carefully
+ - After each logical stopping point when you would like to see if it is working please ask me to start the server, I will then start the server and tell you to procede.
+ - Make sure to create tests for each step when it makes sense to.
+   - Follow the testing guidelines in the testing-guidance.mdc rule
+   - Create unit tests alongside implementation
+   - Update the testing roadmap in docs/testing-roadmap.md
+
+# Final Steps
+ - According to the [template-for-updating.md](mdc:docs/roadmaps/template-for-updating.md) file, please update the roadmap you are working on to correctly indicate (not started, started, finished, abandoned) and finally update the updated at time so we know when that particular feature was last worked on.
+ - Check to see if any updates to the base project level readme, or anywhere else that might need updating.
+ - Ensure all tests are passing with `cargo test`
+ - Make sure the readme is up to date "docs/roadmaps/README.md"
+ - Create extensive documenatation if new implementation was created. We want to keep our docs up to date.
+
+
+##PROMPT_ENHANCER
+- Focus only on what's truly necessary for a lightweight, effective implementation.
+- This is a Rust Axum framework, so use those things to our advantage and try to keep dependencies at a minimum. If the dependency can save us a lot of time or effort, go ahead and add it.
+- Our order of priority is security > ease of use > speed > simplicity
+- Some things we intend on using in prod: AWS, Redis, Postgres, Microsoft's Entra, Gitlab
+    - AWS will be where our app is deployed
+    - Redis will be our cacheing layer
+    - Postgres will be our Database
+    - Entra will be our auth platform
+    - Gitlab will be our VCS and will run pipelines for deployments, builds, testing, vulnerability scanning, etc
+- Testing practices to follow:
+    - Write unit tests concurrently with implementation code
+    - Test both success and error paths
+    - Follow the testing roadmap in docs/testing-roadmap.md
+    - Aim for 80% code coverage minimum

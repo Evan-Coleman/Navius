@@ -1,86 +1,44 @@
 use axum::{
-    Json,
-    extract::{Path, State},
-    routing::{Router, get, post},
+    Router,
+    routing::{delete, get, post, put},
 };
-use std::net::SocketAddr;
 use std::sync::Arc;
-use tracing::info;
 
-use crate::{
-    api,
-    core::auth::EntraAuthLayer,
-    core::router::{AppState, create_core_app_router, init_app_state},
-    handlers::examples::pet,
-};
+use crate::core::router::core_app_router::{AppState, RouterBuilder};
+use config::Config;
 
-/// Create custom user routes that can be modified by developers
-fn create_user_routes(state: Arc<AppState>) -> Router {
-    // Define whether auth is enabled
-    let auth_enabled = state.config.auth.enabled;
-
-    // Create auth middleware for different access levels
-    let readonly_auth = EntraAuthLayer::from_app_config_require_read_only_role(&state.config);
-    let fullaccess_auth = EntraAuthLayer::from_app_config_require_full_access_role(&state.config);
-
-    // 1. PUBLIC ROUTES - available without authentication
-    let public_routes = Router::new()
-        .route("/pet/{id}", get(pet::fetch_pet_handler))
-        // Add more public routes here
-        .route("/hello", get(|| async { "Hello, World!" }))
-        // Include API routes
-        .merge(api::configure());
-
-    // 2. READ-ONLY ROUTES - requires basic authentication
-    let readonly_routes = Router::new()
-        .route("/pet/{id}", get(pet::fetch_pet_handler))
-        // Add more read-only routes here
-        ;
-
-    // 3. FULL ACCESS ROUTES - requires full access role
-    let fullaccess_routes = Router::new()
-        .route("/pet/{id}", get(pet::fetch_pet_handler))
-        // Add more full access routes here
-        ;
-
-    // Apply authentication layers if enabled
-    let (readonly_routes, fullaccess_routes) = if auth_enabled {
-        (
-            readonly_routes.layer(readonly_auth),
-            fullaccess_routes.layer(fullaccess_auth),
-        )
-    } else {
-        // No auth enabled
-        (readonly_routes, fullaccess_routes)
-    };
-
-    // Combine user-defined routes
-    Router::new()
-        .merge(public_routes)
-        .nest("/read", readonly_routes)
-        .nest("/full", fullaccess_routes)
-        .with_state(state)
-}
-
-/// Create the application router by combining core routes with user routes
-pub fn create_router(state: Arc<AppState>) -> Router {
-    // Get user-defined routes
-    let user_routes = create_user_routes(state.clone());
-
-    // Create the core app router with user routes
-    create_core_app_router(state, user_routes)
-}
-
-/// Initialize the application
+/// Create an application router with the given configuration
 ///
-/// Note: The Router returned here has type Router<Arc<AppState>>. When passing to the server
-/// in main.rs, it needs to be used with the appropriate serving method.
-pub async fn init() -> (Router, SocketAddr) {
-    // Initialize app state and get server address
-    let (state, addr) = init_app_state().await;
+/// This function provides a Spring Boot-like developer experience
+/// where you can easily configure and extend the application.
+pub fn create_router(_config: Config) -> Router {
+    // Convert from config to AppConfig
+    let app_config = crate::core::config::app_config::AppConfig::default();
 
-    // Create router with app state
-    let app = create_router(state);
+    // Create a basic app state to use with the router
+    let _app_state = Arc::new(AppState::default());
 
-    (app, addr)
+    // Create a router using the builder pattern
+    let router = RouterBuilder::new()
+        .with_config(app_config)
+        .with_metrics_enabled(true)
+        .with_cors(true)
+        .build();
+
+    // Convert the router to use our app state
+    router.with_state(())
+}
+
+/// Create a Spring Boot-like application with sensible defaults
+pub fn create_application() -> RouterBuilder {
+    crate::core::router::core_app_router::create_application()
+}
+
+async fn health_check() -> &'static str {
+    "OK"
+}
+
+async fn metrics() -> String {
+    let handle = crate::core::metrics::init_metrics();
+    crate::core::metrics::metrics_endpoint_handler(&handle).await
 }

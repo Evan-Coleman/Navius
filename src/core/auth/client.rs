@@ -2,14 +2,23 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
-use oauth2::{AuthUrl, ClientId, ClientSecret, Scope, TokenResponse, TokenUrl, basic::BasicClient};
+use async_trait::async_trait;
+use oauth2::{
+    AuthUrl, ClientId, ClientSecret, Scope, TokenResponse as OAuth2TokenResponse, TokenUrl,
+    basic::BasicClient,
+};
 use reqwest::Client;
 use tracing::{debug, error, info};
 
+use crate::core::auth::interfaces::{TokenClient, TokenValidationResult};
+use crate::core::auth::models::{JwtClaims, TokenResponse, UserProfile};
 use crate::core::config::app_config::AppConfig;
+use crate::core::config::app_config::ProviderConfig;
 use crate::core::config::constants;
+use crate::core::error::AppError;
 
 /// Token cache entry
+#[derive(Debug)]
 struct TokenCacheEntry {
     /// The access token
     access_token: String,
@@ -18,6 +27,7 @@ struct TokenCacheEntry {
 }
 
 /// Entra token client for acquiring tokens for downstream services
+#[derive(Debug)]
 pub struct EntraTokenClient {
     /// HTTP client for making requests
     client: Client,
@@ -60,14 +70,43 @@ impl EntraTokenClient {
 
     /// Create a new token client from the application configuration
     pub fn from_config(config: &AppConfig) -> Self {
-        let tenant_id = &config.auth.entra.tenant_id;
-        let client_id = &config.auth.entra.client_id;
+        // Get the default provider config
+        let provider_name = &config.auth.default_provider;
+        let provider_config = config
+            .auth
+            .providers
+            .get(provider_name)
+            .expect("Default provider configuration not found");
+
+        // Get tenant ID from provider specific config
+        let tenant_id = provider_config
+            .provider_specific
+            .get("tenant_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+
+        let client_id = &provider_config.client_id;
         let client_secret =
             std::env::var(constants::auth::env_vars::CLIENT_SECRET).unwrap_or_default();
 
-        // Use URL formats from config
-        let auth_url_format = &config.auth.entra.authorize_url_format;
-        let token_url_format = &config.auth.entra.token_url_format;
+        // Get URL formats from provider specific config
+        let auth_url_format = provider_config
+            .provider_specific
+            .get("authorize_url_format")
+            .and_then(|v| v.as_str())
+            .unwrap_or_else(|| {
+                let fmt = crate::core::config::app_config::default_authorize_url_format();
+                Box::leak(fmt.into_boxed_str())
+            });
+
+        let token_url_format = provider_config
+            .provider_specific
+            .get("token_url_format")
+            .and_then(|v| v.as_str())
+            .unwrap_or_else(|| {
+                let fmt = crate::core::config::app_config::default_token_url_format();
+                Box::leak(fmt.into_boxed_str())
+            });
 
         let auth_url_str = auth_url_format.replace("{}", tenant_id);
         let token_url_str = token_url_format.replace("{}", tenant_id);
@@ -194,21 +233,57 @@ impl EntraTokenClient {
     }
 }
 
+#[async_trait]
+impl TokenClient for EntraTokenClient {
+    async fn get_token(&self, _username: &str, _password: &str) -> Result<TokenResponse, AppError> {
+        // For now, just return an error since this implementation doesn't support
+        // username/password auth flow - it uses client credentials
+        Err(AppError::NotImplementedError(
+            "Username/password auth flow not implemented for EntraTokenClient".to_string(),
+        ))
+    }
+
+    async fn validate_token(&self, _token: &str) -> Result<TokenValidationResult, AppError> {
+        // This client is for acquiring tokens, not validating them
+        // In a real implementation, we would call the Entra ID token validation endpoint
+        Err(AppError::NotImplementedError(
+            "Token validation not implemented for EntraTokenClient".to_string(),
+        ))
+    }
+
+    async fn refresh_token(&self, _refresh_token: &str) -> Result<TokenResponse, AppError> {
+        // This client uses client credentials flow which doesn't use refresh tokens
+        Err(AppError::NotImplementedError(
+            "Refresh token flow not implemented for EntraTokenClient".to_string(),
+        ))
+    }
+
+    async fn get_user_profile(&self, _token: &str) -> Result<UserProfile, AppError> {
+        // This implementation doesn't support fetching user profiles
+        Err(AppError::NotImplementedError(
+            "User profile retrieval not implemented for EntraTokenClient".to_string(),
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::config::app_config::{AppConfig, ProviderConfig};
+    use std::collections::HashMap;
     use std::env;
     use std::time::{Duration, SystemTime};
 
     #[test]
     fn test_token_client_creation() {
-        // Test creating a client directly with credentials
+        // Create token client
         let client = EntraTokenClient::new(
             "test-tenant-placeholder",
             "test-client-placeholder",
             "test-secret-placeholder",
         );
 
+        // Check that it's properly initialized
         assert_eq!(client.client_id.as_str(), "test-client-placeholder");
         assert_eq!(
             client.client_secret.secret().as_str(),
@@ -228,8 +303,29 @@ mod tests {
         // Create minimal config
         let mut config = AppConfig::default();
         config.auth.enabled = true;
-        config.auth.entra.tenant_id = "config-tenant-placeholder".to_string();
-        config.auth.entra.client_id = "config-client-placeholder".to_string();
+
+        // Add a provider for Entra
+        let mut provider_config = ProviderConfig {
+            enabled: true,
+            client_id: "config-client-placeholder".to_string(),
+            jwks_uri: "https://login.microsoftonline.com/tenant/discovery/v2.0/keys".to_string(),
+            issuer_url: "https://login.microsoftonline.com/tenant/v2.0".to_string(),
+            audience: "api://default".to_string(),
+            role_mappings: HashMap::new(),
+            provider_specific: HashMap::new(),
+        };
+
+        // Add tenant_id to provider specific config
+        provider_config.provider_specific.insert(
+            "tenant_id".to_string(),
+            serde_yaml::Value::String("config-tenant-placeholder".to_string()),
+        );
+
+        config.auth.default_provider = "entra".to_string();
+        config
+            .auth
+            .providers
+            .insert("entra".to_string(), provider_config);
 
         // Create client from config
         let client = EntraTokenClient::from_config(&config);
