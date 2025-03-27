@@ -9,7 +9,7 @@ tags:
 related:
   - reference/api/configuration-api.md
   - examples/basic-application-example.md
-last_updated: March 26, 2024
+last_updated: March 26, 2025
 version: 1.0
 ---
 

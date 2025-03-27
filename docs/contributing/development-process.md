@@ -13,7 +13,7 @@ related:
   - contributing/testing-guidelines.md
   - contributing/code-of-conduct.md
   - architecture/project-structure.md
-last_updated: March 26, 2024
+last_updated: March 26, 2025
 version: 1.0
 ---
 

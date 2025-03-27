@@ -12,7 +12,7 @@ related:
   - ../../reference/configuration/cache-config.md
   - ../../reference/patterns/caching-patterns.md
   - ../../examples/two-tier-cache-example.md
-last_updated: March 26, 2024
+last_updated: March 26, 2025
 version: 1.1
 ---
 

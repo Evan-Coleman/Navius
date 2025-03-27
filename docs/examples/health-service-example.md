@@ -12,7 +12,7 @@ related:
   - roadmaps/25-generic-service-implementations.md
   - reference/patterns/health-check-pattern.md
   - reference/api/health-api.md
-last_updated: March 26, 2024
+last_updated: March 26, 2025
 version: 1.0
 ---
 

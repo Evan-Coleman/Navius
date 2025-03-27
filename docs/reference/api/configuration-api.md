@@ -9,7 +9,7 @@ tags:
 related:
   - reference/patterns/feature-selection-pattern.md
   - examples/configuration-example.md
-last_updated: March 26, 2024
+last_updated: March 26, 2025
 version: 1.0
 ---
 

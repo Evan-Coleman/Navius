@@ -2,7 +2,7 @@
 
 ## Overview
 
-On March 26, 2024, significant improvements were made to the testing infrastructure of the Navius project. This document summarizes the contributions and provides guidance for future test development.
+On March 26, 2025, significant improvements were made to the testing infrastructure of the Navius project. This document summarizes the contributions and provides guidance for future test development.
 
 ## Contributions
 
@@ -117,7 +117,7 @@ When writing tests for the Navius project, follow these best practices:
 
 ## Current Coverage Status
 
-As of March 26, 2024:
+As of March 26, 2025:
 
 - **Overall**: 31.97% (target: 70%)
 - **Core modules**: 98% (target: 80%)

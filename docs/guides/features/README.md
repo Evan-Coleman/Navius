@@ -17,7 +17,7 @@ related:
   - ../../reference/api/README.md
   - ../../reference/architecture/principles.md
   - ../../reference/patterns/caching-patterns.md
-last_updated: March 26, 2024
+last_updated: March 26, 2025
 version: 1.1
 ---
 

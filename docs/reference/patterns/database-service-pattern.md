@@ -11,7 +11,7 @@ related:
   - reference/patterns/repository-pattern.md
   - reference/api/database-api.md
   - examples/database-service-example.md
-last_updated: March 26, 2024
+last_updated: March 26, 2025
 version: 1.0
 ---
 

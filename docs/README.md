@@ -13,7 +13,7 @@ related:
   - architecture/README.md
   - roadmaps/README.md
   - contributing/README.md
-last_updated: March 26, 2024
+last_updated: March 26, 2025
 version: 1.0
 ---
 

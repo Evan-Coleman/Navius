@@ -12,7 +12,7 @@ related:
   - guides/features/server-customization-cli.md
   - reference/configuration/feature-config.md
   - examples/server-customization-example.md
-last_updated: March 26, 2024
+last_updated: March 26, 2025
 version: 1.0
 ---
 

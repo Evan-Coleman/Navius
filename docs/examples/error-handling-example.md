@@ -9,7 +9,7 @@ tags:
 related:
   - examples/rest-api-example.md
   - reference/patterns/service-registration-pattern.md
-last_updated: March 26, 2024
+last_updated: March 26, 2025
 version: 1.0
 ---
 

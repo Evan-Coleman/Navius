@@ -3,7 +3,7 @@ title: Database Cleanup Roadmap
 description: Plan for removing all database implementation code
 category: Infrastructure
 tags: [database, cleanup, stability]
-last_updated: March 26, 2024
+last_updated: March 26, 2025
 version: 1.0
 ---
 

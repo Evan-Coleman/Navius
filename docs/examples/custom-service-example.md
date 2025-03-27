@@ -10,7 +10,7 @@ related:
   - examples/basic-application-example.md
   - examples/dependency-injection-example.md
   - guides/service-registration.md
-last_updated: March 26, 2024
+last_updated: March 26, 2025
 version: 1.0
 ---
 
