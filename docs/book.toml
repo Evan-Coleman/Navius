@@ -35,6 +35,12 @@ site-url = "/navius/"
 home-url = "/navius/"
 additional-css = ["theme/custom.css"]
 additional-js = ["theme/custom.js", "theme/mermaid.min.js", "theme/mermaid-init.js"]
+no-section-label = false
+mathjax-support = false
+copy-fonts = true
+# Increase default text size
+text-size-adjustment = 1.1
+smart-punctuation = true
 
 [output.html.search]
 enable = true

@@ -1,7 +1,10 @@
 /* Basic styles for Navius documentation */
 :root {
     --sidebar-width: 300px;
-    --content-max-width: 750px;
+    --content-max-width: 1200px;
+    --font-size-base: 18px;
+    --font-size-heading: 26px;
+    --font-size-code: 16px;
 }
 
 /* Hide front matter */
@@ -26,14 +29,47 @@ main > *:first-child:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(div):no
 .content {
     max-width: var(--content-max-width);
     margin: 0 auto;
-    padding: 0 15px;
+    padding: 0 25px;
+    font-size: var(--font-size-base);
+    line-height: 1.6;
 }
+
+/* Responsive scaling for very large screens */
+@media screen and (min-width: 2000px) {
+    :root {
+        --font-size-base: 22px;
+        --font-size-heading: 34px;
+        --font-size-code: 20px;
+    }
+    
+    .content {
+        max-width: 70%;
+    }
+}
+
+/* Headings */
+.content h1, .content h2, .content h3, .content h4, .content h5 {
+    font-size: var(--font-size-heading);
+    margin-top: 1.5em;
+    margin-bottom: 0.75em;
+}
+
+.content h1 { font-size: calc(var(--font-size-heading) * 1.3); }
+.content h2 { font-size: calc(var(--font-size-heading) * 1.1); }
+.content h3 { font-size: var(--font-size-heading); }
+.content h4 { font-size: calc(var(--font-size-heading) * 0.9); }
+.content h5 { font-size: calc(var(--font-size-heading) * 0.8); }
 
 /* Code block styling */
 pre {
     padding: 1em;
     border-radius: 4px;
     overflow-x: auto;
+    font-size: var(--font-size-code);
+}
+
+code {
+    font-size: var(--font-size-code);
 }
 
 /* Table styling */
@@ -41,11 +77,22 @@ table {
     width: 100%;
     border-collapse: collapse;
     margin: 1em 0;
+    font-size: var(--font-size-base);
 }
 
 th, td {
-    padding: 8px;
+    padding: 10px;
     border: 1px solid #ddd;
+}
+
+/* Lists with better spacing */
+.content ul, .content ol {
+    padding-left: 2em;
+    margin: 1em 0;
+}
+
+.content li {
+    margin-bottom: 0.5em;
 }
 
 /* Print styles */
