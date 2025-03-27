@@ -39,6 +39,7 @@ Comprehensive documentation for Navius APIs and integrations.
 - [API Resource Reference](api/api-resource.md) - API resource specifications
 - [Authentication API](api/authentication-api.md) - Authentication endpoints
 - [Database API](api/database-api.md) - Database operations
+- [Two-Tier Cache API](api/two-tier-cache-api.md) - Caching system API reference
 
 ### Architecture
 Core architectural concepts and patterns.

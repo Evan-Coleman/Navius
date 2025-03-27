@@ -32,6 +32,8 @@ Navius is a modern, secure, and performant web framework built with Rust and Axu
 - **Developer Experience**: Intuitive APIs and comprehensive documentation
 - **Cloud Native**: Designed for modern cloud environments
 - **Extensible**: Modular architecture for easy customization
+- **Two-Tier Caching**: Fast in-memory cache with persistent Redis fallback
+- **Server Customization**: Feature selection for optimized deployment
 
 ## Getting Help
 
@@ -76,7 +78,9 @@ Practical guides for using Navius:
   - [Authentication](guides/features/authentication.md) - Implementing authentication
   - [API Integration](guides/features/api-integration.md) - Integrating with external APIs
   - [PostgreSQL Integration](guides/features/postgresql-integration.md) - Working with PostgreSQL in features
-  - [Redis Caching](guides/features/caching.md) - Implementing caching strategies
+  - [Redis Caching](guides/features/caching.md) - Implementing basic caching
+  - [Caching Strategies](guides/caching-strategies.md) - Advanced caching with two-tier cache
+  - [Server Customization CLI](guides/features/server-customization-cli.md) - Using the feature selection CLI
   - [WebSocket Support](guides/features/websocket-support.md) - Real-time communication
 
 - [Deployment](guides/deployment/README.md) - Deploying Navius applications
@@ -107,12 +111,15 @@ Technical reference documentation:
 - [Configuration](reference/configuration/README.md) - Configuration options and settings
   - [Environment Variables](reference/configuration/environment-variables.md) - Environment configuration
   - [Application Config](reference/configuration/application-config.md) - Application settings
+  - [Cache Config](reference/configuration/cache-config.md) - Cache system configuration
+  - [Feature Config](reference/configuration/feature-config.md) - Server customization configuration
   - [Logging Config](reference/configuration/logging-config.md) - Logging configuration
   - [Security Config](reference/configuration/security-config.md) - Security settings
 
 - [Patterns](reference/patterns/README.md) - Common design patterns
   - [API Resource Pattern](reference/patterns/api-resource-pattern.md) - API design patterns
   - [Import Patterns](reference/patterns/import-patterns.md) - Module import patterns
+  - [Caching Patterns](reference/patterns/caching-patterns.md) - Effective caching strategies
   - [Error Handling](reference/patterns/error-handling-patterns.md) - Error handling approaches
   - [Testing Patterns](reference/patterns/testing-patterns.md) - Testing best practices
 
@@ -154,6 +161,13 @@ Guidelines for contributors:
 - [IDE Setup](contributing/ide-setup.md) - Setting up your development environment
 - [Testing Prompt](contributing/testing-prompt.md) - Testing guidelines
 - [Test Implementation Template](contributing/test-implementation-template.md) - Templates for tests
+
+### 📚 Examples
+Practical code examples:
+
+- [Spring Boot Comparison](examples/20_spring-boot-comparison.md) - Comparing with Spring Boot
+- [Two-Tier Cache Implementation](examples/two-tier-cache-example.md) - Implementing two-tier caching
+- [Server Customization System](examples/server-customization-example.md) - Using the feature system
 
 ## 🔍 Documentation Search
 

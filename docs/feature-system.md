@@ -1,6 +1,39 @@
+---
+title: "Server Customization System"
+description: "Overview of the Server Customization System that enables optimized server deployments with tailored feature sets"
+category: guides
+tags:
+  - features
+  - server-customization
+  - optimization
+  - performance
+  - feature-selection
+related:
+  - guides/features/server-customization-cli.md
+  - reference/configuration/feature-config.md
+  - examples/server-customization-example.md
+last_updated: March 26, 2024
+version: 1.0
+---
+
 # Server Customization System
 
 The Server Customization System provides a robust framework for creating customized server deployments with tailored feature sets. This enables developers to generate optimized server binaries that include only necessary components, resulting in smaller deployments, reduced attack surface, and improved performance.
+
+## Status
+
+**Implementation Status**: 99% complete
+- Core feature selection framework ✅
+- Feature dependency resolution ✅
+- Configuration integration ✅
+- Basic CLI functionality ✅
+- Dependency analysis and optimization system ✅  
+- Documentation generation with error handling ✅
+- Configuration examples generation ✅
+- Feature import/export functionality ✅
+- CLI visualization components ✅
+
+Final phase focusing on comprehensive testing and documentation is in progress.
 
 ## Overview
 

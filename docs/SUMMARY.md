@@ -29,6 +29,8 @@
   - [API Integration](guides/features/api-integration.md)
   - [PostgreSQL Integration](guides/features/postgresql-integration.md)
   - [Redis Caching](guides/features/caching.md)
+  - [Caching Strategies](guides/caching-strategies.md)
+  - [Server Customization CLI](guides/features/server-customization-cli.md)
   - [WebSocket Support](guides/features/websocket-support.md)
 
 - [Deployment](guides/deployment/README.md)
@@ -57,12 +59,15 @@
 - [Configuration](reference/configuration/README.md)
   - [Environment Variables](reference/configuration/environment-variables.md)
   - [Application Config](reference/configuration/application-config.md)
+  - [Cache Config](reference/configuration/cache-config.md)
+  - [Feature Config](reference/configuration/feature-config.md)
   - [Logging Config](reference/configuration/logging-config.md)
   - [Security Config](reference/configuration/security-config.md)
 
 - [Patterns](reference/patterns/README.md)
   - [API Resource Pattern](reference/patterns/api-resource-pattern.md)
   - [Import Patterns](reference/patterns/import-patterns.md)
+  - [Caching Patterns](reference/patterns/caching-patterns.md)
   - [Error Handling](reference/patterns/error-handling-patterns.md)
   - [Testing Patterns](reference/patterns/testing-patterns.md)
 
@@ -99,4 +104,9 @@
 - [Onboarding](contributing/onboarding.md)
 - [IDE Setup](contributing/ide-setup.md)
 - [Testing Prompt](contributing/testing-prompt.md)
-- [Test Implementation Template](contributing/test-implementation-template.md) 
+- [Test Implementation Template](contributing/test-implementation-template.md)
+
+# Examples
+- [Spring Boot Comparison](examples/20_spring-boot-comparison.md)
+- [Two-Tier Cache Implementation](examples/two-tier-cache-example.md)
+- [Server Customization System](examples/server-customization-example.md) 
