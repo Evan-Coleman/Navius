@@ -79,4 +79,33 @@ This project follows a clear separation between core framework functionality and
 - `/src/app/` - Contains user application code that you can customize
 - Other directories like `/src/handlers/` are extensible for adding your own handlers
 
-When extending the application, focus on adding to the user-extensible parts rather than modifying the core framework. 
+When extending the application, focus on adding to the user-extensible parts rather than modifying the core framework.
+
+## Example Code
+
+The app directory contains several example implementations that demonstrate how to use the core framework components:
+
+- `models/example_user_entity.rs`: Example entity implementation
+- `repositories/example_user_repository.rs`: Example repository implementation
+- `services/example_user_service.rs`: Example service implementation
+
+These examples use the `example_` prefix to indicate that they are reference implementations that can be removed in production environments.
+
+### Removing Example Code
+
+To remove all example code, you can use the provided script:
+
+```bash
+./.devtools/scripts/remove_example_code.sh
+```
+
+### Creating Your Own Implementations
+
+When creating your own implementations:
+
+1. Create files without the `example_` prefix
+2. Follow the patterns demonstrated in the example code
+3. Ensure comprehensive test coverage
+4. Remove the example code once your implementations are complete
+
+Each example directory contains a README.md with detailed guidelines specific to that component type. 

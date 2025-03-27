@@ -14,6 +14,12 @@ pub mod api;
 /// User-facing services
 pub mod services;
 
+/// Example models for entities
+pub mod models;
+
+/// Example repositories
+pub mod repositories;
+
 /// User-facing metrics functionality
 pub mod metrics;
 
