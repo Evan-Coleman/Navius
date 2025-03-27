@@ -12,7 +12,7 @@ related:
   - examples/two-tier-cache-example.md
   - roadmaps/25-generic-service-implementations.md
   - roadmaps/07-enhanced-caching.md
-last_updated: March 26, 2025
+last_updated: March 26, 2024
 version: 1.0
 ---
 

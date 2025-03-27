@@ -13,7 +13,7 @@ related:
   - reference/api/cache-api.md
   - examples/cache-provider-example.md
   - examples/two-tier-cache-example.md
-last_updated: March 26, 2025
+last_updated: March 26, 2024
 version: 1.0
 ---
 
