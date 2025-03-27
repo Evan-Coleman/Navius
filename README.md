@@ -152,14 +152,13 @@ The latest documentation is automatically deployed to GitLab Pages and can be ac
 To work with documentation locally:
 
 ```bash
-# Install mdBook
-make docs-deps
+# Install required tools
+cargo install mdbook --version 0.4.35
+cargo install mdbook-mermaid --version 0.12.6
 
-# Build the documentation
-make docs-build
-
-# Serve documentation locally with live reload
-make docs-serve
+# Build and serve documentation
+cd docs
+mdbook serve --open
 ```
 
 The documentation source files are located in the `/docs` directory. The built documentation is automatically deployed through our CI/CD pipeline and should not be committed to the repository.
@@ -239,3 +238,19 @@ These hooks will:
 - Run formatters and linters on changed files during commit
 - Run tests for modules with changed files
 - Check test coverage before pushing changes 
+
+## Documentation
+
+Comprehensive documentation is available at our [GitLab Pages site](https://ecoleman2.gitlab.io/navius/).
+
+To build the documentation locally:
+
+```bash
+# Install required tools
+cargo install mdbook --version 0.4.35
+cargo install mdbook-mermaid --version 0.12.6
+
+# Build and serve documentation
+cd docs
+mdbook serve --open
+``` 

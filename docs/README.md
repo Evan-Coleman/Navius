@@ -13,9 +13,41 @@ related:
   - architecture/README.md
   - roadmaps/README.md
   - contributing/README.md
-last_updated: March 23, 2025
+last_updated: March 26, 2024
 version: 1.0
 ---
+
+<!-- Documentation Build Instructions -->
+<!--
+# Building Documentation
+
+This documentation is built using [mdBook](https://rust-lang.github.io/mdBook/).
+
+## Local Development
+
+1. Install mdBook and the required plugins:
+   ```bash
+   cargo install mdbook --version 0.4.35
+   cargo install mdbook-mermaid --version 0.12.6
+   ```
+
+2. Build the documentation:
+   ```bash
+   cd docs
+   mdbook build
+   ```
+
+3. Serve the documentation locally:
+   ```bash
+   mdbook serve --open
+   ```
+
+## Deployment
+
+The documentation is automatically deployed to GitLab Pages when changes are pushed to the main branch.
+The CI/CD pipeline will build the documentation and deploy it to https://ecoleman2.gitlab.io/navius/.
+
+-->
 
 # Navius Documentation
 

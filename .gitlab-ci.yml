@@ -256,25 +256,30 @@
 #     - if: $CI_COMMIT_TAG
 #     - if: $CI_COMMIT_BRANCH
 
-# # Job to build and deploy documentation
-# pages:
-#   image: rust:latest
-#   stage: docs
-#   needs:
-#     - chef-cook
-#   script:
-#     - apt-get update && apt-get install -y clang llvm-dev libclang-dev jq
-#     - cargo install mdbook --version ${MDBOOK_VERSION}
-#     - cd docs
-#     - mdbook build
-#     - cd ..
-#     - mv target/book public  # GitLab Pages expects the content to be in a 'public' directory
-#   artifacts:
-#     paths:
-#       - public
-#   rules:
-#     - if: $CI_COMMIT_BRANCH == "master"  # Only deploy on master branch
-#   cache:
-#     paths:
-#       - .cargo
-#       - target/ 
+# Documentation job
+pages:
+  stage: deploy
+  image: rust:latest
+  variables:
+    GIT_DEPTH: "1"
+  before_script:
+    - cargo install mdbook --version ${MDBOOK_VERSION} --no-default-features
+    - cargo install mdbook-mermaid
+  script:
+    - cd docs
+    - mdbook build
+    - mkdir -p ../public
+    - cp -r book/* ../public/
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: always
+    - when: manual
+  cache:
+    key: mdbook-cache
+    paths:
+      - $CARGO_HOME/bin/
+      - $CARGO_HOME/.crates.toml
+      - $CARGO_HOME/.crates2.json 
