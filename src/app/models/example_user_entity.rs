@@ -75,9 +75,9 @@ impl Entity for User {
     }
 
     fn validate(&self) -> Result<(), ServiceError> {
-        // Use the validator crate's validation
-        if let Err(validation_errors) = Validate::validate(self) {
-            let error_messages: Vec<String> = validation_errors
+        let validator = Validate::validate(self);
+        if let Err(errors) = &validator {
+            let error_strings: Vec<String> = errors
                 .field_errors()
                 .iter()
                 .flat_map(|(field, errors)| {
@@ -85,13 +85,16 @@ impl Entity for User {
                         format!(
                             "{}: {}",
                             field,
-                            error.message.as_ref().unwrap_or(&"Invalid".into())
+                            error
+                                .message
+                                .as_ref()
+                                .map_or("Invalid value", |m| m.as_ref())
                         )
                     })
                 })
                 .collect();
 
-            return Err(ServiceError::validation(error_messages.join(", ")));
+            return Err(ServiceError::validation(error_strings.join(", ")));
         }
 
         Ok(())

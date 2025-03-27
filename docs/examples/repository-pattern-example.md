@@ -23,7 +23,13 @@ This pattern is implemented in the Navius framework through these components:
 Here's a simple example of how to use the repository pattern with a User entity:
 
 ```rust
-use crate::core::models::user_entity::{User, UserRole};
+use uuid::Uuid;
+use serde::{Serialize, Deserialize};
+use async_trait::async_trait;
+
+use crate::app::models::user_entity::{User, UserRole};
+use crate::core::models::Entity;
+use crate::core::services::error::ServiceError;
 use crate::core::services::repository_service::{GenericRepository, RepositoryService};
 
 async fn user_repository_example() -> Result<(), Box<dyn std::error::Error>> {

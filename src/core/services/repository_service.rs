@@ -230,7 +230,42 @@ mod tests {
     use tokio::test;
     use uuid::Uuid;
 
-    use crate::core::models::user_entity::User;
+    // Example entity for testing that doesn't rely on app models
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    struct TestEntity {
+        id: Uuid,
+        name: String,
+        value: i32,
+    }
+
+    impl TestEntity {
+        fn new(name: &str, value: i32) -> Self {
+            Self {
+                id: Uuid::new_v4(),
+                name: name.to_string(),
+                value,
+            }
+        }
+    }
+
+    impl Entity for TestEntity {
+        type Id = Uuid;
+
+        fn id(&self) -> &Self::Id {
+            &self.id
+        }
+
+        fn collection_name() -> String {
+            "test_entities".to_string()
+        }
+
+        fn validate(&self) -> Result<(), ServiceError> {
+            if self.name.is_empty() {
+                return Err(ServiceError::validation("Name cannot be empty"));
+            }
+            Ok(())
+        }
+    }
 
     #[tokio::test]
     async fn test_repository_service() {
@@ -238,35 +273,32 @@ mod tests {
         let repo_service = RepositoryService::new();
         repo_service.init().await.unwrap();
 
-        // Create a user repository
-        let user_repo = repo_service
-            .create_typed_repository::<User>()
+        // Create a repository
+        let repo = repo_service
+            .create_typed_repository::<TestEntity>()
             .await
             .unwrap();
 
-        // Create a test user
-        let user = User::new(
-            "testuser".to_string(),
-            "test@example.com".to_string(),
-            "Test User".to_string(),
-        );
+        // Create a test entity
+        let entity = TestEntity::new("test", 42);
 
-        // Save the user
-        let saved_user = user_repo.save(&user).await.unwrap();
-        assert_eq!(saved_user.username, "testuser");
+        // Save the entity
+        let saved = repo.save(&entity).await.unwrap();
+        assert_eq!(saved.name, "test");
+        assert_eq!(saved.value, 42);
 
-        // Find the user
-        let found_user = user_repo.find_by_id(user.id()).await.unwrap();
-        assert!(found_user.is_some());
-        let found_user = found_user.unwrap();
-        assert_eq!(found_user.email, "test@example.com");
+        // Find the entity
+        let found = repo.find_by_id(entity.id()).await.unwrap();
+        assert!(found.is_some());
+        let found = found.unwrap();
+        assert_eq!(found.name, "test");
 
-        // Count users
-        let count = user_repo.count().await.unwrap();
+        // Count entities
+        let count = repo.count().await.unwrap();
         assert_eq!(count, 1);
 
-        // Delete the user
-        let deleted = user_repo.delete(user.id()).await.unwrap();
+        // Delete the entity
+        let deleted = repo.delete(entity.id()).await.unwrap();
         assert!(deleted);
     }
 
@@ -277,33 +309,30 @@ mod tests {
         repo_service.init().await.unwrap();
 
         // Create a generic repository
-        let user_repo = GenericRepository::<User>::with_service(&repo_service)
+        let repo = GenericRepository::<TestEntity>::with_service(&repo_service)
             .await
             .unwrap();
 
-        // Create a test user
-        let user = User::new(
-            "genericuser".to_string(),
-            "generic@example.com".to_string(),
-            "Generic User".to_string(),
-        );
+        // Create a test entity
+        let entity = TestEntity::new("generic", 123);
 
-        // Save the user
-        let saved_user = user_repo.save(&user).await.unwrap();
-        assert_eq!(saved_user.username, "genericuser");
+        // Save the entity
+        let saved = repo.save(&entity).await.unwrap();
+        assert_eq!(saved.name, "generic");
+        assert_eq!(saved.value, 123);
 
-        // Find the user
-        let found_user = user_repo.find_by_id(user.id()).await.unwrap();
-        assert!(found_user.is_some());
-        let found_user = found_user.unwrap();
-        assert_eq!(found_user.email, "generic@example.com");
+        // Find the entity
+        let found = repo.find_by_id(entity.id()).await.unwrap();
+        assert!(found.is_some());
+        let found = found.unwrap();
+        assert_eq!(found.name, "generic");
 
-        // Count users
-        let count = user_repo.count().await.unwrap();
+        // Count entities
+        let count = repo.count().await.unwrap();
         assert_eq!(count, 1);
 
-        // Delete the user
-        let deleted = user_repo.delete(user.id()).await.unwrap();
+        // Delete the entity
+        let deleted = repo.delete(entity.id()).await.unwrap();
         assert!(deleted);
     }
 }

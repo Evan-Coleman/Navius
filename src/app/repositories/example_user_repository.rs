@@ -5,13 +5,12 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::app::User;
-use crate::app::UserRole;
+use crate::app::models::example_user_entity::{User, UserRole};
 use crate::core::models::{Entity, Repository, RepositoryConfig};
+use crate::core::services::Lifecycle;
 use crate::core::services::error::ServiceError;
 use crate::core::services::memory_repository::InMemoryRepositoryProvider;
 use crate::core::services::repository_service::RepositoryService;
-use crate::core::services::service_traits::Lifecycle;
 
 /// Repository for managing user entities
 #[derive(Debug)]

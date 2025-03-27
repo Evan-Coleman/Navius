@@ -6,14 +6,13 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::app::User;
-use crate::app::UserRepository;
-use crate::app::UserRole;
+use crate::app::models::example_user_entity::{User, UserRole};
+use crate::app::repositories::example_user_repository::UserRepository;
 use crate::core::models::entity::Repository;
+use crate::core::services::Lifecycle;
+use crate::core::services::Service;
 use crate::core::services::error::ServiceError;
 use crate::core::services::repository_service::RepositoryService;
-use crate::core::services::service_traits::Lifecycle as CoreLifecycle;
-use crate::core::services::{Lifecycle, Service};
 
 /// Input for creating a user
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -357,5 +356,33 @@ mod tests {
         let editors = service.find_by_role(UserRole::Editor).await.unwrap();
         assert_eq!(editors.len(), 1);
         assert_eq!(editors[0].username, "editor1");
+    }
+
+    #[test]
+    async fn test_delete_user() {
+        let service = create_test_service().await;
+
+        // Create a user first
+        let input = CreateUserInput {
+            username: "deleteuser".to_string(),
+            email: "delete@example.com".to_string(),
+            display_name: "Delete User".to_string(),
+            role: None,
+            active: None,
+        };
+
+        let created_user = service.create_user(input).await.unwrap();
+
+        // Verify user exists
+        let found_before = service.find_by_id(created_user.id).await.unwrap();
+        assert!(found_before.is_some());
+
+        // Delete the user
+        let deleted = service.delete_user(created_user.id).await.unwrap();
+        assert!(deleted);
+
+        // Verify user is gone
+        let found_after = service.find_by_id(created_user.id).await.unwrap();
+        assert!(found_after.is_none());
     }
 }

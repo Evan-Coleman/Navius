@@ -261,7 +261,7 @@ Implement a service for business logic:
 // src/app/services/user_service.rs
 use async_trait::async_trait;
 use crate::core::error::Result;
-use crate::core::models::User;
+use crate::app::models::user_entity::User;
 use crate::core::repository::UserRepository;
 
 #[async_trait]
