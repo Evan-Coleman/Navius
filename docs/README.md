@@ -13,7 +13,7 @@ related:
   - architecture/README.md
   - roadmaps/README.md
   - contributing/README.md
-last_updated: March 26, 2024
+last_updated: March 26, 2025
 version: 1.0
 ---
 
@@ -66,6 +66,7 @@ Navius is a modern, secure, and performant web framework built with Rust and Axu
 - **Extensible**: Modular architecture for easy customization
 - **Two-Tier Caching**: Fast in-memory cache with persistent Redis fallback
 - **Server Customization**: Feature selection for optimized deployment
+- **Generic Repositories**: Type-safe repository pattern for domain entities
 
 ## Getting Help
 
@@ -154,6 +155,7 @@ Technical reference documentation:
   - [Caching Patterns](reference/patterns/caching-patterns.md) - Effective caching strategies
   - [Error Handling](reference/patterns/error-handling-patterns.md) - Error handling approaches
   - [Testing Patterns](reference/patterns/testing-patterns.md) - Testing best practices
+  - [Repository Pattern](reference/patterns/repository-pattern.md) - Entity repository pattern
 
 - [Standards](reference/standards/README.md) - Code and documentation standards
   - [Naming Conventions](reference/standards/naming-conventions.md) - Naming guidelines
@@ -180,6 +182,7 @@ Project roadmaps and future plans:
 - [Developer Experience](roadmaps/10-developer-experience.md) - Improving DX
 - [Security Features](roadmaps/11-security-features.md) - Security enhancements
 - [Document Overhaul](roadmaps/12_document_overhaul.md) - Documentation improvements
+- [Generic Service Implementations](roadmaps/25-generic-service-implementations.md) - Generic service interfaces with pluggable providers
 
 ### 🤝 Contributing
 Guidelines for contributors:
@@ -200,6 +203,7 @@ Practical code examples:
 - [Spring Boot Comparison](examples/20_spring-boot-comparison.md) - Comparing with Spring Boot
 - [Two-Tier Cache Implementation](examples/two-tier-cache-example.md) - Implementing two-tier caching
 - [Server Customization System](examples/server-customization-example.md) - Using the feature system
+- [Repository Pattern Example](examples/repository-pattern-example.md) - Implementing the generic repository pattern
 
 ## 🔍 Documentation Search
 

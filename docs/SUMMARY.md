@@ -70,6 +70,7 @@
   - [Caching Patterns](reference/patterns/caching-patterns.md)
   - [Error Handling](reference/patterns/error-handling-patterns.md)
   - [Testing Patterns](reference/patterns/testing-patterns.md)
+  - [Repository Pattern](reference/patterns/repository-pattern.md)
 
 - [Standards](reference/standards/README.md)
   - [Naming Conventions](reference/standards/naming-conventions.md)
@@ -94,6 +95,7 @@
 - [Developer Experience](roadmaps/10-developer-experience.md)
 - [Security Features](roadmaps/11-security-features.md)
 - [Document Overhaul](roadmaps/12_document_overhaul.md)
+- [Generic Service Implementations](roadmaps/25-generic-service-implementations.md)
 
 # Contributing
 - [Overview](contributing/README.md)
@@ -109,4 +111,5 @@
 # Examples
 - [Spring Boot Comparison](examples/20_spring-boot-comparison.md)
 - [Two-Tier Cache Implementation](examples/two-tier-cache-example.md)
-- [Server Customization System](examples/server-customization-example.md) 
+- [Server Customization System](examples/server-customization-example.md)
+- [Repository Pattern Example](examples/repository-pattern-example.md) 
