@@ -104,10 +104,10 @@ fn test_runtime_features() {
 
     // These may be enabled or disabled depending on how the tests are run,
     // so we'll explicitly set them for the test
-    runtime.disable_feature("advanced_metrics");
+    runtime.disable("advanced_metrics");
     assert!(!runtime.is_enabled("advanced_metrics"));
 
-    runtime.enable_feature("advanced_metrics");
+    runtime.enable("advanced_metrics");
     assert!(runtime.is_enabled("advanced_metrics"));
 
     // Test reset
@@ -121,6 +121,203 @@ fn test_runtime_features() {
 
     let status = runtime.get_feature_status("unknown_feature");
     assert_eq!(status, None);
+}
+
+#[cfg(test)]
+mod runtime_features_tests {
+    use super::*;
+    use std::collections::{HashMap, HashSet};
+
+    #[test]
+    fn test_runtime_features_creation() {
+        // Test the default constructor
+        let runtime = RuntimeFeatures::new();
+
+        // Core features should always be enabled
+        assert!(
+            runtime.is_enabled("core"),
+            "Core feature should be enabled by default"
+        );
+        assert!(
+            runtime.is_enabled("error_handling"),
+            "Error handling should be enabled by default"
+        );
+        assert!(
+            runtime.is_enabled("config"),
+            "Config should be enabled by default"
+        );
+
+        // Get all enabled features
+        let enabled = runtime.get_enabled();
+        assert!(
+            enabled.contains("core"),
+            "Core should be in the enabled set"
+        );
+
+        // Check the size of enabled features set
+        assert!(
+            enabled.len() >= 3,
+            "At least core features should be enabled"
+        );
+    }
+
+    #[test]
+    fn test_runtime_features_enable_disable() {
+        let mut runtime = RuntimeFeatures::new();
+
+        // Test enabling a feature
+        runtime.disable("advanced_metrics");
+        assert!(
+            !runtime.is_enabled("advanced_metrics"),
+            "Feature should be disabled after disable() call"
+        );
+
+        runtime.enable("advanced_metrics");
+        assert!(
+            runtime.is_enabled("advanced_metrics"),
+            "Feature should be enabled after enable() call"
+        );
+
+        // Test multiple enable/disable operations
+        runtime.disable("metrics");
+        runtime.disable("caching");
+
+        assert!(!runtime.is_enabled("metrics"), "Metrics should be disabled");
+        assert!(!runtime.is_enabled("caching"), "Caching should be disabled");
+
+        runtime.enable("metrics");
+        assert!(
+            runtime.is_enabled("metrics"),
+            "Metrics should be enabled again"
+        );
+        assert!(
+            !runtime.is_enabled("caching"),
+            "Caching should still be disabled"
+        );
+    }
+
+    #[test]
+    fn test_runtime_features_reset() {
+        let mut runtime = RuntimeFeatures::new();
+
+        // Modify the state of several features
+        runtime.disable("metrics");
+        runtime.enable("advanced_metrics");
+
+        // Reset a single feature
+        runtime.reset_feature("metrics");
+
+        // Reset state depends on compile-time features, so we can only test that
+        // it's different from our explicitly set value in some cases
+
+        // Reset all features
+        let original_enabled = runtime.get_enabled();
+
+        // Modify all features
+        for feature in original_enabled.iter() {
+            runtime.disable(feature);
+        }
+        runtime.enable("advanced_metrics");
+
+        // Reset all features to defaults
+        runtime.reset_all();
+
+        // Core features should be back to enabled state
+        assert!(
+            runtime.is_enabled("core"),
+            "Core should be re-enabled after reset_all()"
+        );
+        assert!(
+            runtime.is_enabled("error_handling"),
+            "Error handling should be re-enabled after reset_all()"
+        );
+        assert!(
+            runtime.is_enabled("config"),
+            "Config should be re-enabled after reset_all()"
+        );
+    }
+
+    #[test]
+    fn test_runtime_features_status() {
+        let mut runtime = RuntimeFeatures::new();
+
+        // Test existing feature status
+        assert_eq!(
+            runtime.get_feature_status("core"),
+            Some(true),
+            "Core feature should be enabled"
+        );
+
+        // Test after enabling/disabling
+        runtime.disable("metrics");
+        assert_eq!(
+            runtime.get_feature_status("metrics"),
+            Some(false),
+            "Metrics should be disabled"
+        );
+
+        runtime.enable("metrics");
+        assert_eq!(
+            runtime.get_feature_status("metrics"),
+            Some(true),
+            "Metrics should be enabled"
+        );
+
+        // Test unknown feature
+        assert_eq!(
+            runtime.get_feature_status("nonexistent_feature"),
+            None,
+            "Nonexistent feature should return None"
+        );
+    }
+
+    #[test]
+    fn test_runtime_features_reference() {
+        let runtime = RuntimeFeatures::new();
+
+        // Test getting a reference to the enabled features set
+        let enabled_ref = runtime.get_enabled_features();
+        assert!(
+            enabled_ref.contains("core"),
+            "Reference should contain core feature"
+        );
+
+        // The reference should reflect the same state as direct queries
+        for feature in enabled_ref.iter() {
+            assert!(
+                runtime.is_enabled(feature),
+                "Feature in enabled set should return true for is_enabled()"
+            );
+        }
+    }
+
+    #[test]
+    fn test_runtime_features_with_custom_defaults() {
+        // Create a RuntimeFeatures with custom default status
+        let mut default_status = HashMap::new();
+        default_status.insert("custom_feature".to_string(), true);
+        default_status.insert("another_feature".to_string(), false);
+
+        let enabled_features = default_status
+            .iter()
+            .filter_map(|(k, v)| if *v { Some(k.clone()) } else { None })
+            .collect();
+
+        let runtime = RuntimeFeatures {
+            enabled_features,
+            default_status,
+        };
+
+        // Test the custom defaults
+        assert!(
+            runtime.is_enabled("custom_feature"),
+            "Custom feature should be enabled"
+        );
+        assert!(
+            !runtime.is_enabled("another_feature"),
+            "Another feature should be disabled"
+        );
+    }
 }
 
 #[cfg(test)]
