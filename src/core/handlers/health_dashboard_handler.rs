@@ -60,7 +60,7 @@ fn create_dashboard_service() -> Arc<HealthDashboardService> {
 }
 
 /// Get a cached dashboard service from app state or create a new one
-fn get_or_create_dashboard(state: &Arc<AppState>) -> Arc<HealthDashboardService> {
+fn get_or_create_dashboard(_state: &Arc<AppState>) -> Arc<HealthDashboardService> {
     // In a real implementation, we would store this in AppState
     // For now, we'll create a new one each time
     create_dashboard_service()
@@ -68,14 +68,14 @@ fn get_or_create_dashboard(state: &Arc<AppState>) -> Arc<HealthDashboardService>
 
 /// Enhanced health dashboard endpoint
 pub async fn health_dashboard_handler(
-    State(state): State<Arc<AppState>>,
+    State(_state): State<Arc<AppState>>,
     Query(params): Query<DashboardQuery>,
 ) -> impl IntoResponse {
     // Get or create dashboard service
-    let dashboard = get_or_create_dashboard(&state);
+    let dashboard = get_or_create_dashboard(&_state);
 
     // Create custom config from query parameters
-    let config = HealthDashboardConfig {
+    let _config = HealthDashboardConfig {
         include_history: params.history,
         include_performance: params.performance,
         detailed_components: params.details,
@@ -84,7 +84,7 @@ pub async fn health_dashboard_handler(
     };
 
     // Check health
-    match dashboard.check_health(&state).await {
+    match dashboard.check_health(&_state).await {
         Ok(health_status) => {
             // Return success
             (StatusCode::OK, Json(health_status))
@@ -103,8 +103,8 @@ pub async fn health_dashboard_handler(
 }
 
 /// Clear health dashboard history
-pub async fn clear_dashboard_history(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let dashboard = get_or_create_dashboard(&state);
+pub async fn clear_dashboard_history(State(_state): State<Arc<AppState>>) -> impl IntoResponse {
+    let dashboard = get_or_create_dashboard(&_state);
 
     match dashboard.clear_history() {
         Ok(_) => {
@@ -130,8 +130,8 @@ pub async fn clear_dashboard_history(State(state): State<Arc<AppState>>) -> impl
 
 /// Register a dynamic health indicator
 pub async fn register_dynamic_indicator(
-    State(state): State<Arc<AppState>>,
-    Json(payload): Json<Value>,
+    State(_state): State<Arc<AppState>>,
+    Json(_payload): Json<Value>,
 ) -> impl IntoResponse {
     // In a real implementation, we would parse the payload and register the indicator
     // For this example, we'll return a not implemented response

@@ -132,7 +132,7 @@ impl HealthDashboardService {
         let mut aggregated_status = "UP".to_string();
         let mut components = serde_json::Map::new();
         let mut component_statuses = HashMap::new();
-        let mut check_start = Instant::now();
+        let check_start = Instant::now();
 
         // Check each health indicator and measure performance
         for indicator in indicators {
