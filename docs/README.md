@@ -207,6 +207,9 @@ Practical code examples:
 - [Server Customization System](examples/server-customization-example.md) - Using the feature system
 - [Repository Pattern Example](examples/repository-pattern-example.md) - Implementing the generic repository pattern
 - [Logging Service Example](examples/logging-service-example.md) - Using the generic logging service
+- [Database Service Example](examples/database-service-example.md) - Working with the generic database service
+- [Health Service Example](examples/health-service-example.md) - Creating custom health indicators
+- [Cache Provider Example](examples/cache-provider-example.md) - Using the generic cache providers
 
 ## 🔍 Documentation Search
 

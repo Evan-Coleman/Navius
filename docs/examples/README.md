@@ -1,63 +1,55 @@
 ---
-title: "Navius Code Examples"
-description: "Collection of practical code examples demonstrating how to implement various features in Navius applications"
+title: "Navius Examples"
+description: "Usage examples for the Navius Framework"
 category: examples
 tags:
   - examples
-  - code
-  - implementation
-  - reference
-related:
-  - ../guides/README.md
-  - ../reference/README.md
+  - usage
+  - patterns
 last_updated: March 26, 2024
 version: 1.0
 ---
 
-# Navius Code Examples
+# Navius Examples
 
-This directory contains practical code examples demonstrating how to implement various features in Navius applications. Each example provides working code that you can adapt for your own projects.
+This directory contains examples demonstrating how to use the Navius framework for building robust, maintainable applications with Rust.
 
 ## Available Examples
 
-### Caching Examples
-- [Two-Tier Cache Implementation](two-tier-cache-example.md) - Demonstrates the implementation of the two-tier caching system that combines the speed of in-memory caching with the persistence of Redis.
+| Example | Description |
+|---------|-------------|
+| [Basic Application Example](./basic-application-example.md) | A minimalist Navius application demonstrating core concepts |
+| [Custom Service Example](./custom-service-example.md) | How to create and register custom services |
+| [Database Service Example](./database-service-example.md) | Using the database service for data persistence |
+| [Cache Provider Example](./cache-provider-example.md) | Working with the cache provider for improved performance |
+| [Two-Tier Cache Example](./two-tier-cache-example.md) | Implementing multi-level caching strategies |
+| [Health Service Example](./health-service-example.md) | Implementing application health checks |
+| [Configuration Example](./configuration-example.md) | Working with configuration in Navius applications |
+| [Error Handling Example](./error-handling-example.md) | Best practices for error handling |
+| [Dependency Injection Example](./dependency-injection-example.md) | Using dependency injection in Navius |
+| [REST API Example](./rest-api-example.md) | Building REST APIs with Navius |
+| [GraphQL Example](./graphql-example.md) | Building GraphQL APIs with Navius |
 
-### Server Customization Examples
-- [Server Customization System](server-customization-example.md) - Shows how to use the Server Customization System to create optimized server builds with only the features you need.
+## Running the Examples
 
-### Migration Examples
-- [Spring Boot Comparison](20_spring-boot-comparison.md) - Compares Spring Boot implementations with equivalent Navius implementations to help with migration.
+Each example can be run from its own directory. To run an example:
 
-## Using These Examples
+1. Clone the Navius repository
+2. Navigate to the example directory
+3. Follow the specific instructions in the example's README.md file
 
-These examples are designed to be:
+For most examples, you can run them with:
 
-1. **Practical** - Focusing on real-world use cases
-2. **Complete** - Providing all the code needed to implement the feature
-3. **Adaptable** - Easy to modify for your specific needs
-4. **Educational** - Including explanations of how and why things work
+```bash
+cargo run
+```
 
-You can copy and paste code from these examples into your own projects, but we recommend understanding how the code works first by reading the accompanying explanations.
+Some examples may require additional setup, such as a database connection or environment variables.
 
-## Example Structure
+## Getting Help
 
-Each example typically includes:
+If you have questions about these examples, please:
 
-- **Basic Implementation** - Simple code to get started
-- **Advanced Usage** - More complex scenarios
-- **Integration** - How to integrate with other parts of your application
-- **Best Practices** - Tips for effective use
-- **Troubleshooting** - Common issues and solutions
-
-## Contributing Examples
-
-If you have a useful example that would benefit the community, please consider contributing it to the documentation. See our [Contributing Guide](../contributing/contribution-guide.md) for details on how to submit a contribution.
-
-## Related Documentation
-
-For more detailed information about the features demonstrated in these examples, refer to:
-
-- [Feature Guides](../guides/features/README.md) - How-to guides for implementing features
-- [Reference Documentation](../reference/README.md) - Technical reference for Navius APIs
-- [Architecture Documentation](../architecture/README.md) - Understanding the design principles 
+- Check the [Navius documentation](../README.md)
+- Open an issue on the [Navius GitHub repository](https://github.com/navius-framework/navius)
+- Join the [Navius Discord community](https://discord.gg/navius) 
