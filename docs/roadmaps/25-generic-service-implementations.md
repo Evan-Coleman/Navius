@@ -25,9 +25,9 @@ This roadmap outlines the steps to transform hardcoded service implementations i
 ## Current Status
 We've identified several hardcoded implementations in the core that should be made generic:
 
-1. Database Service: Currently hardcoded to use InMemoryDatabase
-2. Health Service: Hardcoded health indicators
-3. Cache Implementation: Specifically tied to Moka cache
+1. Database Service: Currently hardcoded to use InMemoryDatabase ✅
+2. Health Service: Hardcoded health indicators ✅
+3. Cache Implementation: Specifically tied to Moka cache ✅
 4. Database Provider: Only supports in-memory database
 5. Database Collection Model: Specific methods for user collection
 
@@ -115,6 +115,14 @@ Services in the core module should:
    - [x] Implement cache provider factory
    
    *Updated at: July 30, 2024 - Implemented in-memory cache provider and Redis placeholder with provider factory for cache instantiation*
+
+4. **Implement Two-Tier Cache Fallback**
+   - [x] Create `TwoTierCache` implementation
+   - [x] Support fast cache (memory) with slow cache (Redis) fallback
+   - [x] Add automatic promotion of items from slow to fast cache
+   - [x] Support configurable TTLs for each cache level
+   
+   *Updated at: March 26, 2024 - Implemented TwoTierCache with fast/slow cache layers, automatic promotion, and configurable TTLs*
 
 ### Phase 4: Collection Model Generalization
 1. **Define Entity Interface**
@@ -367,10 +375,10 @@ Services in the core module should:
    *Updated at: Not started*
 
 ## Implementation Status
-- **Overall Progress**: 43% complete
-- **Last Updated**: July 30, 2024
+- **Overall Progress**: 50% complete (Phase 3 fully completed)
+- **Last Updated**: March 26, 2024
 - **Next Milestone**: Begin Collection Model Generalization (Phase 4)
-- **Current Focus**: Completing implementation of cache service generalization
+- **Current Focus**: Completed implementation of cache service generalization including the two-tier cache fallback strategy
 
 ## Success Criteria
 1. No hardcoded service implementations in the core module

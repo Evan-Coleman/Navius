@@ -23,3 +23,9 @@ pub use crate::core::cache::CacheStats;
 // pub mod two_tier_cache;
 // pub mod distributed_cache;
 // pub mod encrypted_cache;
+
+// Cache providers
+pub mod two_tier_cache;
+
+// Export public types
+pub use two_tier_cache::TwoTierCache;

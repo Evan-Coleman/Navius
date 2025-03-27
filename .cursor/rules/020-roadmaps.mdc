@@ -22,6 +22,7 @@ alwaysApply: false
  - Check to see if any updates to the base project level readme, or anywhere else that might need updating.
  - Ensure all tests are passing with `cargo test`
  - Make sure the readme is up to date "docs/roadmaps/README.md"
+ - Create extensive documenatation if new implementation was created. We want to keep our docs up to date.
 
 
 ##PROMPT_ENHANCER

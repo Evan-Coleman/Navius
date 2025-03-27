@@ -149,6 +149,9 @@ pub mod app {
 
     // Service implementations
     pub mod services;
+
+    // Application cache implementations
+    pub mod cache;
 }
 
 // ===============================================================================
@@ -157,6 +160,7 @@ pub mod app {
 
 /// Caching functionality
 pub mod cache {
+    pub use crate::app::cache::*;
     pub use crate::core::cache::*;
 }
 
