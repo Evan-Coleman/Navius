@@ -1302,6 +1302,32 @@ mod tests {
 
         // Create feature registry
         let mut registry = FeatureRegistry::new();
+
+        // Register core feature
+        let core = FeatureInfo {
+            name: "core".to_string(),
+            description: "Core server functionality".to_string(),
+            dependencies: Vec::new(),
+            default_enabled: true,
+            category: "Essential".to_string(),
+            tags: vec!["core".to_string(), "required".to_string()],
+            size_impact: 500,
+        };
+
+        // Register metrics feature
+        let metrics = FeatureInfo {
+            name: "metrics".to_string(),
+            description: "Metrics collection and reporting".to_string(),
+            dependencies: vec!["core".to_string()],
+            default_enabled: false,
+            category: "Observability".to_string(),
+            tags: vec!["monitoring".to_string()],
+            size_impact: 150,
+        };
+
+        registry.register(core);
+        registry.register(metrics);
+
         registry.select("core").unwrap();
         registry.select("metrics").unwrap();
 

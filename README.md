@@ -178,4 +178,64 @@ Contributions are welcome! Please check out our [contributing guide](CONTRIBUTIN
 
 ## 📄 License
 
-Navius is Apache 2.0 licensed. See [LICENSE](LICENSE) for details. 
+Navius is Apache 2.0 licensed. See [LICENSE](LICENSE) for details.
+
+## Testing
+
+### Running Tests
+
+To run the test suite:
+
+```bash
+# Run all tests
+cargo test
+
+# Run tests for a specific module
+cargo test core::features
+
+# Run a specific test
+cargo test test_interactive_menu_navigation
+```
+
+### Test Coverage
+
+We use `cargo-tarpaulin` for test coverage analysis:
+
+```bash
+# Install tarpaulin
+cargo install cargo-tarpaulin
+
+# Generate HTML coverage report
+cargo tarpaulin --out Html
+
+# Check coverage against targets
+.devtools/scripts/check_coverage.sh
+```
+
+Current coverage targets:
+- Overall project: 70%+ code coverage
+- Core modules: 80%+ coverage
+- Feature system: 75%+ coverage
+- CLI components: 75%+ coverage
+- Documentation system: 90%+ coverage
+
+### Test Quality
+
+To check test quality and identify test smells:
+
+```bash
+.devtools/scripts/test_quality.sh
+```
+
+### Git Hooks
+
+To install Git hooks that automatically run tests before commits and pushes:
+
+```bash
+.devtools/scripts/install-hooks.sh
+```
+
+These hooks will:
+- Run formatters and linters on changed files during commit
+- Run tests for modules with changed files
+- Check test coverage before pushing changes 

@@ -19,6 +19,9 @@ pub struct DependencyAnalyzer {
 
     /// Optional dependencies that can be removed
     removable_dependencies: HashSet<String>,
+
+    /// Feature registry
+    registry: Option<FeatureRegistry>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -60,6 +63,28 @@ impl DependencyAnalyzer {
             feature_dependencies: HashMap::new(),
             required_dependencies: HashSet::new(),
             removable_dependencies: HashSet::new(),
+            registry: None,
+        };
+
+        // Parse Cargo.toml and analyze dependencies
+        analyzer.analyze_dependencies()?;
+
+        Ok(analyzer)
+    }
+
+    /// Create a new dependency analyzer with feature registry
+    pub fn new_with_registry(
+        cargo_path: PathBuf,
+        selected_features: HashSet<String>,
+        registry: FeatureRegistry,
+    ) -> Result<Self, FeatureError> {
+        let mut analyzer = Self {
+            cargo_path,
+            selected_features,
+            feature_dependencies: HashMap::new(),
+            required_dependencies: HashSet::new(),
+            removable_dependencies: HashSet::new(),
+            registry: Some(registry),
         };
 
         // Parse Cargo.toml and analyze dependencies
@@ -219,7 +244,23 @@ impl DependencyAnalyzer {
         // Add selected features section
         tree.push_str("## Selected Features\n\n");
 
-        for feature in &self.selected_features {
+        // Get all features that need to be enabled
+        let mut required_features = HashSet::new();
+        if let Some(registry) = &self.registry {
+            for feature in &self.selected_features {
+                required_features.insert(feature.clone());
+                if let Some(feature_info) = registry.get_feature_info(feature) {
+                    for dep in &feature_info.dependencies {
+                        required_features.insert(dep.clone());
+                    }
+                }
+            }
+        } else {
+            required_features = self.selected_features.clone();
+        }
+
+        // Show all required features
+        for feature in &required_features {
             tree.push_str(&format!("- {}\n", feature));
 
             // Add dependencies for this feature
@@ -303,6 +344,47 @@ advanced_metrics = ["metrics", "tracing"]
         // Check removable dependencies
         let removable = analyzer.get_removable_dependencies();
         assert!(removable.contains("tracing"));
+
+        // Keep temp_dir in scope
+        drop(temp_dir);
+    }
+
+    #[test]
+    fn test_advanced_metrics_dependencies() {
+        let (temp_dir, cargo_path) = create_test_cargo_toml();
+
+        // Select both metrics and advanced_metrics features
+        let mut selected_features = HashSet::new();
+        selected_features.insert("metrics".to_string());
+        selected_features.insert("advanced_metrics".to_string());
+
+        let analyzer = DependencyAnalyzer::new(cargo_path, selected_features).unwrap();
+
+        // Check required dependencies - should now include tracing
+        let required = analyzer.get_required_dependencies();
+        assert!(required.contains("tokio"));
+        assert!(required.contains("axum"));
+        assert!(required.contains("serde"));
+        // Tracing should now be required due to advanced_metrics feature
+        assert!(required.contains("tracing"));
+
+        // Removable dependencies should be empty or not contain tracing
+        let removable = analyzer.get_removable_dependencies();
+        assert!(!removable.contains("tracing"));
+
+        // Test tree generation
+        let tree = analyzer.generate_dependency_tree();
+        assert!(tree.contains("# Dependency Tree"));
+        assert!(tree.contains("## Selected Features"));
+        assert!(tree.contains("metrics"));
+        assert!(tree.contains("advanced_metrics"));
+
+        // Generate optimized TOML and verify
+        let optimized = analyzer.generate_optimized_toml().unwrap();
+        assert!(optimized.contains("tokio"));
+        assert!(optimized.contains("axum"));
+        assert!(optimized.contains("serde"));
+        assert!(optimized.contains("tracing"));
 
         // Keep temp_dir in scope
         drop(temp_dir);

@@ -25,7 +25,7 @@ This directory contains roadmaps for enhancing the Navius framework to match the
 ## Quick Links
 
 - [Template for Updates](template-for-updating.md) - Guidelines for updating roadmaps
-- [Server Customization System](26-server-customization-system.md) - **Foundation priority** (0% complete)
+- [Server Customization System](26-server-customization-system.md) - **Foundation priority** (96% complete)
 - [Generic Service Implementations](25-generic-service-implementations.md) - **Top priority** (0% complete)
 - [Testing Framework](03-testing-framework.md) - Current focus area (35% complete)
 - [Dependency Injection](01-dependency-injection.md) - High priority focus area
@@ -36,7 +36,7 @@ This directory contains roadmaps for enhancing the Navius framework to match the
 
 | ID | Roadmap | Status | Priority | Dependencies |
 |----|---------|--------|----------|--------------|
-| 17 | [Server Customization System](26-server-customization-system.md) | 0% | **Critical** | None |
+| 17 | [Server Customization System](26-server-customization-system.md) | 96% | **Critical** | None |
 | 16 | [Generic Service Implementations](25-generic-service-implementations.md) | 0% | **Critical** | None |
 | 03 | [Testing Framework](03-testing-framework.md) | 35% | High | None |
 | 01 | [Dependency Injection](01-dependency-injection.md) | 0% | High | None |
@@ -71,7 +71,7 @@ This directory contains roadmaps for enhancing the Navius framework to match the
 
 | Component | Progress | Status | Next Milestone |
 |-----------|----------|--------|----------------|
-| Server Customization | 0% | 🔄 Starting | Modular Build System |
+| Server Customization | 96% | 🔄 In Progress | CLI Visualization |
 | Generic Services | 0% | 🔄 Starting | Database Interface Definition |
 | Project Structure | 100% | ✅ Complete | N/A |
 | Testing Framework | 35% | 🔄 In Progress | API Resource Testing |
