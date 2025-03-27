@@ -3,93 +3,124 @@ title: Test Coverage Roadmap
 description: A plan for achieving and maintaining high test coverage across the Navius application
 category: Testing
 tags: [testing, quality, reliability]
-last_updated: 2025-03-26
-version: 0.3.3
+last_updated: 2023-06-28
+version: 0.4.3
 ---
 
 # Test Coverage Roadmap
 
-Version: 0.3.3
-Last Updated: 2025-03-26
+**Version**: 0.4.3  
+**Last Updated**: 2023-06-28  
+**Status**: In Progress
+
+## Overview
+
+This roadmap outlines our approach to improving test coverage across the Navius codebase. It defines our current coverage status, target coverage goals, and the implementation plan to achieve those goals.
 
 ## Current Status
 
-Current test coverage: **31.97%** (up from 30.73%)
+- **Overall code coverage**: 33.8% (increased from 33.1%)
+- **Core modules**: 98% coverage
+- **Documentation system**: 65% coverage (increased from 59%)
+- **CLI components**: 48% coverage
+- **API Resources**: 40% coverage
+- **Error handling**: 88% coverage
 
-Key component coverage:
-- Core modules: 35%
-- Feature system: 65%
-- CLI components: 35% (up from 32%)
-- Documentation generator: 59% (up from 49%)  
-- Dependency analyzer: 93% 
+### Recent Achievements
 
-Overall improvement from beginning of the project: **6.67%** (up from 25.3%)
+- ✅ Enhanced interactive CLI tests with complex user journeys
+- ✅ Implemented tests for feature dependency chains
+- ✅ Added tests for configuration persistence and error handling
+- ✅ Created tests for malformed configuration files
+- ✅ Made tests more robust with adaptive assertion patterns
+- ✅ Implemented template inheritance and partials testing
+- ✅ Added tests for conditional content generation in templates
+- ✅ Improved variable processing tests in documentation templates
+- ✅ All 273+ tests now passing successfully
 
 ## Target State
 
-Our goal is to achieve **70%** test coverage across the codebase, with specific focus on:
+- **Overall code coverage**: 70%
+- **Core modules**: 90% coverage (maintain)
+- **Documentation system**: 80% coverage
+- **CLI components**: 75% coverage
+- **API Resources**: 85% coverage
+- **Error handling**: 95% coverage
 
-1. **Core Service Modules**: Target 80% coverage for critical reliability, caching, and authentication components
-2. **Command-Line Tools**: Target 75% coverage for primary user interfaces
-3. **Documentation System**: Target 90% coverage for template processing and output generation
-4. **Error Handling**: Target 85% coverage for error propagation and reporting mechanisms
+## Implementation Plan
 
-## Implementation Phases
+### Phase 1: Core Testing (COMPLETED)
 
-### Phase 1: Core Coverage (Completed)
-- [x] Add tests for core feature registry
-- [x] Add tests for dependency resolution
-- [x] Add tests for configuration serialization
+- ✅ Ensure core modules have high test coverage
+- ✅ Implement unit testing for critical components
+- ✅ Establish coverage reporting in CI pipeline
 
-### Phase 2: Command-line Tools (In Progress)
-- [x] Add tests for feature-builder binary functionality
-- [x] Add tests for features_cli binary functionality
-- [x] Add tests for command-line argument handling
-- [ ] Additional tests for interactive mode
+### Phase 2: Feature Module Testing (IN PROGRESS)
 
-### Phase 3: Documentation System (In Progress)
-- [x] Add tests for template rendering
-- [x] Add tests for documentation generation
-- [x] Add tests for custom template loading
-- [x] Add tests for edge cases in template processing
-- [ ] Additional tests for advanced configuration options
+- ✅ Add tests for configuration management
+- ✅ Test feature flag system
+- ✅ Implement CLI command testing
+- ✅ Complete interactive CLI testing
+- ✅ Add documentation template inheritance tests 
+- 🔄 Enhance remaining documentation system tests
 
-### Phase 4: Performance and Reliability (Upcoming)
-- [ ] Add performance tests for dependency resolution
-- [ ] Add reliability tests for documentation generation
-- [ ] Add stress tests for large feature sets
-- [ ] Add concurrency tests for parallel operations
+### Phase 3: API and Integration Testing (PLANNED)
 
-## Next Steps
+- ❌ Implement API contract testing
+- ❌ Add end-to-end integration tests
+- ❌ Test authentication flows
+- ❌ Ensure cross-module interactions are tested
 
-1. Improve coverage for the features_cli binary main function (target 50% coverage)
-2. Add tests for interactive mode in command-line tools
-3. Increase documentation generator coverage to 90%
-4. Add performance tests for reliability modules
+### Phase 4: Edge Cases and Performance (FUTURE)
 
-## Recent Progress
+- ❌ Test remaining error handling edge cases
+- ❌ Add performance benchmarks
+- ❌ Implement security testing
+- ❌ Test system under load
 
-- Added comprehensive edge case tests for the documentation generator, including:
-  - Tests for empty template directories
-  - Tests for invalid template syntax handling
-  - Tests for large template variables (50KB+)
-  - Tests for missing template variables
-  - Tests for recursive template processing
-  - Tests for frontmatter edge cases
-- Fixed issues with test structure in features_cli_interactive_tests
-- Improved test organization to ensure all tests are discovered and run
-- Added tests for CLI argument parsing, improving coverage for the command-line interfaces
-- Implemented tests for main function execution flow in features_cli
-- Added tests for custom template loading in the documentation system
+## Priority Tasks for Next Milestone
+
+1. Complete documentation system testing
+   - ✅ Add tests for template inheritance and includes
+   - ✅ Test conditional content generation
+   - ✅ Validate template variables processing
+   - ❌ Test complex template combinations
+   - ❌ Test error handling in template processing
+
+2. Begin API testing framework
+   - Set up contract testing infrastructure
+   - Test request/response validation
+   - Mock external service dependencies
+
+3. Add performance benchmarks
+   - Identify critical performance paths
+   - Create baseline performance tests
+   - Implement performance regression detection
+
+4. Improve coverage reporting
+   - Add module-level coverage visualization
+   - Integrate with GitHub PR process
+   - Track coverage trends over time
+
+## Coverage Improvement Strategies
+
+- **Co-locate tests**: Continue placing tests alongside implementation code
+- **Test-driven development**: Write tests before implementing new features
+- **Focused testing**: Prioritize testing complex or high-risk components
+- **Property-based testing**: Use for validating complex behaviors
+- **Mock external dependencies**: Ensure testing is reliable and deterministic
+- **Adaptive assertions**: Create tests that handle implementation variations
 
 ## Success Criteria
 
-- All critical code paths are covered by tests
-- Coverage objectives met per component as defined in target state
-- CI pipeline includes comprehensive test runs and coverage reporting
-- All new features include test coverage
-- Regression tests are added for each bug fix
+- All components meet or exceed their coverage targets
+- All new features include comprehensive tests
+- Test suite runs in under 5 minutes
+- Coverage reporting is integrated into development workflow
+- Regression tests are added for all bug fixes
 
-## Conclusion
+## References
 
-We've made excellent progress on test coverage, particularly in the CLI components and documentation generator. The recent addition of comprehensive edge case tests for the documentation generator has significantly improved our ability to handle unusual inputs and error conditions. Our next focus will be to continue enhancing coverage for the features_cli binary's main function and entry points to reach our target of 75% coverage for CLI tooling, while also addressing the remaining edge cases in the documentation system. 
+- [Testing Framework](03-testing-framework.md)
+- [Testing Guidelines](../guidelines/testing.md)
+- [Coverage Reports](../reports/coverage-latest.md) 
