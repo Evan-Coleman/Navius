@@ -61,6 +61,8 @@ tower = { version = "0.5.2", features = ["full"] }
 tower-http = { version = "0.6.2", features = ["trace", "timeout", "catch-panic", "request-id", "cors"] }
 uuid = { version = "1.16.0", features = ["v4", "serde"] }
 tracing-futures = "0.2.5"
+# Validation
+validator = { version = "0.20.0", features = ["derive"] }
 
 # Authentication
 jsonwebtoken = "9.3.1"

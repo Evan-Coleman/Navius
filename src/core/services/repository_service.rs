@@ -1,6 +1,7 @@
 use std::collections::HashMap;
+use std::error::Error;
 use std::marker::PhantomData;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use serde::Serialize;
@@ -8,7 +9,9 @@ use serde::de::DeserializeOwned;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
-use crate::core::models::{Entity, Repository, RepositoryConfig, RepositoryProviderRegistry};
+use crate::core::models::{
+    Entity, Repository, RepositoryConfig, RepositoryProvider, RepositoryProviderRegistry,
+};
 use crate::core::services::error::ServiceError;
 use crate::core::services::memory_repository::{
     InMemoryRepositoryProvider, register_memory_repository_provider,
@@ -16,14 +19,15 @@ use crate::core::services::memory_repository::{
 use crate::core::services::{Lifecycle, Service};
 
 /// Service for managing entity repositories
+#[derive(Debug)]
 pub struct RepositoryService {
     /// Registry of repository providers
     provider_registry: Arc<RwLock<RepositoryProviderRegistry>>,
 
-    /// Repository configurations
+    /// Repository configurations by entity name
     configs: HashMap<String, RepositoryConfig>,
 
-    /// Provider name to use for repositories
+    /// Default provider to use when none is specified
     default_provider: String,
 }
 
@@ -77,7 +81,7 @@ impl RepositoryService {
     }
 
     /// Register a repository provider
-    pub async fn register_provider<P: crate::core::models::RepositoryProvider + 'static>(
+    pub async fn register_provider<P: RepositoryProvider + 'static>(
         &self,
         name: &str,
         provider: P,
@@ -97,21 +101,27 @@ impl RepositoryService {
     }
 
     /// Create a repository for an entity type
-    pub async fn create_repository<E, P>(&self) -> Result<Box<dyn Repository<E>>, ServiceError>
+    pub async fn create_repository<E, P>(
+        &self,
+        config: Option<RepositoryConfig>,
+    ) -> Result<Box<dyn Repository<E>>, ServiceError>
     where
         E: Entity + Serialize + DeserializeOwned,
-        P: crate::core::models::RepositoryProvider + 'static,
+        P: RepositoryProvider + 'static,
     {
         let entity_name = E::collection_name();
-        let config = self.configs.get(&entity_name).cloned().unwrap_or_else(|| {
-            let mut default_config = RepositoryConfig::default();
-            default_config.provider = self.default_provider.clone();
-            default_config
-        });
+        let config = match config {
+            Some(config) => config,
+            None => self.configs.get(&entity_name).cloned().unwrap_or_else(|| {
+                let mut default_config = RepositoryConfig::default();
+                default_config.provider = self.default_provider.clone();
+                default_config
+            }),
+        };
 
         let registry = self.provider_registry.read().await;
         registry
-            .create_repository::<P, E>(&config.provider, config)
+            .create_repository::<P, E>(&config.provider.clone(), config)
             .await
     }
 
@@ -152,6 +162,7 @@ impl Default for RepositoryService {
 }
 
 /// A generic repository facade that simplifies working with repositories
+#[derive(Debug)]
 pub struct GenericRepository<E>
 where
     E: Entity + Serialize + DeserializeOwned,
@@ -215,14 +226,16 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::models::user_entity::User;
+    use serde::{Deserialize, Serialize};
     use tokio::test;
     use uuid::Uuid;
 
-    #[test]
+    use crate::core::models::user_entity::User;
+
+    #[tokio::test]
     async fn test_repository_service() {
         // Create repository service
-        let mut repo_service = RepositoryService::new();
+        let repo_service = RepositoryService::new();
         repo_service.init().await.unwrap();
 
         // Create a user repository
@@ -257,10 +270,10 @@ mod tests {
         assert!(deleted);
     }
 
-    #[test]
+    #[tokio::test]
     async fn test_generic_repository() {
         // Create repository service
-        let mut repo_service = RepositoryService::new();
+        let repo_service = RepositoryService::new();
         repo_service.init().await.unwrap();
 
         // Create a generic repository

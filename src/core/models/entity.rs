@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use uuid::Uuid;
@@ -15,7 +16,7 @@ impl EntityId for i32 {}
 impl EntityId for i64 {}
 
 /// Core entity trait for domain objects
-pub trait Entity: Clone + Debug + Serialize + Send + Sync + 'static {
+pub trait Entity: Clone + Debug + Serialize + DeserializeOwned + Send + Sync + 'static {
     /// The ID type for this entity
     type Id: EntityId;
 
@@ -33,7 +34,7 @@ pub trait Entity: Clone + Debug + Serialize + Send + Sync + 'static {
 
 /// Generic entity interface for CRUD operations
 #[async_trait]
-pub trait Repository<E: Entity>: Send + Sync + 'static {
+pub trait Repository<E: Entity>: Debug + Send + Sync + 'static {
     /// Find an entity by its ID
     async fn find_by_id(&self, id: &E::Id) -> Result<Option<E>, ServiceError>;
 
@@ -59,10 +60,12 @@ pub trait Repository<E: Entity>: Send + Sync + 'static {
 #[async_trait]
 pub trait RepositoryProvider: Send + Sync + 'static {
     /// Create a repository for the given entity type
-    async fn create_repository<E: Entity>(
+    async fn create_repository<E>(
         &self,
         config: RepositoryConfig,
-    ) -> Result<Box<dyn Repository<E>>, ServiceError>;
+    ) -> Result<Box<dyn Repository<E>>, ServiceError>
+    where
+        E: Entity;
 
     /// Check if this provider supports the given repository configuration
     fn supports(&self, config: &RepositoryConfig) -> bool;
@@ -104,6 +107,7 @@ impl Default for RepositoryConfig {
 }
 
 /// Registry for repository providers
+#[derive(Debug)]
 pub struct RepositoryProviderRegistry {
     providers: std::collections::HashMap<String, Box<dyn std::any::Any + Send + Sync>>,
 }

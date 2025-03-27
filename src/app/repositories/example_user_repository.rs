@@ -1,34 +1,43 @@
+use std::error::Error;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::app::models::example_user_entity::{User, UserRole};
+use crate::app::User;
+use crate::app::UserRole;
 use crate::core::models::{Entity, Repository, RepositoryConfig};
 use crate::core::services::error::ServiceError;
 use crate::core::services::memory_repository::InMemoryRepositoryProvider;
 use crate::core::services::repository_service::RepositoryService;
+use crate::core::services::service_traits::Lifecycle;
 
-/// Example custom repository for User entities that extends the base repository
-/// with additional user-specific query methods
+/// Repository for managing user entities
+#[derive(Debug)]
 pub struct UserRepository {
-    // The underlying repository
+    /// Inner repository implementation
     inner: Arc<dyn Repository<User>>,
 }
 
 impl UserRepository {
     /// Create a new user repository
     pub async fn new(repository_service: &RepositoryService) -> Result<Self, ServiceError> {
+        // Create default repository config for User entity
         let config = RepositoryConfig {
             provider: "memory".to_string(),
+            collection_name: Some(User::collection_name()),
             ..Default::default()
         };
 
-        let repository = repository_service.create_repository::<User>(config).await?;
+        // Use the InMemoryRepositoryProvider to create the repository with the updated method signature
+        let boxed_repo = repository_service
+            .create_repository::<User, InMemoryRepositoryProvider>(Some(config))
+            .await?;
 
+        // Wrap the raw Box<dyn Repository<User>> in an Arc
         Ok(Self {
-            inner: Arc::new(repository),
+            inner: Arc::from(boxed_repo),
         })
     }
 
@@ -82,12 +91,14 @@ impl Repository<User> for UserRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::services::Lifecycle;
     use tokio::test;
 
     #[test]
     async fn test_user_repository() {
         // Create a repository service
         let repository_service = RepositoryService::new();
+        repository_service.init().await.unwrap(); // Initialize to register the memory provider
 
         // Create a user repository
         let repo = UserRepository::new(&repository_service).await.unwrap();

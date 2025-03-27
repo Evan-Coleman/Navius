@@ -10,15 +10,14 @@ use tokio::sync::Mutex;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::core::models::Entity;
-use crate::core::models::Repository;
-use crate::core::models::RepositoryConfig;
-use crate::core::models::RepositoryProvider;
-use crate::core::models::RepositoryProviderRegistry;
+use crate::core::models::{
+    Entity, Repository, RepositoryConfig, RepositoryProvider, RepositoryProviderRegistry,
+};
 use crate::core::services::error::ServiceError;
 use crate::core::services::{Lifecycle, Service};
 
 /// Memory-based repository implementation for entities
+#[derive(Debug)]
 pub struct InMemoryRepository<E: Entity + Serialize + DeserializeOwned> {
     /// Repository configuration
     config: RepositoryConfig,
@@ -198,10 +197,13 @@ impl Default for InMemoryRepositoryProvider {
 
 #[async_trait]
 impl RepositoryProvider for InMemoryRepositoryProvider {
-    async fn create_repository<E: Entity + Serialize + DeserializeOwned>(
+    async fn create_repository<E>(
         &self,
         config: RepositoryConfig,
-    ) -> Result<Box<dyn Repository<E>>, ServiceError> {
+    ) -> Result<Box<dyn Repository<E>>, ServiceError>
+    where
+        E: Entity + Serialize + DeserializeOwned,
+    {
         let repository = InMemoryRepository::<E>::new(config, self.data_store.clone());
         repository.init().await.map_err(|e| {
             ServiceError::initialization_error(format!("Failed to initialize repository: {}", e))

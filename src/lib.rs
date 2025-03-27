@@ -90,9 +90,17 @@ pub mod core {
         // Response models
         pub mod core_response;
 
+        // Entity definitions
+        pub mod entity;
+
+        // User entity
+        pub mod user_entity;
+
         pub use core_error::*;
         pub use core_extensions::*;
         pub use core_response::*;
+        pub use entity::*;
+        pub use user_entity::*;
     }
 
     // Reliability features
@@ -152,6 +160,17 @@ pub mod app {
 
     // Application cache implementations
     pub mod cache;
+
+    // Models (e.g., entity definitions)
+    pub mod models;
+
+    // Repositories for data access
+    pub mod repositories;
+
+    // Re-export commonly used types from app modules
+    pub use models::example_user_entity::*;
+    pub use repositories::example_user_repository::*;
+    pub use services::example_user_service::*;
 }
 
 // ===============================================================================
@@ -197,7 +216,14 @@ pub mod models {
 
 /// Service module for business logic
 pub mod services {
-    pub use crate::app::services::*;
+    // Fix ambiguous re-exports by making them more specific
+    // Re-export app services explicitly
+    pub use crate::app::services::example_user_service::{
+        CreateUserInput as AppCreateUserInput, UpdateUserInput as AppUpdateUserInput,
+        UserOutput as AppUserOutput, UserService as AppUserService,
+    };
+
+    // Re-export core services
     pub use crate::core::services::*;
 }
 

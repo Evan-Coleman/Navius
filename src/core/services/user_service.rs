@@ -6,9 +6,10 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::core::models::user_entity::{User, UserRole};
+use crate::core::models::{User, UserRole};
 use crate::core::services::error::ServiceError;
 use crate::core::services::repository_service::{GenericRepository, RepositoryService};
+use crate::core::services::service_traits::Lifecycle as ServiceLifecycle;
 use crate::core::services::{Lifecycle, Service};
 
 /// Input for creating a user
@@ -90,6 +91,7 @@ impl From<User> for UserOutput {
 }
 
 /// Service for managing users
+#[derive(Debug)]
 pub struct UserService {
     /// User repository
     repository: Arc<GenericRepository<User>>,
@@ -277,10 +279,12 @@ impl UserService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::services::Lifecycle;
     use tokio::test;
 
     async fn create_test_service() -> UserService {
         let repo_service = RepositoryService::new();
+        repo_service.init().await.unwrap(); // Initialize to register the memory provider
         UserService::with_repo_service(&repo_service).await.unwrap()
     }
 

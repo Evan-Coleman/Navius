@@ -25,9 +25,9 @@ pub struct User {
 
     /// User's display name
     #[validate(length(
-        min = 1,
+        min = 3,
         max = 100,
-        message = "Display name must be between 1 and 100 characters"
+        message = "Display name must be between 3 and 100 characters"
     ))]
     pub display_name: String,
 
@@ -75,23 +75,26 @@ impl Entity for User {
     }
 
     fn validate(&self) -> Result<(), ServiceError> {
-        // Use the validator crate's validation
-        if let Err(validation_errors) = Validate::validate(self) {
-            let error_messages: Vec<String> = validation_errors
+        let validator = Validate::validate(self);
+        if let Err(errors) = &validator {
+            let error_strings: Vec<String> = errors
                 .field_errors()
                 .iter()
                 .flat_map(|(field, errors)| {
-                    errors.iter().map(|error| {
+                    errors.iter().map(move |error| {
                         format!(
                             "{}: {}",
                             field,
-                            error.message.as_ref().unwrap_or(&"Invalid".into())
+                            error
+                                .message
+                                .as_ref()
+                                .map_or("Invalid value", |m| m.as_ref())
                         )
                     })
                 })
                 .collect();
 
-            return Err(ServiceError::validation(error_messages.join(", ")));
+            return Err(ServiceError::validation(error_strings.join(", ")));
         }
 
         Ok(())
@@ -148,9 +151,11 @@ impl User {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::models::entity;
+    use uuid::Uuid;
 
     #[test]
-    fn test_user_creation() {
+    fn test_user_create() {
         let user = User::new(
             "testuser".to_string(),
             "test@example.com".to_string(),
@@ -162,57 +167,67 @@ mod tests {
         assert_eq!(user.display_name, "Test User");
         assert_eq!(user.role, UserRole::User);
         assert!(user.active);
+        assert!(entity::Entity::validate(&user).is_ok());
     }
 
     #[test]
-    fn test_user_validation_success() {
+    fn test_user_with_role() {
         let user = User::new(
-            "testuser".to_string(),
-            "test@example.com".to_string(),
-            "Test User".to_string(),
-        );
-
-        assert!(user.validate().is_ok());
-    }
-
-    #[test]
-    fn test_user_validation_failure() {
-        // Test invalid username (too short)
-        let user = User::new(
-            "te".to_string(),
-            "test@example.com".to_string(),
-            "Test User".to_string(),
-        );
-        assert!(user.validate().is_err());
-
-        // Test invalid email
-        let user = User::new(
-            "testuser".to_string(),
-            "invalid-email".to_string(),
-            "Test User".to_string(),
-        );
-        assert!(user.validate().is_err());
-
-        // Test empty display name
-        let user = User::new(
-            "testuser".to_string(),
-            "test@example.com".to_string(),
-            "".to_string(),
-        );
-        assert!(user.validate().is_err());
-    }
-
-    #[test]
-    fn test_with_methods() {
-        let user = User::new(
-            "testuser".to_string(),
-            "test@example.com".to_string(),
-            "Test User".to_string(),
+            "admin".to_string(),
+            "admin@example.com".to_string(),
+            "Admin User".to_string(),
         )
-        .with_role(UserRole::Admin)
-        .with_active(false);
+        .with_role(UserRole::Admin);
 
         assert_eq!(user.role, UserRole::Admin);
-        assert!(!user.active);
+        assert!(entity::Entity::validate(&user).is_ok());
+    }
+
+    #[test]
+    fn test_user_validation_empty_username() {
+        let user = User {
+            id: Uuid::new_v4(),
+            username: "".to_string(),
+            email: "test@example.com".to_string(),
+            display_name: "Test User".to_string(),
+            role: UserRole::User,
+            active: true,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+
+        assert!(entity::Entity::validate(&user).is_err());
+    }
+
+    #[test]
+    fn test_user_validation_invalid_email() {
+        let user = User {
+            id: Uuid::new_v4(),
+            username: "testuser".to_string(),
+            email: "invalid-email".to_string(),
+            display_name: "Test User".to_string(),
+            role: UserRole::User,
+            active: true,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+
+        assert!(entity::Entity::validate(&user).is_err());
+    }
+
+    #[test]
+    fn test_user_validation_short_display_name() {
+        let user = User {
+            id: Uuid::new_v4(),
+            username: "testuser".to_string(),
+            email: "test@example.com".to_string(),
+            display_name: "T".to_string(), // Too short
+            role: UserRole::User,
+            active: true,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+
+        assert!(entity::Entity::validate(&user).is_err());
     }
 }
