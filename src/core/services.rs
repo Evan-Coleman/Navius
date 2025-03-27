@@ -11,8 +11,11 @@ pub mod health_indicators;
 pub mod health_provider;
 pub mod memory_cache;
 pub mod memory_database;
+pub mod memory_repository;
 pub mod redis_cache;
+pub mod repository_service;
 pub mod service_traits;
+pub mod user_service;
 
 // Re-export key components
 pub use cache_provider::{
@@ -42,5 +45,10 @@ pub use health_provider::{
 };
 pub use memory_cache::InMemoryCacheProvider;
 pub use memory_database::{InMemoryDatabase, InMemoryDatabaseProvider};
+pub use memory_repository::{
+    InMemoryRepository, InMemoryRepositoryProvider, register_memory_repository_provider,
+};
 pub use redis_cache::RedisCacheProvider;
+pub use repository_service::{GenericRepository, RepositoryService};
 pub use service_traits::{Lifecycle, Service, ServiceProvider, ServiceRegistry};
+pub use user_service::{CreateUserInput, UpdateUserInput, UserOutput, UserService};

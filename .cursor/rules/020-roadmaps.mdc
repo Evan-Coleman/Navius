@@ -23,6 +23,7 @@ alwaysApply: false
  - Ensure all tests are passing with `cargo test`
  - Make sure the readme is up to date "docs/roadmaps/README.md"
  - Create extensive documenatation if new implementation was created. We want to keep our docs up to date.
+   - Keep /docs/README.md and docs/SUMMARY.md up to date and in sync as well.
 
 
 ##PROMPT_ENHANCER
