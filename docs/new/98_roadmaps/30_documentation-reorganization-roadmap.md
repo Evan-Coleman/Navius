@@ -9,11 +9,11 @@ tags:
   - standards
 related:
   - 30_documentation-reorganization-instructions.md
-  - ../contributing/documentation-guidelines.md
-  - ../reference/standards/documentation-standards.md
+  - ../03_contributing/documentation-guidelines.md
+  - ../05_reference/standards/documentation-standards.md
 last_updated: March 27, 2025
 version: 1.0
-status: not started
+status: started
 ---
 
 # Documentation Reorganization Roadmap
@@ -31,6 +31,7 @@ The Navius documentation currently faces several challenges:
 - **Outdated References**: Some documents reference deprecated features, code patterns, or architectural components.
 - **Inconsistent Formatting**: Documents vary in structure, headings, and metadata, making navigation less intuitive.
 - **Incomplete Coverage**: Gaps exist in documentation for newer features and components.
+- **Non-functioning Documentation Scripts**: The documentation validation and improvement scripts are not working correctly, making automated quality assessment difficult.
 
 ## Target State
 
@@ -38,10 +39,11 @@ After reorganization, the Navius documentation will:
 
 - **Have an Intuitive Structure**: Clear categorization with progressive depth, from getting started to advanced topics.
 - **Eliminate Redundancy**: No duplicate content, with cross-references instead.
-- **Be Consistently Formatted**: All documents following the same template and style guidelines as defined in our [Documentation Standards](/docs/reference/standards/documentation-standards.md).
+- **Be Consistently Formatted**: All documents following the same template and style guidelines as defined in our [Documentation Standards](../05_reference/standards/documentation-standards.md).
 - **Be Up-to-Date**: All content verified as current and accurate.
 - **Have Complete Coverage**: Documentation for all major features and components.
 - **Be Maintainable**: Clear processes for ongoing updates and improvements.
+- **Have Working Documentation Tools**: Functional scripts for validation, quality assessment, and improvement.
 
 ## New Structure
 
@@ -59,142 +61,166 @@ The documentation will be reorganized into the following primary sections:
 
 ## Implementation Phases
 
+### Phase 0: Fix Documentation Scripts (High Priority)
+
+The documentation scripts located in `.devtools/scripts/doc-overhaul/*.sh` are not working correctly. These scripts are intended to validate, improve, and manage the documentation, but they currently have significant issues:
+
+- Shell compatibility problems with macOS (zsh)
+- Syntax errors in expressions and variable handling
+- Issues with markdownlint detection
+- File count and reporting errors
+
+This phase must be prioritized before continuing with the automated portions of the reorganization. See the [Documentation Scripts Fix Roadmap](31_documentation-script-fixes.md) for a detailed plan to address these issues.
+
+### Tasks
+- ❌ Analyze and document all script errors in detail
+- ❌ Create a shell-agnostic utility library
+- ❌ Fix individual scripts (generate_report.sh, comprehensive_test.sh, etc.)
+- ❌ Test fixes in multiple environments
+- ❌ Update script documentation
+- ❌ Support the new directory structure in all scripts
+
+While these issues are being addressed, manual processes will be used for the documentation reorganization.
+
 ### Phase 1: Structure Setup and Content Analysis (Week 1)
 
 1. **Create New Directory Structure**
-   - Set up the new directory hierarchy in a temporary location
-   - Prepare document templates with consistent frontmatter
-   - Establish cross-referencing conventions
+   - ✅ Set up the new directory hierarchy in a temporary location
+   - ✅ Prepare document templates with consistent frontmatter
+   - ✅ Establish cross-referencing conventions
 
-2. **Automated Content Analysis**
-   - Run `.devtools/scripts/doc-overhaul/generate_report.sh` to perform comprehensive analysis
-   - Use `--csv` option of comprehensive_test.sh to generate a structured inventory
-   - Extract quality metrics including content quality scores, readability, and code validation
-   - Generate document relationship visualizations with `generate_report.sh --vis`
-   - Track historical quality trends to establish a baseline for improvement
+2. **Content Analysis**
+   - ✅ Created basic content inventory using find
+   - ❌ Automated content analysis with generate_report.sh (blocked by script issues)
+   - ❌ Detailed quality metrics extraction (blocked by script issues)
+   - ❌ Document relationship visualization (blocked by script issues)
 
-3. **Review AI-Assisted Recommendations**
-   - Leverage the "Improvement Recommendations" section from generate_report.sh
-   - Prioritize documents for improvement based on their quality scores and health metrics
-   - Create action plans for documents with failing code examples
-   - Identify documents with poor readability for targeted enhancement
-
-4. **Develop Migration Tracking**
-   - Set up tracking mechanisms for migration progress
-   - Create migration validation checklist based on report findings
-   - Establish metrics tracking for monitoring improvement over time
+3. **Migration Tracking**
+   - ✅ Created migration plan document
+   - ✅ Set up tracking mechanisms for migration progress
+   - ✅ Created migration validation checklist
 
 ### Phase 2: Content Migration (Weeks 2-3)
 
 1. **Inventory Existing Content**
-   - Use the generated quality reports to classify content by quality level
-   - Assess readability metrics to identify content requiring simplification
-   - Review code validation results to prioritize technical documentation
-   - Identify duplications and gaps using document relationship visualization
+   - ✅ Basic inventory of existing documentation files
+   - ❌ Quality assessment (blocked by script issues)
 
 2. **Migrate High-Priority Content**
-   - Start with essential getting started documentation
-   - Apply frontmatter fixes using `.devtools/scripts/doc-overhaul/fix_frontmatter.sh`
-   - Process multiple files efficiently with batch processing: `.devtools/scripts/doc-overhaul/fix_frontmatter.sh --dir [directory] --recursive`
-   - Verify and update examples, focusing on failing code blocks identified by validation
-   - Fix internal links with `.devtools/scripts/doc-overhaul/fix_links.sh`
-   - Process multiple files for link fixing: `.devtools/scripts/doc-overhaul/fix_links.sh --dir [directory] --recursive`
-   - Validate each migrated document with `generate_report.sh --file`
+   - ✅ Migrated essential getting started documentation
+   - ✅ Migrated contributing documentation
+   - ✅ Migrated examples
+   - ❌ Apply frontmatter fixes (blocked by script issues)
+   - ❌ Fix internal links (blocked by script issues)
 
 3. **Migrate Secondary Content**
-   - Move contributing guidelines and references
-   - Use `.devtools/scripts/doc-overhaul/add_sections.sh` to ensure consistent document structure 
-   - Add standard sections to entire directories: `.devtools/scripts/doc-overhaul/add_sections.sh --dir [directory] --recursive`
-   - Define custom sections for document types: `.devtools/scripts/doc-overhaul/add_sections.sh --sections "Overview,Examples" --dir [directory]`
-   - Update cross-references to match new structure
-   - Consolidate duplicate content identified through the document relationship analysis
+   - ✅ Migrated guides and reference documentation
+   - ✅ Migrated roadmaps
+   - ✅ Migrated miscellaneous content
+   - ❌ Add standard sections to documents (blocked by script issues)
+   - ❌ Update cross-references to match new structure
 
-4. **Targeted Quality Improvements**
-   - Address documents with poor readability scores
-   - Fix code blocks that failed validation
-   - Implement specific recommendations from the quality reports
-   - Generate incremental reports to track progress using historical data
+4. **Initial Organization Improvements**
+   - ✅ Created proper directory structure with numbered sections
+   - ✅ Updated main README.md to reflect new structure
+   - ✅ Created new SUMMARY.md for navigation
+   - ✅ Created README-reorganization.md to explain the changes
 
 ### Phase 3: Gap Analysis and Content Creation (Weeks 4-5)
 
 1. **Identify Missing Documentation**
-   - Run updated reports to identify remaining gaps
-   - Use document relationship visualization to find isolated content areas
-   - Identify sections with low coverage or quality scores
-   - Prioritize new content creation based on quality gaps
-   - Assign writing responsibilities
+   - ❌ Run updated reports to identify gaps (blocked by script issues)
+   - ❌ Identify sections with low coverage
 
 2. **Create New Content**
-   - Develop missing documentation
-   - Use provided templates and document standards
-   - Apply frontmatter and section structure consistently
-   - Ensure new documents achieve "Good" or "Excellent" quality scores
-   - Validate code examples before inclusion
+   - ❌ Develop missing documentation
+   - ❌ Use provided templates and document standards
 
 3. **Validation and Improvement**
-   - Run `.devtools/scripts/doc-overhaul/generate_report.sh --dir` on each section
-   - Address issues identified by automated quality assessment
-   - Improve readability based on metrics
-   - Update cross-references and related document sections
-   - Track improvement trends using the historical metrics feature
+   - ❌ Run quality assessment on each section (blocked by script issues)
+   - ❌ Improve readability
+   - ❌ Update cross-references
 
 ### Phase 4: Review and Refinement (Week 6)
 
 1. **Technical Review**
-   - Verify technical accuracy
-   - Test code examples, focusing on those flagged during validation
-   - Check for outdated information
-   - Update examples to follow latest code conventions
+   - ❌ Verify technical accuracy
+   - ❌ Test code examples
 
 2. **Automated Testing**
-   - Run full documentation validation suite
-   - Generate comprehensive quality reports with visualization
-   - Validate frontmatter completeness with `fix_frontmatter.sh --validate-all --report`
-   - Check for broken links with `fix_links.sh --check-only --report`
-   - Check readability and content quality metrics
-   - Verify all links work correctly
-   - Ensure all documents have proper frontmatter and structure
+   - ❌ Run full documentation validation suite (blocked by script issues)
+   - ❌ Generate quality reports (blocked by script issues)
 
 3. **Final Adjustments**
-   - Address feedback and validation issues
-   - Fix any remaining structural problems
-   - Update cross-references
-   - Improve documents with low quality or readability scores
-   - Generate before/after quality reports to demonstrate improvement
+   - ❌ Address feedback and validation issues
+   - ❌ Fix any remaining structural problems
 
 ### Phase 5: Publication and Monitoring (Week 7)
 
 1. **Deploy New Structure**
-   - Replace existing documentation with new structure
-   - Update build configurations
-   - Verify publication pipeline
-   - Generate final quality baseline report for future comparison
+   - ❌ Replace existing documentation with new structure
+   - ❌ Update build configurations
 
 2. **Announce and Communicate**
-   - Inform users about changes
-   - Provide transition guidance
-   - Document reorganization benefits
-   - Share quality metrics improvements
+   - ❌ Inform users about changes
+   - ❌ Document reorganization benefits
 
 3. **Ongoing Maintenance**
-   - Set up regular documentation quality checks using provided scripts
-   - Establish process for addressing documentation issues
-   - Configure CI integration for documentation validation
-   - Set up automated tracking of quality metrics over time
-   - Implement scheduled trend reporting for continued improvement
+   - ❌ Set up regular documentation quality checks
+   - ❌ Establish process for addressing documentation issues
+
+## Progress Update
+
+As of March 27, 2025, we have made significant progress with the initial structure setup and content migration:
+
+- ✅ Created the new directory structure with numbered sections
+- ✅ Created a document template for standardization
+- ✅ Migrated content from the old structure to the new structure
+- ✅ Created supporting documentation (migration plan, README, etc.)
+- ✅ Updated README.md with new navigation paths
+- ❌ Documentation scripts are not working correctly - this is now a high priority
+
+Next steps:
+1. Fix the documentation scripts or develop alternatives
+2. Update frontmatter in all documents
+3. Fix internal links to point to the new paths
+4. Validate the structure and make final adjustments
+
+## Script Issues
+
+The following issues have been identified with the documentation scripts:
+
+1. **generate_report.sh**
+   - Shell compatibility issues with certain commands
+   - Error with markdownlint detection
+   - Syntax errors in expressions
+
+2. **comprehensive_test.sh**
+   - Invalid option for declare command (likely bash vs zsh differences)
+   - Unable to run with --csv option
+
+3. **fix_frontmatter.sh**
+   - Reports incorrect file counts
+   - May have path resolution issues
+
+4. **fix_links.sh**
+   - Not tested yet, but likely has similar issues
+
+Until these issues are resolved, we are proceeding with manual processes for the documentation reorganization.
 
 ## Success Criteria
 
 The documentation reorganization will be considered successful when:
 
 1. All existing valid content has been migrated to the new structure
-2. All documents follow the established standards and templates as specified in our [Documentation Standards](/docs/reference/standards/documentation-standards.md)
+2. All documents follow the established standards and templates as specified in our [Documentation Standards](../05_reference/standards/documentation-standards.md)
 3. No duplicate content exists
 4. All content has been verified as current and accurate
 5. Documentation build completes without errors
 6. All automated validation tests pass with no critical issues
 7. Users can find information more easily
 8. Maintenance processes are clearly established
+9. Documentation tools are working correctly
 
 ## Metrics
 
@@ -300,6 +326,6 @@ These tools will be integrated into our workflow to provide continuous validatio
 
 ## Related Documents
 
-- [Documentation Reorganization Instructions](30_documentation-reorganization-instructions.md) - Detailed implementation instructions
-- [Documentation Guidelines](../contributing/documentation-guidelines.md) - Standards for document creation and maintenance
-- [Documentation Standards](/docs/reference/standards/documentation-standards.md) - Detailed formatting and writing style guidelines 
+- [Documentation Reorganization Instructions](30_documentation-reorganization-instructions.md)
+- [Documentation Scripts Fix Roadmap](31_documentation-script-fixes.md)
+- [Documentation Guidelines](../05_reference/standards/documentation-standards.md) 

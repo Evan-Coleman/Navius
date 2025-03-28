@@ -13,7 +13,7 @@ related:
   - ../reference/standards/documentation-standards.md
 last_updated: March 27, 2025
 version: 1.0
-status: not started
+status: started
 ---
 
 # Documentation Reorganization Roadmap
@@ -58,6 +58,27 @@ The documentation will be reorganized into the following primary sections:
 | `99_misc` | Supplementary material | Templates, miscellaneous information |
 
 ## Implementation Phases
+
+### Phase 0: Fix Documentation Scripts (High Priority)
+
+The documentation scripts located in `.devtools/scripts/doc-overhaul/*.sh` are not working correctly. These scripts are intended to validate, improve, and manage the documentation, but they currently have significant issues:
+
+- Shell compatibility problems with macOS (zsh)
+- Syntax errors in expressions and variable handling
+- Issues with markdownlint detection
+- File count and reporting errors
+
+This phase must be prioritized before continuing with the automated portions of the reorganization. See the [Documentation Scripts Fix Roadmap](31_documentation-script-fixes.md) for a detailed plan to address these issues.
+
+### Tasks
+- ❌ Analyze and document all script errors in detail
+- ❌ Create a shell-agnostic utility library
+- ❌ Fix individual scripts (generate_report.sh, comprehensive_test.sh, etc.)
+- ❌ Test fixes in multiple environments
+- ❌ Update script documentation
+- ❌ Support the new directory structure in all scripts
+
+While these issues are being addressed, manual processes will be used for the documentation reorganization.
 
 ### Phase 1: Structure Setup and Content Analysis (Week 1)
 
@@ -300,6 +321,6 @@ These tools will be integrated into our workflow to provide continuous validatio
 
 ## Related Documents
 
-- [Documentation Reorganization Instructions](30_documentation-reorganization-instructions.md) - Detailed implementation instructions
-- [Documentation Guidelines](../contributing/documentation-guidelines.md) - Standards for document creation and maintenance
-- [Documentation Standards](/docs/reference/standards/documentation-standards.md) - Detailed formatting and writing style guidelines 
+- [Documentation Reorganization Instructions](30_documentation-reorganization-instructions.md)
+- [Documentation Scripts Fix Roadmap](31_documentation-script-fixes.md)
+- [Documentation Guidelines](../reference/standards/documentation-standards.md) 

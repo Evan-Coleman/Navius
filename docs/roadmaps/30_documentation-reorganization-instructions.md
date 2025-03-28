@@ -13,7 +13,7 @@ related:
   - ../reference/standards/documentation-standards.md
 last_updated: March 27, 2025
 version: 1.0
-status: not started
+status: started
 ---
 
 # Documentation Reorganization Instructions
@@ -698,8 +698,33 @@ The script detects document type based on path and adds appropriate sections:
 
 These options allow for more targeted and efficient document section management during the migration process.
 
+## Script Issues and Mitigation
+
+The documentation scripts located in `.devtools/scripts/doc-overhaul/` are currently not functioning correctly. These issues have been documented in the [Documentation Scripts Fix Roadmap](31_documentation-script-fixes.md) and [Documentation Scripts Fix Instructions](31_documentation-script-fixes-instructions.md).
+
+Until these scripts are fixed, follow these alternative manual processes:
+
+1. **For document quality assessment**:
+   - Use manual review based on the documentation standards
+   - Use simple grep commands to find common issues: `grep -r "TODO" docs/`
+   - Use basic markdown linting through IDE extensions or online tools
+
+2. **For frontmatter validation**:
+   - Manually verify frontmatter against the templates
+   - Use a simple text editor or find/replace for batch updates
+   - Create sample valid frontmatter and use it as a reference
+
+3. **For link validation**:
+   - Use IDE search functionality to find broken links
+   - Manually check links when migrating content
+   - Update links systematically by directory
+
+See the [Documentation Scripts Fix Instructions](31_documentation-script-fixes-instructions.md) for detailed plans to fix each script.
+
 ## Related Documents
 
-- [Documentation Reorganization Roadmap](30_documentation-reorganization-roadmap.md) - Strategic plan and goals
-- [Documentation Standards](/docs/reference/standards/documentation-standards.md) - Detailed formatting and writing style guidelines
-- [Documentation Guidelines](../contributing/documentation-guidelines.md) - General contribution guidelines 
+- [Documentation Reorganization Roadmap](30_documentation-reorganization-roadmap.md)
+- [Documentation Scripts Fix Roadmap](31_documentation-script-fixes.md)
+- [Documentation Scripts Fix Instructions](31_documentation-script-fixes-instructions.md)
+- [Documentation Standards](../reference/standards/documentation-standards.md)
+- [Documentation Guidelines](../contributing/documentation-guidelines.md) 
