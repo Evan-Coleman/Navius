@@ -95,8 +95,6 @@ The validation and testing framework is largely in place, with basic checks impl
 ## Implementation Notes
 
 ### Example Documentation Structure
-```
 
 ## Related Documents
-- [Project Structure Roadmap](/docs/roadmaps/completed/11_project_structure_future_improvements.md) - Future improvements
-
+- [Future Improvements](./completed/11_project_structure_future_improvements.md)

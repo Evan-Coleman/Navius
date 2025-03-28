@@ -30,5 +30,5 @@ I need help with the next phase of our codebase cleanup after the Pet API Databa
 
 Please help implement fixes for this area and update our tracking in the roadmap. 
 
-Roadmap : /Users/goblin/dev/git/navius/docs/roadmaps/17-codebase-cleanup.md
-Instructions : /Users/goblin/dev/git/navius/docs/roadmaps/roadmap-instructions/17-codebase-cleanup-instructions.md
+Roadmap : ../../17-codebase-cleanup.md
+Instructions : ../../roadmap-instructions/17-codebase-cleanup-instructions.md

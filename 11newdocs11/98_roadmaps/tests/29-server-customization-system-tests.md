@@ -106,6 +106,6 @@ cargo test -- core::features::error_handling
 ```
 
 ## Related Documents
-- [Server Customization System Roadmap](/docs/roadmaps/26-server-customization-system.md)
-- [Testing Guidelines](/docs/contributing/testing-guidelines.md)
-- [Error Handling Guidelines](/docs/contributing/error-handling.md) 
+- [Server Customization System Roadmap](../../26-server-customization-system.md)
+- [Testing Guidelines](../../../03_contributing/testing-guidelines.md)
+- [Error Handling Guidelines](../../../03_contributing/error-handling.md) 

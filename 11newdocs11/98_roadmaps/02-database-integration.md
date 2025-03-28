@@ -410,6 +410,6 @@ mod tests {
 - [Rust Database Patterns](https://rust-lang.github.io/async-book/06_multiple_futures/02_join.html) 
 
 ## Related Documents
-- [Project Structure Roadmap](/docs/roadmaps/completed/11_project_structure_future_improvements.md) - Future improvements
-- [Documentation Overhaul](/docs/roadmaps/12_document_overhaul.md) - Documentation plans
+- [Project Structure Roadmap](../completed/11_project_structure_future_improvements.md) - Future improvements
+- [Documentation Overhaul](../12_document_overhaul.md) - Documentation plans
 

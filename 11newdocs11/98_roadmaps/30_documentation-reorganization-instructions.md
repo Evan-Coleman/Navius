@@ -221,6 +221,443 @@ Remaining steps:
 3. ❌ Add missing sections to documents (pending)
 4. ❌ Validate the new structure (pending)
 
+### Document Migration Steps
+
+For each document to be migrated:
+
+1. **Review and Plan**:
+   - Review source document quality using the inventory assessment
+   - Check document quality score, readability metrics, and code validation results
+   - Review specific recommendations from the comprehensive report
+   - Plan structure updates and content improvements
+   - Verify the document will meet the formatting requirements in our [Documentation Standards](../05_reference/standards/documentation-standards.md)
+
+2. **Migrate Content**:
+   ```bash
+   cp [source_path] [target_path]
+   ```
+
+3. **Fix Frontmatter**:
+   - Use the frontmatter fixing script:
+   ```bash
+   # Fix frontmatter for a single file
+   .devtools/scripts/doc-overhaul/fix_frontmatter.sh [target_path]
+   
+   # Process an entire directory
+   .devtools/scripts/doc-overhaul/fix_frontmatter.sh --dir [directory] --recursive
+   
+   # Auto-apply changes without confirmation
+   .devtools/scripts/doc-overhaul/fix_frontmatter.sh [target_path] auto
+   ```
+   - Ensure all required metadata is present
+   - Verify category, tags, and related documents
+   - Reading time will be automatically calculated based on content length
+
+4. **Add Standard Sections**:
+   - Use the section adding script:
+   ```bash
+   # Add missing sections to a single file
+   .devtools/scripts/doc-overhaul/add_sections.sh [target_path]
+   
+   # Process an entire directory
+   .devtools/scripts/doc-overhaul/add_sections.sh --dir [directory] --recursive
+   
+   # Auto-apply changes without confirmation
+   .devtools/scripts/doc-overhaul/add_sections.sh [target_path] auto
+   
+   # Add specific sections to a document
+   .devtools/scripts/doc-overhaul/add_sections.sh --sections "Overview,Prerequisites,Troubleshooting" [target_path]
+   
+   # Add all recommended sections based on document type
+   .devtools/scripts/doc-overhaul/add_sections.sh --add-all [target_path]
+   
+   # Only check for missing sections without making changes
+   .devtools/scripts/doc-overhaul/add_sections.sh --check-only --dir [directory] --report
+   ```
+   - Ensure consistent document structure across all files
+
+5. **Improve Readability**:
+   - For documents marked as "Complex":
+     - Break down long sentences
+     - Simplify wording
+     - Use more subheadings and lists
+   - For documents marked as "Simple":
+     - Add more detailed explanations
+     - Provide context and background information
+   - Follow the writing style guidelines in the [Documentation Standards](../05_reference/standards/documentation-standards.md)
+
+6. **Fix Code Examples**:
+   - Focus on examples marked as "FAIL" in the validation
+   - Verify all code examples work with current version
+   - Add context and explanations
+   - Use consistent syntax highlighting
+
+7. **Fix Links**:
+   - Use the link fixing script:
+   ```bash
+   # Fix links in a single file
+   .devtools/scripts/doc-overhaul/fix_links.sh [target_path]
+   
+   # Process an entire directory
+   .devtools/scripts/doc-overhaul/fix_links.sh --dir [directory] --recursive
+   
+   # Auto-apply changes without confirmation
+   .devtools/scripts/doc-overhaul/fix_links.sh [target_path] auto
+   
+   # Only check for broken links without making changes
+   .devtools/scripts/doc-overhaul/fix_links.sh --check-only --dir [directory] --report
+   ```
+   - Ensure all internal links use absolute paths
+   - Add cross-references to related documents
+
+8. **Final Review**:
+   - Run document-specific validation:
+   ```bash
+   .devtools/scripts/doc-overhaul/generate_report.sh --file [target_path]
+   ```
+   - Review quality score improvements
+   - Verify code validation passes
+   - Check readability improvements
+   - Confirm all recommendations have been addressed
+
+### Automated Document Processing
+
+To process multiple files efficiently:
+
+```bash
+# Process a set of files with consistent standards
+.devtools/scripts/doc-overhaul/improve_docs.sh
+
+# Process all documents in a specific directory
+.devtools/scripts/doc-overhaul/generate_report.sh --dir docs/new/01_getting_started
+```
+
+These tools will guide you through an interactive process to select and improve multiple documents efficiently.
+
+### Cleanup Process
+
+After migration of all content:
+
+1. Run comprehensive testing on the new structure:
+   ```bash
+   .devtools/scripts/doc-overhaul/generate_report.sh --dir docs/new
+   ```
+
+2. Check for orphaned or unlinked documents using the report
+3. Verify cross-references and internal links
+4. Examine the document relationship visualization to ensure proper connectivity
+5. Remove duplicated content based on the content inventory
+6. Archive obsolete content
+
+## Testing and Validation
+
+### Build Testing
+
+1. Configure mdbook to build from the new structure:
+
+```bash
+cp docs/book.toml docs/new/
+```
+
+2. Update `SUMMARY.md` to reflect the new structure:
+
+```bash
+echo "# Summary" > docs/new/SUMMARY.md
+echo >> docs/new/SUMMARY.md
+find docs/new -type f -name "*.md" | sort | sed 's/docs\/new\//- \[/; s/\.md/\](&)/; s/_/ /g; s/\/[0-9]*_/\//g' >> docs/new/SUMMARY.md
+```
+
+3. Build documentation to verify structure:
+
+```bash
+cd docs/new
+mdbook build
+```
+
+### Validation Checklist
+
+Run automated validation on the new structure:
+
+```bash
+# Generate comprehensive quality report with trend tracking
+.devtools/scripts/doc-overhaul/generate_report.sh --dir docs/new
+
+# Generate updated document relationship visualization
+.devtools/scripts/doc-overhaul/generate_report.sh --dir docs/new --vis
+
+# Skip linting for faster validation focusing on content quality
+.devtools/scripts/doc-overhaul/generate_report.sh --dir docs/new --skip-linting
+
+# Validate frontmatter completeness across all documents
+.devtools/scripts/doc-overhaul/fix_frontmatter.sh --validate-all --dir docs/new --report
+
+# Check for broken links in all documents
+.devtools/scripts/doc-overhaul/fix_links.sh --check-only --dir docs/new --report
+```
+
+Verify that each section meets these requirements:
+- [ ] All documents have proper frontmatter
+- [ ] All documents follow the template structure
+- [ ] All documents score "Good" or "Excellent" in quality assessment
+- [ ] All documents have "Good" readability scores
+- [ ] All code examples pass validation
+- [ ] All internal links work correctly
+- [ ] All documents have appropriate cross-references
+- [ ] No references to deprecated features or approaches
+- [ ] All documents conform to the formatting and style requirements in our [Documentation Standards](../05_reference/standards/documentation-standards.md)
+
+## Finalization and Publication
+
+### Final Review
+
+1. Generate a final documentation quality report:
+   ```bash
+   .devtools/scripts/doc-overhaul/generate_report.sh --dir docs/new
+   ```
+
+2. Review the report for any remaining issues:
+   - Check the quality distribution (aim for >80% Good or Excellent)
+   - Verify code validation pass rate (aim for >95%)
+   - Check readability metrics (aim for >90% Good)
+   - Review the historical trends to confirm overall improvement
+   
+3. Address all critical and high-priority issues
+4. Verify all success criteria from roadmap are met
+
+### Publication Steps
+
+1. Backup current documentation:
+   ```bash
+   cp -r docs docs.bak
+   ```
+
+2. Move new structure to replace current:
+   ```bash
+   rm -rf docs/{getting-started,examples,contributing,guides,reference,architecture,roadmaps}
+   mv docs/new/* docs/
+   rmdir docs/new
+   ```
+
+3. Update build configuration:
+   ```bash
+   # Update CI/CD settings if needed
+   ```
+
+4. Publish and announce:
+   - Deploy updated documentation
+   - Announce changes to community
+   - Provide transition guide for users
+
+## Maintenance Plan
+
+### Ongoing Documentation Quality
+
+1. **Regular Automated Testing**:
+   - Configure scheduled runs of documentation testing in CI:
+     ```bash
+     # Add to CI pipeline
+     .devtools/scripts/doc-overhaul/generate_report.sh
+     ```
+   - Set up weekly documentation quality reports
+   - Monitor documentation health score
+   - Track quality trends over time using the historical data
+
+2. **Process for Updates**:
+   - Document update workflow using the provided tools
+   - Add documentation validation to PR process
+   - Configure pre-commit hooks for documentation standards
+
+3. **Metrics Tracking**:
+   - Track quality distribution over time (% of Excellent/Good/etc.)
+   - Monitor code validation pass rate
+   - Track readability metrics improvement
+   - Monitor fix rate for identified issues
+   - Review user feedback on documentation usability
+
+## Example Migration
+
+### Example: Migrating Installation Guide
+
+Original: `/docs/getting-started/installation.md`
+Target: `/docs/new/01_getting_started/installation.md`
+
+```bash
+# Copy the file
+cp docs/getting-started/installation.md docs/new/01_getting_started/installation.md
+
+# Check quality metrics with detailed report
+.devtools/scripts/doc-overhaul/generate_report.sh --file docs/new/01_getting_started/installation.md
+
+# Fix frontmatter and automatically apply changes
+.devtools/scripts/doc-overhaul/fix_frontmatter.sh docs/new/01_getting_started/installation.md auto
+
+# Add any missing standard sections
+.devtools/scripts/doc-overhaul/add_sections.sh docs/new/01_getting_started/installation.md
+
+# Improve readability if needed
+# (Edit based on readability metrics from the quality report)
+
+# Fix any failing code examples
+# (Edit based on code validation results from the quality report)
+
+# Fix any broken links
+.devtools/scripts/doc-overhaul/fix_links.sh docs/new/01_getting_started/installation.md
+
+# Verify the document quality after improvements
+.devtools/scripts/doc-overhaul/generate_report.sh --file docs/new/01_getting_started/installation.md
+```
+
+## Appendix: Templates and Resources
+
+### Document Templates
+
+- Basic document template (shown above)
+- Example-specific template
+- API reference template
+- Guide template
+
+### Migration Tracking
+
+Use a tracking sheet to monitor migration progress:
+
+| Document | Assigned To | Status | Quality Score | Readability | Code Status | Review Status |
+|----------|-------------|--------|---------------|-------------|-------------|---------------|
+| Installation | Alice | Complete | Good | Good | PASS | Approved |
+| First Steps | Bob | In Progress | Adequate | Complex | FAIL | - |
+| ... | ... | ... | ... | ... | ... | ... |
+
+### Documentation Test Suite
+
+The `.devtools/scripts/doc-overhaul/` directory contains a comprehensive set of tools for improving and validating documentation:
+
+- **generate_report.sh**: Generates overall documentation quality report with:
+  - Executive summary with health score and priority recommendations
+  - Quality metrics and distribution visualization
+  - Readability analysis and content complexity metrics
+  - Code validation results and failing examples identification
+  - Document relationship visualization
+  - Historical trend tracking with quality metrics over time
+  - CI/CD integration capabilities
+- **comprehensive_test.sh**: Performs in-depth documentation analysis including:
+  - Content quality assessment (10-point scoring system)
+  - Readability analysis (words per sentence metrics)
+  - Code validation (syntax checking for Rust, Bash)
+  - Document relationship visualization
+  - AI-assisted improvement recommendations
+- **fix_links.sh**: Identifies and fixes broken links with these features:
+  - Converts relative links to absolute paths for consistency
+  - Batch processing capabilities with `--dir` option
+  - Validation-only mode with `--check-only` flag
+  - Report generation with `--report` option
+  - Recursive directory processing with `--recursive` option
+  - Intelligent link suggestion based on filename matching
+  - Support for both current and new documentation structure
+- **fix_frontmatter.sh**: Adds or corrects document frontmatter with these features:
+  - Batch processing of entire directories with `--dir` option
+  - Recursive directory traversal with `--recursive` option
+  - Validation-only mode with `--validate-all` flag
+  - Report generation with `--report` option
+  - Automatic reading time calculation
+  - Enhanced tag extraction and document categorization
+  - Support for both current and new documentation structure
+- **add_sections.sh**: Ensures consistent document structure with these features:
+  - Automatic detection of document type based on path or frontmatter category
+  - Support for both old and new directory structures
+  - Intelligent section generation based on document type
+  - Automatic last_updated field maintenance
+  - Batch processing with directory and recursive options
+  - Check-only mode for validation without changes
+  - Report generation for section compliance
+  - Integration with quality reporting system
+- **improve_docs.sh**: Interactive workflow for guided documentation improvement with these features:
+  - Step-by-step guided process for improving individual documents
+  - Batch processing options for common documentation issues (frontmatter, sections, links)
+  - Integration with all documentation validation tools
+  - Automatic detection and updating of frontmatter metadata
+  - Readability metrics calculation with words per sentence analysis
+  - Document quality assessment with detailed reporting
+  - Support for both old and new directory structures
+  - Frontmatter last_updated field maintenance with current date (March 27, 2025)
+  - Document relationship visualization generation
+  - Quality report generation with visualization options
+  - Interactive document improvement workflow
+
+Use these tools throughout the migration process to ensure high-quality results.
+
+### Command Line Options for fix_frontmatter.sh
+
+The enhanced fix_frontmatter.sh script supports the following options:
+
+```
+Usage:
+  ./fix_frontmatter.sh <markdown_file> [auto]       # Process a single file
+  ./fix_frontmatter.sh --dir <directory>            # Process all markdown files in a directory 
+  ./fix_frontmatter.sh --validate-all               # Validate all markdown files (no changes)
+  
+Options:
+  auto                  Apply changes automatically without confirmation
+  --dir <directory>     Specify the directory to process (default: docs)
+  --recursive, -r       Process directories recursively
+  --validate-all        Only validate frontmatter without making changes
+  --report              Generate a detailed report of validation results
+  --verbose, -v         Show more detailed information during processing
+  --help, -h            Display help message
+```
+
+### Command Line Options for fix_links.sh
+
+The enhanced fix_links.sh script supports the following options:
+
+```
+Usage:
+  ./fix_links.sh <markdown_file> [auto]       # Process a single file
+  ./fix_links.sh --dir <directory>            # Process all markdown files in a directory 
+  ./fix_links.sh --check-only                 # Validate links without making changes
+  
+Options:
+  auto                  Apply changes automatically without confirmation
+  --dir <directory>     Specify the directory to process (default: docs)
+  --recursive, -r       Process directories recursively
+  --check-only          Only validate links without making changes
+  --report              Generate a detailed report of validation results
+  --verbose, -v         Show more detailed information during processing
+  --help, -h            Display help message
+```
+
+### Command Line Options for add_sections.sh
+
+The enhanced add_sections.sh script supports the following options:
+
+```
+Usage:
+  ./add_sections.sh <markdown_file> [auto]       # Process a single file
+  ./add_sections.sh --dir <directory>            # Process all markdown files in a directory 
+  ./add_sections.sh --check-only                 # Check for missing sections without making changes
+  
+Options:
+  auto                      Apply changes automatically without confirmation
+  --dir <directory>         Specify the directory to process (default: docs)
+  --recursive, -r           Process directories recursively
+  --check-only              Only check for missing sections without making changes
+  --report                  Generate a detailed report of validation results
+  --verbose, -v             Show more detailed information during processing
+  --add-all                 Add all possible sections appropriate for document type
+  --sections "sec1,sec2"    Specify custom sections to add (comma-separated)
+  --help, -h                Display help message
+```
+
+The script detects document type based on path and adds appropriate sections:
+- Getting Started documents: Overview, Prerequisites, Installation, Usage, Troubleshooting, Related Documents
+- Guides: Overview, Prerequisites, Usage, Configuration, Examples, Troubleshooting, Related Documents
+- Reference: Overview, Configuration, Examples, Implementation Details, Related Documents
+- Examples: Overview, Prerequisites, Usage, Related Documents
+- Contributing: Overview, Prerequisites, Related Documents
+- Architecture: Overview, Implementation Details, Related Documents
+- Roadmaps: Overview, Current State, Target State, Implementation Phases, Success Criteria, Related Documents
+- Misc: Overview, Related Documents
+
+These options allow for more targeted and efficient document section management during the migration process.
+
 ## Script Issues and Mitigation
 
 The documentation scripts located in `.devtools/scripts/doc-overhaul/` are currently not functioning correctly. These issues have been documented in the [Documentation Scripts Fix Roadmap](31_documentation-script-fixes.md) and [Documentation Scripts Fix Instructions](31_documentation-script-fixes-instructions.md).

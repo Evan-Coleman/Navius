@@ -8,8 +8,8 @@ tags:
   - guidelines
   - style-guide
 related:
-  - ../../roadmaps/30_documentation-reorganization-roadmap.md
-  - ../../roadmaps/30_documentation-reorganization-instructions.md
+  - ../../98_roadmaps/30_documentation-reorganization-roadmap.md
+  - ../../98_roadmaps/30_documentation-reorganization-instructions.md
 last_updated: March 27, 2025
 version: 1.0
 ---
@@ -17,8 +17,8 @@ version: 1.0
 # Documentation Standards
 
 > **IMPORTANT**: The primary source of truth for documentation standards and structure is maintained in:
-> - [Documentation Reorganization Roadmap](/docs/roadmaps/30_documentation-reorganization-roadmap.md)
-> - [Documentation Reorganization Instructions](/docs/roadmaps/30_documentation-reorganization-instructions.md)
+> - [Documentation Reorganization Roadmap](../../98_roadmaps/30_documentation-reorganization-roadmap.md)
+> - [Documentation Reorganization Instructions](../../98_roadmaps/30_documentation-reorganization-instructions.md)
 >
 > This document provides a high-level overview and redirects to the authoritative sources.
 
@@ -69,13 +69,13 @@ Use this checklist to ensure your documentation meets our standards:
 
 ### Primary Sources
 
-1. [**Documentation Reorganization Roadmap**](/docs/roadmaps/30_documentation-reorganization-roadmap.md)
+1. [**Documentation Reorganization Roadmap**](../../98_roadmaps/30_documentation-reorganization-roadmap.md)
    - Defines the overall documentation structure
    - Details the validation tools and their integration
    - Establishes success criteria and metrics
    - Outlines the implementation phases
 
-2. [**Documentation Reorganization Instructions**](/docs/roadmaps/30_documentation-reorganization-instructions.md)
+2. [**Documentation Reorganization Instructions**](../../98_roadmaps/30_documentation-reorganization-instructions.md)
    - Provides detailed implementation guidelines
    - Defines document templates and section requirements
    - Includes comprehensive migration processes
@@ -299,7 +299,7 @@ cargo run --release
 #### Internal Links
 Use absolute paths from the project root for internal links:
 ```markdown
-See the [Installation Guide](/docs/getting-started/installation.md) for more information.
+See the [Installation Guide](../01_getting_started/installation.md) for more information.
 ```
 
 #### External Links
@@ -311,7 +311,7 @@ Visit the [Rust website](https://www.rust-lang.org/) for more information.
 #### Images
 Include images with alt text:
 ```markdown
-![Architecture Diagram](/docs/images/architecture.png)
+![Architecture Diagram](../images/architecture.png)
 ```
 
 ### Tables
@@ -457,10 +457,10 @@ Creating accessible documentation ensures that all users, including those with d
 
 ```markdown
 <!-- ❌ Poor alt text -->
-![Diagram](/docs/images/architecture.png)
+![Diagram](../images/architecture.png)
 
 <!-- ✅ Good alt text -->
-![Architecture diagram showing the three-tier system with presentation, business logic, and data layers](/docs/images/architecture.png)
+![Architecture diagram showing the three-tier system with presentation, business logic, and data layers](../images/architecture.png)
 ```
 
 ### Headings and Structure
@@ -479,10 +479,10 @@ Creating accessible documentation ensures that all users, including those with d
 
 ```markdown
 <!-- ❌ Poor link text -->
-For more information about accessibility, [click here](/docs/guidelines/accessibility.md).
+For more information about accessibility, [click here](../04_guides/accessibility.md).
 
 <!-- ✅ Good link text -->
-For more information, read the [Accessibility Guidelines](/docs/guidelines/accessibility.md).
+For more information, read the [Accessibility Guidelines](../04_guides/accessibility.md).
 ```
 
 ### Tables
@@ -524,7 +524,7 @@ While our primary documentation is in English, following these practices helps w
 
 ## Document Type Templates
 
-The following templates provide examples for different document types. For the definitive list of required sections by document type, refer to the [Documentation Reorganization Instructions](/docs/roadmaps/30_documentation-reorganization-instructions.md).
+The following templates provide examples for different document types. For the definitive list of required sections by document type, refer to the [Documentation Reorganization Instructions](../../98_roadmaps/30_documentation-reorganization-instructions.md).
 
 ### Index Documents (README.md)
 
@@ -543,13 +543,13 @@ This directory contains guides for using and developing with the Navius framewor
 
 If you're new to development, start with:
 - [Development Workflow](development-workflow.md)
-- [Project Structure](/docs/reference/project-structure.md)
+- [Project Structure](../05_reference/project-structure.md)
 
 ## Getting Started
 
 For new developers, we recommend following these guides in order:
-1. [Installation Guide](/docs/getting-started/installation.md)
-2. [Development Setup](/docs/getting-started/development-setup.md)
+1. [Installation Guide](../01_getting_started/installation.md)
+2. [Development Setup](../01_getting_started/development-setup.md)
 3. [Development Workflow](development-workflow.md)
 ```
 
@@ -589,14 +589,14 @@ Here's a complete example of a protected route:
 - **Auth middleware errors**: Ensure environment variables are set
 
 ## Related Documents
-- [Security Standards](/docs/reference/standards/security-standards.md)
-- [API Integration Guide](/docs/guides/api-integration.md)
+- [Security Standards](../05_reference/standards/security-standards.md)
+- [API Integration Guide](../04_guides/api-integration.md)
 ```
 
 ## Getting Started
 
 To start implementing these standards on a new or existing document:
 
-1. Review the [Documentation Reorganization Instructions](/docs/roadmaps/30_documentation-reorganization-instructions.md)
+1. Review the [Documentation Reorganization Instructions](../../98_roadmaps/30_documentation-reorganization-instructions.md)
 2. Follow the example migration process detailed in that document
 3. Use the provided tools to validate and improve your documentation

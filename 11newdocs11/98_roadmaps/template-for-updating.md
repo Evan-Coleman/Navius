@@ -268,6 +268,6 @@ cargo test -- module::path
  - We want to keep our docs updated with all changes. Please when finishing a section of a roadmap to add/update any docs related to it.
 
 ## Related Documents
-- [Project Structure Roadmap](/docs/roadmaps/completed/11_project_structure_future_improvements.md) - Future improvements
-- [Documentation Overhaul](/docs/roadmaps/12_document_overhaul.md) - Documentation plans
+- [Project Structure Roadmap](../completed/11_project_structure_future_improvements.md) - Future improvements
+- [Documentation Overhaul](../12_document_overhaul.md) - Documentation plans
 

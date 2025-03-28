@@ -366,6 +366,6 @@ impl Middleware for DevMiddleware {
 - [OpenTelemetry Rust](https://docs.rs/opentelemetry/) 
 
 ## Related Documents
-- [Project Structure Roadmap](/docs/roadmaps/completed/11_project_structure_future_improvements.md) - Future improvements
-- [Documentation Overhaul](/docs/roadmaps/12_document_overhaul.md) - Documentation plans
+- [Project Structure Roadmap](../completed/11_project_structure_future_improvements.md) - Future improvements
+- [Documentation Overhaul](../12_document_overhaul.md) - Documentation plans
 

@@ -168,7 +168,7 @@ Then move the following files to their new locations:
 ```
 Update the following index files to reflect the new structure:
 1. /docs/README.md
-2. /docs/roadmaps/README.md
+2. ../README.md
 3. [other relevant index files]
 ```
 
