@@ -801,7 +801,7 @@ mock! {
 Now you can use these mocks in your unit tests:
 
 ```rust
-#[tokio::test]
+    #[tokio::test]
 async fn test_process_order() {
     // Create mock instances
     let mut mock_repository = MockOrderRepository::new();
@@ -838,15 +838,15 @@ async fn test_process_order() {
     // Create test data
     let order_request = CreateOrderRequest {
         customer_id: "cust-123".to_string(),
-        items: vec![
+            items: vec![
             OrderItemRequest {
                 product_id: "prod-1".to_string(),
-                quantity: 2,
-            }
-        ],
-        shipping_address: "123 Test St".to_string(),
-    };
-    
+                    quantity: 2,
+                }
+            ],
+            shipping_address: "123 Test St".to_string(),
+        };
+        
     let payment_details = PaymentDetails {
         payment_method: "credit_card".to_string(),
         card_last_four: Some("4242".to_string()),

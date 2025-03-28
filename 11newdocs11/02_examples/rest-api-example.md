@@ -986,7 +986,7 @@ mod tests {
     use crate::models::task::{CreateTaskRequest, Task, TaskStatus};
     use crate::repositories::task_repository::MockTaskRepository;
     use crate::services::task_service::{TaskService, TaskServiceImpl};
-    use std::sync::Arc;
+use std::sync::Arc;
 
     #[test]
     fn test_create_task() {
@@ -1060,7 +1060,7 @@ mod tests {
     use navius::http::{Body, Request, StatusCode};
     use navius::router::RouteHandler;
     use navius::test::TestClient;
-    use std::sync::Arc;
+use std::sync::Arc;
 
     fn setup_test_client() -> TestClient {
         // Create a test client with mock services
