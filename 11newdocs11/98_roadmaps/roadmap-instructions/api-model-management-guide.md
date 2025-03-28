@@ -377,4 +377,4 @@ Perform a final verification of the API model management implementation:
 
 ## Related Documents
 - [API Model Management Roadmap](../15-api-model-management.md)
-- [OpenAPI Integration Guide](/docs/guides/openapi-integration.md) 
+- [OpenAPI Integration Guide](../../../04_guides/openapi-integration.md) 

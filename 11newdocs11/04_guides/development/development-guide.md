@@ -168,6 +168,6 @@ If you need assistance with development:
 - Open an issue on GitHub/GitLab 
 
 ## Related Documents
-- [Installation Guide](/docs/guides/installation.md) - How to install the application
-- [Development Workflow](/docs/guides/development/development-workflow.md) - Development best practices
+- [Installation Guide](../../01_getting_started/installation.md) - How to install the application
+- [Development Workflow](development-workflow.md) - Development best practices
 

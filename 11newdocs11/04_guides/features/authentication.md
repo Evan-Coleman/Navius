@@ -712,6 +712,6 @@ For more advanced use cases, refer to the following resources:
 - [Custom Authentication Schemes](custom_auth.md) 
 
 ## Related Documents
-- [Installation Guide](/docs/getting-started/installation.md) - How to install the application
-- [Development Workflow](/docs/guides/development/development-workflow.md) - Development best practices
+- [Installation Guide](../../01_getting_started/installation.md) - How to install the application
+- [Development Workflow](../development/development-workflow.md) - Development best practices
 

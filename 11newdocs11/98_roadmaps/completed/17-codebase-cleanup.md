@@ -282,9 +282,9 @@ This roadmap outlines the strategy to address approximately 100 errors (up from 
 - Ensure all CRUD operations are thoroughly tested
 
 ### Resources
-- Detailed instructions: [docs/roadmaps/roadmap-instructions/17-codebase-cleanup-instructions.md](docs/roadmaps/roadmap-instructions/17-codebase-cleanup-instructions.md)
-- Prompt template: [docs/roadmaps/roadmap-instructions/codebase-cleanup-prompt.md](docs/roadmaps/roadmap-instructions/codebase-cleanup-prompt.md)
-- SQLx cache script: [scripts/generate_sqlx_cache.sh](scripts/generate_sqlx_cache.sh)
+- Detailed instructions: [../roadmap-instructions/17-codebase-cleanup-instructions.md](./17-codebase-cleanup-instructions.md)
+- Prompt template: [../roadmap-instructions/codebase-cleanup-prompt.md](../roadmap-instructions/codebase-cleanup-prompt.md)
+- SQLx cache script: [.devtools/scripts/generate_sqlx_cache.sh](.devtools/scripts/generate_sqlx_cache.sh)
 - Error tracking guide: Refer to error-tracking.mdc for known error patterns and solutions
 
 ### Example Code Tagging Standards

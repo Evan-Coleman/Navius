@@ -186,6 +186,6 @@ cargo clippy
 - Review example implementations in `src/app/api/examples/` 
 
 ## Related Documents
-- [Installation Guide](/docs/getting-started/installation.md) - How to install the application
-- [Development Workflow](/docs/guides/development/development-workflow.md) - Development best practices
+- [Installation Guide](../../01_getting_started/installation.md) - How to install the application
+- [Development Workflow](../../04_guides/development/development-workflow.md) - Development best practices
 

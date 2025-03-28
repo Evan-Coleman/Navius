@@ -81,6 +81,6 @@ The app directory completion marks an important milestone in the project restruc
 
 
 ## Related Documents
-- [Project Structure Roadmap](/roadmaps/11_project_structure_future_improvements.md) - Future improvements
-- [Documentation Overhaul](/roadmaps/12_document_overhaul.md) - Documentation plans
+- [Project Structure Roadmap](./11_project_structure_future_improvements.md) - Future improvements
+- [Documentation Overhaul](../12_document_overhaul.md) - Documentation plans
 

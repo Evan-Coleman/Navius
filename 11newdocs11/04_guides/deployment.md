@@ -447,6 +447,6 @@ In production, migrations can be run:
 Navius's efficient resource usage, fast startup time, and resilient design make it an excellent choice for production deployments of any scale. By following the recommendations in this guide, you can ensure your application performs optimally in production environments. 
 
 ## Related Documents
-- [Installation Guide](/docs/getting-started/installation.md) - How to install the application
-- [Development Workflow](/docs/guides/development/development-workflow.md) - Development best practices
+- [Installation Guide](../01_getting_started/installation.md) - How to install the application
+- [Development Workflow](development/development-workflow.md) - Development best practices
 

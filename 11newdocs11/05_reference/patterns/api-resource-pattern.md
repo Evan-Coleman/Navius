@@ -177,6 +177,6 @@ Planned enhancements to the pattern include:
 3. Circuit breaker pattern for failing services 
 
 ## Related Documents
-- [API Standards](/docs/reference/standards/api-standards.md) - API design guidelines
-- [Error Handling](/docs/reference/error-handling.md) - Error handling patterns
+- [API Standards](../standards/api-standards.md) - API design guidelines
+- [Error Handling](../standards/error-handling.md) - Error handling patterns
 

@@ -258,5 +258,5 @@ These diagrams are written in Mermaid format, which can be viewed in several way
 4. **Browser Extension**: Use a browser extension like "Mermaid Diagrams" for Chrome 
 
 ## Related Documents
-- [Project Structure](/docs/architecture/project-structure.md) - Overall structure
+- [Project Structure](project-structure.md) - Overall structure
 

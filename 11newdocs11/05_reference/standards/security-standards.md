@@ -171,6 +171,6 @@ Navius can be used as part of a compliant application architecture for:
 > 📝 **Note**: While Navius provides the building blocks for compliant applications, full compliance depends on how you use the framework and your overall application architecture. 
 
 ## Related Documents
-- [API Standards](/docs/reference/standards/api-standards.md) - API design guidelines
-- [Error Handling](/docs/reference/error-handling.md) - Error handling patterns
+- [API Standards](api-standards.md) - API design guidelines
+- [Error Handling](error-handling.md) - Error handling patterns
 

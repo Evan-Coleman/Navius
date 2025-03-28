@@ -399,6 +399,6 @@ For production environments:
 - Monitor query performance and optimize slow queries 
 
 ## Related Documents
-- [Installation Guide](/docs/getting-started/installation.md) - How to install the application
-- [Development Workflow](/docs/guides/development/development-workflow.md) - Development best practices
+- [Installation Guide](../01_getting_started/installation.md) - How to install the application
+- [Development Workflow](development/development-workflow.md) - Development best practices
 

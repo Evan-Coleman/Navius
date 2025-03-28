@@ -83,7 +83,7 @@ Use this checklist to ensure your documentation meets our standards:
 
 ### Supplementary Resources
 
-1. [**Documentation Testing Tools**](/.devtools/scripts/doc-overhaul/documentation-testing.md)
+1. [**Documentation Testing Tools**](../../../.devtools/scripts/doc-overhaul/documentation-testing.md)
    - Documents the tools available for validation
    - Provides usage examples
    - Explains integration with CI/CD pipelines
@@ -589,8 +589,8 @@ Here's a complete example of a protected route:
 - **Auth middleware errors**: Ensure environment variables are set
 
 ## Related Documents
-- [Security Standards](../05_reference/standards/security-standards.md)
-- [API Integration Guide](../04_guides/api-integration.md)
+- [Security Standards](./security-standards.md)
+- [API Integration Guide](../../04_guides/features/api-integration.md)
 ```
 
 ## Getting Started

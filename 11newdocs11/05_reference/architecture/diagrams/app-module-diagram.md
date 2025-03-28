@@ -80,6 +80,6 @@ graph LR
 ``` 
 
 ## Related Documents
-- [Project Structure](/docs/architecture/project-structure.md) - Overall structure
-- [Module Dependencies](/docs/architecture/module-dependencies.md) - Dependencies between modules
+- [Project Structure](../project-structure.md) - Overall structure
+- [Module Dependencies](../module-dependencies.md) - Dependencies between modules
 

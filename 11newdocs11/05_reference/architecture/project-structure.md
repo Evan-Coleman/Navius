@@ -231,5 +231,5 @@ To help with navigating the codebase, several tools are available:
 - **Module Dependencies**: See `docs/architecture/module-dependencies.md` for visualizations 
 
 ## Related Documents
-- [Module Dependencies](/docs/architecture/module-dependencies.md) - Dependencies between modules
+- [Module Dependencies](module-dependencies.md) - Dependencies between modules
 

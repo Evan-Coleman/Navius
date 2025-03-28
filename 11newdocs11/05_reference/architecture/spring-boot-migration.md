@@ -397,6 +397,6 @@ If you encounter challenges during migration, reach out through:
 4. Develop a phased migration plan for larger applications 
 
 ## Related Documents
-- [Project Structure](/docs/architecture/project-structure.md) - Overall structure
-- [Module Dependencies](/docs/architecture/module-dependencies.md) - Dependencies between modules
+- [Project Structure](project-structure.md) - Overall structure
+- [Module Dependencies](module-dependencies.md) - Dependencies between modules
 

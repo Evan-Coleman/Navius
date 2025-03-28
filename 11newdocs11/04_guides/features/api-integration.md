@@ -410,6 +410,6 @@ Navius provides a comprehensive API integration framework that makes it easy to 
 For more complex scenarios or custom integrations, you can extend the framework's base components to implement domain-specific functionality while still benefiting from the built-in reliability features. 
 
 ## Related Documents
-- [Installation Guide](/docs/getting-started/installation.md) - How to install the application
-- [Development Workflow](/docs/guides/development/development-workflow.md) - Development best practices
+- [Installation Guide](../../01_getting_started/installation.md) - How to install the application
+- [Development Workflow](../development/development-workflow.md) - Development best practices
 

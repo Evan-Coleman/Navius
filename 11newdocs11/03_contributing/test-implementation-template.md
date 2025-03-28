@@ -188,6 +188,6 @@ fn test_multiple_scenarios() {
 }
 
 ## Related Documents
-- [Contributing Guide](/docs/contributing/contributing.md) - How to contribute to the project
-- [Development Setup](/docs/getting-started/development-setup.md) - Setting up your development environment
+- [Contributing Guide](CONTRIBUTING.md) - How to contribute to the project
+- [Development Setup](../01_getting_started/development-setup.md) - Setting up your development environment
 

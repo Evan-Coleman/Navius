@@ -136,6 +136,6 @@ The core modules are designed to be extended rather than modified:
 This extension-over-modification pattern ensures that framework upgrades remain compatible with user code. 
 
 ## Related Documents
-- [Project Structure](/docs/architecture/project-structure.md) - Overall structure
-- [Module Dependencies](/docs/architecture/module-dependencies.md) - Dependencies between modules
+- [Project Structure](../project-structure.md) - Overall structure
+- [Module Dependencies](../module-dependencies.md) - Dependencies between modules
 

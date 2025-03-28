@@ -292,6 +292,6 @@ If you encounter database connection issues:
 
 ## Related Documents
 
-- [Development Setup](/docs/getting-started/development-setup.md) - Next steps after installation
-- [Development Workflow](/docs/guides/development/development-workflow.md) - Understanding the development process
-- [Deployment Guide](/docs/guides/deployment.md) - Production deployment instructions 
+- [Development Setup](development-setup.md) - Next steps after installation
+- [Development Workflow](../04_guides/development/development-workflow.md) - Understanding the development process
+- [Deployment Guide](../04_guides/deployment.md) - Production deployment instructions 

@@ -104,6 +104,6 @@ If debugging doesn't work properly:
 - [CLion Rust Guide](https://www.jetbrains.com/help/clion/rust-support.html) 
 
 ## Related Documents
-- [Contributing Guide](/docs/contributing/contributing.md) - How to contribute to the project
-- [Development Setup](/docs/getting-started/development-setup.md) - Setting up your development environment
+- [Contributing Guide](CONTRIBUTING.md) - How to contribute to the project
+- [Development Setup](../01_getting_started/development-setup.md) - Setting up your development environment
 

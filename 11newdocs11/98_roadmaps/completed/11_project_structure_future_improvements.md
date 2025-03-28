@@ -174,6 +174,5 @@ A brief overview of Future Improvements and its purpose.
 
 
 ## Related Documents
-- [Project Structure Roadmap](/roadmaps/11_project_structure_future_improvements.md) - Future improvements
-- [Documentation Overhaul](/roadmaps/12_document_overhaul.md) - Documentation plans
+- [Documentation Overhaul](../12_document_overhaul.md) - Documentation plans
 
