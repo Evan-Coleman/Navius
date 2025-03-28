@@ -54,7 +54,7 @@ Before starting this example, make sure you have:
 
 This example follows a structured approach to organizing your REST API project:
 
-```
+```rust
 rest-api-example/
 ├── Cargo.toml                  # Project dependencies
 ├── config/
@@ -85,7 +85,7 @@ rest-api-example/
 └── tests/
     ├── api_tests.rs            # API integration tests
     └── service_tests.rs        # Service unit tests
-```
+```rust
 
 ## Implementation
 
@@ -133,19 +133,19 @@ You can test the API using curl, Postman, or any HTTP client. Here are some exam
 
 ```bash
 curl -X GET http://localhost:8080/products
-```
+```rust
 
 With filters:
 
 ```bash
 curl -X GET "http://localhost:8080/products?category=electronics&min_price=100&page=1&limit=5"
-```
+```rust
 
 ### Get Product by ID
 
 ```bash
 curl -X GET http://localhost:8080/products/123e4567-e89b-12d3-a456-426614174000
-```
+```rust
 
 ### Create Product
 
@@ -160,7 +160,7 @@ curl -X POST http://localhost:8080/products \
     "stock": 50,
     "category": "electronics"
   }'
-```
+```rust
 
 ### Update Product
 
@@ -171,13 +171,13 @@ curl -X PUT http://localhost:8080/products/123e4567-e89b-12d3-a456-426614174000 
     "price": 179.99,
     "stock": 45
   }'
-```
+```rust
 
 ### Delete Product
 
 ```bash
 curl -X DELETE http://localhost:8080/products/123e4567-e89b-12d3-a456-426614174000
-```
+```rust
 
 ## API Documentation
 
@@ -252,7 +252,7 @@ Router::new()
     .nest("/products", products_routes())
     .nest("/orders", orders_routes())
     .nest("/customers", customers_routes())
-```
+```rust
 
 ### Response Envelope
 
@@ -273,7 +273,7 @@ struct ResponseMetadata {
     page: usize,
     limit: usize,
 }
-```
+```rust
 
 ### Service Registration
 
@@ -285,7 +285,7 @@ let app = Application::new()
     .register_extension(order_service)
     .register_routes(api_routes())
     .build()?;
-```
+```rust
 
 ## Troubleshooting
 
@@ -312,7 +312,7 @@ let app = Application::new()
 
 ```rust
 tracing::debug!("Processing product request: {:?}", product);
-```
+```rust
 
 2. Enable more detailed logs by setting log level to debug or trace in your configuration.
 
@@ -320,7 +320,7 @@ tracing::debug!("Processing product request: {:?}", product);
 
 ```rust
 app.middleware(LoggingMiddleware::new())
-```
+```rust
 
 ## Next Steps
 
@@ -947,7 +947,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     Ok(())
 }
-```
+```rust
 
 ### Configuration
 
@@ -971,7 +971,7 @@ cors:
   allowed_origins: ["*"]
   allowed_methods: ["GET", "POST", "PUT", "DELETE"]
   max_age_secs: 86400
-```
+```rust
 
 ## Testing Your API
 
@@ -1044,7 +1044,7 @@ use std::sync::Arc;
         assert!(error.to_string().contains("not found"));
     }
 }
-```
+```rust
 
 ### Integration Testing
 
@@ -1129,7 +1129,7 @@ use std::sync::Arc;
         assert!(!tasks.is_empty());
     }
 }
-```
+```rust
 
 ## API Documentation
 
@@ -1164,7 +1164,7 @@ pub fn add_swagger_routes(router: &mut Router) {
             .unwrap()
     });
 }
-```
+```rust
 
 ## Best Practices
 
@@ -1305,7 +1305,7 @@ impl Middleware for CacheMiddleware {
         res
     }
 }
-```
+```rust
 
 ### API Versioning
 
@@ -1351,7 +1351,7 @@ impl VersionedRouter {
         main_router
     }
 }
-```
+```rust
 
 ## Troubleshooting
 

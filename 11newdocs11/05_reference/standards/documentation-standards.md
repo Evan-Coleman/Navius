@@ -156,7 +156,15 @@ To address challenges with the more complex validation tools, we've also created
 - **simple-batch-validate.sh**: Runs validation on multiple documents and generates a consolidated report
 - **generate-summary.sh**: Creates an executive summary of validation results with actionable recommendations
 
-These tools provide basic validation capabilities with minimal dependencies and are recommended for initial validation passes. For detailed instructions on using these simplified validation tools, see the [Documentation Validation Tools README](../../98_roadmaps/doc-reorg-tools/README.md).
+#### Automated Fix Tools
+
+To efficiently address common documentation issues identified during validation, we've developed automated fix tools:
+
+- **fix-frontmatter.sh**: Checks for missing frontmatter and adds a basic template if missing
+- **add-sections.sh**: Checks for missing required sections and adds them based on document type
+- **code-example-tagger.sh**: Identifies untagged code blocks and adds appropriate language tags
+
+These tools provide basic validation and fix capabilities with minimal dependencies and are recommended for initial validation passes. For detailed instructions on using these tools, see the [Documentation Validation Tools README](../../98_roadmaps/doc-reorg-tools/README.md).
 
 #### Tiered Validation Approach
 

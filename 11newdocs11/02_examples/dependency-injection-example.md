@@ -65,7 +65,7 @@ Required dependencies:
 
 ## Project Structure
 
-```
+```rust
 dependency-injection-example/
 ├── Cargo.toml
 ├── config/
@@ -102,7 +102,7 @@ dependency-injection-example/
         └── services/
             ├── mod.rs
             └── service_registry.rs
-```
+```rust
 
 ## Core Dependency Injection Framework
 
@@ -181,7 +181,7 @@ impl ServiceRegistry {
         Err(AppError::not_implemented("Trait-based service resolution is not implemented in this example"))
     }
 }
-```
+```rust
 
 ## Service Interfaces
 
@@ -200,7 +200,7 @@ pub trait OrderRepository: Send + Sync {
     async fn update(&self, order: &Order) -> Result<Order, AppError>;
     async fn delete(&self, id: OrderId) -> Result<bool, AppError>;
 }
-```
+```rust
 
 ### `app/services/interfaces/payment_processor.rs`
 
@@ -215,7 +215,7 @@ pub trait PaymentProcessor: Send + Sync {
     async fn refund_payment(&self, payment_id: &str) -> Result<bool, AppError>;
     async fn verify_payment(&self, payment_id: &str) -> Result<bool, AppError>;
 }
-```
+```rust
 
 ### `app/services/interfaces/notifier.rs`
 
@@ -231,7 +231,7 @@ pub trait Notifier: Send + Sync {
     async fn notify_order_cancelled(&self, order: &Order) -> Result<(), AppError>;
     async fn notify_payment_processed(&self, order: &Order, payment_id: &str) -> Result<(), AppError>;
 }
-```
+```rust
 
 ## Model Definitions
 
@@ -289,7 +289,7 @@ impl fmt::Display for Order {
                self.id, self.customer_id, self.total_amount, self.status)
     }
 }
-```
+```rust
 
 ## Service Implementations
 
@@ -426,7 +426,7 @@ impl OrderService {
         self.order_repository.find_all().await
     }
 }
-```
+```rust
 
 ### Repository Implementations for Testing
 
@@ -500,7 +500,7 @@ impl OrderRepository for InMemoryOrderRepository {
         Ok(orders.remove(&id).is_some())
     }
 }
-```
+```rust
 
 ### Mock Payment Processor
 
@@ -544,7 +544,7 @@ impl PaymentProcessor for MockPaymentProcessor {
         Ok(true)
     }
 }
-```
+```rust
 
 ### Console Notifier
 
@@ -585,7 +585,7 @@ impl Notifier for ConsoleNotifier {
         Ok(())
     }
 }
-```
+```rust
 
 ## API Handlers
 
@@ -676,7 +676,7 @@ pub async fn cancel_order(
     
     Ok(Json(cancelled_order))
 }
-```
+```rust
 
 ## Main Application
 
@@ -755,7 +755,7 @@ async fn main() -> Result<(), AppError> {
     
     Ok(())
 }
-```
+```rust
 
 ## Working with DI in Tests
 
@@ -794,7 +794,7 @@ mock! {
         async fn verify_payment(&self, payment_id: &str) -> Result<bool, AppError>;
     }
 }
-```
+```rust
 
 ### Unit Testing with Mocks
 
@@ -863,7 +863,7 @@ async fn test_process_order() {
     assert_eq!(order.status, OrderStatus::Paid);
     assert_eq!(order.payment_id, Some("payment-123".to_string()));
 }
-```
+```rust
 
 ### Integration Testing with a Test ServiceRegistry
 
@@ -902,7 +902,7 @@ async fn test_order_handler_integration() {
     assert!(result.is_ok());
     // Further assertions...
 }
-```
+```rust
 
 ## Best Practices
 
@@ -924,7 +924,7 @@ pub trait ProductService: Send + Sync {
     /// Creates a new product
     async fn create_product(&self, product: CreateProductRequest) -> Result<Product, AppError>;
 }
-```
+```rust
 
 ### 2. Program to Interfaces, Not Implementations
 
@@ -945,7 +945,7 @@ pub struct OrderServiceImpl {
     payment_processor: Arc<StripePaymentProcessor>,
     notifier: Arc<EmailNotifier>,
 }
-```
+```rust
 
 ### 3. Use Constructor Injection
 
@@ -978,7 +978,7 @@ impl OrderServiceImpl {
         }
     }
 }
-```
+```rust
 
 ### 4. Consider Factory Methods
 
@@ -998,7 +998,7 @@ impl OrderServiceImpl {
         })
     }
 }
-```
+```rust
 
 ### 5. Register Services as Trait Objects
 
@@ -1028,7 +1028,7 @@ pub fn setup_services(registry: &ServiceRegistry) -> Result<(), AppError> {
     
     Ok(())
 }
-```
+```rust
 
 ## Common Pitfalls
 
@@ -1047,7 +1047,7 @@ pub struct ServiceA {
 pub struct ServiceB {
     service_a: Arc<ServiceA>,
 }
-```
+```rust
 
 **Solution:**
 - Restructure your services to remove the circular dependency
@@ -1070,7 +1070,7 @@ impl OrderService {
         // Business logic...
     }
 }
-```
+```rust
 
 **Better approach:**
 ```rust
@@ -1091,7 +1091,7 @@ impl OrderService {
         // Business logic...
     }
 }
-```
+```rust
 
 ### 3. Over-Abstraction
 
@@ -1119,7 +1119,7 @@ pub struct InMemoryOrderRepository {
     // Use RwLock or Mutex for shared mutable state
     orders: RwLock<HashMap<OrderId, Order>>,
 }
-```
+```rust
 
 ## Advanced Techniques
 
@@ -1134,7 +1134,7 @@ registry.register_named::<Box<dyn PaymentProcessor>>("paypal", Box::new(PayPalPr
 
 // Retrieve a specific implementation
 let stripe_processor = registry.get_named::<Box<dyn PaymentProcessor>>("stripe")?;
-```
+```rust
 
 ### 2. Conditional Registration
 
@@ -1153,7 +1153,7 @@ pub fn setup_services(registry: &ServiceRegistry, config: &AppConfig) -> Result<
     
     Ok(())
 }
-```
+```rust
 
 ### 3. Service Lifetimes
 
@@ -1172,7 +1172,7 @@ registry.register_transient::<UserService, _>(|| {
 registry.register_scoped::<UserService, _>(|| {
     Arc::new(UserServiceImpl::new())
 });
-```
+```rust
 
 ### 4. Decorators and Middleware
 
@@ -1208,7 +1208,7 @@ impl OrderProcessor for LoggingOrderProcessor {
 let base_processor = Arc::new(BasicOrderProcessor::new(repository));
 let logging_processor = Arc::new(LoggingOrderProcessor::new(base_processor, logger));
 registry.register::<Box<dyn OrderProcessor>>(Box::new(logging_processor));
-```
+```rust
 
 ## Conclusion
 

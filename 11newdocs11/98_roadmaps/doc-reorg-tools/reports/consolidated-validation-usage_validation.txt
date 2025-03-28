@@ -1,6 +1,6 @@
 ===== Simple Document Validator =====
 Validating: 11newdocs11/98_roadmaps/doc-reorg-tools/consolidated-validation-usage.md
-Timestamp: Fri Mar 28 01:47:08 PDT 2025
+Timestamp: Fri Mar 28 14:21:46 PDT 2025
 
 ## Frontmatter validation
 ✅ Frontmatter found
@@ -12,18 +12,18 @@ Timestamp: Fri Mar 28 01:47:08 PDT 2025
 ## Document structure validation
 ✅ Main heading (H1) found
 ✅ Overview section found
-✅ Related Documents section found
+❌ Related Documents section missing
 
 ## Code examples validation
-Found 10 code blocks (0 Rust blocks)
+Found 0 code blocks (0 Rust blocks)
 
 ## Link validation
-Found 7 internal links
-✅ All internal links are valid
+Found 0 internal links
+⚠️ No internal links to validate
 
 ## Validation Summary
 Document: 11newdocs11/98_roadmaps/doc-reorg-tools/consolidated-validation-usage.md
-Timestamp: Fri Mar 28 01:47:08 PDT 2025
-Code Blocks: 10
-Internal Links: 7
+Timestamp: Fri Mar 28 14:21:46 PDT 2025
+Code Blocks: 0
+Internal Links: 0
 Broken Links: 0

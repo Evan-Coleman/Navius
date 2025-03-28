@@ -1,0 +1,32 @@
+===== Simple Document Validator =====
+Validating: 11newdocs11/98_roadmaps/doc-reorg-tools/examples-validation.md
+Timestamp: Fri Mar 28 14:21:46 PDT 2025
+
+## Frontmatter validation
+✅ Frontmatter found
+✅ Required field 'title' present
+✅ Required field 'description' present
+✅ Required field 'category' present
+✅ Required field 'last_updated' present
+
+## Document structure validation
+✅ Main heading (H1) found
+✅ Overview section found
+✅ Related Documents section found
+
+## Code examples validation
+Found 0 code blocks (0 Rust blocks)
+
+## Link validation
+Found 5 internal links
+❌ Broken link: /11newdocs11/05_reference/standards/documentation-standards.md -> 11newdocs11/11newdocs11/05_reference/standards/documentation-standards.md
+❌ Broken link: ./related1.md -> 11newdocs11/98_roadmaps/doc-reorg-tools/./related1.md
+❌ Broken link: ./related2.md -> 11newdocs11/98_roadmaps/doc-reorg-tools/./related2.md
+❌ Found 3 broken internal links
+
+## Validation Summary
+Document: 11newdocs11/98_roadmaps/doc-reorg-tools/examples-validation.md
+Timestamp: Fri Mar 28 14:21:46 PDT 2025
+Code Blocks: 0
+Internal Links: 5
+Broken Links: 3

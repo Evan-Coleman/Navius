@@ -1,0 +1,35 @@
+===== Simple Document Validator =====
+Validating: 11newdocs11/05_reference/api/two-tier-cache-api.md
+Timestamp: Fri Mar 28 14:21:39 PDT 2025
+
+## Frontmatter validation
+✅ Frontmatter found
+✅ Required field 'title' present
+✅ Required field 'description' present
+✅ Required field 'category' present
+✅ Required field 'last_updated' present
+
+## Document structure validation
+✅ Main heading (H1) found
+✅ Overview section found
+✅ Related Documents section found
+
+## Code examples validation
+Found 14 code blocks (14 Rust blocks)
+
+## Link validation
+Found 6 internal links
+❌ Broken link: ../guides/caching-strategies.md -> 11newdocs11/05_reference/api/../guides/caching-strategies.md
+❌ Broken link: ../reference/configuration/cache-config.md -> 11newdocs11/05_reference/api/../reference/configuration/cache-config.md
+❌ Broken link: ../reference/patterns/caching-patterns.md -> 11newdocs11/05_reference/api/../reference/patterns/caching-patterns.md
+❌ Broken link: ../examples/two-tier-cache-example.md -> 11newdocs11/05_reference/api/../examples/two-tier-cache-example.md
+❌ Broken link: ./related-api.md -> 11newdocs11/05_reference/api/./related-api.md
+❌ Broken link: ./implementation-details.md -> 11newdocs11/05_reference/api/./implementation-details.md
+❌ Found 6 broken internal links
+
+## Validation Summary
+Document: 11newdocs11/05_reference/api/two-tier-cache-api.md
+Timestamp: Fri Mar 28 14:21:39 PDT 2025
+Code Blocks: 14
+Internal Links: 6
+Broken Links: 6

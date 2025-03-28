@@ -479,3 +479,18 @@ Future development will focus on enhancing the interactive CLI experience, imple
 3. **Expand Test Coverage**: Add more comprehensive tests for feature interactions
 4. **Create User Documentation**: Develop user guides for working with the feature system
 5. **Evaluate Plugin System**: Begin design for the plugin architecture as the next major enhancement 
+
+## Details
+Detailed information about the topic.
+
+
+
+## Examples
+
+
+
+
+## Related Information
+- [Related document 1](./related1.md)
+- [Related document 2](./related2.md)
+

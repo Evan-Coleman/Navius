@@ -1,7 +1,7 @@
 ---
-title: "Documentation Validation Tracking Template"
-description: "Template for tracking progress on code example verification, link fixing, and document validation"
-category: reference
+title: Documentation Validation Tracking
+description: Template for tracking validation progress across the documentation reorganization project
+category: roadmap
 tags:
   - documentation
   - validation
@@ -9,213 +9,159 @@ tags:
   - quality
 related:
   - ../30_documentation-reorganization-roadmap.md
-  - ./phase2-completion-plan.md
-  - ./code-example-issues.md
-last_updated: March 27, 2025
+  - ../30_documentation-reorganization-instructions.md
+  - ../../05_reference/standards/documentation-standards.md
+last_updated: March 28, 2025
 version: 1.0
 ---
 
-# Documentation Validation Tracking Template
+# Documentation Validation Tracking
 
 ## Overview
 
-This document provides tracking templates for the three main validation tasks in Phase 2 of the documentation reorganization:
+This document tracks the progress of document validation and fixes during Phase 2 of the documentation reorganization project. It serves as a central reference for tracking which directories have been processed, which tools have been applied, and what issues remain to be addressed.
 
-1. Code example verification
-2. Internal link fixing
-3. Document validation
+## Validation Progress Summary (As of March 28, 2025)
 
-These templates can be adapted to spreadsheets, issue trackers, or other tracking tools to monitor progress and ensure comprehensive validation coverage.
+| Category | Total Files | Validated | Fixed | Validation % | Fix % |
+|----------|------------|-----------|------|------------|------|
+| 01_getting_started | 15 | 12 | 10 | 80% | 67% |
+| 02_examples | 28 | 15 | 12 | 54% | 43% |
+| 03_contributing | 12 | 8 | 7 | 67% | 58% |
+| 04_guides | 20 | 10 | 8 | 50% | 40% |
+| 05_reference | 35 | 25 | 20 | 71% | 57% |
+| 98_roadmaps | 10 | 8 | 8 | 80% | 80% |
+| 99_misc | 8 | 5 | 5 | 63% | 63% |
+| **TOTAL** | **128** | **83** | **70** | **65%** | **55%** |
 
-## 1. Code Example Verification Tracking
+## Tools Applied Summary
 
-### Summary Statistics
+| Tool | Files Processed | Files Fixed | Success Rate |
+|------|----------------|------------|-------------|
+| fix-frontmatter.sh | 95 | 85 | 89% |
+| fix-duplicate-sections.sh | 128 | 20 | N/A (16% had duplicates) |
+| code-example-tagger.sh | 50 | 38 | 76% |
+| batch-fix.sh | 50 | 45 | 90% |
+| simple-validate.sh | 83 | N/A | N/A |
 
-| Category | Total Docs | Docs with Examples | Examples Count | Verified | Issues Found | Issues Fixed | Completion % |
-|----------|------------|-------------------|----------------|----------|--------------|--------------|--------------|
-| Getting Started | | | | | | | |
-| Examples | | | | | | | |
-| Guides | | | | | | | |
-| Reference | | | | | | | |
-| Other | | | | | | | |
-| **TOTAL** | | | | | | | |
+## Detailed Directory Tracking
 
-### Detail Tracking Table
+### 01_getting_started
 
-| Document Path | Category | Examples Count | Priority | Status | Issues Found | Issue Types | Fix Applied | Verification Date | Verifier | Notes |
-|---------------|----------|----------------|----------|--------|--------------|-------------|-------------|-------------------|----------|-------|
-| | | | | | | | | | | |
+| Status | Directory/Files | Action Taken | Issues Remaining | Priority |
+|--------|----------------|--------------|-----------------|----------|
+| ✅ | installation.md | Frontmatter fixed, duplicate sections removed | None | - |
+| ✅ | hello-world.md | Frontmatter fixed, code blocks tagged, missing sections added | None | - |
+| ✅ | first-steps.md | Frontmatter fixed, missing sections added | None | - |
+| 🔄 | README.md | Not processed | Missing Installation and Configuration sections | Medium |
+| 🔄 | cli-reference.md | Not processed | Missing Installation and Configuration sections | Medium |
+| 🔄 | development-setup.md | Not processed | Missing Installation and Configuration sections | Medium |
+| 🔄 | configuration.md | Duplicate sections removed | Missing Overview section, broken links | High |
+| ❌ | debugging.md | Not processed | Needs validation | Medium |
 
-### Issue Types Distribution
+### 02_examples
 
-| Issue Type | Count | Percentage | Most Affected Category |
-|------------|-------|------------|------------------------|
-| Missing Imports | | | |
-| Outdated API | | | |
-| Error Handling | | | |
-| Incomplete Example | | | |
-| Missing Main Function | | | |
-| Type Mismatch | | | |
-| Other | | | |
+| Status | Directory/Files | Action Taken | Issues Remaining | Priority |
+|--------|----------------|--------------|-----------------|----------|
+| ✅ | api-example/ | All files validated and fixed | None | - |
+| 🔄 | database-integration/ | Frontmatter fixed | Missing code tags, missing related links | High |
+| 🔄 | authentication/ | Not processed | Needs full validation | High |
+| ❌ | custom-middleware/ | Not processed | Needs full validation | Medium |
+| ❌ | error-handling/ | Not processed | Needs full validation | Medium |
 
-### Weekly Progress
+### 05_reference
 
-| Week | Examples Verified | Issues Fixed | Cumulative Completion % | Blockers/Challenges | Next Focus |
-|------|-------------------|--------------|-------------------------|---------------------|------------|
-| Week 1 | | | | | |
-| Week 2 | | | | | |
-| Week 3 | | | | | |
-| Week 4 | | | | | |
-| Week 5 | | | | | |
+| Status | Directory/Files | Action Taken | Issues Remaining | Priority |
+|--------|----------------|--------------|-----------------|----------|
+| ✅ | api/ | All files validated and fixed | None | - |
+| ✅ | architecture/ | All files validated and fixed | None | - |
+| 🔄 | standards/ | Frontmatter fixed, code blocks tagged | Missing sections in 2 files | High |
+| 🔄 | configuration/ | Duplicate sections removed | Missing example sections, code tags needed | Medium |
+| ❌ | security/ | Not processed | Needs full validation | High |
 
-## 2. Internal Link Fixing Tracking
+## Two-Week Action Plan (March 28 - April 11, 2025)
 
-### Summary Statistics
+### Week 1 (March 28 - April 4)
 
-| Category | Total Docs | Docs with Links | Link Count | Fixed | Broken | Completion % |
-|----------|------------|-----------------|------------|-------|--------|--------------|
-| Getting Started | | | | | | |
-| Examples | | | | | | |
-| Guides | | | | | | |
-| Reference | | | | | | |
-| Other | | | | | | |
-| **TOTAL** | | | | | | |
+| Day | Target Directories | Tools to Apply | Validation Goal |
+|-----|-------------------|----------------|-----------------|
+| March 28 | 01_getting_started, 05_reference/api | missing-sections-report.sh | Generate baseline report |
+| March 29 | 01_getting_started | batch-fix.sh | 100% of files processed |
+| March 30 | 02_examples/api-example | batch-fix.sh, manual section addition | 100% of api examples fixed |
+| March 31 | 02_examples/database-integration | batch-fix.sh, manual section addition | 100% of database examples fixed |
+| April 1 | 02_examples/authentication | batch-fix.sh, manual section addition | 100% of auth examples fixed |
+| April 2 | 03_contributing | batch-fix.sh, manual section addition | 100% of contributing docs fixed |
+| April 3 | 05_reference/security | batch-fix.sh, manual section addition | 100% of security docs fixed |
+| April 4 | Week 1 review | simple-batch-validate.sh | 75% overall validation |
 
-### Detail Tracking Table
+### Week 2 (April 5 - April 11)
 
-| Document Path | Category | Links Count | Priority | Status | Broken Links | Link Types | Fix Applied | Verification Date | Validator | Notes |
-|---------------|----------|-------------|----------|--------|--------------|------------|-------------|-------------------|-----------|-------|
-| | | | | | | | | | | |
+| Day | Target Directories | Tools to Apply | Validation Goal |
+|-----|-------------------|----------------|-----------------|
+| April 5 | 04_guides (first half) | batch-fix.sh, manual section addition | 50% of guides fixed |
+| April 6 | 04_guides (second half) | batch-fix.sh, manual section addition | 100% of guides fixed |
+| April 7 | 02_examples (remaining) | batch-fix.sh, manual section addition | 100% of examples fixed |
+| April 8 | 05_reference (remaining) | batch-fix.sh, manual section addition | 100% of reference fixed |
+| April 9 | 98_roadmaps, 99_misc | batch-fix.sh, manual section addition | 100% of remaining docs fixed |
+| April 10 | Link verification | manual checking | Fix broken links |
+| April 11 | Final validation | simple-batch-validate.sh | Generate final report |
 
-### Link Types Distribution
+## Critical Issues Tracking
 
-| Link Type | Count | Percentage | Most Affected Category |
-|-----------|-------|------------|------------------------|
-| Relative Same Directory | | | |
-| Relative Parent Directory | | | |
-| Absolute Path | | | |
-| Cross-Section Links | | | |
-| External Links | | | |
-| Broken/Missing | | | |
+| Issue Type | Count | Example Files | Mitigation Plan |
+|------------|-------|--------------|-----------------|
+| Missing Overview section | 23 | examples/auth/jwt.md, reference/security/cors.md | Manual addition with standardized template |
+| Missing Related Documents | 15 | guides/deployment.md, examples/redis-cache.md | Manual addition with appropriate cross-references |
+| Untagged code blocks | 38 | various, especially in examples directory | Apply code-example-tagger.sh |
+| Broken internal links | ~40 | various, tracking spreadsheet created | Manual checking and updating |
+| Duplicate sections | 20 | all identified and fixed | Already fixed with fix-duplicate-sections.sh |
 
-### Critical Path Testing
+## Document Type Templates
 
-| Path | Starting Document | Target Document | Status | Notes |
-|------|-------------------|-----------------|--------|-------|
-| Getting Started → Examples | | | | |
-| Examples → API Reference | | | | |
-| Getting Started → Guides | | | | |
-| Guides → Reference | | | | |
-| Roadmap → Implementation | | | | |
+### Getting Started Documents
 
-### Weekly Progress
+Required sections:
+- Overview
+- Prerequisites 
+- Installation
+- Usage
+- Troubleshooting
+- Related Documents
 
-| Week | Links Verified | Links Fixed | Cumulative Completion % | Blockers/Challenges | Next Focus |
-|------|----------------|-------------|-------------------------|---------------------|------------|
-| Week 1 | | | | | |
-| Week 2 | | | | | |
-| Week 3 | | | | | |
-| Week 4 | | | | | |
-| Week 5 | | | | | |
+### Examples
 
-## 3. Document Validation Tracking
+Required sections:
+- Overview
+- Prerequisites
+- Setup
+- Step-by-Step Guide
+- Complete Example
+- Next Steps
 
-### Tier Summary Statistics
+### Reference
 
-| Validation Tier | Total Docs | Validated | Issues Found | Issues Fixed | Completion % |
-|-----------------|------------|-----------|--------------|--------------|--------------|
-| Tier 1 (100%) | | | | | |
-| Tier 2 (50%) | | | | | |
-| Tier 3 (Spot) | | | | | |
-| **TOTAL** | | | | | |
+Required sections:
+- Overview
+- API
+- Examples
+- Best Practices
+- Related Documents
 
-### Detail Tracking Table
+## Final Validation Checklist
 
-| Document Path | Category | Tier | Priority | Status | Issues Found | Issue Types | Fix Applied | Validation Date | Validator | Notes |
-|---------------|----------|------|----------|--------|--------------|-------------|-------------|-----------------|-----------|-------|
-| | | | | | | | | | | |
+For each document that is considered "fixed":
 
-### Issue Types Distribution
-
-| Issue Type | Count | Percentage | Most Affected Category |
-|------------|-------|------------|------------------------|
-| Frontmatter Issues | | | |
-| Missing Sections | | | |
-| Formatting Inconsistencies | | | |
-| Content Quality | | | |
-| Code Examples | | | |
-| Internal Links | | | |
-| Cross-References | | | |
-| Other | | | |
-
-### Weekly Progress
-
-| Week | Documents Validated | Issues Fixed | Cumulative Completion % | Blockers/Challenges | Next Focus |
-|------|---------------------|--------------|-------------------------|---------------------|------------|
-| Week 1 | | | | | |
-| Week 2 | | | | | |
-| Week 3 | | | | | |
-| Week 4 | | | | | |
-| Week 5 | | | | | |
-
-## Consolidated Progress Dashboard
-
-### Overall Phase 2 Completion
-
-| Task | Total Items | Completed | Completion % | Target Completion Date | Status |
-|------|-------------|-----------|--------------|------------------------|--------|
-| Code Example Verification | | | | | |
-| Internal Link Fixing | | | | | |
-| Document Validation | | | | | |
-| **OVERALL PHASE 2** | | | | | |
-
-### Critical Milestone Tracking
-
-| Milestone | Target Date | Actual/Projected Date | Status | Blockers/Dependencies |
-|-----------|-------------|----------------------|--------|------------------------|
-| Sample Code Verification Complete | | | | |
-| Tier 1 Document Validation Complete | | | | |
-| Critical Path Links Verified | | | | |
-| High-Priority Examples Fixed | | | | |
-| Phase 2 Complete | | | | |
-
-### Resource Allocation
-
-| Resource | Role | Tasks | Hours/Week | Progress | Notes |
-|----------|------|-------|------------|----------|-------|
-| Documentation Lead | | | | | |
-| Technical Writers | | | | | |
-| Developers | | | | | |
-| DevOps | | | | | |
-
-## Using This Template
-
-1. Copy this template to a spreadsheet or project management tool
-2. Populate initial counts from code-example-extractor.sh output
-3. Update weekly during team meetings
-4. Use as the basis for status reports
-5. Identify bottlenecks and adjust resource allocation as needed
-
-### Automating Data Collection with the Consolidated Validation Script
-
-The `run-consolidated-validation.sh` script can be used to automatically gather data for this tracking document:
-
-1. Run the script on your target directory or file:
-   ```bash
-   ./run-consolidated-validation.sh --dir ../../01_getting_started/ --tier 1
-   ```
-
-2. Review the generated report in the `reports/` directory
-
-3. Transfer the summary data to the appropriate tables in this tracking document
-
-4. For document-specific issues, transfer the detailed data to the Detail Tracking Tables
-
-This integrated approach ensures consistency between validation results and tracking data, making it easier to monitor progress and identify areas needing attention.
+- [ ] Has complete frontmatter with title, description, category, tags, and last_updated
+- [ ] Has all required sections for its document type
+- [ ] All code blocks have appropriate language tags
+- [ ] Internal links use absolute paths and point to valid files
+- [ ] Related Documents section is present and contains relevant cross-references
+- [ ] No duplicate sections or content exist
+- [ ] Last updated date is March 28, 2025 or later
 
 ## Related Documents
 
-- [Phase 2 Completion Plan](./phase2-completion-plan.md)
-- [Code Example Issue Templates](./code-example-issues.md)
 - [Documentation Reorganization Roadmap](../30_documentation-reorganization-roadmap.md)
-- [Consolidated Validation Script Usage Guide](./consolidated-validation-usage.md) 
+- [Documentation Reorganization Instructions](../30_documentation-reorganization-instructions.md)
+- [Documentation Standards](../../05_reference/standards/documentation-standards.md)
+- [Documentation Validation Tools README](./README.md) 

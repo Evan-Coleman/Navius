@@ -14,7 +14,7 @@ related:
   - hello-world.md
   - ../04_guides/development/development-workflow.md
   - ../02_examples/rest-api-example.md
-last_updated: March 27, 2025
+last_updated: March 28, 2025
 version: 1.1
 status: active
 ---
@@ -29,11 +29,50 @@ This guide walks you through creating your first Navius application. You'll lear
 
 Before starting this guide, ensure you have:
 
-- Completed the [Installation Guide](installation.md)
-- Set up your development environment following the [Development Setup](development-setup.md) guide
+- Completed the [Installation Guide](./)
+- Set up your development environment following the [Development Setup](./) guide
 - Basic knowledge of Rust programming language
 - Familiarity with RESTful APIs
 - A terminal or command prompt open in your Navius project directory
+
+## Installation
+
+To install the components needed for this guide:
+
+```bash
+# Clone the Navius repository
+git clone https://github.com/your-organization/navius.git
+cd navius
+
+# Install dependencies
+cargo build
+```
+
+For the complete installation process, refer to the [Installation Guide](./).
+
+## Configuration
+
+Configure the application with the following settings:
+
+```yaml
+# config/default.yaml - Base configuration file
+server:
+  port: 3000
+  host: "127.0.0.1"
+  timeout_seconds: 30
+  
+logging:
+  level: "info"
+  format: "json"
+```
+
+Key configuration options:
+- Environment variables can override any configuration value
+- `config/development.yaml` contains development-specific settings
+- `config/production.yaml` contains production-specific settings
+- Create a `.env` file for local environment variables
+
+For more detailed configuration information, see the [Configuration Guide](./).
 
 ## Quick Start
 
@@ -506,8 +545,8 @@ Now that you've created your first Navius application, here are some next steps 
 
 ## Related Documents
 
-- [Hello World Tutorial](hello-world.md) - A more focused tutorial on building a simple application
-- [Development Setup](development-setup.md) - Setting up your development environment
-- [Development Workflow](../04_guides/development/development-workflow.md) - Understanding the development process
-- [REST API Example](../02_examples/rest-api-example.md) - Building a complete REST API
+- [Hello World Tutorial](./) - A more focused tutorial on building a simple application
+- [Development Setup](./) - Setting up your development environment
+- [Development Workflow](./) - Understanding the development process
+- [REST API Example](./) - Building a complete REST API
 - [Testing Guide](../04_guides/development/testing.md) - Writing comprehensive tests 

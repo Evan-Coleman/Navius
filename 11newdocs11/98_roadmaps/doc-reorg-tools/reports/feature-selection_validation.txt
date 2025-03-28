@@ -1,0 +1,25 @@
+===== Simple Document Validator =====
+Validating: 11newdocs11/04_guides/feature-selection.md
+Timestamp: Fri Mar 28 14:21:42 PDT 2025
+
+## Frontmatter validation
+❌ No frontmatter found
+
+## Document structure validation
+✅ Main heading (H1) found
+❌ Overview section missing
+✅ Related Documents section found
+
+## Code examples validation
+Found 17 code blocks (7 Rust blocks)
+
+## Link validation
+Found 3 internal links
+✅ All internal links are valid
+
+## Validation Summary
+Document: 11newdocs11/04_guides/feature-selection.md
+Timestamp: Fri Mar 28 14:21:42 PDT 2025
+Code Blocks: 17
+Internal Links: 3
+Broken Links: 0

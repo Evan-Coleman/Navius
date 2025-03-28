@@ -50,7 +50,7 @@ public class DemoApplication {
         SpringApplication.run(DemoApplication.class, args);
     }
 }
-```
+```rust
 
 ### Navius (Rust)
 
@@ -62,7 +62,7 @@ fn main() {
         .with_swagger()
         .run();
 }
-```
+```rust
 
 ### Key Similarities
 
@@ -77,7 +77,7 @@ fn main() {
 
 Java Spring Boot follows a package-based organization where components are organized by feature or layer:
 
-```
+```rust
 com.example.demo/
 ├── DemoApplication.java
 ├── config/
@@ -90,7 +90,7 @@ com.example.demo/
 │   └── UserRepository.java
 └── model/
     └── User.java
-```
+```rust
 
 ### Navius (Rust)
 
@@ -129,7 +129,7 @@ src/
 └── app/
     └── api/
         └── examples.rs
-```
+```rust
 
 This approach eliminates the need for mod.rs files in each directory, reducing file clutter and making the module structure more immediately apparent in a single location.
 
@@ -154,7 +154,7 @@ public class SimpleHealthController {
         return ResponseEntity.ok(response);
     }
 }
-```
+```rust
 
 ### Navius (Rust)
 
@@ -182,7 +182,7 @@ fn main() {
         .with_routes(configure_routes)
         .run();
 }
-```
+```rust
 
 ### Extending the Health Endpoint in Navius
 
@@ -212,7 +212,7 @@ pub async fn custom_health_handler() -> impl IntoResponse {
 pub fn configure_routes(router: &mut Router) {
     router.route("/health", get(custom_health_handler));
 }
-```
+```rust
 
 ### Key Similarities
 
@@ -253,7 +253,7 @@ public class UserController {
             .body(user);
     }
 }
-```
+```rust
 
 ### Navius (Rust)
 
@@ -295,7 +295,7 @@ impl UserController {
         Ok((StatusCode::CREATED, Json(user)))
     }
 }
-```
+```rust
 
 ### Key Similarities
 
@@ -335,7 +335,7 @@ public class UserServiceImpl implements UserService {
         return userRepository.save(user);
     }
 }
-```
+```rust
 
 ### Navius (Rust)
 
@@ -386,7 +386,7 @@ impl UserService for UserServiceImpl {
         self.repository.save(user).await
     }
 }
-```
+```rust
 
 ### Key Similarities
 
@@ -442,7 +442,7 @@ public class NotificationService {
     }
     // ...
 }
-```
+```rust
 
 ### Navius (Rust)
 
@@ -493,7 +493,7 @@ fn configure_services(registry: &mut ServiceRegistry) {
     let notification_service = Arc::new(NotificationServiceImpl::new(email_service));
     registry.register::<dyn NotificationService>(notification_service);
 }
-```
+```rust
 
 ### Key Similarities
 
@@ -540,7 +540,7 @@ public class DatabaseConfig {
 // Using environment-specific configurations
 // application-dev.properties, application-prod.properties
 // Activated with: spring.profiles.active=dev
-```
+```rust
 
 ### Navius (Rust)
 
@@ -593,7 +593,7 @@ fn main() {
         .with_config(config)
         .run();
 }
-```
+```rust
 
 ### Key Similarities
 
@@ -652,7 +652,7 @@ public class UserService {
         return repository.findByNameContaining(name);
     }
 }
-```
+```rust
 
 ### Navius (Rust)
 
@@ -721,7 +721,7 @@ impl UserRepository for UserRepositoryImpl {
     
     // Other methods...
 }
-```
+```rust
 
 ### Key Similarities
 
@@ -793,7 +793,7 @@ public class UserControllerTest {
             .andExpect(jsonPath("$.name").value("Test User"));
     }
 }
-```
+```rust
 
 ### Navius (Rust)
 
@@ -884,7 +884,7 @@ mod tests {
         assert_eq!(body.name, "Test User");
     }
 }
-```
+```rust
 
 ### Key Similarities
 
@@ -916,7 +916,7 @@ public class PaymentMethodFactory {
                 .orElseThrow(() -> new IllegalArgumentException("No processor for type: " + type));
     }
 }
-```
+```rust
 
 **Navius**:
 ```rust
@@ -942,7 +942,7 @@ impl PaymentMethodFactory {
             .ok_or_else(|| AppError::not_found(&format!("No processor for type: {}", type_)))
     }
 }
-```
+```rust
 
 ### Observer Pattern
 
@@ -971,7 +971,7 @@ public class EmailNotifier {
         // Send email notification
     }
 }
-```
+```rust
 
 **Navius**:
 ```rust
@@ -1013,7 +1013,7 @@ fn configure_services(registry: &mut ServiceRegistry) {
     let notifier = Arc::new(EmailNotifier::new());
     event_bus.subscribe::<OrderCreatedEvent, _>(notifier);
 }
-```
+```rust
 
 ## Migration Tips for Spring Boot Developers
 

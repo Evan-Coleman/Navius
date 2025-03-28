@@ -1,6 +1,6 @@
 ===== Simple Document Validator =====
 Validating: 11newdocs11/98_roadmaps/30_documentation-reorganization-instructions.md
-Timestamp: Fri Mar 28 01:47:07 PDT 2025
+Timestamp: Fri Mar 28 14:21:44 PDT 2025
 
 ## Frontmatter validation
 ✅ Frontmatter found
@@ -15,17 +15,15 @@ Timestamp: Fri Mar 28 01:47:07 PDT 2025
 ✅ Related Documents section found
 
 ## Code examples validation
-Found 28 code blocks (0 Rust blocks)
+Found 4 code blocks (0 Rust blocks)
 
 ## Link validation
-Found 13 internal links
-❌ Broken link: path/to/document1.md -> 11newdocs11/98_roadmaps/path/to/document1.md
-❌ Broken link: path/to/document2.md -> 11newdocs11/98_roadmaps/path/to/document2.md
-❌ Found 2 broken internal links
+Found 1 internal links
+✅ All internal links are valid
 
 ## Validation Summary
 Document: 11newdocs11/98_roadmaps/30_documentation-reorganization-instructions.md
-Timestamp: Fri Mar 28 01:47:07 PDT 2025
-Code Blocks: 28
-Internal Links: 13
-Broken Links: 2
+Timestamp: Fri Mar 28 14:21:44 PDT 2025
+Code Blocks: 4
+Internal Links: 1
+Broken Links: 0

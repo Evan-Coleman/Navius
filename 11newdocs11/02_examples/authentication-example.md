@@ -75,7 +75,7 @@ Required dependencies:
 
 ## Project Structure
 
-```
+```rust
 authentication-example/
 ├── Cargo.toml                # Project dependencies
 ├── config/
@@ -124,7 +124,7 @@ auth:
     login: "/auth/login"
     register: "/auth/register"
     refresh: "/auth/refresh"
-```
+```rust
 
 ### Models
 
@@ -184,7 +184,7 @@ fn validate_password(password: &str) -> Result<(), validator::ValidationError> {
     
     Ok(())
 }
-```
+```rust
 
 #### `src/models/auth.rs`
 
@@ -212,7 +212,7 @@ pub struct TokenResponse {
 pub struct RefreshRequest {
     pub refresh_token: String,
 }
-```
+```rust
 
 ### Auth Service
 
@@ -385,7 +385,7 @@ impl AuthService {
         })
     }
 }
-```
+```rust
 
 ### Middleware
 
@@ -448,7 +448,7 @@ pub fn require_role(role: &'static str) -> impl FnOnce(CurrentUser) -> Result<Cu
         }
     }
 }
-```
+```rust
 
 ### Handlers
 
@@ -529,7 +529,7 @@ pub async fn refresh(
         "expires_in": token_response.expires_in,
     })))
 }
-```
+```rust
 
 #### `src/handlers/protected.rs`
 
@@ -601,7 +601,7 @@ pub async fn admin_dashboard(
         }
     })))
 }
-```
+```rust
 
 ### Application Setup
 
@@ -681,7 +681,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(listener, app).await?;
     Ok(())
 }
-```
+```rust
 
 ## Testing the Authentication
 
@@ -689,7 +689,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```bash
 cargo run
-```
+```rust
 
 ### Testing the Register Endpoint
 
@@ -701,7 +701,7 @@ curl -X POST http://localhost:8080/auth/register \
     "email": "test@example.com",
     "password": "Password1!"
   }'
-```
+```rust
 
 Sample response:
 ```json
@@ -712,7 +712,7 @@ Sample response:
   "roles": ["USER"],
   "created_at": "2025-03-27T12:00:00Z"
 }
-```
+```rust
 
 ### Testing the Login Endpoint
 
@@ -723,7 +723,7 @@ curl -X POST http://localhost:8080/auth/login \
     "email": "test@example.com",
     "password": "Password1!"
   }'
-```
+```rust
 
 Sample response:
 ```json
@@ -733,14 +733,14 @@ Sample response:
   "token_type": "Bearer",
   "expires_in": 3600
 }
-```
+```rust
 
 ### Testing a Protected Endpoint
 
 ```bash
 curl http://localhost:8080/api/profile \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-```
+```rust
 
 Sample response:
 ```json
@@ -751,7 +751,7 @@ Sample response:
   "roles": ["USER"],
   "created_at": "2025-03-27T12:00:00Z"
 }
-```
+```rust
 
 ### Testing Token Refresh
 
@@ -761,7 +761,7 @@ curl -X POST http://localhost:8080/auth/refresh \
   -d '{
     "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   }'
-```
+```rust
 
 Sample response:
 ```json
@@ -771,14 +771,14 @@ Sample response:
   "token_type": "Bearer",
   "expires_in": 3600
 }
-```
+```rust
 
 ### Testing Role-Based Access
 
 ```bash
 curl http://localhost:8080/api/admin/dashboard \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-```
+```rust
 
 If the user doesn't have the required role:
 ```json
@@ -787,7 +787,7 @@ If the user doesn't have the required role:
   "code": "FORBIDDEN",
   "message": "Requires admin or moderator role"
 }
-```
+```rust
 
 ## Key Concepts
 
@@ -927,7 +927,7 @@ async fn basic_auth_middleware<B>(
         Err(AppError::unauthorized("Invalid credentials"))
     }
 }
-```
+```rust
 
 ### Cookie-Based Authentication
 
@@ -956,7 +956,7 @@ async fn login_with_cookies(
         Json(serde_json::json!({"status": "success"}))
     ))
 }
-```
+```rust
 
 ### Social Login Integration
 
@@ -987,7 +987,7 @@ async fn google_auth_callback(
     // Redirect to frontend with tokens
     Ok(Redirect::to(&format!("/auth/callback?token={}", tokens.access_token)))
 }
-```
+```rust
 
 ## Refresh Token Handling
 
@@ -1016,7 +1016,7 @@ pub async fn refresh_with_rotation(&self, refresh_token: &str) -> Result<TokenRe
     
     Ok(tokens)
 }
-```
+```rust
 
 ### Handling Refresh Token Theft
 
@@ -1040,7 +1040,7 @@ pub async fn detect_token_reuse(&self, refresh_token: &str) -> Result<(), AppErr
     
     Ok(())
 }
-```
+```rust
 
 ## Integrating with External Auth Providers
 
@@ -1086,7 +1086,7 @@ pub async fn authenticate_with_oidc(&self, provider: &str, code: &str) -> Result
     // Generate application tokens
     self.generate_tokens(&user)
 }
-```
+```rust
 
 ### Multi-Factor Authentication
 
@@ -1110,7 +1110,7 @@ pub async fn verify_totp(&self, user_id: &str, token: &str) -> Result<bool, AppE
     // Check if token is valid (allowing one interval before/after for clock skew)
     Ok(totp.check(token, 1))
 }
-```
+```rust
 
 ## Troubleshooting
 

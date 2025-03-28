@@ -19,7 +19,7 @@ This example demonstrates a minimal Navius application, showing the essential co
 
 ## Project Structure
 
-```
+```rust
 basic-app/
 ├── Cargo.toml
 ├── config/
@@ -42,7 +42,7 @@ basic-app/
         ├── config.rs
         ├── error.rs
         └── router.rs
-```
+```rust
 
 ## Implementation
 
@@ -80,7 +80,7 @@ async fn main() -> Result<(), AppError> {
     
     Ok(())
 }
-```
+```rust
 
 #### `core/config.rs`
 
@@ -109,7 +109,7 @@ pub fn load_config() -> Result<Arc<AppConfig>, ConfigError> {
     let app_config: AppConfig = config.try_deserialize()?;
     Ok(Arc::new(app_config))
 }
-```
+```rust
 
 #### `core/router.rs`
 
@@ -128,7 +128,7 @@ pub fn build_router(config: Arc<AppConfig>) -> Result<Router, AppError> {
     
     Ok(router)
 }
-```
+```rust
 
 ### Application Components
 
@@ -157,7 +157,7 @@ pub async fn greet_user(
         message: format!("Hello, {}! Welcome to {}!", name, config.app_name),
     })
 }
-```
+```rust
 
 #### `app/models/greeting.rs`
 
@@ -168,7 +168,7 @@ use serde::{Deserialize, Serialize};
 pub struct Greeting {
     pub message: String,
 }
-```
+```rust
 
 #### `app/services/greeting_service.rs`
 
@@ -194,7 +194,7 @@ impl GreetingService {
         }
     }
 }
-```
+```rust
 
 ## Configuration
 
@@ -206,7 +206,7 @@ server:
   port: 3000
 
 app_name: "Basic Navius App"
-```
+```rust
 
 ## Cargo.toml
 
@@ -224,7 +224,7 @@ config = "0.13.3"
 serde = { version = "1.0.188", features = ["derive"] }
 tracing = "0.1.37"
 tracing-subscriber = "0.3.17"
-```
+```rust
 
 ## Running the Example
 
@@ -234,7 +234,7 @@ tracing-subscriber = "0.3.17"
 
 ```bash
 cargo run
-```
+```rust
 
 4. Test the endpoints:
 
@@ -244,7 +244,7 @@ curl http://localhost:3000/
 
 # Get personalized greeting
 curl http://localhost:3000/greeting/YourName
-```
+```rust
 
 ## Key Concepts Demonstrated
 

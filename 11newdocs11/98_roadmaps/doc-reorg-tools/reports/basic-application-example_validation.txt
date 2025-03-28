@@ -1,0 +1,30 @@
+===== Simple Document Validator =====
+Validating: 11newdocs11/02_examples/basic-application-example.md
+Timestamp: Fri Mar 28 14:21:43 PDT 2025
+
+## Frontmatter validation
+✅ Frontmatter found
+✅ Required field 'title' present
+✅ Required field 'description' present
+✅ Required field 'category' present
+✅ Required field 'last_updated' present
+
+## Document structure validation
+✅ Main heading (H1) found
+❌ Overview section missing
+❌ Related Documents section missing
+
+## Code examples validation
+Found 11 code blocks (18 Rust blocks)
+
+## Link validation
+Found 5 internal links
+❌ Broken link: pet-store-example.md -> 11newdocs11/02_examples/pet-store-example.md
+❌ Found 1 broken internal links
+
+## Validation Summary
+Document: 11newdocs11/02_examples/basic-application-example.md
+Timestamp: Fri Mar 28 14:21:43 PDT 2025
+Code Blocks: 11
+Internal Links: 5
+Broken Links: 1

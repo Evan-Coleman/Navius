@@ -31,8 +31,6 @@
 #   - generate
 #   - test
 #   - lint
-#   - coverage
-#   - docs
 #   - build
 #   - deploy
 
@@ -156,72 +154,6 @@
 #     - cargo fmt -- --check
 #     - cargo clippy -- -D warnings
 
-# # Code coverage job
-# coverage:
-#   stage: coverage
-#   image: rust:latest
-#   needs:
-#     - chef-cook
-#     - generate-apis
-#   script:
-#     - apt-get update && apt-get install -y clang llvm-dev libclang-dev lld jq
-#     - bash .devtools/scripts/coverage.sh
-#   artifacts:
-#     reports:
-#       coverage_report:
-#         coverage_format: cobertura
-#         path: cobertura.xml
-#     paths:
-#       - cobertura.xml
-#       - .devtools/coverage/
-#     expire_in: 1 week
-#   # Add coverage visualization to merge requests
-#   coverage: '/^\d+.\d+% coverage/'
-
-# # Documentation validation job
-# docs:
-#   stage: docs
-#   image: node:latest
-#   before_script:
-#     - apt-get update && apt-get install -y python3 python3-pip jq
-#     - pip3 install pyyaml
-#   script:
-#     - chmod +x .devtools/scripts/validate_docs.sh
-#     - chmod +x .devtools/scripts/doc-overhaul/comprehensive_test.sh
-#     - chmod +x .devtools/scripts/doc-overhaul/generate_report.sh
-#     - export CI_MODE=true
-#     - bash .devtools/scripts/validate_docs.sh
-#   artifacts:
-#     paths:
-#       - doc_validation_report.txt
-#       - target/reports/docs_validation/
-#     expire_in: 1 week
-#     when: always
-#   rules:
-#     - changes:
-#       - docs/**/*
-#       - .devtools/scripts/validate_docs.sh
-#       - .devtools/scripts/validate_frontmatter.py
-#       - .devtools/scripts/doc-overhaul/**/*
-#       - .devtools/config/markdownlint.json
-
-# # Documentation quality report job (not run in CI, but available for manual execution)
-# docs:quality-report:
-#   stage: docs
-#   image: node:latest
-#   before_script:
-#     - apt-get update && apt-get install -y python3 python3-pip pandoc jq
-#     - pip3 install pyyaml
-#   script:
-#     - chmod +x .devtools/scripts/doc-overhaul/generate_report.sh
-#     - chmod +x .devtools/scripts/doc-overhaul/comprehensive_test.sh
-#     - bash .devtools/scripts/doc-overhaul/generate_report.sh
-#   artifacts:
-#     paths:
-#       - target/reports/docs_validation/
-#     expire_in: 2 weeks
-#   when: manual
-
 # # Build release binaries
 # build:
 #   stage: build
@@ -257,29 +189,29 @@
 #     - if: $CI_COMMIT_BRANCH
 
 # Documentation job
-pages:
-  stage: deploy
-  image: rust:latest
-  variables:
-    GIT_DEPTH: "1"
-  before_script:
-    - cargo install mdbook --version 0.4.35 --no-default-features
-    - cargo install mdbook-mermaid --version 0.12.6
-  script:
-    - cd docs
-    - mdbook build
-    - mkdir -p ../public
-    - cp -r book/* ../public/
-  artifacts:
-    paths:
-      - public
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: always
-    - when: manual
-  cache:
-    key: mdbook-cache
-    paths:
-      - $CARGO_HOME/bin/
-      - $CARGO_HOME/.crates.toml
-      - $CARGO_HOME/.crates2.json 
+# pages:
+#   stage: deploy
+#   image: rust:latest
+#   variables:
+#     GIT_DEPTH: "1"
+#   before_script:
+#     - cargo install mdbook --version 0.4.35 --no-default-features
+#     - cargo install mdbook-mermaid --version 0.12.6
+#   script:
+#     - cd docs
+#     - mdbook build
+#     - mkdir -p ../public
+#     - cp -r book/* ../public/
+#   artifacts:
+#     paths:
+#       - public
+#   rules:
+#     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+#       when: always
+#     - when: manual
+#   cache:
+#     key: mdbook-cache
+#     paths:
+#       - $CARGO_HOME/bin/
+#       - $CARGO_HOME/.crates.toml
+#       - $CARGO_HOME/.crates2.json 

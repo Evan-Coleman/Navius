@@ -286,12 +286,12 @@ If you encounter database connection issues:
 
 ## Next Steps
 
-- Continue to [First Steps](first-steps.md) to learn about basic Navius concepts
-- Try building a [Hello World Application](hello-world.md)
-- Set up your [Development Environment](development-setup.md) for contributing
+- Continue to [First Steps](./) to learn about basic Navius concepts
+- Try building a [Hello World Application](./)
+- Set up your [Development Environment](./) for contributing
 
 ## Related Documents
 
-- [Development Setup](development-setup.md) - Next steps after installation
-- [Development Workflow](../04_guides/development/development-workflow.md) - Understanding the development process
+- [Development Setup](./) - Next steps after installation
+- [Development Workflow](./) - Understanding the development process
 - [Deployment Guide](../04_guides/deployment.md) - Production deployment instructions 

@@ -53,7 +53,7 @@ let db_service = service_registry.get::<DatabaseService>();
 
 // Use the database service
 let result = db_service.create_database().await?;
-```
+```rust
 
 ### Performing Basic Operations
 
@@ -71,7 +71,7 @@ let deleted = db.delete("users", "user-789").await?;
 
 // Query with a filter
 let active_users = db.query("users", "status='active'").await?;
-```
+```rust
 
 ## Implementing a Custom Provider
 
@@ -110,7 +110,7 @@ impl DatabaseOperations for MyCustomDatabase {
     
     // Implement other required operations...
 }
-```
+```rust
 
 ## Registering a Provider
 
@@ -127,7 +127,7 @@ registry.register("custom", MyCustomDatabaseProvider);
 
 // Create the database service with the registry
 let db_service = DatabaseService::new(registry);
-```
+```rust
 
 ## Using the In-Memory Database
 
@@ -152,7 +152,7 @@ async fn test_database_operations() {
     let value = db.get("test", "key1").await.unwrap();
     assert_eq!(value, Some("value1".to_string()));
 }
-```
+```rust
 
 ## Configuration
 
@@ -167,7 +167,7 @@ database:
   connection_timeout_ms: 5000
   retry_attempts: 3
   enable_logging: true
-```
+```rust
 
 Loading the configuration:
 
@@ -184,7 +184,7 @@ let db_config = DatabaseConfig::default()
     .with_provider("postgres")
     .with_connection_string("postgres://user:pass@localhost/dbname")
     .with_max_connections(20);
-```
+```rust
 
 ## Complete Example
 
@@ -237,7 +237,7 @@ async fn example_usage(service: &DatabaseService) -> Result<(), ServiceError> {
     
     Ok(())
 }
-```
+```rust
 
 ## Best Practices
 

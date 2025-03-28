@@ -56,7 +56,7 @@ let health_service = service_registry.get::<HealthService>();
 // Get the health status
 let health_status = health_service.check_health().await?;
 println!("System health: {}", health_status.status);
-```
+```rust
 
 ### Implementing a Custom Health Indicator
 
@@ -119,7 +119,7 @@ fn check_database_connection(connection_string: &str) -> Result<(), Box<dyn std:
     // Actual implementation would connect to database
     Ok(())
 }
-```
+```rust
 
 ### Creating a Health Provider
 
@@ -154,7 +154,7 @@ impl HealthProvider for InfrastructureHealthProvider {
         config.get_bool("health.infrastructure_checks_enabled").unwrap_or(true)
     }
 }
-```
+```rust
 
 ### Registering Health Indicators and Providers
 
@@ -181,7 +181,7 @@ async fn setup_health_service() -> HealthService {
     
     health_service
 }
-```
+```rust
 
 ### Using the Health Discovery Service
 
@@ -207,7 +207,7 @@ async fn setup_with_discovery() -> HealthService {
     
     health_service
 }
-```
+```rust
 
 ## Health Dashboard
 
@@ -229,7 +229,7 @@ async fn setup_dashboard(health_service: Arc<HealthService>) -> HealthDashboard 
     
     dashboard
 }
-```
+```rust
 
 ## Complete Example
 
@@ -314,7 +314,7 @@ async fn setup_health_system() {
     // Clear dashboard history
     dashboard.clear_history().await;
 }
-```
+```rust
 
 ## Health API Endpoints
 
@@ -349,7 +349,7 @@ Example response:
     }
   ]
 }
-```
+```rust
 
 ## Best Practices
 

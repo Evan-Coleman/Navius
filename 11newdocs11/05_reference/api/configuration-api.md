@@ -626,4 +626,4 @@ Navius supports the following configuration file formats:
 
 - [Configuration Example](../../02_examples/configuration-example.md)
 - [Feature Selection Pattern](../patterns/feature-selection-pattern.md)
-- [Application API Reference](./application-api.md) 
+- [Application API Reference](./application-api.md)

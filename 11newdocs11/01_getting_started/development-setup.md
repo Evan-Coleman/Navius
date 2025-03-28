@@ -28,7 +28,7 @@ This guide walks you through setting up a comprehensive development environment 
 
 Before setting up your development environment, ensure you have:
 
-- Completed the [Installation Guide](installation.md) for basic Navius setup
+- Completed the [Installation Guide](./) for basic Navius setup
 - Basic familiarity with command-line tools and Git
 - Admin/sudo rights on your development machine
 - Rust toolchain installed (1.70.0 or later)
@@ -366,13 +366,13 @@ To verify your development environment:
 
 ## Next Steps
 
-- Continue to [First Steps](first-steps.md) to learn about basic Navius concepts
-- Try building a [Hello World Application](hello-world.md)
-- Review the [Coding Standards](../03_contributing/coding-standards.md) before contributing code
+- Continue to [First Steps](./) to learn about basic Navius concepts
+- Try building a [Hello World Application](./)
+- Review the [Coding Standards](./) before contributing code
 
 ## Related Documents
 
-- [Installation Guide](installation.md) - Prerequisites for this guide
-- [First Steps](first-steps.md) - Next steps after setting up your environment
-- [Coding Standards](../03_contributing/coding-standards.md) - Guidelines for code contributions
+- [Installation Guide](./) - Prerequisites for this guide
+- [First Steps](./) - Next steps after setting up your environment
+- [Coding Standards](./) - Guidelines for code contributions
 - [Development Workflow](../04_guides/development/development-workflow.md) - Understanding the development process 

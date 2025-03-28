@@ -26,7 +26,7 @@ This document provides a comprehensive reference for the Navius command-line int
 ## Prerequisites
 
 - Rust and Cargo installed
-- Navius project cloned and dependencies installed (see [Installation Guide](installation.md))
+- Navius project cloned and dependencies installed (see [Installation Guide](./))
 
 ## Quick Start
 
@@ -240,6 +240,6 @@ Navius provides several convenience scripts in the project root:
 
 ## Next Steps
 
-- Review the [Installation Guide](installation.md) for setup instructions
-- See [Development Setup](development-setup.md) for creating a development environment
+- Review the [Installation Guide](./) for setup instructions
+- See [Development Setup](./) for creating a development environment
 - Learn about basic concepts in [First Steps](first-steps.md) 

@@ -31,10 +31,10 @@ Navius is a modern, opinionated web framework for Rust that combines the perform
 
 ## Quick Navigation
 
-- [Installation Guide](installation.md) - Set up Navius and its dependencies
-- [Development Setup](development-setup.md) - Configure your development environment
-- [First Steps](first-steps.md) - Create your first Navius application
-- [Hello World Tutorial](hello-world.md) - Build a simple REST API
+- [Installation Guide](./) - Set up Navius and its dependencies
+- [Development Setup](./) - Configure your development environment
+- [First Steps](./) - Create your first Navius application
+- [Hello World Tutorial](./) - Build a simple REST API
 
 ## Getting Started in 5 Minutes
 
@@ -133,10 +133,10 @@ For the best development experience, we recommend:
 ### 2. Environment Setup
 
 - **Docker** for containerized development (databases, Redis, etc.)
-- **Git** with pre-commit hooks (as described in [Development Setup](development-setup.md))
+- **Git** with pre-commit hooks (as described in [Development Setup](./))
 - **Environment Configuration** (custom `.env` files for different environments)
 
-See the [Development Setup](development-setup.md) guide for detailed instructions.
+See the [Development Setup](./) guide for detailed instructions.
 
 ## Learning Path
 
@@ -144,10 +144,10 @@ We recommend following this path to learn Navius effectively:
 
 ### 1. Basic Concepts (Start Here)
 
-- Complete the [Installation Guide](installation.md)
-- Set up your environment with [Development Setup](development-setup.md)
-- Build your first app with [First Steps](first-steps.md)
-- Try the [Hello World Tutorial](hello-world.md)
+- Complete the [Installation Guide](./)
+- Set up your environment with [Development Setup](./)
+- Build your first app with [First Steps](./)
+- Try the [Hello World Tutorial](./)
 
 ### 2. Core Framework Concepts
 
@@ -249,7 +249,7 @@ If you encounter issues during setup:
 | Issue | Solution |
 |-------|----------|
 | **Build failures** | Ensure you have the correct Rust version and dependencies |
-| **Missing libraries** | Check OS-specific requirements in the [Installation Guide](installation.md) |
+| **Missing libraries** | Check OS-specific requirements in the [Installation Guide](./) |
 | **Configuration errors** | Verify your config files match the expected format |
 | **Runtime errors** | Check logs and ensure all required services are running |
 
@@ -266,7 +266,7 @@ Need help with Navius?
 
 We welcome contributions to Navius! Here's how to get involved:
 
-1. Read our [Contributing Guidelines](../03_contributing/README.md)
+1. Read our [Contributing Guidelines](./)
 2. Set up your development environment
 3. Pick an issue from our tracker or propose a new feature
 4. Submit a pull request with your changes
@@ -275,7 +275,7 @@ We welcome contributions to Navius! Here's how to get involved:
 
 Ready to explore more?
 
-- [Examples](../02_examples/README.md) - See Navius in action with practical examples
-- [Guides](../04_guides/README.md) - In-depth guides on specific features
-- [Reference](../05_reference/README.md) - Detailed API and architecture reference
+- [Examples](./) - See Navius in action with practical examples
+- [Guides](./) - In-depth guides on specific features
+- [Reference](./) - Detailed API and architecture reference
 - [Roadmap](../98_roadmaps/README.md) - See what's coming in future releases 

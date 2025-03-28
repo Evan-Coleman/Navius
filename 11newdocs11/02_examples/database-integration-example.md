@@ -74,7 +74,7 @@ Required dependencies:
 
 ## Project Structure
 
-```
+```rust
 database-integration-example/
 ├── Cargo.toml                # Project dependencies
 ├── config/
@@ -466,7 +466,7 @@ pub trait Entity: Clone + std::fmt::Debug {
 
 pub mod user;
 pub mod product;
-```
+```rust
 
 #### `src/models/user.rs`
 
@@ -567,7 +567,7 @@ impl User {
         self.updated_at = Utc::now();
     }
 }
-```
+```rust
 
 #### `src/models/product.rs`
 
@@ -665,7 +665,7 @@ impl Product {
         Ok(())
     }
 }
-```
+```rust
 
 ## Testing With Databases
 
@@ -856,7 +856,7 @@ pub fn register_user_service(registry: &mut ServiceRegistry) {
     let user_service = UserServiceImpl::new(user_repository);
     registry.register::<dyn UserService>(Arc::new(user_service));
 }
-```
+```rust
 
 ### Product Service Implementation
 
@@ -1047,7 +1047,7 @@ pub fn register_product_service(registry: &mut ServiceRegistry) {
     let product_service = ProductServiceImpl::new(product_repository);
     registry.register::<dyn ProductService>(Arc::new(product_service));
 }
-```
+```rust
 
 ## Database Migrations
 
@@ -1276,7 +1276,7 @@ pub fn setup_migrations(db_service: Arc<DatabaseService>) -> MigrationManager {
     
     manager
 }
-```
+```rust
 
 ## API Endpoints
 
@@ -1540,5 +1540,5 @@ fn hash_password(password: &str) -> String {
     // This is a simplified example
     format!("hashed_{}", password)
 }
-```
+```rust
 ``` 

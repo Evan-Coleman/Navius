@@ -65,7 +65,7 @@ async fn setup_user_cache(cache_service: &CacheService) -> Result<(), AppError> 
     
     Ok(())
 }
-```
+```rust
 
 ## Fallback Behavior Demonstration
 
@@ -106,7 +106,7 @@ async fn demonstrate_fallback(cache_service: &CacheService) -> Result<(), AppErr
     
     Ok(())
 }
-```
+```rust
 
 ## Development Environment Setup
 
@@ -133,7 +133,7 @@ async fn setup_dev_cache(cache_service: &CacheService) -> Result<(), AppError> {
     
     Ok(())
 }
-```
+```rust
 
 ## Integration with Service Layer
 
@@ -183,7 +183,7 @@ impl UserService {
         Ok(None)
     }
 }
-```
+```rust
 
 ## Complete Application Example
 
@@ -235,7 +235,7 @@ async fn get_user(
     let user = state.user_service.get_user(&id).await.unwrap();
     Json(user)
 }
-```
+```rust
 
 ## Best Practices
 

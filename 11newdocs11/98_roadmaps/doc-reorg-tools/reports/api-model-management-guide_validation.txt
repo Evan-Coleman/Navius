@@ -1,6 +1,6 @@
 ===== Simple Document Validator =====
 Validating: 11newdocs11/98_roadmaps/roadmap-instructions/api-model-management-guide.md
-Timestamp: Fri Mar 28 01:47:07 PDT 2025
+Timestamp: Fri Mar 28 14:21:45 PDT 2025
 
 ## Frontmatter validation
 ✅ Frontmatter found
@@ -18,13 +18,15 @@ Timestamp: Fri Mar 28 01:47:07 PDT 2025
 Found 18 code blocks (0 Rust blocks)
 
 ## Link validation
-Found 2 internal links
+Found 4 internal links
 ❌ Broken link: ../../../04_guides/openapi-integration.md -> 11newdocs11/98_roadmaps/roadmap-instructions/../../../04_guides/openapi-integration.md
-❌ Found 1 broken internal links
+❌ Broken link: ./related1.md -> 11newdocs11/98_roadmaps/roadmap-instructions/./related1.md
+❌ Broken link: ./related2.md -> 11newdocs11/98_roadmaps/roadmap-instructions/./related2.md
+❌ Found 3 broken internal links
 
 ## Validation Summary
 Document: 11newdocs11/98_roadmaps/roadmap-instructions/api-model-management-guide.md
-Timestamp: Fri Mar 28 01:47:07 PDT 2025
+Timestamp: Fri Mar 28 14:21:45 PDT 2025
 Code Blocks: 18
-Internal Links: 2
-Broken Links: 1
+Internal Links: 4
+Broken Links: 3

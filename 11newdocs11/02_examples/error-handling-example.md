@@ -72,7 +72,7 @@ Required dependencies:
 
 ## Project Structure
 
-```
+```rust
 error-handling-example/
 ├── Cargo.toml                # Project dependencies
 ├── config/
@@ -82,7 +82,7 @@ error-handling-example/
     ├── handlers.rs          # Example API handlers demonstrating various errors
     ├── models.rs            # Domain models with validation rules
     └── error.rs             # Centralized error handling system
-```
+```rust
 
 ## Implementation
 
@@ -293,7 +293,7 @@ impl ValidatorErrorExt for validator::ValidationErrors {
         AppError::validation(errors)
     }
 }
-```
+```rust
 
 ### src/models.rs
 
@@ -325,7 +325,7 @@ pub struct CreateUserRequest {
     #[validate(length(min = 8, max = 100))]
     pub password: String,
 }
-```
+```rust
 
 ### src/handlers.rs
 
@@ -420,7 +420,7 @@ pub async fn external_service() -> Result<Json<serde_json::Value>, AppError> {
     
     Ok(Json(json!({ "success": true })))
 }
-```
+```rust
 
 ### src/main.rs
 
@@ -485,7 +485,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     Ok(())
 }
-```
+```rust
 
 ### Cargo.toml
 
@@ -505,7 +505,7 @@ validator = { version = "0.16", features = ["derive"] }
 log = "0.4"
 env_logger = "0.10"
 uuid = { version = "1.3", features = ["v4"] }
-```
+```rust
 
 ## Testing the Error Handling
 
@@ -513,7 +513,7 @@ uuid = { version = "1.3", features = ["v4"] }
 
 ```bash
 cargo run
-```
+```rust
 
 ### Testing Validation Errors
 
@@ -525,7 +525,7 @@ curl -X POST http://localhost:8080/users \
     "name": "A",
     "password": "short"
   }'
-```
+```rust
 
 Response:
 ```json
@@ -553,13 +553,13 @@ Response:
     ]
   }
 }
-```
+```rust
 
 ### Testing Not Found Errors
 
 ```bash
 curl http://localhost:8080/users/not-found
-```
+```rust
 
 Response:
 ```json
@@ -568,13 +568,13 @@ Response:
   "code": "NOT_FOUND",
   "message": "User with ID not-found not found"
 }
-```
+```rust
 
 ### Testing Database Errors
 
 ```bash
 curl http://localhost:8080/users/db-error
-```
+```rust
 
 Response:
 ```json
@@ -583,13 +583,13 @@ Response:
   "code": "DATABASE_ERROR",
   "message": "An internal server error occurred"
 }
-```
+```rust
 
 ### Testing Authorization Errors
 
 ```bash
 curl http://localhost:8080/admin
-```
+```rust
 
 Response:
 ```json
@@ -598,13 +598,13 @@ Response:
   "code": "FORBIDDEN",
   "message": "Admin access required"
 }
-```
+```rust
 
 ### Testing External Service Errors
 
 ```bash
 curl http://localhost:8080/external
-```
+```rust
 
 Response:
 ```json
@@ -613,7 +613,7 @@ Response:
   "code": "EXTERNAL_SERVICE_ERROR",
   "message": "Payment gateway is currently unavailable"
 }
-```
+```rust
 
 ## Key Concepts
 
@@ -717,7 +717,7 @@ if !is_valid_business_rule(&payload) {
         }
     ]));
 }
-```
+```rust
 
 ### Resource Not Found
 
@@ -730,7 +730,7 @@ async fn get_resource(id: &str) -> Result<Resource, AppError> {
         None => Err(AppError::not_found(format!("Resource with ID {} not found", id)))
     }
 }
-```
+```rust
 
 ### Authorization Checks
 
@@ -750,7 +750,7 @@ fn check_permission(user: &User, resource: &Resource) -> Result<(), AppError> {
     
     Ok(())
 }
-```
+```rust
 
 ### External Service Integration
 
@@ -772,7 +772,7 @@ async fn call_payment_gateway(payment: &Payment) -> Result<PaymentResponse, AppE
         }
     }
 }
-```
+```rust
 
 ## Error Response Structures
 
@@ -784,7 +784,7 @@ async fn call_payment_gateway(payment: &Payment) -> Result<PaymentResponse, AppE
   "code": "NOT_FOUND",
   "message": "User with ID 123 not found"
 }
-```
+```rust
 
 ### Validation Error Response
 
@@ -808,7 +808,7 @@ async fn call_payment_gateway(payment: &Payment) -> Result<PaymentResponse, AppE
     ]
   }
 }
-```
+```rust
 
 ### Server Error Response
 
@@ -820,7 +820,7 @@ Note how implementation details are hidden:
   "code": "DATABASE_ERROR",
   "message": "An internal server error occurred"
 }
-```
+```rust
 
 ## Integrating with External Services
 
@@ -870,7 +870,7 @@ where
         }
     }
 }
-```
+```rust
 
 ## Error Handling in Async Code
 
@@ -900,7 +900,7 @@ async fn with_timeout<T>(
         Err(_) => Err(AppError::external_service("Operation timed out")),
     }
 }
-```
+```rust
 
 ## Security Considerations
 
@@ -949,7 +949,7 @@ fn format_error(err: &AppError) -> String {
 fn format_error(err: &AppError) -> String {
     format!("Error: {}", err)
 }
-```
+```rust
 
 ## Next Steps
 

@@ -53,7 +53,7 @@ fn main() {
     // Start the server
     app.start().unwrap();
 }
-```
+```rust
 
 ## Loading Features from Configuration
 
@@ -85,7 +85,7 @@ fn load_features_from_config() -> FeatureRegistry {
     
     registry
 }
-```
+```rust
 
 ## Feature-Conditional Code Execution
 
@@ -124,7 +124,7 @@ fn setup_services(app_state: &AppState) {
         app_state.register_cache_provider("redis", redis_provider);
     });
 }
-```
+```rust
 
 ## Feature Dependency Example
 
@@ -166,7 +166,7 @@ fn setup_feature_dependencies() -> FeatureRegistry {
     
     registry
 }
-```
+```rust
 
 ## Using the Feature CLI
 
@@ -193,7 +193,7 @@ features_cli save my-features.json
 
 # Load features from a configuration file
 features_cli load my-features.json
-```
+```rust
 
 ## Conditional Compilation with Cargo Features
 
@@ -209,7 +209,7 @@ tracing = []
 caching = []
 redis_caching = ["caching"]
 security = []
-```
+```rust
 
 Then in your code:
 
@@ -239,7 +239,7 @@ pub fn setup_cache() {
         println!("Setting up Redis cache provider...");
     }
 }
-```
+```rust
 
 ## Feature Configuration File Example
 
@@ -270,7 +270,7 @@ configuration:
   security:
     rate_limit_enabled: true
     rate_limit_requests_per_minute: 100
-```
+```rust
 
 ## Custom Feature Registration
 
@@ -311,7 +311,7 @@ fn register_custom_features() -> FeatureRegistry {
     
     registry
 }
-```
+```rust
 
 ## Feature Status Display
 
@@ -335,7 +335,7 @@ fn display_feature_status(registry: &FeatureRegistry) {
     // Print dependency tree
     printer.print_dependency_tree();
 }
-```
+```rust
 
 ## Feature Documentation Generation
 
@@ -360,7 +360,7 @@ fn generate_feature_documentation(registry: &FeatureRegistry) {
     let mut example_file = File::create("feature-examples.yaml").unwrap();
     doc_generator.write_yaml_examples(&mut example_file, &examples).unwrap();
 }
-```
+```rust
 
 ## Feature Visualization
 

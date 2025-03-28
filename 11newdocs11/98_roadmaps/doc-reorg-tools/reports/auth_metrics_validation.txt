@@ -1,0 +1,31 @@
+===== Simple Document Validator =====
+Validating: 11newdocs11/05_reference/auth/auth_metrics.md
+Timestamp: Fri Mar 28 14:21:38 PDT 2025
+
+## Frontmatter validation
+✅ Frontmatter found
+✅ Required field 'title' present
+✅ Required field 'description' present
+✅ Required field 'category' present
+✅ Required field 'last_updated' present
+
+## Document structure validation
+✅ Main heading (H1) found
+✅ Overview section found
+✅ Related Documents section found
+
+## Code examples validation
+Found 0 code blocks (0 Rust blocks)
+
+## Link validation
+Found 2 internal links
+❌ Broken link: ./related-api.md -> 11newdocs11/05_reference/auth/./related-api.md
+❌ Broken link: ./implementation-details.md -> 11newdocs11/05_reference/auth/./implementation-details.md
+❌ Found 2 broken internal links
+
+## Validation Summary
+Document: 11newdocs11/05_reference/auth/auth_metrics.md
+Timestamp: Fri Mar 28 14:21:38 PDT 2025
+Code Blocks: 0
+Internal Links: 2
+Broken Links: 2

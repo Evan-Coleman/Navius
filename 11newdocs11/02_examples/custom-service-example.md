@@ -71,7 +71,7 @@ Required dependencies:
 
 ## Project Structure
 
-```
+```rust
 custom-service-example/
 ├── Cargo.toml
 ├── config/
@@ -98,7 +98,7 @@ custom-service-example/
         └── services/
             ├── mod.rs
             └── service_registry.rs # DI container
-```
+```rust
 
 ## Implementation
 
@@ -163,7 +163,7 @@ impl ServiceRegistry {
         }
     }
 }
-```
+```rust
 
 ### User Model
 
@@ -185,7 +185,7 @@ impl fmt::Display for User {
         write!(f, "User {{ id: {}, name: {}, email: {} }}", self.id, self.name, self.email)
     }
 }
-```
+```rust
 
 ### User Service
 
@@ -255,7 +255,7 @@ impl UserService {
         users.remove(id).is_some()
     }
 }
-```
+```rust
 
 ### Notification Service
 
@@ -293,7 +293,7 @@ impl NotificationService {
         println!("Sending update notification to {}: Your profile was updated", user.email);
     }
 }
-```
+```rust
 
 ### API Handlers
 
@@ -378,7 +378,7 @@ pub async fn delete_user(
         Err(AppError::not_found(format!("User with ID {} not found", id)))
     }
 }
-```
+```rust
 
 ### Application Entry Point
 
@@ -444,7 +444,7 @@ async fn main() -> Result<(), AppError> {
     
     Ok(())
 }
-```
+```rust
 
 ## Configuration
 
@@ -457,7 +457,7 @@ server:
 
 app_name: "Custom Service Example"
 notifications_enabled: true
-```
+```rust
 
 ## Running the Example
 
@@ -482,7 +482,7 @@ Test the endpoints using curl or any HTTP client:
 
 ```bash
 curl http://localhost:3000/users
-```
+```rust
 
 Sample response:
 ```json
@@ -490,18 +490,18 @@ Sample response:
   {"id":"1","name":"Alice","email":"alice@example.com"},
   {"id":"2","name":"Bob","email":"bob@example.com"}
 ]
-```
+```rust
 
 ### Get a specific user
 
 ```bash
 curl http://localhost:3000/users/1
-```
+```rust
 
 Sample response:
 ```json
 {"id":"1","name":"Alice","email":"alice@example.com"}
-```
+```rust
 
 ### Create a new user
 
@@ -509,12 +509,12 @@ Sample response:
 curl -X POST http://localhost:3000/users \
   -H "Content-Type: application/json" \
   -d '{"id": "3", "name": "Charlie", "email": "charlie@example.com"}'
-```
+```rust
 
 Sample response:
 ```json
 {"id":"3","name":"Charlie","email":"charlie@example.com"}
-```
+```rust
 
 ### Update a user
 
@@ -522,18 +522,18 @@ Sample response:
 curl -X PUT http://localhost:3000/users/3 \
   -H "Content-Type: application/json" \
   -d '{"id": "3", "name": "Charlie Updated", "email": "charlie@example.com"}'
-```
+```rust
 
 Sample response:
 ```json
 {"id":"3","name":"Charlie Updated","email":"charlie@example.com"}
-```
+```rust
 
 ### Delete a user
 
 ```bash
 curl -X DELETE http://localhost:3000/users/3
-```
+```rust
 
 ## Key Concepts
 
@@ -624,7 +624,7 @@ pub trait UserRepository {
 pub struct UserService {
     repository: Arc<dyn UserRepository>,
 }
-```
+```rust
 
 ### Factory Pattern
 
@@ -644,7 +644,7 @@ impl ServiceFactory {
         NotificationService::new(self.config.notifications_enabled)
     }
 }
-```
+```rust
 
 ### Decorator Pattern
 
@@ -661,7 +661,7 @@ impl LoggingNotificationService {
         self.inner.send_welcome_notification(user)
     }
 }
-```
+```rust
 
 ## Testing Services
 
@@ -708,7 +708,7 @@ mod tests {
         assert!(service.get_user("test").is_none());
     }
 }
-```
+```rust
 
 ### Testing Services with Mocks
 
@@ -740,7 +740,7 @@ mod tests {
         // (Implementation depends on how the services are integrated)
     }
 }
-```
+```rust
 
 ## Common Pitfalls
 
@@ -785,7 +785,7 @@ if config.use_mock_services {
 } else {
     registry.register(RealUserService::new(db_connection))?;
 }
-```
+```rust
 
 ### Async Services
 
@@ -798,7 +798,7 @@ pub trait AsyncUserService {
     async fn create_user(&self, user: User) -> Result<User, AppError>;
     // ...
 }
-```
+```rust
 
 ### Service Middleware
 
@@ -814,7 +814,7 @@ pub struct ServiceMiddleware<S> {
 impl<S> ServiceMiddleware<S> {
     // Proxy methods to inner service with before/after hooks
 }
-```
+```rust
 
 ## Next Steps
 

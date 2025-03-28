@@ -36,7 +36,7 @@ pub trait LoggingOperations: Send + Sync + 'static {
     // Create a child logger with additional context
     fn child(&self, context: &str) -> Arc<dyn LoggingOperations>;
 }
-```
+```rust
 
 ### LoggingProvider
 
@@ -53,7 +53,7 @@ pub trait LoggingProvider: Send + Sync + 'static {
     // Check if this provider supports the given configuration
     fn supports(&self, config: &LoggingConfig) -> bool;
 }
-```
+```rust
 
 ## Using the Logging Service
 
@@ -74,7 +74,7 @@ async fn setup_logging() -> Result<Arc<dyn LoggingOperations>, LoggingError> {
     // Return the logger instance
     Ok(logger)
 }
-```
+```rust
 
 ### Basic Logging
 
@@ -99,7 +99,7 @@ logger.error(
         .with_request_id("req-123456")
         .with_user_id("user@example.com")
 ).unwrap();
-```
+```rust
 
 ### Structured Logging
 
@@ -130,7 +130,7 @@ let structured_log = StructuredLog::from((LogLevel::Info, log_info));
 
 // Log the structured record
 logger.log_structured(structured_log).unwrap();
-```
+```rust
 
 ### Advanced: Creating Child Loggers
 
@@ -146,7 +146,7 @@ auth_logger.info(LogInfo::new("User login successful")).unwrap();
 // Create nested child loggers
 let oauth_logger = auth_logger.child("oauth");
 oauth_logger.debug(LogInfo::new("Token validation")).unwrap();
-```
+```rust
 
 ## Implementing a Custom Logger
 
@@ -207,7 +207,7 @@ async fn register_custom_provider() -> Result<Arc<dyn LoggingOperations>, Loggin
     
     registry.create_logger_from_config(&config).await
 }
-```
+```rust
 
 ## Built-in Logger Implementations
 
@@ -225,7 +225,7 @@ let config = LoggingConfig {
 };
 
 let logger = init(&config).await.unwrap();
-```
+```rust
 
 ### Console Logger
 
@@ -241,7 +241,7 @@ let config = LoggingConfig {
 };
 
 let logger = init(&config).await.unwrap();
-```
+```rust
 
 ## Configuring Logging
 
@@ -274,7 +274,7 @@ let config = LoggingConfig {
     
     ..Default::default()
 };
-```
+```rust
 
 ## Best Practices
 

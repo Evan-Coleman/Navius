@@ -57,7 +57,7 @@ let cache_service = service_registry.get::<CacheService>();
 
 // Create a typed cache for a specific resource
 let user_cache = cache_service.create_cache::<UserDto>("users").await?;
-```
+```rust
 
 ### Performing Basic Cache Operations
 
@@ -79,7 +79,7 @@ user_cache.delete("user-123").await?;
 
 // Clear the entire cache
 user_cache.clear().await?;
-```
+```rust
 
 ## Implementing a Custom Cache Provider
 
@@ -159,7 +159,7 @@ impl<T: Send + Sync + Clone + 'static> CacheOperations<T> for CustomCache<T> {
         }
     }
 }
-```
+```rust
 
 ## Registering a Provider
 
@@ -189,7 +189,7 @@ async fn setup_cache_service() -> CacheService {
     
     cache_service
 }
-```
+```rust
 
 ## Using the In-Memory Cache Provider
 
@@ -219,7 +219,7 @@ async fn test_memory_cache() {
     let value = cache.get("greeting").await;
     assert_eq!(value, Some("Hello, world!".to_string()));
 }
-```
+```rust
 
 ## Using the Redis Cache Provider
 
@@ -242,7 +242,7 @@ async fn setup_redis_cache() {
     // Use the cache
     // ...
 }
-```
+```rust
 
 ## Two-Tier Cache Implementation
 
@@ -280,7 +280,7 @@ async fn setup_two_tier_cache() {
     // Use the cache - automatically manages both tiers
     two_tier_cache.get("user-123").await;
 }
-```
+```rust
 
 ## Configuration
 
@@ -307,7 +307,7 @@ cache:
     products:
       provider: redis
       ttl_seconds: 1800
-```
+```rust
 
 Loading the configuration:
 
@@ -325,7 +325,7 @@ let cache_config = CacheConfig::default()
     .with_name("users")
     .with_ttl(Duration::from_secs(60))
     .with_max_size(1000);
-```
+```rust
 
 ## Complete Example
 
@@ -391,7 +391,7 @@ async fn cache_example(service: &CacheService) -> Result<(), CacheError> {
     
     Ok(())
 }
-```
+```rust
 
 ## Integration with Two-Tier Cache
 
@@ -429,7 +429,7 @@ async fn two_tier_example(service: &CacheService) -> Result<(), CacheError> {
     
     Ok(())
 }
-```
+```rust
 
 ## Best Practices
 

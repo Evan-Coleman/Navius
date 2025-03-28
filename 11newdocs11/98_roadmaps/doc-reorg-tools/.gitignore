@@ -1,0 +1,19 @@
+# Ignore logs
+logs/*
+!logs/.gitkeep
+
+# Ignore reports
+reports/*
+!reports/.gitkeep
+
+# Ignore backups
+backups/*
+!backups/.gitkeep
+
+# Ignore data files
+data/*.json
+data/*.csv
+!data/.gitkeep
+
+# Keep directory structure
+!*/

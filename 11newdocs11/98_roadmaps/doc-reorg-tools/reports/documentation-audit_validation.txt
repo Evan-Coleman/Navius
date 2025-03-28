@@ -1,6 +1,6 @@
 ===== Simple Document Validator =====
 Validating: 11newdocs11/98_roadmaps/roadmap-instructions/documentation-audit.md
-Timestamp: Fri Mar 28 01:47:07 PDT 2025
+Timestamp: Fri Mar 28 14:21:44 PDT 2025
 
 ## Frontmatter validation
 ✅ Frontmatter found
@@ -11,21 +11,23 @@ Timestamp: Fri Mar 28 01:47:07 PDT 2025
 
 ## Document structure validation
 ✅ Main heading (H1) found
-❌ Overview section missing
+✅ Overview section found
 ✅ Related Documents section found
 
 ## Code examples validation
 Found 0 code blocks (0 Rust blocks)
 
 ## Link validation
-Found 2 internal links
+Found 4 internal links
 ❌ Broken link: ../../completed/11_project_structure_future_improvements.md -> 11newdocs11/98_roadmaps/roadmap-instructions/../../completed/11_project_structure_future_improvements.md
 ❌ Broken link: ../../12_document_overhaul.md -> 11newdocs11/98_roadmaps/roadmap-instructions/../../12_document_overhaul.md
-❌ Found 2 broken internal links
+❌ Broken link: ./related1.md -> 11newdocs11/98_roadmaps/roadmap-instructions/./related1.md
+❌ Broken link: ./related2.md -> 11newdocs11/98_roadmaps/roadmap-instructions/./related2.md
+❌ Found 4 broken internal links
 
 ## Validation Summary
 Document: 11newdocs11/98_roadmaps/roadmap-instructions/documentation-audit.md
-Timestamp: Fri Mar 28 01:47:07 PDT 2025
+Timestamp: Fri Mar 28 14:21:44 PDT 2025
 Code Blocks: 0
-Internal Links: 2
-Broken Links: 2
+Internal Links: 4
+Broken Links: 4

@@ -14,7 +14,7 @@ related:
   - development-setup.md
   - ../02_examples/rest-api-example.md
   - ../04_guides/dependency-injection.md
-last_updated: March 27, 2025
+last_updated: March 28, 2025
 version: 1.0
 status: active
 ---
@@ -31,8 +31,49 @@ Before beginning this tutorial, ensure you have:
 
 - Rust installed (1.70.0 or newer)
 - Cargo installed
-- Completed the [Installation Guide](installation.md)
-- Optional: Completed the [Development Setup](development-setup.md)
+- Completed the [Installation Guide](./)
+- Optional: Completed the [Development Setup](./)
+
+## Installation
+
+To install the components needed for this guide:
+
+```bash
+# Create a new project
+cargo new hello-navius
+cd hello-navius
+
+# Add dependencies to Cargo.toml
+# (See Step 2 in the tutorial below for details)
+```
+
+For the complete installation process, refer to the [Installation Guide](./).
+
+## Configuration
+
+Configure the application with the following settings:
+
+```toml
+# Cargo.toml configuration
+[package]
+name = "hello-navius"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+navius = "0.1.0"
+tokio = { version = "1", features = ["full"] }
+axum = "0.6.0"
+serde = { version = "1.0", features = ["derive"] }
+```
+
+Key configuration options:
+- `navius`: The core Navius framework
+- `tokio`: Asynchronous runtime for Rust
+- `axum`: Web framework for building APIs
+- `serde`: Serialization/deserialization library
+
+For more detailed configuration information, see the [Configuration Guide](./).
 
 ## Quick Start
 
@@ -387,13 +428,13 @@ impl HelloService {
 
 This simple example demonstrates the basic structure of a Navius application. From here, you can:
 
-- Add more advanced [routing patterns](../04_guides/routing.md)
-- Implement proper [error handling](../04_guides/error-handling.md)
-- Explore [database integration](../04_guides/database-integration.md)
-- Add [authentication](../04_guides/authentication.md)
-- Set up [comprehensive testing](../04_guides/testing.md)
+- Add more advanced [routing patterns](./)
+- Implement proper [error handling](./)
+- Explore [database integration](./)
+- Add [authentication](./)
+- Set up [comprehensive testing](./)
 
-For more sophisticated examples, check out the [Examples](../02_examples/README.md) section, particularly:
+For more sophisticated examples, check out the [Examples](./) section, particularly:
 
-- [REST API Example](../02_examples/rest-api-example.md) for a more complete API
+- [REST API Example](./) for a more complete API
 - [Dependency Injection Example](../02_examples/dependency-injection-example.md) for advanced DI patterns 

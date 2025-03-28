@@ -64,7 +64,7 @@ async fn user_repository_example() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-```
+```rust
 
 ## Creating Custom Entity Types
 
@@ -121,7 +121,7 @@ impl Product {
         }
     }
 }
-```
+```rust
 
 ## Using Different Repository Providers
 
@@ -151,7 +151,7 @@ async fn configure_repository_providers() -> Result<(), Box<dyn std::error::Erro
     
     Ok(())
 }
-```
+```rust
 
 ## Creating Custom Repository Methods
 
@@ -194,7 +194,7 @@ impl<R: Repository<User>> CustomUserRepository<R> {
         Ok(all_users.into_iter().filter(|u| u.role == role).collect())
     }
 }
-```
+```rust
 
 ## Testing With Mock Repositories
 
@@ -243,7 +243,7 @@ async fn test_user_service() {
     assert!(result.is_some());
     assert_eq!(result.unwrap().username, "testuser");
 }
-```
+```rust
 
 ## Benefits of the Repository Pattern
 

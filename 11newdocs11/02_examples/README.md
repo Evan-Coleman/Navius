@@ -42,7 +42,7 @@ For most examples, you can run them with:
 
 ```bash
 cargo run
-```
+```rust
 
 Some examples may require additional setup, such as a database connection or environment variables.
 

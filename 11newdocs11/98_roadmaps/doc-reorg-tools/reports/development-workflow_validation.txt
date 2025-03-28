@@ -1,0 +1,33 @@
+===== Simple Document Validator =====
+Validating: 11newdocs11/04_guides/development/development-workflow.md
+Timestamp: Fri Mar 28 14:21:41 PDT 2025
+
+## Frontmatter validation
+✅ Frontmatter found
+✅ Required field 'title' present
+✅ Required field 'description' present
+✅ Required field 'category' present
+✅ Required field 'last_updated' present
+
+## Document structure validation
+✅ Main heading (H1) found
+✅ Overview section found
+✅ Related Documents section found
+
+## Code examples validation
+Found 10 code blocks (1 Rust blocks)
+
+## Link validation
+Found 9 internal links
+❌ Broken link: ../../getting-started/installation.md -> 11newdocs11/04_guides/development/../../getting-started/installation.md
+❌ Broken link: ../../getting-started/development-setup.md -> 11newdocs11/04_guides/development/../../getting-started/development-setup.md
+❌ Broken link: ../../getting-started/development-setup.md -> 11newdocs11/04_guides/development/../../getting-started/development-setup.md
+❌ Broken link: ../../reference/architecture/project-structure.md -> 11newdocs11/04_guides/development/../../reference/architecture/project-structure.md
+❌ Found 4 broken internal links
+
+## Validation Summary
+Document: 11newdocs11/04_guides/development/development-workflow.md
+Timestamp: Fri Mar 28 14:21:41 PDT 2025
+Code Blocks: 10
+Internal Links: 9
+Broken Links: 4

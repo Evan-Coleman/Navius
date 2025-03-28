@@ -1,12 +1,16 @@
 ===== Simple Document Validator =====
-Validating: 11newdocs11/98_roadmaps/doc-reorg-tools/README.md
-Timestamp: Fri Mar 28 01:47:08 PDT 2025
+Validating: 11newdocs11/99_misc/templates/basic/README.md
+Timestamp: Fri Mar 28 14:21:47 PDT 2025
 
 ## Frontmatter validation
-❌ No frontmatter found
+✅ Frontmatter found
+✅ Required field 'title' present
+❌ Required field 'description' missing
+❌ Required field 'category' missing
+❌ Required field 'last_updated' missing
 
 ## Document structure validation
-❌ No main heading (H1) found
+✅ Main heading (H1) found
 ❌ Overview section missing
 ❌ Related Documents section missing
 
@@ -14,12 +18,14 @@ Timestamp: Fri Mar 28 01:47:08 PDT 2025
 Found 0 code blocks (0 Rust blocks)
 
 ## Link validation
-Found 0 internal links
-⚠️ No internal links to validate
+Found 2 internal links
+❌ Broken link: api/index.md -> 11newdocs11/99_misc/templates/basic/api/index.md
+❌ Broken link: config/index.md -> 11newdocs11/99_misc/templates/basic/config/index.md
+❌ Found 2 broken internal links
 
 ## Validation Summary
-Document: 11newdocs11/98_roadmaps/doc-reorg-tools/README.md
-Timestamp: Fri Mar 28 01:47:08 PDT 2025
+Document: 11newdocs11/99_misc/templates/basic/README.md
+Timestamp: Fri Mar 28 14:21:47 PDT 2025
 Code Blocks: 0
-Internal Links: 0
-Broken Links: 0
+Internal Links: 2
+Broken Links: 2

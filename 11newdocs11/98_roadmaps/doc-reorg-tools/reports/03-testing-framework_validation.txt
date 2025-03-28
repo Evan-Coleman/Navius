@@ -1,6 +1,6 @@
 ===== Simple Document Validator =====
 Validating: 11newdocs11/98_roadmaps/03-testing-framework.md
-Timestamp: Fri Mar 28 01:47:07 PDT 2025
+Timestamp: Fri Mar 28 14:21:44 PDT 2025
 
 ## Frontmatter validation
 ✅ Frontmatter found
@@ -12,21 +12,23 @@ Timestamp: Fri Mar 28 01:47:07 PDT 2025
 ## Document structure validation
 ✅ Main heading (H1) found
 ✅ Overview section found
-❌ Related Documents section missing
+✅ Related Documents section found
 
 ## Code examples validation
 Found 0 code blocks (0 Rust blocks)
 
 ## Link validation
-Found 3 internal links
+Found 5 internal links
 ❌ Broken link: ../guidelines/testing.md -> 11newdocs11/98_roadmaps/../guidelines/testing.md
 ❌ Broken link: ../reports/coverage-latest.md -> 11newdocs11/98_roadmaps/../reports/coverage-latest.md
 ❌ Broken link: ../architecture/testing-architecture.md -> 11newdocs11/98_roadmaps/../architecture/testing-architecture.md
-❌ Found 3 broken internal links
+❌ Broken link: ./related1.md -> 11newdocs11/98_roadmaps/./related1.md
+❌ Broken link: ./related2.md -> 11newdocs11/98_roadmaps/./related2.md
+❌ Found 5 broken internal links
 
 ## Validation Summary
 Document: 11newdocs11/98_roadmaps/03-testing-framework.md
-Timestamp: Fri Mar 28 01:47:07 PDT 2025
+Timestamp: Fri Mar 28 14:21:44 PDT 2025
 Code Blocks: 0
-Internal Links: 3
-Broken Links: 3
+Internal Links: 5
+Broken Links: 5

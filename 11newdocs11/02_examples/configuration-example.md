@@ -19,7 +19,7 @@ This example demonstrates how to work with configuration in Navius applications.
 
 ## Project Structure
 
-```
+```rust
 configuration-example/
 ├── Cargo.toml
 ├── config/
@@ -38,7 +38,7 @@ configuration-example/
         ├── mod.rs
         ├── config.rs
         └── error.rs
-```
+```rust
 
 ## Implementation
 
@@ -177,7 +177,7 @@ pub fn load_test_config() -> Arc<AppConfig> {
         Err(_) => Arc::new(AppConfig::default()),
     }
 }
-```
+```rust
 
 ### Application Configuration Service
 
@@ -246,7 +246,7 @@ impl ConfigService {
         format!("{}?user={}&password={}", db.url, db.username, db.password)
     }
 }
-```
+```rust
 
 ### Using Configuration in Main
 
@@ -319,7 +319,7 @@ async fn main() -> Result<(), AppError> {
     
     Ok(())
 }
-```
+```rust
 
 ## Configuration Files
 
@@ -358,7 +358,7 @@ features:
 api_keys:
   weather_service: "dev_weather_api_key"
   payment_gateway: "dev_payment_api_key"
-```
+```rust
 
 ### `config/production.yaml`
 
@@ -393,7 +393,7 @@ features:
 api_keys:
   weather_service: "${WEATHER_API_KEY}"
   payment_gateway: "${PAYMENT_API_KEY}"
-```
+```rust
 
 ### `config/test.yaml`
 
@@ -415,7 +415,7 @@ logging:
 features:
   enable_metrics: false
   enable_tracing: false
-```
+```rust
 
 ## Running the Example
 
@@ -425,25 +425,25 @@ features:
 
 ```bash
 cargo run
-```
+```rust
 
 4. Run with production configuration:
 
 ```bash
 APP_ENV=production cargo run
-```
+```rust
 
 5. Override specific values with environment variables:
 
 ```bash
 APP_SERVER__PORT=9000 cargo run
-```
+```rust
 
 6. Access the configuration endpoint:
 
 ```bash
 curl http://localhost:3000/config
-```
+```rust
 
 ## Key Concepts Demonstrated
 

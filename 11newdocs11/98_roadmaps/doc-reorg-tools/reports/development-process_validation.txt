@@ -1,0 +1,30 @@
+===== Simple Document Validator =====
+Validating: 11newdocs11/03_contributing/development-process.md
+Timestamp: Fri Mar 28 14:21:40 PDT 2025
+
+## Frontmatter validation
+✅ Frontmatter found
+✅ Required field 'title' present
+✅ Required field 'description' present
+✅ Required field 'category' present
+✅ Required field 'last_updated' present
+
+## Document structure validation
+✅ Main heading (H1) found
+❌ Overview section missing
+❌ Related Documents section missing
+
+## Code examples validation
+Found 3 code blocks (0 Rust blocks)
+
+## Link validation
+Found 1 internal links
+❌ Broken link: ../reference/standards/code-style.md -> 11newdocs11/03_contributing/../reference/standards/code-style.md
+❌ Found 1 broken internal links
+
+## Validation Summary
+Document: 11newdocs11/03_contributing/development-process.md
+Timestamp: Fri Mar 28 14:21:40 PDT 2025
+Code Blocks: 3
+Internal Links: 1
+Broken Links: 1

@@ -1,6 +1,6 @@
 ===== Simple Document Validator =====
 Validating: 11newdocs11/98_roadmaps/completed/project-restructuring-summary.md
-Timestamp: Fri Mar 28 01:47:06 PDT 2025
+Timestamp: Fri Mar 28 14:21:44 PDT 2025
 
 ## Frontmatter validation
 ✅ Frontmatter found
@@ -18,17 +18,19 @@ Timestamp: Fri Mar 28 01:47:06 PDT 2025
 Found 0 code blocks (0 Rust blocks)
 
 ## Link validation
-Found 6 internal links
+Found 8 internal links
 ❌ Broken link: ../guides/project-navigation.md -> 11newdocs11/98_roadmaps/completed/../guides/project-navigation.md
 ❌ Broken link: ./module-dependencies.md -> 11newdocs11/98_roadmaps/completed/./module-dependencies.md
 ❌ Broken link: ./project-structure.md -> 11newdocs11/98_roadmaps/completed/./project-structure.md
 ❌ Broken link: path/to/document1.md -> 11newdocs11/98_roadmaps/completed/path/to/document1.md
 ❌ Broken link: path/to/document2.md -> 11newdocs11/98_roadmaps/completed/path/to/document2.md
-❌ Found 5 broken internal links
+❌ Broken link: ./related1.md -> 11newdocs11/98_roadmaps/completed/./related1.md
+❌ Broken link: ./related2.md -> 11newdocs11/98_roadmaps/completed/./related2.md
+❌ Found 7 broken internal links
 
 ## Validation Summary
 Document: 11newdocs11/98_roadmaps/completed/project-restructuring-summary.md
-Timestamp: Fri Mar 28 01:47:06 PDT 2025
+Timestamp: Fri Mar 28 14:21:44 PDT 2025
 Code Blocks: 0
-Internal Links: 6
-Broken Links: 5
+Internal Links: 8
+Broken Links: 7

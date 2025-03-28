@@ -1,0 +1,29 @@
+===== Simple Document Validator =====
+Validating: 11newdocs11/99_misc/release-notes/0.1.0.md
+Timestamp: Fri Mar 28 14:21:47 PDT 2025
+
+## Frontmatter validation
+❌ No frontmatter found
+
+## Document structure validation
+✅ Main heading (H1) found
+✅ Overview section found
+❌ Related Documents section missing
+
+## Code examples validation
+Found 1 code blocks (0 Rust blocks)
+
+## Link validation
+Found 4 internal links
+❌ Broken link: ../getting-started/README.md -> 11newdocs11/99_misc/release-notes/../getting-started/README.md
+❌ Broken link: ../examples/basic-application-example.md -> 11newdocs11/99_misc/release-notes/../examples/basic-application-example.md
+❌ Broken link: ../examples/rest-api-example.md -> 11newdocs11/99_misc/release-notes/../examples/rest-api-example.md
+❌ Broken link: ../examples/dependency-injection-example.md -> 11newdocs11/99_misc/release-notes/../examples/dependency-injection-example.md
+❌ Found 4 broken internal links
+
+## Validation Summary
+Document: 11newdocs11/99_misc/release-notes/0.1.0.md
+Timestamp: Fri Mar 28 14:21:47 PDT 2025
+Code Blocks: 1
+Internal Links: 4
+Broken Links: 4
