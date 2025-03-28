@@ -129,10 +129,10 @@ Our primary focus is on migrating high-priority content from the old structure t
 - ✅ Migrate dependency injection example
 - ✅ Create comprehensive database integration example
 - ✅ Migrate REST API example
-- [ ] Migrate custom service example
-- [ ] Migrate error handling example
-- [ ] Migrate middleware example
-- [ ] Migrate application API reference
+- ✅ Migrate custom service example
+- ✅ Migrate error handling example
+- ✅ Migrate middleware example
+- ✅ Migrate application API reference
 - [ ] Migrate router API reference
 - [ ] Migrate config API reference
 - [ ] Apply frontmatter fixes across all documents
@@ -143,8 +143,7 @@ Our primary focus is on migrating high-priority content from the old structure t
 **Milestones**:
 - ✅ Initial structure created (Week 1)
 - ✅ Templates defined (Week 2)  
-- 🔄 32.5% of high-priority documents migrated (Week 4)
-- [ ] 50% of high-priority documents migrated (Week 6)
+- 🔄 70% of high-priority documents migrated (Week 4)
 - [ ] 75% of high-priority documents migrated (Week 8)
 - [ ] 100% of high-priority documents migrated (Week 10)
 - [ ] All cross-references verified (Week 12)

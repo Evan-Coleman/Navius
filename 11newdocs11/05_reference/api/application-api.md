@@ -1,16 +1,24 @@
 ---
 title: "Application API Reference"
-description: "Comprehensive reference for the Navius Application API"
+description: "Comprehensive reference guide for the Navius Application API, including core components, lifecycle management, routing, middleware, error handling, and state management"
 category: api
 tags:
   - api
   - application
   - framework
+  - routing
+  - middleware
+  - error-handling
+  - state-management
+  - lifecycle
 related:
-  - reference/api/configuration-api.md
-  - examples/basic-application-example.md
-last_updated: March 26, 2025
-version: 1.0
+  - 05_reference/api/router-api.md
+  - 05_reference/api/config-api.md
+  - 02_examples/basic-application-example.md
+  - 02_examples/custom-service-example.md
+last_updated: March 27, 2025
+version: 1.1
+status: stable
 ---
 
 # Application API Reference
@@ -849,6 +857,8 @@ impl HealthService {
 
 ## Related Examples
 
-- [Basic Application Example](../../examples/basic-application-example.md)
-- [Configuration Example](../../examples/configuration-example.md)
-- [Custom Service Example](../../examples/custom-service-example.md) 
+- [Basic Application Example](../../02_examples/basic-application-example.md)
+- [Configuration Example](../../02_examples/configuration-example.md)
+- [Custom Service Example](../../02_examples/custom-service-example.md)
+- [Error Handling Example](../../02_examples/error-handling-example.md)
+- [Middleware Example](../../02_examples/middleware-example.md) 
