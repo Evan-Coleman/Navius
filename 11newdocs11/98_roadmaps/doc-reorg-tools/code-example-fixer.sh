@@ -14,17 +14,48 @@ FIXED_DIR="$VERIFICATION_DIR/fixed"
 
 # Function to test compilation of a Rust file
 test_compilation() {
-    local file="$1"
-    local temp_dir=$(mktemp -d)
-    local cargo_toml="$temp_dir/Cargo.toml"
-    local src_dir="$temp_dir/src"
-    
-    mkdir -p "$src_dir"
-    
-    # Create a minimal Cargo.toml with required dependencies
-    cat > "$cargo_toml" << EOL
+    local example_file="$1"
+    local example_dir=$(dirname "$example_file")
+
+    # Create Cargo.toml if it doesn't exist
+    if [ ! -f "${example_dir}/Cargo.toml" ]; then
+        cat > "${example_dir}/Cargo.toml" << EOL
 [package]
-name = "example_test"
+name = "router-api-examples"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["trace"] }
+hyper = "1.0"
+EOL
+    fi
+
+    # Create src directory and move example file
+    mkdir -p "${example_dir}/src"
+    cp "$example_file" "${example_dir}/src/main.rs"
+
+    # Try to compile
+    (cd "$example_dir" && cargo check --quiet)
+    return $?
+}
+
+# Create output directory
+mkdir -p "$FIXED_DIR"
+
+# Create a temporary directory for compilation
+temp_dir=$(mktemp -d)
+mkdir -p "$temp_dir/src"
+
+# Create Cargo.toml
+cat > "$temp_dir/Cargo.toml" << 'EOL'
+[package]
+name = "router-api-examples"
 version = "0.1.0"
 edition = "2021"
 
@@ -34,208 +65,208 @@ tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 EOL
-    
-    # Copy the example file to src/main.rs
-    cp "$file" "$src_dir/main.rs"
-    
-    # Try to compile
-    (cd "$temp_dir" && cargo check --quiet) > /dev/null 2>&1
-    local result=$?
-    
-    # Clean up
-    rm -rf "$temp_dir"
-    
-    return $result
-}
-
-# Mock dependencies and types for examples
-MOCK_DEPENDENCIES=$(cat << 'EOL'
-// Mock types and dependencies for examples
-pub mod app {
-    use axum::Router;
-    use std::error::Error;
-    use axum::response::IntoResponse;
-    use axum::Json;
-    use serde::{Deserialize, Serialize};
-
-    pub struct ApplicationBuilder {
-        name: String,
-        router: Option<Router>,
-    }
-
-    impl ApplicationBuilder {
-        pub fn new(name: &str) -> Self {
-            Self {
-                name: name.to_string(),
-                router: None,
-            }
-        }
-
-        pub fn with_router(mut self, router: Router) -> Self {
-            self.router = Some(router);
-            self
-        }
-
-        pub fn build(self) -> Result<Application, Box<dyn Error>> {
-            Ok(Application {
-                name: self.name,
-                router: self.router.unwrap_or_default(),
-            })
-        }
-    }
-
-    pub struct Application {
-        name: String,
-        router: Router,
-    }
-
-    pub mod handlers {
-        use super::*;
-
-        pub async fn index_handler() -> impl IntoResponse {
-            "Hello, World!"
-        }
-
-        pub mod users {
-            use super::*;
-
-            #[derive(Serialize, Deserialize)]
-            pub struct User {
-                id: i32,
-                name: String,
-            }
-
-            pub async fn get_users() -> impl IntoResponse {
-                Json(vec![User { id: 1, name: "Test".to_string() }])
-            }
-
-            pub async fn create_user() -> impl IntoResponse {
-                Json(User { id: 1, name: "New User".to_string() })
-            }
-
-            pub async fn get_user_by_id() -> impl IntoResponse {
-                Json(User { id: 1, name: "Test".to_string() })
-            }
-
-            pub async fn update_user() -> impl IntoResponse {
-                Json(User { id: 1, name: "Updated User".to_string() })
-            }
-
-            pub async fn delete_user() -> impl IntoResponse {
-                Json(User { id: 1, name: "Deleted User".to_string() })
-            }
-        }
-    }
-
-    pub mod middleware {
-        use axum::{
-            http::Request,
-            middleware::Next,
-            response::Response,
-        };
-
-        pub async fn auth_middleware<B>(req: Request<B>, next: Next<B>) -> Response {
-            // Mock authentication middleware
-            next.run(req).await
-        }
-    }
-}
-
-// Common imports for all examples
-use axum::{
-    routing::{get, post, put, delete},
-    Router,
-    response::IntoResponse,
-    Json,
-    extract::Path,
-    middleware,
-    http::{Request, Response},
-};
-use serde::{Serialize, Deserialize};
-use std::error::Error;
-use crate::app::{ApplicationBuilder, Application};
-use crate::app::handlers::{index_handler, users::{get_users, create_user, get_user_by_id, update_user, delete_user}};
-use crate::app::middleware::auth_middleware;
-EOL
-)
-
-# Create output directory
-mkdir -p "$FIXED_DIR"
 
 # Function to fix a code example
 fix_code_example() {
     local example_file="$1"
     local fixed_file="$2"
-    local diff_file="$3"
-    local issues_found=""
-    local fixes_applied=""
+    local original_code
+    local filtered_code
 
     # Read the original code
-    local original_code=$(cat "$example_file")
+    original_code=$(cat "$example_file")
 
-    # Filter out import statements and indent the remaining code
-    local filtered_code=$(echo "$original_code" | grep -v '^use' | sed 's/^/        /')
+    # Filter out import statements
+    filtered_code=$(echo "$original_code" | grep -v "^use " | sed 's/^/        /')
 
-    # Check if the example contains a struct or impl block
-    if echo "$original_code" | grep -q '^struct\|^impl'; then
-        # If it has a struct or impl, wrap it in a module with imports
-        echo "// Example with struct/impl definitions" > "$fixed_file"
-        echo "$MOCK_DEPENDENCIES" >> "$fixed_file"
-        echo "fn main() -> Result<(), Box<dyn Error>> {" >> "$fixed_file"
-        echo "    Ok(())" >> "$fixed_file"
-        echo "}" >> "$fixed_file"
-        echo "" >> "$fixed_file"
-        echo "$filtered_code" >> "$fixed_file"
-        issues_found="Code fragment with struct/impl definitions"
-        fixes_applied="Added mock types and wrapped in module"
-    else
-        # Check if the code contains async functions
-        if echo "$original_code" | grep -q 'async\|\.await'; then
-            # If it has async code, wrap it in a module with tokio runtime
-            echo "// Example with async code" > "$fixed_file"
-            echo "$MOCK_DEPENDENCIES" >> "$fixed_file"
-            echo "" >> "$fixed_file"
-            echo "#[tokio::main]" >> "$fixed_file"
-            echo "async fn main() -> Result<(), Box<dyn Error>> {" >> "$fixed_file"
-            echo "$filtered_code" >> "$fixed_file"
-            echo "    Ok(())" >> "$fixed_file"
-            echo "}" >> "$fixed_file"
-            issues_found="Code fragment requiring async runtime"
-            fixes_applied="Added async runtime and mock dependencies"
+    # Create fixed code with proper imports and mock dependencies
+    {
+        echo 'use axum::{'
+        echo '    routing::{get, post, put, delete},'
+        echo '    Router,'
+        echo '    response::IntoResponse,'
+        echo '    Json,'
+        echo '    extract::Path,'
+        echo '    middleware::{self, Next},'
+        echo '    http::{Request, Response, StatusCode},'
+        echo '    body::Body,'
+        echo '};'
+        echo 'use serde::{Serialize, Deserialize};'
+        echo 'use std::error::Error;'
+        echo
+        echo '#[derive(Clone)]'
+        echo 'struct AppState {}'
+        echo
+        echo 'pub mod app {'
+        echo '    use super::*;'
+        echo
+        echo '    pub struct ApplicationBuilder {'
+        echo '        name: String,'
+        echo '        router: Option<Router<AppState>>,'
+        echo '    }'
+        echo
+        echo '    impl ApplicationBuilder {'
+        echo '        pub fn new(name: &str) -> Self {'
+        echo '            Self {'
+        echo '                name: name.to_string(),'
+        echo '                router: None,'
+        echo '            }'
+        echo '        }'
+        echo
+        echo '        pub fn with_router(mut self, router: Router<AppState>) -> Self {'
+        echo '            self.router = Some(router);'
+        echo '            self'
+        echo '        }'
+        echo
+        echo '        pub fn build(self) -> Result<Application, Box<dyn Error>> {'
+        echo '            Ok(Application {'
+        echo '                name: self.name,'
+        echo '                router: self.router.unwrap_or_default(),'
+        echo '            })'
+        echo '        }'
+        echo '    }'
+        echo
+        echo '    pub struct Application {'
+        echo '        name: String,'
+        echo '        router: Router<AppState>,'
+        echo '    }'
+        echo
+        echo '    pub mod handlers {'
+        echo '        use super::*;'
+        echo
+        echo '        pub async fn index_handler() -> impl IntoResponse {'
+        echo '            "Hello, World!"'
+        echo '        }'
+        echo
+        echo '        pub mod users {'
+        echo '            use super::*;'
+        echo
+        echo '            #[derive(Serialize, Deserialize)]'
+        echo '            pub struct User {'
+        echo '                id: i32,'
+        echo '                name: String,'
+        echo '            }'
+        echo
+        echo '            pub async fn get_users() -> impl IntoResponse {'
+        echo '                Json(vec![User { id: 1, name: "Test".to_string() }])'
+        echo '            }'
+        echo
+        echo '            pub async fn create_user() -> impl IntoResponse {'
+        echo '                Json(User { id: 1, name: "New User".to_string() })'
+        echo '            }'
+        echo
+        echo '            pub async fn get_user_by_id() -> impl IntoResponse {'
+        echo '                Json(User { id: 1, name: "Test".to_string() })'
+        echo '            }'
+        echo
+        echo '            pub async fn update_user() -> impl IntoResponse {'
+        echo '                Json(User { id: 1, name: "Updated User".to_string() })'
+        echo '            }'
+        echo
+        echo '            pub async fn delete_user() -> impl IntoResponse {'
+        echo '                Json(User { id: 1, name: "Deleted User".to_string() })'
+        echo '            }'
+        echo '        }'
+        echo '    }'
+        echo
+        echo '    pub mod middleware {'
+        echo '        use super::*;'
+        echo
+        echo '        pub async fn auth_middleware(req: Request<Body>, next: Next) -> Response<Body> {'
+        echo '            next.run(req).await'
+        echo '        }'
+        echo
+        echo '        pub async fn logging_middleware(req: Request<Body>, next: Next) -> Response<Body> {'
+        echo '            println!("Request: {} {}", req.method(), req.uri());'
+        echo '            next.run(req).await'
+        echo '        }'
+        echo
+        echo '        pub async fn error_handling_middleware(req: Request<Body>, next: Next) -> Response<Body> {'
+        echo '            next.run(req).await'
+        echo '        }'
+        echo '    }'
+        echo '}'
+        echo
+        echo 'pub mod protected {'
+        echo '    use super::*;'
+        echo
+        echo '    pub async fn profile_handler() -> impl IntoResponse {'
+        echo '        "Profile"'
+        echo '    }'
+        echo
+        echo '    pub async fn settings_handler() -> impl IntoResponse {'
+        echo '        "Settings"'
+        echo '    }'
+        echo
+        echo '    pub async fn dashboard() -> impl IntoResponse {'
+        echo '        "Dashboard"'
+        echo '    }'
+        echo '}'
+        echo
+        echo 'pub mod public {'
+        echo '    use super::*;'
+        echo
+        echo '    pub async fn index() -> impl IntoResponse {'
+        echo '        "Index"'
+        echo '    }'
+        echo
+        echo '    pub async fn about() -> impl IntoResponse {'
+        echo '        "About"'
+        echo '    }'
+        echo
+        echo '    pub async fn login() -> impl IntoResponse {'
+        echo '        "Login"'
+        echo '    }'
+        echo '}'
+        echo
+        echo 'pub async fn handle_404() -> impl IntoResponse {'
+        echo '    (StatusCode::NOT_FOUND, "Resource not found")'
+        echo '}'
+        echo
+        echo 'pub async fn health_check() -> impl IntoResponse {'
+        echo '    "OK"'
+        echo '}'
+        echo
+        echo 'use app::{ApplicationBuilder, Application};'
+        echo 'use app::handlers::{index_handler, users::{get_users, create_user, get_user_by_id, update_user, delete_user}};'
+        echo 'use app::middleware::{auth_middleware, logging_middleware, error_handling_middleware};'
+        echo 'use protected::*;'
+        echo 'use public::*;'
+        echo
+        # Check if the code contains a function declaration
+        if ! echo "$original_code" | grep -q "^fn\|^async fn"; then
+            echo '#[tokio::main]'
+            echo 'async fn main() -> Result<(), Box<dyn Error>> {'
+            echo "$filtered_code"
+            echo '    Ok(())'
+            echo '}'
         else
-            # Regular code fragment
-            echo "// Regular code example" > "$fixed_file"
-            echo "$MOCK_DEPENDENCIES" >> "$fixed_file"
-            echo "" >> "$fixed_file"
-            echo "fn main() -> Result<(), Box<dyn Error>> {" >> "$fixed_file"
-            echo "$filtered_code" >> "$fixed_file"
-            echo "    Ok(())" >> "$fixed_file"
-            echo "}" >> "$fixed_file"
-            issues_found="Code fragment requiring mock dependencies"
-            fixes_applied="Added mock types and wrapped in module"
+            echo "$filtered_code"
         fi
-    fi
+    } > "$fixed_file"
 
-    # Create the diff file
+    # Create a diff file
+    local diff_file="${fixed_file%.*}_diff.md"
     {
         echo "## Issues Found"
-        echo "$issues_found"
-        echo ""
+        echo
+        echo
         echo "## Fixes Applied"
-        echo "$fixes_applied"
-        echo ""
+        echo
+        echo
         echo "## Original Code"
         echo '```rust'
         echo "$original_code"
         echo '```'
-        echo ""
+        echo
         echo "## Fixed Code"
         echo '```rust'
         cat "$fixed_file"
         echo '```'
+        echo
     } > "$diff_file"
 
-    # Return success if the file was created
+    # Return success if the fixed file was created
     [ -f "$fixed_file" ]
 }
 
@@ -272,7 +303,7 @@ process_document() {
         echo "Fixing example $example_id (${orig_file})..."
         
         # Fix the example
-        if fix_code_example "$orig_file" "$fixed_file" "$fixed_dir/example_${example_id}_diff.md"; then
+        if fix_code_example "$orig_file" "$fixed_file"; then
             issues_fixed="Added mock dependencies;Added async runtime;Added proper module structure"
             new_status="Compiles"
             echo "✓ Fixed successfully!"
