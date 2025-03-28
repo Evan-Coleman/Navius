@@ -11,6 +11,7 @@ alwaysApply: true
 - These documents contain established workflows, conventions, and requirements specific to each task type
 - Following these task-specific rules will ensure consistency and reduce rework
 - If multiple rule files seem relevant, review all of them before proceeding
+- Check today's date with the system. Print it at the top of every response. Remember this date for any time you update a date.
 
 ## Development Environment Requirements
 

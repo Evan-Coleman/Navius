@@ -10,6 +10,13 @@ DOCS_DIR="docs"
 REPORTS_DIR="target/reports/docs_validation"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 REPORT_FILE="${REPORTS_DIR}/comprehensive_test_${TIMESTAMP}.md"
+GRAPH_FILE="${REPORTS_DIR}/document_graph_${TIMESTAMP}.dot"
+HTML_VISUALIZATION="${REPORTS_DIR}/document_graph_${TIMESTAMP}.html"
+SINGLE_FILE_MODE=false
+TARGET_FILE=""
+FOCUS_DIR=""
+CSV_OUTPUT=false
+CUSTOM_RULES_FILE=""
 
 # Create reports directory if it doesn't exist
 mkdir -p "$REPORTS_DIR"
@@ -26,6 +33,47 @@ declare -A document_references
 declare -A tag_counts
 declare -A category_documents
 declare -A related_pairs
+declare -A content_quality_scores
+declare -A code_validation_results
+declare -A readability_scores
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --file)
+            SINGLE_FILE_MODE=true
+            TARGET_FILE="$2"
+            shift 2
+            ;;
+        --dir)
+            FOCUS_DIR="$2"
+            shift 2
+            ;;
+        --csv)
+            CSV_OUTPUT=true
+            shift
+            ;;
+        --rules)
+            CUSTOM_RULES_FILE="$2"
+            shift 2
+            ;;
+        --help)
+            echo "Usage: comprehensive_test.sh [OPTIONS]"
+            echo "Options:"
+            echo "  --file FILE       Analyze a single file instead of all documentation"
+            echo "  --dir DIRECTORY   Focus analysis on a specific directory"
+            echo "  --csv             Output results in CSV format for spreadsheet import"
+            echo "  --rules FILE      Use custom validation rules from specified file"
+            echo "  --help            Display this help message"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
 
 # Function to extract frontmatter from file
 extract_frontmatter() {
@@ -47,28 +95,455 @@ get_frontmatter_list() {
     echo "$frontmatter" | awk -v f="$field:" 'BEGIN{flag=0} $0 ~ "^"f{flag=1;next} /^[a-z]/{if(flag==1)flag=0} flag==1 && /^ *- /{print $2}'
 }
 
+# Function to check if code blocks are syntactically valid
+validate_code_blocks() {
+    local file=$1
+    local language=""
+    local code_block=""
+    local in_code_block=false
+    local block_count=0
+    local valid_blocks=0
+    local result="PASS"
+    
+    # Read the file line by line
+    while IFS= read -r line; do
+        # Check for the start of a code block
+        if [[ "$line" =~ ^```([a-zA-Z0-9]*)$ && "$in_code_block" == false ]]; then
+            language="${BASH_REMATCH[1]}"
+            code_block=""
+            in_code_block=true
+            block_count=$((block_count + 1))
+            continue
+        fi
+        
+        # Check for the end of a code block
+        if [[ "$line" == "```" && "$in_code_block" == true ]]; then
+            in_code_block=false
+            
+            # Validate based on language
+            case "$language" in
+                rust)
+                    # Create a temporary file for validation
+                    temp_file=$(mktemp)
+                    echo "$code_block" > "$temp_file"
+                    
+                    # Use rustfmt to validate syntax
+                    if rustfmt --check "$temp_file" &> /dev/null; then
+                        valid_blocks=$((valid_blocks + 1))
+                    else
+                        result="FAIL"
+                    fi
+                    
+                    rm "$temp_file"
+                    ;;
+                bash|sh)
+                    # Create a temporary file for validation
+                    temp_file=$(mktemp)
+                    echo "$code_block" > "$temp_file"
+                    
+                    # Use bash -n to validate syntax
+                    if bash -n "$temp_file" &> /dev/null; then
+                        valid_blocks=$((valid_blocks + 1))
+                    else
+                        result="FAIL"
+                    fi
+                    
+                    rm "$temp_file"
+                    ;;
+                *)
+                    # For other languages, just count them without validation
+                    valid_blocks=$((valid_blocks + 1))
+                    ;;
+            esac
+            
+            continue
+        fi
+        
+        # Collect code blocks
+        if [[ "$in_code_block" == true ]]; then
+            code_block="${code_block}${line}
+"
+        fi
+    done < "$file"
+    
+    # Store the validation result
+    code_validation_results["$file"]="$result:$valid_blocks:$block_count"
+}
+
+# Function to calculate readability score
+calculate_readability() {
+    local file=$1
+    local content=""
+    local in_code_block=false
+    local in_frontmatter=false
+    local frontmatter_count=0
+    
+    # Extract content without code blocks and frontmatter
+    while IFS= read -r line; do
+        # Skip frontmatter
+        if [[ "$line" == "---" ]]; then
+            frontmatter_count=$((frontmatter_count + 1))
+            if [[ "$frontmatter_count" == 1 ]]; then
+                in_frontmatter=true
+                continue
+            elif [[ "$frontmatter_count" == 2 ]]; then
+                in_frontmatter=false
+                continue
+            fi
+        fi
+        
+        if [[ "$in_frontmatter" == true ]]; then
+            continue
+        fi
+        
+        # Skip code blocks
+        if [[ "$line" =~ ^```[a-zA-Z0-9]*$ && "$in_code_block" == false ]]; then
+            in_code_block=true
+            continue
+        fi
+        
+        if [[ "$line" == "```" && "$in_code_block" == true ]]; then
+            in_code_block=false
+            continue
+        fi
+        
+        if [[ "$in_code_block" == true ]]; then
+            continue
+        fi
+        
+        # Add the line to content
+        content="${content}${line}
+"
+    done < "$file"
+    
+    # Calculate basic readability metrics
+    words=$(echo "$content" | wc -w)
+    sentences=$(echo "$content" | grep -o "[.!?]" | wc -l)
+    paragraphs=$(echo "$content" | grep -c "^$")
+    
+    # Avoid division by zero
+    if [[ "$sentences" -eq 0 ]]; then
+        sentences=1
+    fi
+    
+    # Simple readability calculation (words per sentence)
+    words_per_sentence=$(echo "scale=2; $words / $sentences" | bc)
+    
+    # Assign a readability score based on words per sentence
+    # 15-20 words per sentence is considered ideal
+    if (( $(echo "$words_per_sentence < 10" | bc -l) )); then
+        readability_score="Simple:$words_per_sentence"
+    elif (( $(echo "$words_per_sentence <= 20" | bc -l) )); then
+        readability_score="Good:$words_per_sentence"
+    else
+        readability_score="Complex:$words_per_sentence"
+    fi
+    
+    readability_scores["$file"]="$readability_score:$words:$sentences:$paragraphs"
+}
+
+# Function to evaluate content quality
+evaluate_content_quality() {
+    local file=$1
+    local score=0
+    local frontmatter=$(extract_frontmatter "$file")
+    
+    # Check for frontmatter completeness (2 points)
+    if [[ -n "$(get_frontmatter_field "$frontmatter" "title")" ]]; then
+        score=$((score + 1))
+    fi
+    
+    if [[ -n "$(get_frontmatter_field "$frontmatter" "description")" ]]; then
+        score=$((score + 1))
+    fi
+    
+    # Check for heading structure (3 points)
+    if grep -q "^# " "$file"; then
+        score=$((score + 1))
+    fi
+    
+    if grep -q "^## " "$file"; then
+        score=$((score + 1))
+    fi
+    
+    # Check if there are at least 2 subsections
+    if [[ $(grep -c "^## " "$file") -ge 2 ]]; then
+        score=$((score + 1))
+    fi
+    
+    # Check for code examples (2 points)
+    if grep -q "^\`\`\`" "$file"; then
+        score=$((score + 1))
+        
+        # Extra point if code blocks have language specified
+        if grep -q "^\`\`\`[a-zA-Z]" "$file"; then
+            score=$((score + 1))
+        fi
+    fi
+    
+    # Check for internal links (1 point)
+    if grep -q "\[.*\](.*\.md)" "$file"; then
+        score=$((score + 1))
+    fi
+    
+    # Check for Related Documents section (2 points)
+    if grep -q "^## Related Documents" "$file"; then
+        score=$((score + 1))
+        
+        # Extra point if there are actual related documents listed
+        if grep -A 5 "^## Related Documents" "$file" | grep -q "\[.*\](.*\.md)"; then
+            score=$((score + 1))
+        fi
+    fi
+    
+    # Determine quality label based on score
+    local quality_label=""
+    if [[ $score -ge 9 ]]; then
+        quality_label="Excellent"
+    elif [[ $score -ge 7 ]]; then
+        quality_label="Good"
+    elif [[ $score -ge 5 ]]; then
+        quality_label="Adequate"
+    elif [[ $score -ge 3 ]]; then
+        quality_label="Poor"
+    else
+        quality_label="Very Poor"
+    fi
+    
+    content_quality_scores["$file"]="$quality_label:$score:10"
+}
+
+# Function to generate document relationship graph
+generate_graph() {
+    echo "digraph DocumentRelationships {" > "$GRAPH_FILE"
+    echo "  node [shape=box, style=filled, fillcolor=lightblue];" >> "$GRAPH_FILE"
+    echo "  graph [rankdir=LR];" >> "$GRAPH_FILE"
+    
+    # Add nodes
+    for file in "${!document_references[@]}"; do
+        filename=$(basename "$file")
+        fileId="${filename//[^a-zA-Z0-9]/_}"
+        echo "  $fileId [label=\"$filename\"];" >> "$GRAPH_FILE"
+    done
+    
+    # Add edges
+    for pair in "${!related_pairs[@]}"; do
+        source=$(echo "$pair" | cut -d'|' -f1)
+        target=$(echo "$pair" | cut -d'|' -f2)
+        
+        source_filename=$(basename "$source")
+        target_filename=$(basename "$target")
+        
+        sourceId="${source_filename//[^a-zA-Z0-9]/_}"
+        targetId="${target_filename//[^a-zA-Z0-9]/_}"
+        
+        echo "  $sourceId -> $targetId;" >> "$GRAPH_FILE"
+    done
+    
+    echo "}" >> "$GRAPH_FILE"
+    
+    # Try to generate HTML visualization if graphviz is installed
+    if command -v dot &> /dev/null; then
+        dot -Tsvg "$GRAPH_FILE" > "${GRAPH_FILE}.svg"
+        
+        # Create an HTML file with the SVG embedded
+        cat > "$HTML_VISUALIZATION" << EOL
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Document Relationship Graph</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #333; }
+        .container { max-width: 100%; overflow: auto; }
+    </style>
+</head>
+<body>
+    <h1>Document Relationship Graph</h1>
+    <p>Generated on $(date)</p>
+    <div class="container">
+        $(cat "${GRAPH_FILE}.svg")
+    </div>
+</body>
+</html>
+EOL
+        echo -e "${GREEN}Generated document relationship visualization: $HTML_VISUALIZATION${NC}"
+    else
+        echo -e "${YELLOW}Graphviz not installed. Skipping visualization generation.${NC}"
+        echo -e "${YELLOW}Install with: sudo apt-get install graphviz${NC}"
+    fi
+}
+
+# Generate AI-assisted recommendations
+generate_recommendations() {
+    local file=$1
+    
+    # Extract various metrics
+    local quality=${content_quality_scores[$file]}
+    local quality_label=$(echo "$quality" | cut -d':' -f1)
+    local quality_score=$(echo "$quality" | cut -d':' -f2)
+    
+    local readability=${readability_scores[$file]}
+    local readability_label=$(echo "$readability" | cut -d':' -f1)
+    local words_per_sentence=$(echo "$readability" | cut -d':' -f2)
+    
+    local code_validation=${code_validation_results[$file]}
+    local code_status=$(echo "$code_validation" | cut -d':' -f1)
+    
+    # Generate recommendations based on metrics
+    local recommendations=""
+    
+    # Content quality recommendations
+    if [[ "$quality_label" == "Very Poor" || "$quality_label" == "Poor" ]]; then
+        recommendations+="- Structure needs significant improvement. Add proper frontmatter, headings, and sections.\n"
+    elif [[ "$quality_label" == "Adequate" ]]; then
+        recommendations+="- Good basic structure, but needs more detail and better section organization.\n"
+    fi
+    
+    # Readability recommendations
+    if [[ "$readability_label" == "Complex" ]]; then
+        recommendations+="- Simplify content: break long sentences into shorter ones (currently $words_per_sentence words per sentence).\n"
+    elif [[ "$readability_label" == "Simple" ]]; then
+        recommendations+="- Content may be too simplistic. Consider adding more detailed explanations.\n"
+    fi
+    
+    # Code validation recommendations
+    if [[ "$code_status" == "FAIL" ]]; then
+        recommendations+="- Fix syntax errors in code examples.\n"
+    fi
+    
+    # Check if related documents section exists
+    if ! grep -q "^## Related Documents" "$file"; then
+        recommendations+="- Add a 'Related Documents' section with relevant links.\n"
+    fi
+    
+    # Check for broken links
+    if grep -q "\[.*\]([^)]*)" "$file"; then
+        local links=$(grep -o "\[.*\]([^)]*)" "$file" | grep -o "([^)]*)" | tr -d '(' | tr -d ')')
+        for link in $links; do
+            # Skip external links and anchors
+            if [[ "$link" =~ ^https?:// || "$link" =~ ^# ]]; then
+                continue
+            fi
+            
+            # Check if link is to a markdown file that exists
+            if [[ "$link" == *.md ]]; then
+                # Handle absolute paths
+                if [[ "$link" == /* ]]; then
+                    # Remove /docs prefix if present
+                    link_path=${link#/docs}
+                    link_path="docs$link_path"
+                else
+                    # Relative path
+                    link_path=$(dirname "$file")/$link
+                fi
+                
+                if [ ! -f "$link_path" ]; then
+                    recommendations+="- Fix broken link to $link.\n"
+                fi
+            fi
+        done
+    fi
+    
+    echo -e "$recommendations"
+}
+
+# Main report generation
 echo -e "${BLUE}Starting comprehensive documentation testing...${NC}"
+
+# Determine which files to analyze
+if [[ "$SINGLE_FILE_MODE" == true ]]; then
+    if [[ ! -f "$TARGET_FILE" ]]; then
+        echo -e "${RED}Error: File $TARGET_FILE does not exist.${NC}"
+        exit 1
+    fi
+    
+    files=("$TARGET_FILE")
+    echo -e "${BLUE}Analyzing single file: $TARGET_FILE${NC}"
+else
+    if [[ -n "$FOCUS_DIR" ]]; then
+        if [[ ! -d "$FOCUS_DIR" ]]; then
+            echo -e "${RED}Error: Directory $FOCUS_DIR does not exist.${NC}"
+            exit 1
+        fi
+        
+        echo -e "${BLUE}Focusing analysis on directory: $FOCUS_DIR${NC}"
+        files=($(find "$FOCUS_DIR" -name "*.md" -type f))
+    else
+        echo -e "${BLUE}Analyzing all documentation in $DOCS_DIR${NC}"
+        files=($(find "$DOCS_DIR" -name "*.md" -type f))
+    fi
+fi
+
+# CSV output mode
+if [[ "$CSV_OUTPUT" == true ]]; then
+    echo "File,Title,Category,Tags,Quality Score,Readability,Code Status,Word Count,Related Documents"
+    
+    for file in "${files[@]}"; do
+        frontmatter=$(extract_frontmatter "$file")
+        title=$(get_frontmatter_field "$frontmatter" "title")
+        category=$(get_frontmatter_field "$frontmatter" "category")
+        tags=$(get_frontmatter_list "$frontmatter" "tags" | tr '\n' ',' | sed 's/,$//')
+        
+        # Calculate metrics
+        evaluate_content_quality "$file"
+        calculate_readability "$file"
+        validate_code_blocks "$file"
+        
+        # Extract metrics
+        quality=${content_quality_scores[$file]}
+        quality_label=$(echo "$quality" | cut -d':' -f1)
+        
+        readability=${readability_scores[$file]}
+        readability_label=$(echo "$readability" | cut -d':' -f1)
+        word_count=$(echo "$readability" | cut -d':' -f2)
+        
+        code_validation=${code_validation_results[$file]}
+        code_status=$(echo "$code_validation" | cut -d':' -f1)
+        
+        # Count related documents
+        related_count=$(grep -c "\[.*\](.*\.md)" "$file")
+        
+        # Output CSV row
+        echo "\"$file\",\"$title\",\"$category\",\"$tags\",\"$quality_label\",\"$readability_label\",\"$code_status\",\"$word_count\",\"$related_count\""
+    done
+    
+    exit 0
+fi
+
+# Initialize the report
 echo "# Comprehensive Documentation Test Report - $(date '+%B %d, %Y')" > $REPORT_FILE
 echo "" >> $REPORT_FILE
+echo "## Test Configuration" >> $REPORT_FILE
+echo "" >> $REPORT_FILE
 
-# Phase 1: Document Inventory and Metadata Analysis
+if [[ "$SINGLE_FILE_MODE" == true ]]; then
+    echo "- Mode: Single File Analysis" >> $REPORT_FILE
+    echo "- Target: $TARGET_FILE" >> $REPORT_FILE
+elif [[ -n "$FOCUS_DIR" ]]; then
+    echo "- Mode: Directory Analysis" >> $REPORT_FILE
+    echo "- Target: $FOCUS_DIR" >> $REPORT_FILE
+else
+    echo "- Mode: Full Documentation Analysis" >> $REPORT_FILE
+    echo "- Target: $DOCS_DIR" >> $REPORT_FILE
+fi
+
+if [[ -n "$CUSTOM_RULES_FILE" ]]; then
+    echo "- Custom Rules: $CUSTOM_RULES_FILE" >> $REPORT_FILE
+fi
+
+echo "" >> $REPORT_FILE
+
+# Process the files
+total_documents=${#files[@]}
+files_with_frontmatter=0
+files_without_frontmatter=0
+
 echo -e "${BLUE}Phase 1: Document Inventory and Metadata Analysis${NC}"
 echo "## Document Inventory" >> $REPORT_FILE
 echo "" >> $REPORT_FILE
 
-total_documents=0
-files_with_frontmatter=0
-files_without_frontmatter=0
-
-while IFS= read -r file; do
-    total_documents=$((total_documents + 1))
-    
-    # Skip READMEs for certain checks
-    is_readme=false
-    if [[ $(basename "$file") == "README.md" ]]; then
-        is_readme=true
-    fi
-    
+for file in "${files[@]}"; do
     # Extract and analyze frontmatter
     if grep -q "^---" "$file"; then
         files_with_frontmatter=$((files_with_frontmatter + 1))
@@ -112,7 +587,16 @@ while IFS= read -r file; do
     else
         files_without_frontmatter=$((files_without_frontmatter + 1))
     fi
-done < <(find "$DOCS_DIR" -name "*.md" -type f)
+    
+    # Evaluate content quality
+    evaluate_content_quality "$file"
+    
+    # Calculate readability
+    calculate_readability "$file"
+    
+    # Validate code blocks
+    validate_code_blocks "$file"
+done
 
 # Output document inventory statistics
 echo "Total documents: $total_documents" >> $REPORT_FILE
@@ -152,13 +636,16 @@ echo -e "${BLUE}Phase 4: Document Relationship Analysis${NC}"
 echo "## Document Relationships" >> $REPORT_FILE
 echo "" >> $REPORT_FILE
 
+# Generate the document graph
+generate_graph
+
 # Check for orphaned documents (no incoming references)
 echo "### Orphaned Documents" >> $REPORT_FILE
 echo "Documents that are not referenced by any other document:" >> $REPORT_FILE
 echo "" >> $REPORT_FILE
 
 orphaned_count=0
-for file in $(find "$DOCS_DIR" -name "*.md" -type f); do
+for file in "${files[@]}"; do
     # Skip README files in this check, they're meant to be entry points
     if [[ $(basename "$file") == "README.md" ]]; then
         continue
@@ -204,144 +691,97 @@ if [ $broken_ref_count -eq 0 ]; then
 fi
 echo "" >> $REPORT_FILE
 
-# Phase 5: Content Structure Analysis
-echo -e "${BLUE}Phase 5: Content Structure Analysis${NC}"
-echo "## Content Structure" >> $REPORT_FILE
+# Phase 5: Content Quality Analysis
+echo -e "${BLUE}Phase 5: Content Quality Analysis${NC}"
+echo "## Content Quality Assessment" >> $REPORT_FILE
+echo "" >> $REPORT_FILE
+echo "| Document | Quality | Score | Readability | Words/Sentence | Code Status |" >> $REPORT_FILE
+echo "|----------|---------|-------|-------------|----------------|-------------|" >> $REPORT_FILE
+
+for file in "${files[@]}"; do
+    # Extract quality metrics
+    quality=${content_quality_scores[$file]}
+    quality_label=$(echo "$quality" | cut -d':' -f1)
+    quality_score=$(echo "$quality" | cut -d':' -f2)
+    
+    # Extract readability metrics
+    readability=${readability_scores[$file]}
+    readability_label=$(echo "$readability" | cut -d':' -f1)
+    words_per_sentence=$(echo "$readability" | cut -d':' -f2)
+    
+    # Extract code validation metrics
+    code_validation=${code_validation_results[$file]}
+    code_status=$(echo "$code_validation" | cut -d':' -f1)
+    
+    # Output the table row
+    echo "| $(basename "$file") | $quality_label | $quality_score/10 | $readability_label | $words_per_sentence | $code_status |" >> $REPORT_FILE
+done
 echo "" >> $REPORT_FILE
 
-# Analyze heading structure
-echo "### Heading Structure" >> $REPORT_FILE
-echo "Documents with non-standard heading structure:" >> $REPORT_FILE
+# Phase 6: Document Improvement Recommendations
+echo -e "${BLUE}Phase 6: Document Improvement Recommendations${NC}"
+echo "## Improvement Recommendations" >> $REPORT_FILE
 echo "" >> $REPORT_FILE
 
-heading_issues=0
-while IFS= read -r file; do
-    # Skip README files for this check
-    if [[ $(basename "$file") == "README.md" ]]; then
+for file in "${files[@]}"; do
+    # Skip documents that are already excellent
+    quality=${content_quality_scores[$file]}
+    quality_label=$(echo "$quality" | cut -d':' -f1)
+    
+    if [[ "$quality_label" == "Excellent" ]]; then
         continue
     fi
     
-    # Check if document has required headings
-    has_title_heading=$(grep -q "^# " "$file" && echo true || echo false)
-    has_overview=$(grep -q "^## Overview" "$file" && echo true || echo false)
+    # Generate recommendations for this file
+    recommendations=$(generate_recommendations "$file")
     
-    if [ "$has_title_heading" = false ] || [ "$has_overview" = false ]; then
-        heading_issues=$((heading_issues + 1))
-        echo "- $file" >> $REPORT_FILE
-        
-        if [ "$has_title_heading" = false ]; then
-            echo "  - Missing title heading (# Title)" >> $REPORT_FILE
-        fi
-        
-        if [ "$has_overview" = false ]; then
-            echo "  - Missing overview section (## Overview)" >> $REPORT_FILE
-        fi
+    if [[ -n "$recommendations" ]]; then
+        echo "### $(basename "$file")" >> $REPORT_FILE
+        echo "" >> $REPORT_FILE
+        echo -e "$recommendations" >> $REPORT_FILE
+        echo "" >> $REPORT_FILE
     fi
-done < <(find "$DOCS_DIR" -name "*.md" -type f)
-
-if [ $heading_issues -eq 0 ]; then
-    echo "All documents have standard heading structure." >> $REPORT_FILE
-fi
-echo "" >> $REPORT_FILE
-
-# Phase 6: Content Quality Analysis
-echo -e "${BLUE}Phase 6: Content Quality Analysis${NC}"
-echo "## Content Quality" >> $REPORT_FILE
-echo "" >> $REPORT_FILE
-
-# Check for potentially outdated content
-echo "### Potentially Outdated Content" >> $REPORT_FILE
-echo "Documents last updated more than 90 days ago:" >> $REPORT_FILE
-echo "" >> $REPORT_FILE
-
-outdated_count=0
-current_date=$(date +%s)
-while IFS= read -r file; do
-    frontmatter=$(extract_frontmatter "$file")
-    last_updated=$(get_frontmatter_field "$frontmatter" "last_updated")
-    
-    if [ -n "$last_updated" ]; then
-        # Try to parse the date
-        update_timestamp=$(date -j -f "%B %d, %Y" "$last_updated" +%s 2>/dev/null)
-        
-        # If date parsing succeeded
-        if [ -n "$update_timestamp" ]; then
-            # Calculate days since last update
-            days_diff=$(( (current_date - update_timestamp) / 86400 ))
-            
-            if [ $days_diff -gt 90 ]; then
-                outdated_count=$((outdated_count + 1))
-                echo "- $file (Last updated: $last_updated, $days_diff days ago)" >> $REPORT_FILE
-            fi
-        fi
-    fi
-done < <(find "$DOCS_DIR" -name "*.md" -type f)
-
-if [ $outdated_count -eq 0 ]; then
-    echo "All documents appear to be up-to-date." >> $REPORT_FILE
-fi
-echo "" >> $REPORT_FILE
-
-# Generate document relationship graph data
-echo "### Document Relationship Graph" >> $REPORT_FILE
-echo "Generating document relationship data for visualization:" >> $REPORT_FILE
-echo "" >> $REPORT_FILE
-echo "```mermaid" >> $REPORT_FILE
-echo "graph TD" >> $REPORT_FILE
-
-# Add nodes and connections
-for pair in "${!related_pairs[@]}"; do
-    source=$(echo "$pair" | cut -d'|' -f1)
-    target=$(echo "$pair" | cut -d'|' -f2)
-    
-    # Use just the filename for readability
-    source_name=$(basename "$source" .md)
-    target_name=$(basename "$target" .md)
-    
-    # Add the relationship to the graph
-    echo "    ${source_name//[^a-zA-Z0-9]/}_doc --> ${target_name//[^a-zA-Z0-9]/}_doc" >> $REPORT_FILE
 done
-echo "```" >> $REPORT_FILE
+
+# Output summary statistics
+echo "## Summary" >> $REPORT_FILE
+echo "" >> $REPORT_FILE
+echo "- **Total Documents:** $total_documents" >> $REPORT_FILE
+echo "- **Frontmatter Coverage:** $files_with_frontmatter/$total_documents ($(echo "scale=1; 100*$files_with_frontmatter/$total_documents" | bc)%)" >> $REPORT_FILE
+echo "- **Orphaned Documents:** $orphaned_count" >> $REPORT_FILE
+echo "- **Broken References:** $broken_ref_count" >> $REPORT_FILE
+
+# Count documents by quality level
+excellent_docs=0
+good_docs=0
+adequate_docs=0
+poor_docs=0
+very_poor_docs=0
+
+for file in "${files[@]}"; do
+    quality=${content_quality_scores[$file]}
+    quality_label=$(echo "$quality" | cut -d':' -f1)
+    
+    case "$quality_label" in
+        "Excellent") excellent_docs=$((excellent_docs + 1)) ;;
+        "Good") good_docs=$((good_docs + 1)) ;;
+        "Adequate") adequate_docs=$((adequate_docs + 1)) ;;
+        "Poor") poor_docs=$((poor_docs + 1)) ;;
+        "Very Poor") very_poor_docs=$((very_poor_docs + 1)) ;;
+    esac
+done
+
+echo "- **Quality Distribution:**" >> $REPORT_FILE
+echo "  - Excellent: $excellent_docs ($(echo "scale=1; 100*$excellent_docs/$total_documents" | bc)%)" >> $REPORT_FILE
+echo "  - Good: $good_docs ($(echo "scale=1; 100*$good_docs/$total_documents" | bc)%)" >> $REPORT_FILE
+echo "  - Adequate: $adequate_docs ($(echo "scale=1; 100*$adequate_docs/$total_documents" | bc)%)" >> $REPORT_FILE
+echo "  - Poor: $poor_docs ($(echo "scale=1; 100*$poor_docs/$total_documents" | bc)%)" >> $REPORT_FILE
+echo "  - Very Poor: $very_poor_docs ($(echo "scale=1; 100*$very_poor_docs/$total_documents" | bc)%)" >> $REPORT_FILE
 echo "" >> $REPORT_FILE
 
-# Generate summary and recommendations
-echo -e "${BLUE}Generating summary and recommendations...${NC}"
-echo "## Summary and Recommendations" >> $REPORT_FILE
-echo "" >> $REPORT_FILE
+# Output path to the report file
+echo -e "${GREEN}Report generated: $REPORT_FILE${NC}"
+echo $REPORT_FILE
 
-if [ $files_without_frontmatter -gt 0 ]; then
-    echo "### Critical Issues" >> $REPORT_FILE
-    echo "- $files_without_frontmatter documents are missing frontmatter" >> $REPORT_FILE
-    echo "- Use fix_frontmatter.sh to add proper frontmatter to these files" >> $REPORT_FILE
-    echo "" >> $REPORT_FILE
-fi
-
-if [ $broken_ref_count -gt 0 ]; then
-    echo "### High Priority" >> $REPORT_FILE
-    echo "- $broken_ref_count broken references need to be fixed" >> $REPORT_FILE
-    echo "- Use fix_links.sh to correct these references" >> $REPORT_FILE
-    echo "" >> $REPORT_FILE
-fi
-
-if [ $orphaned_count -gt 0 ]; then
-    echo "### Medium Priority" >> $REPORT_FILE
-    echo "- $orphaned_count documents are not referenced by any other document" >> $REPORT_FILE
-    echo "- Add appropriate links to these documents from related content" >> $REPORT_FILE
-    echo "" >> $REPORT_FILE
-fi
-
-if [ $heading_issues -gt 0 ]; then
-    echo "### Formatting Issues" >> $REPORT_FILE
-    echo "- $heading_issues documents have non-standard heading structure" >> $REPORT_FILE
-    echo "- Add standard sections to these documents using add_sections.sh" >> $REPORT_FILE
-    echo "" >> $REPORT_FILE
-fi
-
-# Generate report URL
-REPORT_URL="file://$(pwd)/$REPORT_FILE"
-echo -e "${GREEN}Comprehensive documentation testing completed.${NC}"
-echo -e "${GREEN}Report saved to: ${BLUE}$REPORT_FILE${NC}"
-echo -e "${GREEN}View the report at: ${BLUE}$REPORT_URL${NC}"
-
-# Return success status
-exit 0 
+# Return path to report file
+echo $REPORT_FILE 

@@ -10,6 +10,7 @@ tags:
 related:
   - 30_documentation-reorganization-roadmap.md
   - ../contributing/documentation-guidelines.md
+  - ../reference/standards/documentation-standards.md
 last_updated: March 27, 2025
 version: 1.0
 status: not started
@@ -94,58 +95,112 @@ Content for the second main section.
 - [Document 2](path/to/document2.md)
 ```
 
+For more detailed guidelines on document formatting, writing style, and accessibility requirements, refer to the [Documentation Standards](/docs/reference/standards/documentation-standards.md).
+
 ## Content Inventory and Assessment
 
 ### Generate Content Inventory
 
-1. Create a content inventory spreadsheet with the following columns:
-   - File Path
-   - Document Title
-   - Content Type
-   - Quality Assessment (1-5)
-   - Up-to-Date Assessment (1-5)
-   - Target Location in New Structure
-   - Migration Priority (1-3)
-   - Notes
-
-2. Run the inventory script to generate the initial list of files:
+1. Run the comprehensive documentation analysis script to generate an inventory and analysis:
 
 ```bash
+# Generate a comprehensive report with quality metrics
+.devtools/scripts/doc-overhaul/generate_report.sh
+
+# Generate a CSV file with detailed quality metrics for all documents
+.devtools/scripts/doc-overhaul/comprehensive_test.sh --csv > docs/new/99_misc/content-inventory.csv
+
+# Generate document relationship visualization
+.devtools/scripts/doc-overhaul/comprehensive_test.sh
+```
+
+This will create several valuable resources:
+- A detailed report at `target/reports/docs_validation/documentation_quality_report_YYYY-MM-DD.md`
+- A CSV inventory with quality scores, readability metrics, and code validation results
+- A document relationship visualization in both DOT and HTML formats
+- Document-specific improvement recommendations
+
+2. Create an initial document inventory:
+
+```bash
+mkdir -p docs/new/99_misc
 find docs -name "*.md" -not -path "*/new/*" -not -path "*/\.*" | sort > docs/new/99_misc/content-inventory.txt
 ```
 
-3. Process each file to complete the inventory spreadsheet:
+### Document Assessment
+
+Use the generated reports to complete the inventory assessment:
+
+1. Quality assessment:
+   - Use the "Content Quality Assessment" scores from the report
+   - Documents are automatically rated as:
+     - Excellent (9-10 points)
+     - Good (7-8 points)
+     - Adequate (5-6 points)
+     - Poor (3-4 points)
+     - Very Poor (0-2 points)
+
+2. Readability assessment:
+   - Use the readability metrics from the report
+   - Pay attention to documents classified as "Complex" or "Simple"
+   - Note the words per sentence metric for improvement targets
+   - Ensure documents follow the writing style guidelines in our [Documentation Standards](/docs/reference/standards/documentation-standards.md)
+
+3. Code validation:
+   - Check which documents have code blocks that failed validation
+   - Prioritize fixing code examples marked as "FAIL"
+
+4. Up-to-date assessment:
+   - Refer to the frontmatter last_updated field
+   - Verify manually for critical documentation
+
+5. Target location determination:
+   - Use the document category and content to determine the best location in the new structure
+   - Refer to the mapping table below
+
+6. Review AI-assisted recommendations:
+   - Check the "Improvement Recommendations" section of the report
+   - Use these targeted suggestions to prioritize document improvements
+
+### Document Relationship Analysis
+
+Review the document relationship visualization:
+
+1. Open the generated HTML visualization from `target/reports/docs_validation/document_graph_*.html`
+2. Identify:
+   - Central documents (those with many connections)
+   - Isolated documents (those with few or no connections)
+   - Document clusters (groups of closely related documents)
+3. Use this information to plan document organization and cross-referencing
+
+### Automated Testing of Current Documentation
+
+Run the full documentation test suite to identify current issues:
 
 ```bash
-for file in $(cat docs/new/99_misc/content-inventory.txt); do
-  title=$(grep -m 1 "^# " "$file" | sed 's/^# //')
-  echo "$file,$title,,,,,," >> docs/new/99_misc/content-inventory.csv
-done
+# Test all documentation for issues with a comprehensive quality report
+.devtools/scripts/doc-overhaul/generate_report.sh
+
+# Focus analysis on a specific directory
+.devtools/scripts/doc-overhaul/generate_report.sh --dir docs/getting-started
+
+# Generate quality report for a single file
+.devtools/scripts/doc-overhaul/generate_report.sh --file docs/getting-started/installation.md
+
+# Skip linting for faster report generation
+.devtools/scripts/doc-overhaul/generate_report.sh --skip-linting
+
+# Generate full visualization
+.devtools/scripts/doc-overhaul/generate_report.sh --vis
+
+# Validate frontmatter across all documents
+.devtools/scripts/doc-overhaul/fix_frontmatter.sh --validate-all --report
+
+# Check for broken links across all documentation
+.devtools/scripts/doc-overhaul/fix_links.sh --check-only --report
 ```
 
-### Review and Assess Content
-
-For each document in the inventory:
-
-1. Review content quality:
-   - 5: Excellent, comprehensive, clear
-   - 4: Good, minor improvements needed
-   - 3: Adequate, needs updating
-   - 2: Poor, significant rewrite needed
-   - 1: Very poor or outdated, should be replaced
-
-2. Assess if content is up-to-date:
-   - 5: Completely current
-   - 4: Minor updates needed
-   - 3: Moderate updates needed
-   - 2: Significant updates needed
-   - 1: Completely outdated
-
-3. Determine target location in new structure
-4. Assign migration priority:
-   - 1: High priority (essential docs)
-   - 2: Medium priority (important docs)
-   - 3: Low priority (optional docs)
+Review the test results to identify priority areas for improvement during the migration.
 
 ## Content Migration Plan
 
@@ -153,34 +208,54 @@ For each document in the inventory:
 
 Based on the inventory assessment, create a detailed content mapping for migration:
 
-| Current Location | New Location | Migration Strategy |
-|------------------|--------------|-------------------|
-| docs/getting-started/installation.md | docs/new/01_getting_started/installation.md | Direct with updates |
-| docs/getting-started/first-steps.md | docs/new/01_getting_started/first-steps.md | Direct with updates |
-| docs/guides/application-structure.md | docs/new/04_guides/application-structure.md | Direct with updates |
-| docs/examples/* | docs/new/02_examples/* | Consolidate and restructure |
-| docs/architecture/* | docs/new/05_reference/architecture/* | Restructure with updates |
-| docs/reference/standards/* | docs/new/05_reference/standards/* | Update format and verify content |
-| docs/contributing/* | docs/new/03_contributing/* | Update with new standards |
-| docs/roadmaps/* | docs/new/98_roadmaps/* | Preserve as reference |
+| Current Location | New Location | Migration Strategy | Quality Score | Readability | Code Status |
+|------------------|--------------|-------------------|---------------|-------------|------------|
+| docs/getting-started/installation.md | docs/new/01_getting_started/installation.md | Direct with updates | Good | Good | PASS |
+| docs/getting-started/first-steps.md | docs/new/01_getting_started/first-steps.md | Direct with updates | Adequate | Good | PASS |
+| docs/guides/application-structure.md | docs/new/04_guides/application-structure.md | Direct with updates | Poor | Complex | FAIL |
+| docs/examples/* | docs/new/02_examples/* | Consolidate and restructure | Varies | Varies | Varies |
+| docs/architecture/* | docs/new/05_reference/architecture/* | Restructure with updates | Varies | Varies | Varies |
+| docs/reference/standards/* | docs/new/05_reference/standards/* | Update format and verify content | Good | Good | PASS |
+| docs/contributing/* | docs/new/03_contributing/* | Update with new standards | Adequate | Good | PASS |
+| docs/roadmaps/* | docs/new/98_roadmaps/* | Preserve as reference | Adequate | Good | N/A |
+
+### Prioritization Strategy
+
+Use the quality metrics to prioritize migration and improvement efforts:
+
+1. **High Priority**:
+   - Documents with "Poor" or "Very Poor" quality scores
+   - Documents with "FAIL" code validation status
+   - Documents with "Complex" readability
+
+2. **Medium Priority**:
+   - Documents with "Adequate" quality scores
+   - Documents with "Simple" readability
+   - Documents with missing metadata or sections
+
+3. **Low Priority**:
+   - Documents with "Good" or "Excellent" scores
+   - Documents with "Good" readability
+   - Documents with "PASS" code validation
 
 ### Duplication Resolution
 
-Identify sets of documents with overlapping content and decide on consolidation:
+Use the comprehensive test report to identify documents with overlapping content:
 
-1. Review similar content across sections
-2. Choose primary location for consolidated content
-3. Create redirects or cross-references as needed
-4. Document decisions in migration notes
+1. Review the "Document Relationships" section to identify strong relationships
+2. Use the graph visualization to identify clusters of related documents
+3. Choose primary location for consolidated content
+4. Create redirects or cross-references as needed
+5. Document decisions in migration notes
 
 ### New Content Requirements
 
-Based on gap analysis, identify new documents that need to be created:
+Based on gap analysis in the comprehensive report:
 
-1. List missing documentation in each section
-2. Assign priorities for creation
-3. Allocate resources for writing new content
-4. Set deadlines for completion
+1. Review the "Coverage Gaps" section to identify missing documentation
+2. Identify sections with low documentation coverage
+3. Prioritize creation based on feature importance
+4. Assign responsibilities for creating new content
 
 ## Migration Process
 
@@ -189,49 +264,128 @@ Based on gap analysis, identify new documents that need to be created:
 For each document to be migrated:
 
 1. **Review and Plan**:
-   - Review source document for quality and relevance
-   - Identify updated structure and outline
-   - Note required changes and additions
+   - Review source document quality using the inventory assessment
+   - Check document quality score, readability metrics, and code validation results
+   - Review specific recommendations from the comprehensive report
+   - Plan structure updates and content improvements
+   - Verify the document will meet the formatting requirements in our [Documentation Standards](/docs/reference/standards/documentation-standards.md)
 
 2. **Migrate Content**:
    ```bash
    cp [source_path] [target_path]
    ```
 
-3. **Update Frontmatter**:
-   - Add or update YAML frontmatter
+3. **Fix Frontmatter**:
+   - Use the frontmatter fixing script:
+   ```bash
+   # Fix frontmatter for a single file
+   .devtools/scripts/doc-overhaul/fix_frontmatter.sh [target_path]
+   
+   # Process an entire directory
+   .devtools/scripts/doc-overhaul/fix_frontmatter.sh --dir [directory] --recursive
+   
+   # Auto-apply changes without confirmation
+   .devtools/scripts/doc-overhaul/fix_frontmatter.sh [target_path] auto
+   ```
    - Ensure all required metadata is present
    - Verify category, tags, and related documents
+   - Reading time will be automatically calculated based on content length
 
-4. **Restructure Content**:
-   - Apply consistent heading structure
-   - Reorganize content for logical flow
-   - Add or update introduction and conclusion sections
+4. **Add Standard Sections**:
+   - Use the section adding script:
+   ```bash
+   # Add missing sections to a single file
+   .devtools/scripts/doc-overhaul/add_sections.sh [target_path]
+   
+   # Process an entire directory
+   .devtools/scripts/doc-overhaul/add_sections.sh --dir [directory] --recursive
+   
+   # Auto-apply changes without confirmation
+   .devtools/scripts/doc-overhaul/add_sections.sh [target_path] auto
+   
+   # Add specific sections to a document
+   .devtools/scripts/doc-overhaul/add_sections.sh --sections "Overview,Prerequisites,Troubleshooting" [target_path]
+   
+   # Add all recommended sections based on document type
+   .devtools/scripts/doc-overhaul/add_sections.sh --add-all [target_path]
+   
+   # Only check for missing sections without making changes
+   .devtools/scripts/doc-overhaul/add_sections.sh --check-only --dir [directory] --report
+   ```
+   - Ensure consistent document structure across all files
 
-5. **Update Code Examples**:
+5. **Improve Readability**:
+   - For documents marked as "Complex":
+     - Break down long sentences
+     - Simplify wording
+     - Use more subheadings and lists
+   - For documents marked as "Simple":
+     - Add more detailed explanations
+     - Provide context and background information
+   - Follow the writing style guidelines in the [Documentation Standards](/docs/reference/standards/documentation-standards.md)
+
+6. **Fix Code Examples**:
+   - Focus on examples marked as "FAIL" in the validation
    - Verify all code examples work with current version
    - Add context and explanations
    - Use consistent syntax highlighting
 
-6. **Update Cross-References**:
-   - Fix internal links to reference new structure
+7. **Fix Links**:
+   - Use the link fixing script:
+   ```bash
+   # Fix links in a single file
+   .devtools/scripts/doc-overhaul/fix_links.sh [target_path]
+   
+   # Process an entire directory
+   .devtools/scripts/doc-overhaul/fix_links.sh --dir [directory] --recursive
+   
+   # Auto-apply changes without confirmation
+   .devtools/scripts/doc-overhaul/fix_links.sh [target_path] auto
+   
+   # Only check for broken links without making changes
+   .devtools/scripts/doc-overhaul/fix_links.sh --check-only --dir [directory] --report
+   ```
+   - Ensure all internal links use absolute paths
    - Add cross-references to related documents
-   - Check for broken or outdated external links
 
-7. **Final Review**:
-   - Verify content is up-to-date
-   - Check adherence to style guidelines
-   - Run mdbook build to verify rendering
+8. **Final Review**:
+   - Run document-specific validation:
+   ```bash
+   .devtools/scripts/doc-overhaul/generate_report.sh --file [target_path]
+   ```
+   - Review quality score improvements
+   - Verify code validation passes
+   - Check readability improvements
+   - Confirm all recommendations have been addressed
+
+### Automated Document Processing
+
+To process multiple files efficiently:
+
+```bash
+# Process a set of files with consistent standards
+.devtools/scripts/doc-overhaul/improve_docs.sh
+
+# Process all documents in a specific directory
+.devtools/scripts/doc-overhaul/generate_report.sh --dir docs/new/01_getting_started
+```
+
+These tools will guide you through an interactive process to select and improve multiple documents efficiently.
 
 ### Cleanup Process
 
 After migration of all content:
 
-1. Review generated inventory to ensure all documents are accounted for
-2. Check for orphaned or unlinked documents
+1. Run comprehensive testing on the new structure:
+   ```bash
+   .devtools/scripts/doc-overhaul/generate_report.sh --dir docs/new
+   ```
+
+2. Check for orphaned or unlinked documents using the report
 3. Verify cross-references and internal links
-4. Remove duplicated content
-5. Archive obsolete content
+4. Examine the document relationship visualization to ensure proper connectivity
+5. Remove duplicated content based on the content inventory
+6. Archive obsolete content
 
 ## Testing and Validation
 
@@ -260,21 +414,53 @@ mdbook build
 
 ### Validation Checklist
 
-For each section:
+Run automated validation on the new structure:
+
+```bash
+# Generate comprehensive quality report with trend tracking
+.devtools/scripts/doc-overhaul/generate_report.sh --dir docs/new
+
+# Generate updated document relationship visualization
+.devtools/scripts/doc-overhaul/generate_report.sh --dir docs/new --vis
+
+# Skip linting for faster validation focusing on content quality
+.devtools/scripts/doc-overhaul/generate_report.sh --dir docs/new --skip-linting
+
+# Validate frontmatter completeness across all documents
+.devtools/scripts/doc-overhaul/fix_frontmatter.sh --validate-all --dir docs/new --report
+
+# Check for broken links in all documents
+.devtools/scripts/doc-overhaul/fix_links.sh --check-only --dir docs/new --report
+```
+
+Verify that each section meets these requirements:
 - [ ] All documents have proper frontmatter
 - [ ] All documents follow the template structure
-- [ ] All code examples are functional and current
+- [ ] All documents score "Good" or "Excellent" in quality assessment
+- [ ] All documents have "Good" readability scores
+- [ ] All code examples pass validation
 - [ ] All internal links work correctly
 - [ ] All documents have appropriate cross-references
 - [ ] No references to deprecated features or approaches
+- [ ] All documents conform to the formatting and style requirements in our [Documentation Standards](/docs/reference/standards/documentation-standards.md)
 
 ## Finalization and Publication
 
 ### Final Review
 
-1. Conduct full documentation review by multiple reviewers
-2. Address any remaining issues or gaps
-3. Verify all success criteria from roadmap are met
+1. Generate a final documentation quality report:
+   ```bash
+   .devtools/scripts/doc-overhaul/generate_report.sh --dir docs/new
+   ```
+
+2. Review the report for any remaining issues:
+   - Check the quality distribution (aim for >80% Good or Excellent)
+   - Verify code validation pass rate (aim for >95%)
+   - Check readability metrics (aim for >90% Good)
+   - Review the historical trends to confirm overall improvement
+   
+3. Address all critical and high-priority issues
+4. Verify all success criteria from roadmap are met
 
 ### Publication Steps
 
@@ -302,22 +488,29 @@ For each section:
 
 ## Maintenance Plan
 
-### Ongoing Documentation Processes
+### Ongoing Documentation Quality
 
-1. **Regular Reviews**:
-   - Monthly audit of documentation
-   - Check for outdated content
-   - Verify all examples still work
+1. **Regular Automated Testing**:
+   - Configure scheduled runs of documentation testing in CI:
+     ```bash
+     # Add to CI pipeline
+     .devtools/scripts/doc-overhaul/generate_report.sh
+     ```
+   - Set up weekly documentation quality reports
+   - Monitor documentation health score
+   - Track quality trends over time using the historical data
 
 2. **Process for Updates**:
-   - Document update workflow
-   - Pull request templates for documentation
-   - Guidelines for community contributions
+   - Document update workflow using the provided tools
+   - Add documentation validation to PR process
+   - Configure pre-commit hooks for documentation standards
 
 3. **Metrics Tracking**:
-   - Page view analytics
-   - User satisfaction metrics
-   - Documentation-related support requests
+   - Track quality distribution over time (% of Excellent/Good/etc.)
+   - Monitor code validation pass rate
+   - Track readability metrics improvement
+   - Monitor fix rate for identified issues
+   - Review user feedback on documentation usability
 
 ## Example Migration
 
@@ -330,44 +523,26 @@ Target: `/docs/new/01_getting_started/installation.md`
 # Copy the file
 cp docs/getting-started/installation.md docs/new/01_getting_started/installation.md
 
-# Edit to add frontmatter and update structure
-cat > docs/new/01_getting_started/installation.md << 'EOL'
----
-title: Installation Guide
-description: How to install the Navius framework in your development environment
-category: getting-started
-tags:
-  - installation
-  - setup
-  - requirements
-related:
-  - first-steps.md
-  - development-setup.md
-last_updated: 2025-03-27
-version: 1.0
----
+# Check quality metrics with detailed report
+.devtools/scripts/doc-overhaul/generate_report.sh --file docs/new/01_getting_started/installation.md
 
-# Installation Guide
+# Fix frontmatter and automatically apply changes
+.devtools/scripts/doc-overhaul/fix_frontmatter.sh docs/new/01_getting_started/installation.md auto
 
-## Overview
+# Add any missing standard sections
+.devtools/scripts/doc-overhaul/add_sections.sh docs/new/01_getting_started/installation.md
 
-This guide walks you through the process of installing the Navius framework.
+# Improve readability if needed
+# (Edit based on readability metrics from the quality report)
 
-## System Requirements
+# Fix any failing code examples
+# (Edit based on code validation results from the quality report)
 
-- Rust 1.70 or later
-- Cargo
-- PostgreSQL 14.0 or later (optional)
-- Redis 6.0 or later (optional)
+# Fix any broken links
+.devtools/scripts/doc-overhaul/fix_links.sh docs/new/01_getting_started/installation.md
 
-## Installation Steps
-
-### Step 1: Install Rust
-
-If you don't already have Rust installed...
-
-[rest of content...]
-EOL
+# Verify the document quality after improvements
+.devtools/scripts/doc-overhaul/generate_report.sh --file docs/new/01_getting_started/installation.md
 ```
 
 ## Appendix: Templates and Resources
@@ -383,30 +558,137 @@ EOL
 
 Use a tracking sheet to monitor migration progress:
 
-| Document | Assigned To | Status | Quality Check | Link Check | Review Status |
-|----------|-------------|--------|---------------|------------|---------------|
-| Installation | Alice | Complete | ✅ | ✅ | Approved |
-| First Steps | Bob | In Progress | - | - | - |
-| ... | ... | ... | ... | ... | ... |
+| Document | Assigned To | Status | Quality Score | Readability | Code Status | Review Status |
+|----------|-------------|--------|---------------|-------------|-------------|---------------|
+| Installation | Alice | Complete | Good | Good | PASS | Approved |
+| First Steps | Bob | In Progress | Adequate | Complex | FAIL | - |
+| ... | ... | ... | ... | ... | ... | ... |
 
-### Helpful Scripts
+### Documentation Test Suite
 
-#### Content Inventory Script
+The `.devtools/scripts/doc-overhaul/` directory contains a comprehensive set of tools for improving and validating documentation:
 
-```bash
-#!/bin/bash
-# inventory.sh - Generate documentation inventory
+- **generate_report.sh**: Generates overall documentation quality report with:
+  - Executive summary with health score and priority recommendations
+  - Quality metrics and distribution visualization
+  - Readability analysis and content complexity metrics
+  - Code validation results and failing examples identification
+  - Document relationship visualization
+  - Historical trend tracking with quality metrics over time
+  - CI/CD integration capabilities
+- **comprehensive_test.sh**: Performs in-depth documentation analysis including:
+  - Content quality assessment (10-point scoring system)
+  - Readability analysis (words per sentence metrics)
+  - Code validation (syntax checking for Rust, Bash)
+  - Document relationship visualization
+  - AI-assisted improvement recommendations
+- **fix_links.sh**: Identifies and fixes broken links with these features:
+  - Converts relative links to absolute paths for consistency
+  - Batch processing capabilities with `--dir` option
+  - Validation-only mode with `--check-only` flag
+  - Report generation with `--report` option
+  - Recursive directory processing with `--recursive` option
+  - Intelligent link suggestion based on filename matching
+  - Support for both current and new documentation structure
+- **fix_frontmatter.sh**: Adds or corrects document frontmatter with these features:
+  - Batch processing of entire directories with `--dir` option
+  - Recursive directory traversal with `--recursive` option
+  - Validation-only mode with `--validate-all` flag
+  - Report generation with `--report` option
+  - Automatic reading time calculation
+  - Enhanced tag extraction and document categorization
+  - Support for both current and new documentation structure
+- **add_sections.sh**: Ensures consistent document structure with these features:
+  - Automatic detection of document type based on path or frontmatter category
+  - Support for both old and new directory structures
+  - Intelligent section generation based on document type
+  - Automatic last_updated field maintenance
+  - Batch processing with directory and recursive options
+  - Check-only mode for validation without changes
+  - Report generation for section compliance
+  - Integration with quality reporting system
+- **improve_docs.sh**: Interactive tool for guided documentation improvement
 
-echo "File Path,Title,Word Count,Last Modified,Frontmatter" > inventory.csv
+Use these tools throughout the migration process to ensure high-quality results.
 
-find docs -name "*.md" -not -path "*/\.*" | while read file; do
-  title=$(grep -m 1 "^# " "$file" | sed 's/^# //')
-  word_count=$(wc -w < "$file")
-  last_modified=$(date -r "$file" "+%Y-%m-%d")
-  has_frontmatter=$(grep -c "^---" "$file")
+### Command Line Options for fix_frontmatter.sh
+
+The enhanced fix_frontmatter.sh script supports the following options:
+
+```
+Usage:
+  ./fix_frontmatter.sh <markdown_file> [auto]       # Process a single file
+  ./fix_frontmatter.sh --dir <directory>            # Process all markdown files in a directory 
+  ./fix_frontmatter.sh --validate-all               # Validate all markdown files (no changes)
   
-  echo "\"$file\",\"$title\",$word_count,$last_modified,$has_frontmatter" >> inventory.csv
-done
+Options:
+  auto                  Apply changes automatically without confirmation
+  --dir <directory>     Specify the directory to process (default: docs)
+  --recursive, -r       Process directories recursively
+  --validate-all        Only validate frontmatter without making changes
+  --report              Generate a detailed report of validation results
+  --verbose, -v         Show more detailed information during processing
+  --help, -h            Display help message
+```
 
-echo "Inventory saved to inventory.csv"
-``` 
+### Command Line Options for fix_links.sh
+
+The enhanced fix_links.sh script supports the following options:
+
+```
+Usage:
+  ./fix_links.sh <markdown_file> [auto]       # Process a single file
+  ./fix_links.sh --dir <directory>            # Process all markdown files in a directory 
+  ./fix_links.sh --check-only                 # Validate links without making changes
+  
+Options:
+  auto                  Apply changes automatically without confirmation
+  --dir <directory>     Specify the directory to process (default: docs)
+  --recursive, -r       Process directories recursively
+  --check-only          Only validate links without making changes
+  --report              Generate a detailed report of validation results
+  --verbose, -v         Show more detailed information during processing
+  --help, -h            Display help message
+```
+
+These options allow for more targeted and efficient documentation testing during the migration process.
+
+### Command Line Options for add_sections.sh
+
+The enhanced add_sections.sh script supports the following options:
+
+```
+Usage:
+  ./add_sections.sh <markdown_file> [auto]       # Process a single file
+  ./add_sections.sh --dir <directory>            # Process all markdown files in a directory 
+  ./add_sections.sh --check-only                 # Check for missing sections without making changes
+  
+Options:
+  auto                      Apply changes automatically without confirmation
+  --dir <directory>         Specify the directory to process (default: docs)
+  --recursive, -r           Process directories recursively
+  --check-only              Only check for missing sections without making changes
+  --report                  Generate a detailed report of validation results
+  --verbose, -v             Show more detailed information during processing
+  --add-all                 Add all possible sections appropriate for document type
+  --sections "sec1,sec2"    Specify custom sections to add (comma-separated)
+  --help, -h                Display help message
+```
+
+The script detects document type based on path and adds appropriate sections:
+- Getting Started documents: Overview, Prerequisites, Installation, Usage, Troubleshooting, Related Documents
+- Guides: Overview, Prerequisites, Usage, Configuration, Examples, Troubleshooting, Related Documents
+- Reference: Overview, Configuration, Examples, Implementation Details, Related Documents
+- Examples: Overview, Prerequisites, Usage, Related Documents
+- Contributing: Overview, Prerequisites, Related Documents
+- Architecture: Overview, Implementation Details, Related Documents
+- Roadmaps: Overview, Current State, Target State, Implementation Phases, Success Criteria, Related Documents
+- Misc: Overview, Related Documents
+
+These options allow for more targeted and efficient document section management during the migration process.
+
+## Related Documents
+
+- [Documentation Reorganization Roadmap](30_documentation-reorganization-roadmap.md) - Strategic plan and goals
+- [Documentation Standards](/docs/reference/standards/documentation-standards.md) - Detailed formatting and writing style guidelines
+- [Documentation Guidelines](../contributing/documentation-guidelines.md) - General contribution guidelines 

@@ -2,6 +2,12 @@
 
 This directory contains tools for testing documentation quality and maintaining consistent standards across the Navius documentation.
 
+> **IMPORTANT**: The primary documentation standards are defined in:
+> - [Documentation Reorganization Roadmap](/docs/roadmaps/30_documentation-reorganization-roadmap.md)
+> - [Documentation Reorganization Instructions](/docs/roadmaps/30_documentation-reorganization-instructions.md)
+>
+> This document provides technical details about the tools that implement those standards.
+
 ## Overview
 
 These tools provide multiple levels of documentation validation:
@@ -49,7 +55,7 @@ This will:
 To fix issues in specific files:
 
 ```bash
-# Fix links in a file
+# Fix links in a single file
 .devtools/scripts/doc-overhaul/fix_links.sh path/to/file.md
 
 # Fix frontmatter in a file
@@ -58,6 +64,8 @@ To fix issues in specific files:
 # Add standard sections to a file
 .devtools/scripts/doc-overhaul/add_sections.sh path/to/file.md
 ```
+
+For more detailed usage options for each tool, refer to the "Command Line Options" sections in the [Documentation Reorganization Instructions](/docs/roadmaps/30_documentation-reorganization-instructions.md).
 
 ### Full Documentation Improvement Workflow
 
@@ -93,10 +101,13 @@ The GitLab CI is configured to:
 
 ## Documentation Standards
 
-These tools enforce the following standards:
+These tools enforce the documentation standards defined in:
+- [Documentation Reorganization Roadmap](/docs/roadmaps/30_documentation-reorganization-roadmap.md)
+- [Documentation Reorganization Instructions](/docs/roadmaps/30_documentation-reorganization-instructions.md)
 
+Key standards enforced by these tools include:
 - All documents must have complete frontmatter (title, description, category, etc.)
-- All documents should have a standard heading structure
+- All documents should have a standard heading structure based on document type
 - All documents should have a Related Documents section
 - Internal links should use absolute paths from the project root
 - All links should resolve correctly
@@ -107,9 +118,10 @@ To extend the documentation testing:
 
 1. Add new checks to comprehensive_test.sh
 2. Update the generate_report.sh script to include your new checks
-3. Update this documentation to reflect your changes
+3. Update documentation in the reorganization instructions and roadmap to reflect your changes
 
 ## Related Documents
 
-- [Documentation Overhaul Roadmap](/docs/roadmaps/12_document_overhaul.md) - Overall roadmap
-- [Documentation Standards](/docs/reference/documentation-standards.md) - Detailed standards 
+- [Documentation Reorganization Roadmap](/docs/roadmaps/30_documentation-reorganization-roadmap.md) - Primary source of truth
+- [Documentation Reorganization Instructions](/docs/roadmaps/30_documentation-reorganization-instructions.md) - Detailed implementation guidance
+- [Documentation Standards](/docs/reference/standards/documentation-standards.md) - Standards summary and reference 
