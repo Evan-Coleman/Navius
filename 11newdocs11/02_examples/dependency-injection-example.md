@@ -1,21 +1,67 @@
 ---
-title: "Dependency Injection Example"
-description: "Using dependency injection in Navius applications"
+title: "Dependency Injection in Navius"
+description: "Comprehensive guide to using dependency injection in Navius applications for managing service dependencies and promoting loose coupling"
 category: examples
 tags:
-  - examples
   - dependency-injection
   - services
+  - service-registry
+  - di
+  - inversion-of-control
+  - loose-coupling
+  - interfaces
 related:
-  - examples/custom-service-example.md
-  - guides/dependency-injection.md
-last_updated: March 26, 2025
-version: 1.0
+  - 02_examples/custom-service-example.md
+  - 02_examples/rest-api-example.md
+  - 01_getting_started/development-setup.md
+last_updated: March 27, 2025
+version: 1.1
+status: stable
 ---
 
 # Dependency Injection Example
 
 This example demonstrates how to use Navius' dependency injection system to manage service dependencies and promote loose coupling between components.
+
+## Overview
+
+Dependency Injection (DI) is a software design pattern that promotes loose coupling between components by separating behavior from dependency resolution. In Navius, the DI system allows you to:
+
+- Register services in a central registry
+- Resolve service dependencies at runtime
+- Mock dependencies for testing
+- Create modular, maintainable code with clear separation of concerns
+
+This example builds a complete order management system that showcases dependency injection principles in action through a series of services, repositories, and handlers.
+
+## Quick Navigation
+
+- [Project Structure](#project-structure)
+- [Core Dependency Injection Framework](#core-dependency-injection-framework)
+- [Service Interfaces](#service-interfaces)
+- [Model Definitions](#model-definitions)
+- [Service Implementations](#service-implementations)
+- [API Handlers](#api-handlers)
+- [Service Registration](#service-registration)
+- [Working with DI in Tests](#working-with-di-in-tests)
+- [Best Practices](#best-practices)
+- [Common Pitfalls](#common-pitfalls)
+- [Advanced Techniques](#advanced-techniques)
+
+## Prerequisites
+
+Before working with this example, you should be familiar with:
+
+- Rust programming basics, including traits and trait objects
+- Asynchronous programming with Tokio
+- Basic software design patterns
+- Navius framework fundamentals
+
+Required dependencies:
+- Rust 1.70 or newer
+- Navius 0.1.0 or newer
+- async-trait 0.1.0 or newer
+- tokio for asynchronous operations
 
 ## Project Structure
 
@@ -711,170 +757,474 @@ async fn main() -> Result<(), AppError> {
 }
 ```
 
-## Testing with Dependency Injection
+## Working with DI in Tests
+
+Testing services that use dependency injection is straightforward thanks to Navius' flexible service registry. The DI system allows you to easily replace real implementations with mocks for isolated unit testing.
+
+### Creating Mock Services
+
+First, implement mock versions of your service interfaces:
 
 ```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app::models::order::{Order, OrderStatus, OrderItem};
-    use chrono::Utc;
-    use std::sync::Arc;
-    
-    // Mock notifier for testing
-    struct TestNotifier {
-        called: Arc<Mutex<bool>>,
-    }
-    
-    impl TestNotifier {
-        fn new() -> Self {
-            Self {
-                called: Arc::new(Mutex::new(false)),
-            }
-        }
-        
-        fn was_called(&self) -> bool {
-            *self.called.lock().unwrap()
-        }
-    }
+use mockall::predicate::*;
+use mockall::mock;
+
+// Generate a mock implementation of the OrderRepository trait
+mock! {
+    OrderRepository {}
     
     #[async_trait]
-    impl Notifier for TestNotifier {
-        async fn notify_order_created(&self, _order: &Order) -> Result<(), AppError> {
-            let mut called = self.called.lock().unwrap();
-            *called = true;
-            Ok(())
-        }
-        
-        // Implement other methods...
-        async fn notify_order_updated(&self, _: &Order) -> Result<(), AppError> { Ok(()) }
-        async fn notify_order_cancelled(&self, _: &Order) -> Result<(), AppError> { Ok(()) }
-        async fn notify_payment_processed(&self, _: &Order, _: &str) -> Result<(), AppError> { Ok(()) }
+    impl OrderRepository for OrderRepository {
+        async fn save(&self, order: &Order) -> Result<Order, AppError>;
+        async fn find_by_id(&self, id: OrderId) -> Result<Option<Order>, AppError>;
+        async fn find_all(&self) -> Result<Vec<Order>, AppError>;
+        async fn update(&self, order: &Order) -> Result<Order, AppError>;
+        async fn delete(&self, id: OrderId) -> Result<bool, AppError>;
     }
+}
+
+// Generate a mock implementation of the PaymentProcessor trait
+mock! {
+    PaymentProcessor {}
     
-    #[tokio::test]
-    async fn test_create_order() {
-        // Create test dependencies
-        let order_repository = Arc::new(InMemoryOrderRepository::new());
-        let payment_processor = Arc::new(MockPaymentProcessor::new(true));
-        let test_notifier = Arc::new(TestNotifier::new());
-        
-        // Create service with injected mock dependencies
-        let order_service = OrderService::new(
-            order_repository.clone(),
-            payment_processor.clone(),
-            test_notifier.clone(),
-        );
-        
-        // Create test order
-        let order = Order {
-            id: "".to_string(), // Empty ID will be generated
-            customer_id: "test-customer".to_string(),
-            items: vec![
-                OrderItem {
-                    product_id: "product-1".to_string(),
-                    quantity: 2,
-                    unit_price: 10.0,
-                }
-            ],
-            status: OrderStatus::Created,
-            total_amount: 20.0,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-            payment_id: None,
-            shipping_address: "123 Test St".to_string(),
-        };
-        
-        // Test creating an order
-        let result = order_service.create_order(order).await;
-        
-        // Verify result
-        assert!(result.is_ok(), "Order creation failed: {:?}", result.err());
-        let created_order = result.unwrap();
-        assert!(!created_order.id.is_empty(), "Order ID should be generated");
-        assert_eq!(created_order.customer_id, "test-customer");
-        assert_eq!(created_order.status, OrderStatus::Created);
-        
-        // Verify notification was sent
-        assert!(test_notifier.was_called(), "Notifier was not called");
-        
-        // Verify order was stored in repository
-        let stored_order = order_repository.find_by_id(created_order.id.clone()).await.unwrap();
-        assert!(stored_order.is_some(), "Order should be stored in repository");
+    #[async_trait]
+    impl PaymentProcessor for PaymentProcessor {
+        async fn process_payment(&self, order: &Order, payment: &PaymentDetails) -> Result<String, AppError>;
+        async fn refund_payment(&self, payment_id: &str) -> Result<bool, AppError>;
+        async fn verify_payment(&self, payment_id: &str) -> Result<bool, AppError>;
     }
 }
 ```
 
-## Running the Example
+### Unit Testing with Mocks
 
-1. Clone the Navius repository
-2. Navigate to the `examples/dependency-injection-example` directory
-3. Run the example:
+Now you can use these mocks in your unit tests:
 
-```bash
-cargo run
+```rust
+#[tokio::test]
+async fn test_process_order() {
+    // Create mock instances
+    let mut mock_repository = MockOrderRepository::new();
+    let mut mock_processor = MockPaymentProcessor::new();
+    let mut mock_notifier = MockNotifier::new();
+    
+    // Set up mock expectations
+    
+    // Expect save to be called once and return a cloned order
+    mock_repository
+        .expect_save()
+        .times(1)
+        .returning(|order| Ok(order.clone()));
+    
+    // Expect process_payment to be called once and return a payment ID
+    mock_processor
+        .expect_process_payment()
+        .times(1)
+        .returning(|_, _| Ok("payment-123".to_string()));
+        
+    // Expect notify_order_created to be called once
+    mock_notifier
+        .expect_notify_order_created()
+        .times(1)
+        .returning(|_| Ok(()));
+        
+    // Create the service with mocked dependencies
+    let order_service = OrderServiceImpl::new(
+        Arc::new(mock_repository),
+        Arc::new(mock_processor),
+        Arc::new(mock_notifier)
+    );
+    
+    // Create test data
+    let order_request = CreateOrderRequest {
+        customer_id: "cust-123".to_string(),
+        items: vec![
+            OrderItemRequest {
+                product_id: "prod-1".to_string(),
+                quantity: 2,
+            }
+        ],
+        shipping_address: "123 Test St".to_string(),
+    };
+    
+    let payment_details = PaymentDetails {
+        payment_method: "credit_card".to_string(),
+        card_last_four: Some("4242".to_string()),
+        amount: 100.0,
+        currency: "USD".to_string(),
+    };
+    
+    // Execute the method under test
+    let result = order_service.process_order(order_request, payment_details).await;
+    
+    // Assert results
+    assert!(result.is_ok());
+    let order = result.unwrap();
+    assert_eq!(order.status, OrderStatus::Paid);
+    assert_eq!(order.payment_id, Some("payment-123".to_string()));
+}
 ```
 
-4. Test the API endpoints:
+### Integration Testing with a Test ServiceRegistry
 
-```bash
-# Create an order
-curl -X POST http://localhost:3000/orders \
-  -H "Content-Type: application/json" \
-  -d '{
-    "id": "",
-    "customer_id": "user123",
-    "items": [
-      {
-        "product_id": "product456",
-        "quantity": 2,
-        "unit_price": 19.99
-      }
-    ],
-    "status": "Created",
-    "total_amount": 39.98,
-    "created_at": "2023-09-25T00:00:00Z",
-    "updated_at": "2023-09-25T00:00:00Z",
-    "payment_id": null,
-    "shipping_address": "123 Main St, Anytown, AN 12345"
-  }' | jq
+For integration tests, you can create a test ServiceRegistry with mock or real implementations:
 
-# Get the order ID from the response, then process payment
-curl -X POST http://localhost:3000/orders/[ORDER_ID]/payment \
-  -H "Content-Type: application/json" \
-  -d '{
-    "payment_method": "credit_card",
-    "card_last_four": "4242",
-    "amount": 39.98,
-    "currency": "USD"
-  }' | jq
-
-# Get all orders
-curl http://localhost:3000/orders | jq
-
-# Cancel an order
-curl -X PUT http://localhost:3000/orders/[ORDER_ID]/cancel | jq
+```rust
+#[tokio::test]
+async fn test_order_handler_integration() {
+    // Create a test ServiceRegistry
+    let registry = ServiceRegistry::new();
+    
+    // Register mock services
+    let mock_repository = Arc::new(MockOrderRepository::new());
+    registry.register::<Box<dyn OrderRepository>>(Box::new(mock_repository.clone()));
+    
+    let mock_processor = Arc::new(MockPaymentProcessor::new());
+    registry.register::<Box<dyn PaymentProcessor>>(Box::new(mock_processor.clone()));
+    
+    let mock_notifier = Arc::new(MockNotifier::new());
+    registry.register::<Box<dyn Notifier>>(Box::new(mock_notifier.clone()));
+    
+    // Set up expectations on mocks
+    // ...
+    
+    // Create an OrderService with the registry
+    let order_service = OrderServiceImpl::new_with_registry(&registry).await.unwrap();
+    registry.register::<OrderServiceImpl>(order_service.clone());
+    
+    // Create a handler with the registry
+    let handler = OrderHandler::new(&registry);
+    
+    // Call the handler's method
+    let result = handler.create_order(/* test request */).await;
+    
+    // Assert the results
+    assert!(result.is_ok());
+    // Further assertions...
+}
 ```
-
-## Key Concepts Demonstrated
-
-1. **Dependency Inversion Principle**: Services depend on abstractions (interfaces) rather than concrete implementations
-2. **Constructor Injection**: Dependencies are provided through constructors
-3. **Registry Pattern**: ServiceRegistry manages service instances and their lifecycle
-4. **Interface Segregation**: Clear interfaces defining cohesive sets of operations
-5. **Testability**: Easy to replace real implementations with test doubles
 
 ## Best Practices
 
-1. **Prefer Interfaces**: Define clear interfaces before implementations
-2. **Single Responsibility**: Each service should have one primary responsibility
-3. **Explicit Dependencies**: Make dependencies clear in constructors
-4. **Testable Design**: Design services to be easily testable with mock dependencies
-5. **Circular Dependency Avoidance**: Structure your dependencies to avoid cycles
+### 1. Define Clear Interfaces
 
-## Next Steps
+Create well-defined interfaces (traits) that describe the behavior of your services:
 
-- [Custom Service Example](custom-service-example.md): More examples of creating custom services
-- [Error Handling Example](error-handling-example.md): Comprehensive error handling strategies
-- [Repository Pattern Example](repository-pattern-example.md): Using the repository pattern with dependency injection
-</rewritten_file> 
+```rust
+#[async_trait]
+pub trait ProductService: Send + Sync {
+    // Clear contract with detailed documentation
+    
+    /// Retrieves a product by its unique identifier
+    async fn get_product(&self, id: ProductId) -> Result<Option<Product>, AppError>;
+    
+    /// Lists all available products
+    async fn list_products(&self) -> Result<Vec<Product>, AppError>;
+    
+    /// Creates a new product
+    async fn create_product(&self, product: CreateProductRequest) -> Result<Product, AppError>;
+}
+```
+
+### 2. Program to Interfaces, Not Implementations
+
+Whenever possible, accept trait objects rather than concrete implementations:
+
+```rust
+// Good approach
+pub struct OrderServiceImpl {
+    order_repository: Arc<dyn OrderRepository>,
+    payment_processor: Arc<dyn PaymentProcessor>,
+    notifier: Arc<dyn Notifier>,
+}
+
+// Avoid this approach
+pub struct OrderServiceImpl {
+    // Tightly coupled to concrete implementations
+    order_repository: Arc<OrderRepositoryImpl>,
+    payment_processor: Arc<StripePaymentProcessor>,
+    notifier: Arc<EmailNotifier>,
+}
+```
+
+### 3. Use Constructor Injection
+
+Pass dependencies through the constructor rather than creating them inside the service:
+
+```rust
+// Good approach
+impl OrderServiceImpl {
+    pub fn new(
+        order_repository: Arc<dyn OrderRepository>,
+        payment_processor: Arc<dyn PaymentProcessor>,
+        notifier: Arc<dyn Notifier>,
+    ) -> Self {
+        Self {
+            order_repository,
+            payment_processor,
+            notifier,
+        }
+    }
+}
+
+// Avoid this approach
+impl OrderServiceImpl {
+    pub fn new() -> Self {
+        Self {
+            // Tightly coupled to concrete implementations
+            order_repository: Arc::new(OrderRepositoryImpl::new()),
+            payment_processor: Arc::new(StripePaymentProcessor::new()),
+            notifier: Arc::new(EmailNotifier::new()),
+        }
+    }
+}
+```
+
+### 4. Consider Factory Methods
+
+When constructing services with many dependencies, use factory methods with the ServiceRegistry:
+
+```rust
+impl OrderServiceImpl {
+    pub async fn new_with_registry(registry: &ServiceRegistry) -> Result<Self, AppError> {
+        let order_repository = registry.get::<Box<dyn OrderRepository>>().await?;
+        let payment_processor = registry.get::<Box<dyn PaymentProcessor>>().await?;
+        let notifier = registry.get::<Box<dyn Notifier>>().await?;
+        
+        Ok(Self {
+            order_repository,
+            payment_processor,
+            notifier,
+        })
+    }
+}
+```
+
+### 5. Register Services as Trait Objects
+
+Register your services as trait objects to enable polymorphism:
+
+```rust
+// Setup function
+pub fn setup_services(registry: &ServiceRegistry) -> Result<(), AppError> {
+    // Create the concrete implementations
+    let order_repo = Arc::new(PostgresOrderRepository::new());
+    let payment_processor = Arc::new(StripePaymentProcessor::new());
+    let notifier = Arc::new(EmailNotifier::new());
+    
+    // Register them as trait objects
+    registry.register::<Box<dyn OrderRepository>>(Box::new(order_repo));
+    registry.register::<Box<dyn PaymentProcessor>>(Box::new(payment_processor));
+    registry.register::<Box<dyn Notifier>>(Box::new(notifier));
+    
+    // Register the service that depends on them
+    let order_service = Arc::new(OrderServiceImpl::new(
+        registry.get::<Box<dyn OrderRepository>>()?,
+        registry.get::<Box<dyn PaymentProcessor>>()?,
+        registry.get::<Box<dyn Notifier>>()?,
+    ));
+    
+    registry.register::<OrderServiceImpl>(order_service);
+    
+    Ok(())
+}
+```
+
+## Common Pitfalls
+
+### 1. Circular Dependencies
+
+Avoid circular dependencies between services, as they can cause initialization problems and infinite loops.
+
+**Problem:**
+```rust
+// Service A depends on Service B
+pub struct ServiceA {
+    service_b: Arc<ServiceB>,
+}
+
+// Service B depends on Service A
+pub struct ServiceB {
+    service_a: Arc<ServiceA>,
+}
+```
+
+**Solution:**
+- Restructure your services to remove the circular dependency
+- Extract a common interface that both services can depend on
+- Use events or callbacks to communicate between services
+
+### 2. Service Locator Anti-Pattern
+
+Avoid using the ServiceRegistry directly in your business logic:
+
+**Anti-pattern:**
+```rust
+// Service locator anti-pattern
+impl OrderService {
+    async fn process_order(&self, registry: &ServiceRegistry, order: Order) -> Result<Order, AppError> {
+        // Getting dependencies at runtime
+        let repository = registry.get::<Box<dyn OrderRepository>>().await?;
+        let payment_processor = registry.get::<Box<dyn PaymentProcessor>>().await?;
+        
+        // Business logic...
+    }
+}
+```
+
+**Better approach:**
+```rust
+// Constructor injection
+impl OrderService {
+    pub fn new(
+        repository: Arc<dyn OrderRepository>,
+        payment_processor: Arc<dyn PaymentProcessor>,
+    ) -> Self {
+        Self {
+            repository,
+            payment_processor,
+        }
+    }
+    
+    async fn process_order(&self, order: Order) -> Result<Order, AppError> {
+        // Using injected dependencies
+        // Business logic...
+    }
+}
+```
+
+### 3. Over-Abstraction
+
+Don't create interfaces for everything. Consider the following when deciding whether to create an interface:
+
+- Will there be multiple implementations?
+- Will you need to mock this service for testing?
+- Is there a need to replace the implementation at runtime?
+
+If the answer to all these questions is "no," a direct implementation may be simpler.
+
+### 4. Thread Safety Issues
+
+Since services are shared across async tasks, ensure your services are thread-safe:
+
+```rust
+// Ensure all services implement Send + Sync
+#[async_trait]
+pub trait OrderRepository: Send + Sync {
+    // Methods...
+}
+
+// Use thread-safe data structures
+pub struct InMemoryOrderRepository {
+    // Use RwLock or Mutex for shared mutable state
+    orders: RwLock<HashMap<OrderId, Order>>,
+}
+```
+
+## Advanced Techniques
+
+### 1. Named Dependencies
+
+When you need multiple implementations of the same interface, use named dependencies:
+
+```rust
+// Register named implementations
+registry.register_named::<Box<dyn PaymentProcessor>>("stripe", Box::new(StripeProcessor::new()));
+registry.register_named::<Box<dyn PaymentProcessor>>("paypal", Box::new(PayPalProcessor::new()));
+
+// Retrieve a specific implementation
+let stripe_processor = registry.get_named::<Box<dyn PaymentProcessor>>("stripe")?;
+```
+
+### 2. Conditional Registration
+
+Register different implementations based on configuration:
+
+```rust
+pub fn setup_services(registry: &ServiceRegistry, config: &AppConfig) -> Result<(), AppError> {
+    // Choose implementation based on configuration
+    if config.use_real_payment_processor {
+        let processor = Arc::new(StripePaymentProcessor::new(config.stripe_api_key.clone()));
+        registry.register::<Box<dyn PaymentProcessor>>(Box::new(processor));
+    } else {
+        let processor = Arc::new(MockPaymentProcessor::new());
+        registry.register::<Box<dyn PaymentProcessor>>(Box::new(processor));
+    }
+    
+    Ok(())
+}
+```
+
+### 3. Service Lifetimes
+
+Control the lifetime of your services by using different registration strategies:
+
+```rust
+// Singleton (default) - one instance shared across the application
+registry.register_singleton::<UserService>(Arc::new(UserServiceImpl::new()));
+
+// Transient - new instance created each time it's resolved
+registry.register_transient::<UserService, _>(|| {
+    Arc::new(UserServiceImpl::new())
+});
+
+// Scoped - one instance per scope (e.g., per request)
+registry.register_scoped::<UserService, _>(|| {
+    Arc::new(UserServiceImpl::new())
+});
+```
+
+### 4. Decorators and Middleware
+
+Use the decorator pattern to add cross-cutting concerns:
+
+```rust
+// Base implementation
+pub struct BasicOrderProcessor {
+    repository: Arc<dyn OrderRepository>,
+}
+
+// Decorator that adds logging
+pub struct LoggingOrderProcessor {
+    inner: Arc<dyn OrderProcessor>,
+    logger: Arc<dyn Logger>,
+}
+
+impl OrderProcessor for LoggingOrderProcessor {
+    async fn process(&self, order: Order) -> Result<Order, AppError> {
+        self.logger.log(&format!("Processing order: {}", order.id));
+        let result = self.inner.process(order).await;
+        
+        match &result {
+            Ok(order) => self.logger.log(&format!("Order processed successfully: {}", order.id)),
+            Err(e) => self.logger.log(&format!("Order processing failed: {}", e)),
+        }
+        
+        result
+    }
+}
+
+// Register with decorator
+let base_processor = Arc::new(BasicOrderProcessor::new(repository));
+let logging_processor = Arc::new(LoggingOrderProcessor::new(base_processor, logger));
+registry.register::<Box<dyn OrderProcessor>>(Box::new(logging_processor));
+```
+
+## Conclusion
+
+This example has demonstrated how to use dependency injection in Navius to build modular and testable applications. By leveraging interfaces, constructor injection, and a centralized service registry, you can create loosely coupled components that are easy to test and maintain.
+
+Key takeaways:
+- Define clear interfaces using traits
+- Inject dependencies through constructors
+- Register services in a central registry
+- Test using mock implementations
+- Follow best practices to avoid common pitfalls
+
+By following these patterns, your Navius applications will be more modular, testable, and maintainable.
+
+## See Also
+
+- [Custom Service Example](./custom-service-example.md) - For more advanced service implementation techniques
+- [REST API Example](./rest-api-example.md) - For using DI in API handlers
+- [Testing with Navius](../04_guides/testing.md) - For more testing techniques

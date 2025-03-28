@@ -1,22 +1,73 @@
 ---
-title: "Custom Service Example"
-description: "How to create and register custom services in Navius"
+title: "Creating and Using Custom Services in Navius"
+description: "Comprehensive guide to designing, implementing and registering custom services with dependency injection in Navius applications"
 category: examples
 tags:
-  - examples
   - services
   - dependency-injection
+  - service-registry
+  - business-logic
+  - application-state
+  - testability
 related:
-  - examples/basic-application-example.md
-  - examples/dependency-injection-example.md
-  - guides/service-registration.md
-last_updated: March 26, 2025
-version: 1.0
+  - 02_examples/dependency-injection-example.md
+  - 02_examples/rest-api-example.md
+  - 04_guides/service-design-patterns.md
+last_updated: March 27, 2025
+version: 1.1
+status: stable
 ---
 
 # Custom Service Example
 
 This example demonstrates how to create and register custom services in a Navius application. Services are the building blocks for business logic in Navius, and understanding how to create and use them is essential for developing robust applications.
+
+## Overview
+
+Services in Navius encapsulate business logic and provide a way to organize functionality into cohesive, reusable components. The service pattern promotes:
+
+- **Separation of concerns** - keeping business logic separate from request handling
+- **Testability** - making it easier to unit test business logic
+- **Reusability** - allowing functionality to be used across different parts of the application
+- **Dependency injection** - enabling loose coupling between components
+
+This example creates a user management system with notification capabilities, demonstrating how to design, implement, register, and use custom services in a Navius application.
+
+## Quick Navigation
+
+- [Project Structure](#project-structure)
+- [Implementation](#implementation)
+  - [Service Registry](#core-service-registry)
+  - [User Model](#user-model)
+  - [User Service](#user-service)
+  - [Notification Service](#notification-service)
+  - [API Handlers](#api-handlers)
+  - [Application Entry Point](#application-entry-point)
+- [Configuration](#configuration)
+- [Running the Example](#running-the-example)
+- [Testing the API](#testing-the-api)
+- [Key Concepts](#key-concepts)
+- [Best Practices](#best-practices)
+- [Design Patterns](#design-patterns)
+- [Testing Services](#testing-services)
+- [Common Pitfalls](#common-pitfalls)
+- [Advanced Topics](#advanced-topics)
+
+## Prerequisites
+
+Before working with this example, you should be familiar with:
+
+- Rust programming basics
+- Basic understanding of web services architecture
+- HTTP and RESTful principles
+- Dependency injection concepts (helpful but not required)
+
+Required dependencies:
+- Rust 1.70 or newer
+- Navius 0.1.0 or newer
+- tokio for asynchronous operations
+- axum for HTTP routing
+- serde for serialization/deserialization
 
 ## Project Structure
 
@@ -26,27 +77,27 @@ custom-service-example/
 ├── config/
 │   └── default.yaml
 └── src/
-    ├── main.rs
+    ├── main.rs                  # Application entry point
     ├── app/
     │   ├── mod.rs
-    │   ├── api/
+    │   ├── api/                 # HTTP handlers
     │   │   ├── mod.rs
-    │   │   └── user_handler.rs
-    │   ├── models/
+    │   │   └── user_handler.rs  # User API handlers
+    │   ├── models/              # Domain models
     │   │   ├── mod.rs
-    │   │   └── user.rs
-    │   └── services/
+    │   │   └── user.rs          # User model
+    │   └── services/            # Business logic
     │       ├── mod.rs
-    │       ├── user_service.rs
-    │       └── notification_service.rs
-    └── core/
+    │       ├── user_service.rs  # User management service
+    │       └── notification_service.rs # Notification service
+    └── core/                    # Core framework components
         ├── mod.rs
-        ├── config.rs
-        ├── error.rs
-        ├── router.rs
+        ├── config.rs            # Configuration loading
+        ├── error.rs             # Error handling
+        ├── router.rs            # Router setup
         └── services/
             ├── mod.rs
-            └── service_registry.rs
+            └── service_registry.rs # DI container
 ```
 
 ## Implementation
@@ -114,7 +165,7 @@ impl ServiceRegistry {
 }
 ```
 
-### Custom Services Implementation
+### User Model
 
 #### `app/models/user.rs`
 
@@ -135,6 +186,8 @@ impl fmt::Display for User {
     }
 }
 ```
+
+### User Service
 
 #### `app/services/user_service.rs`
 
@@ -204,6 +257,8 @@ impl UserService {
 }
 ```
 
+### Notification Service
+
 #### `app/services/notification_service.rs`
 
 ```rust
@@ -240,7 +295,7 @@ impl NotificationService {
 }
 ```
 
-### Service Usage in Handlers
+### API Handlers
 
 #### `app/api/user_handler.rs`
 
@@ -325,6 +380,8 @@ pub async fn delete_user(
 }
 ```
 
+### Application Entry Point
+
 #### `main.rs`
 
 ```rust
@@ -404,63 +461,364 @@ notifications_enabled: true
 
 ## Running the Example
 
-1. Clone the Navius repository
-2. Navigate to the `examples/custom-service-example` directory
-3. Run the application:
+1. Clone the Navius repository:
+   ```bash
+   git clone https://github.com/navius/examples.git
+   cd examples/custom-service-example
+   ```
+
+2. Build and run the application:
+   ```bash
+   cargo run
+   ```
+
+3. The server will start on `http://localhost:3000`
+
+## Testing the API
+
+Test the endpoints using curl or any HTTP client:
+
+### Get all users
 
 ```bash
-cargo run
+curl http://localhost:3000/users
 ```
 
-4. Test the endpoints:
+Sample response:
+```json
+[
+  {"id":"1","name":"Alice","email":"alice@example.com"},
+  {"id":"2","name":"Bob","email":"bob@example.com"}
+]
+```
+
+### Get a specific user
 
 ```bash
-# Get all users
-curl http://localhost:3000/users
-
-# Get a specific user
 curl http://localhost:3000/users/1
+```
 
-# Create a new user
+Sample response:
+```json
+{"id":"1","name":"Alice","email":"alice@example.com"}
+```
+
+### Create a new user
+
+```bash
 curl -X POST http://localhost:3000/users \
   -H "Content-Type: application/json" \
   -d '{"id": "3", "name": "Charlie", "email": "charlie@example.com"}'
+```
 
-# Update a user
+Sample response:
+```json
+{"id":"3","name":"Charlie","email":"charlie@example.com"}
+```
+
+### Update a user
+
+```bash
 curl -X PUT http://localhost:3000/users/3 \
   -H "Content-Type: application/json" \
   -d '{"id": "3", "name": "Charlie Updated", "email": "charlie@example.com"}'
+```
 
-# Delete a user
+Sample response:
+```json
+{"id":"3","name":"Charlie Updated","email":"charlie@example.com"}
+```
+
+### Delete a user
+
+```bash
 curl -X DELETE http://localhost:3000/users/3
 ```
 
-## Key Concepts Demonstrated
+## Key Concepts
 
-1. **Creating Custom Services**: Defining service classes with specific functionality
-2. **Service Registration**: Adding services to the ServiceRegistry
-3. **Dependency Injection**: Injecting services into handlers
-4. **Service Interaction**: Having services work together (UserService and NotificationService)
-5. **State Management**: Sharing application state with handlers
+1. **Service-Oriented Architecture**
+   - Services encapsulate business logic and domain operations
+   - Each service has a clear responsibility and domain focus
+   - Services can be composed and used by other services or handlers
+
+2. **Dependency Injection**
+   - Services are registered with a central registry
+   - Components request services from the registry instead of creating them
+   - This promotes loose coupling and testability
+
+3. **Service Lifecycle Management**
+   - Services can be stateful or stateless
+   - The registry handles creation, retrieval, and ownership
+   - Arc (Atomic Reference Counting) is used to share services safely
+
+4. **Service Communication**
+   - Services can communicate with each other
+   - In this example, the User service operations trigger Notification service actions
+   - Services can be composed to build complex behavior from simple components
 
 ## Best Practices
 
-1. **Service Design**: Keep services focused on a specific domain or functionality
-2. **Immutability**: Use immutable data structures when possible
-3. **Error Handling**: Properly propagate errors up the call stack
-4. **Testing**: Create services with testability in mind
-5. **Configuration**: Configure services based on application settings
+### Service Design
+
+1. **Single Responsibility Principle**
+   - Each service should focus on a single domain or functionality
+   - Keep services small and focused (e.g., UserService handles user CRUD, NotificationService handles notifications)
+
+2. **Interface Segregation**
+   - Consider using traits to define service interfaces
+   - Clients should only depend on methods they actually use
+
+3. **Immutability**
+   - Prefer immutable data structures when possible
+   - Use interior mutability patterns (Mutex, RwLock) for thread-safe state management
+
+4. **Configuration Injection**
+   - Configure services based on application settings
+   - Pass configuration during service initialization rather than hardcoding values
+
+### Error Handling
+
+1. **Propagate Errors Appropriately**
+   - Use Result<T, E> for operations that can fail
+   - Define clear error types that provide useful information
+
+2. **Graceful Failure**
+   - Services should fail gracefully and communicate failures clearly
+   - Handle expected failure cases directly in the service
+
+3. **Transaction Safety**
+   - Ensure operations that modify multiple resources are atomic or can be rolled back
+   - Consider using transactions for database operations
+
+### Testing
+
+1. **Testability**
+   - Design services with testing in mind
+   - Use dependency injection to mock dependencies in tests
+
+2. **Unit Testing**
+   - Test service methods in isolation
+   - Mock any external dependencies
+
+3. **Integration Testing**
+   - Test service interactions together
+   - Verify that services work correctly when composed
+
+## Design Patterns
+
+### Repository Pattern
+
+For services that manage data, consider using the Repository pattern:
+
+```rust
+pub trait UserRepository {
+    fn find_by_id(&self, id: &str) -> Option<User>;
+    fn find_all(&self) -> Vec<User>;
+    fn create(&self, user: User) -> User;
+    fn update(&self, id: &str, user: User) -> Option<User>;
+    fn delete(&self, id: &str) -> bool;
+}
+
+// Then inject repository into service
+pub struct UserService {
+    repository: Arc<dyn UserRepository>,
+}
+```
+
+### Factory Pattern
+
+For complex service creation:
+
+```rust
+pub struct ServiceFactory {
+    config: AppConfig,
+}
+
+impl ServiceFactory {
+    pub fn create_user_service(&self) -> UserService {
+        // Create and configure UserService
+    }
+    
+    pub fn create_notification_service(&self) -> NotificationService {
+        NotificationService::new(self.config.notifications_enabled)
+    }
+}
+```
+
+### Decorator Pattern
+
+Add functionality to services without modifying them:
+
+```rust
+pub struct LoggingNotificationService {
+    inner: Arc<NotificationService>,
+}
+
+impl LoggingNotificationService {
+    pub fn send_welcome_notification(&self, user: &User) {
+        tracing::info!("Sending welcome notification to {}", user.email);
+        self.inner.send_welcome_notification(user)
+    }
+}
+```
+
+## Testing Services
+
+### Unit Testing Example
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_user_service_crud() {
+        let service = UserService::new();
+        
+        // Test creating a user
+        let user = User {
+            id: "test".to_string(),
+            name: "Test User".to_string(),
+            email: "test@example.com".to_string(),
+        };
+        
+        let created = service.create_user(user.clone());
+        assert_eq!(created.id, "test");
+        
+        // Test retrieving a user
+        let retrieved = service.get_user("test").unwrap();
+        assert_eq!(retrieved.name, "Test User");
+        
+        // Test updating a user
+        let updated_user = User {
+            id: "test".to_string(),
+            name: "Updated User".to_string(),
+            email: "test@example.com".to_string(),
+        };
+        
+        let updated = service.update_user("test", updated_user).unwrap();
+        assert_eq!(updated.name, "Updated User");
+        
+        // Test deleting a user
+        let deleted = service.delete_user("test");
+        assert!(deleted);
+        
+        // Verify user is gone
+        assert!(service.get_user("test").is_none());
+    }
+}
+```
+
+### Testing Services with Mocks
+
+```rust
+// Using mockall to create a mock NotificationService
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mockall::predicate::*;
+    use mockall::*;
+    
+    mock! {
+        NotificationService {
+            fn send_welcome_notification(&self, user: &User);
+        }
+    }
+    
+    #[test]
+    fn test_user_creation_triggers_notification() {
+        // Create mock
+        let mut mock_notification = MockNotificationService::new();
+        mock_notification
+            .expect_send_welcome_notification()
+            .with(predicate::function(|user: &User| user.id == "test"))
+            .times(1)
+            .return_const(());
+            
+        // Test that creating a user triggers a notification
+        // (Implementation depends on how the services are integrated)
+    }
+}
+```
+
+## Common Pitfalls
+
+1. **Circular Dependencies**
+   - Services that depend on each other can create circular dependencies
+   - Solution: Use interfaces/traits, restructure services, or introduce mediator services
+
+2. **Over-Engineering**
+   - Creating too many small services can lead to complexity
+   - Balance between cohesion and simplicity
+
+3. **Thread Safety Issues**
+   - Services in web applications need to be thread-safe
+   - Use Arc, Mutex, and RwLock appropriately
+   - Be cautious of deadlocks when multiple locks are held
+
+4. **Improper Error Handling**
+   - Not propagating errors correctly
+   - Not providing useful error information
+
+5. **Service Lifetime Mismatches**
+   - Some services may have different lifecycles (e.g., per-request vs. application-wide)
+   - Be explicit about service lifetimes
 
 ## Advanced Topics
 
-- **Service Lifetimes**: Understanding Arc and ownership patterns
-- **Service Dependencies**: Managing services that depend on other services
-- **Mock Services**: Creating test doubles for dependent services
-- **Conditional Services**: Registering different implementations based on configuration
+### Service Lifetimes
+
+Different services may have different lifetimes:
+
+- **Singleton**: One instance for the entire application
+- **Scoped**: One instance per scope (e.g., per request)
+- **Transient**: New instance each time it's requested
+
+### Conditional Service Registration
+
+Register different implementations based on configuration:
+
+```rust
+if config.use_mock_services {
+    registry.register(MockUserService::new())?;
+} else {
+    registry.register(RealUserService::new(db_connection))?;
+}
+```
+
+### Async Services
+
+For services that perform async operations:
+
+```rust
+#[async_trait]
+pub trait AsyncUserService {
+    async fn get_user(&self, id: &str) -> Result<User, AppError>;
+    async fn create_user(&self, user: User) -> Result<User, AppError>;
+    // ...
+}
+```
+
+### Service Middleware
+
+Intercept and modify service behavior:
+
+```rust
+pub struct ServiceMiddleware<S> {
+    inner: S,
+    before: Box<dyn Fn() -> ()>,
+    after: Box<dyn Fn() -> ()>,
+}
+
+impl<S> ServiceMiddleware<S> {
+    // Proxy methods to inner service with before/after hooks
+}
+```
 
 ## Next Steps
 
-- [Dependency Injection Example](dependency-injection-example.md): More advanced dependency injection patterns
-- [Repository Pattern Example](repository-pattern-example.md): Using services with data repositories
-- [Error Handling Example](error-handling-example.md): Comprehensive error handling strategies
+- Explore the [Dependency Injection Example](02_examples/dependency-injection-example.md) for more advanced DI patterns
+- Learn about structured error handling in the [Error Handling Example](02_examples/error-handling-example.md)
+- See services in action with a complete API in the [REST API Example](02_examples/rest-api-example.md)
 </rewritten_file> 

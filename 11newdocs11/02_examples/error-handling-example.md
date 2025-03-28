@@ -1,34 +1,87 @@
 ---
-title: "Error Handling Example"
-description: "Implementing robust error handling in Navius applications"
+title: "Comprehensive Error Handling in Navius"
+description: "A complete guide to implementing robust, consistent error handling in Navius applications with centralized error types, validation error handling, middleware integration, and client-friendly error responses"
 category: examples
 tags:
-  - examples
   - error-handling
-  - api
+  - validation
+  - middleware
+  - http-status-codes
+  - api-responses
+  - logging
+  - thiserror
 related:
-  - examples/rest-api-example.md
-  - reference/patterns/service-registration-pattern.md
-last_updated: March 26, 2025
-version: 1.0
+  - 02_examples/rest-api-example.md
+  - 02_examples/custom-service-example.md
+  - 04_guides/api-design.md
+last_updated: March 27, 2025
+version: 1.1
+status: stable
 ---
 
 # Error Handling Example
 
 This example demonstrates implementing robust error handling in Navius applications, focusing on creating a centralized error system with consistent error responses.
 
+## Overview
+
+Effective error handling is crucial for building reliable and user-friendly applications. This example shows how to:
+
+- Create a unified error type system for your entire application
+- Convert various error types to consistent HTTP responses
+- Validate user input and provide helpful validation error messages
+- Handle business logic errors, database errors, and external service failures
+- Log errors appropriately while hiding sensitive details from users
+- Integrate error handling with middleware for consistent application-wide behavior
+
+By implementing these patterns, your application will provide clear feedback to users when errors occur, while maintaining security and making debugging easier for developers.
+
+## Quick Navigation
+
+- [Project Structure](#project-structure)
+- [Implementation](#implementation)
+  - [Error System](#srcerrorrs)
+  - [Models](#srcmodelsrs)
+  - [Handlers](#srchandlersrs)
+  - [Application Setup](#srcmainrs)
+- [Testing Error Scenarios](#testing-the-error-handling)
+- [Key Concepts](#key-concepts)
+- [Error Handling Best Practices](#best-practices)
+- [Common Error Patterns](#common-error-patterns)
+- [Error Response Structures](#error-response-structures)
+- [Integrating with External Services](#integrating-with-external-services)
+- [Error Handling in Async Code](#error-handling-in-async-code)
+- [Security Considerations](#security-considerations)
+- [Debugging Tips](#debugging-tips)
+
+## Prerequisites
+
+Before working with this example, you should be familiar with:
+
+- Rust programming basics
+- HTTP status codes and RESTful API concepts
+- Basic understanding of error handling in Rust (Result, Error traits)
+
+Required dependencies:
+- Rust 1.70 or newer
+- Navius 0.1.0 or newer
+- tokio for asynchronous operations
+- thiserror for defining error types
+- validator for request validation
+- serde for serialization/deserialization
+
 ## Project Structure
 
 ```
 error-handling-example/
-├── Cargo.toml
+├── Cargo.toml                # Project dependencies
 ├── config/
-│   └── default.yaml
+│   └── default.yaml         # Configuration file
 └── src/
-    ├── main.rs                 # Application entry point
-    ├── handlers.rs             # Example API handlers
-    ├── models.rs               # Domain models
-    └── error.rs                # Error handling system
+    ├── main.rs              # Application entry point with error middleware
+    ├── handlers.rs          # Example API handlers demonstrating various errors
+    ├── models.rs            # Domain models with validation rules
+    └── error.rs             # Centralized error handling system
 ```
 
 ## Implementation
@@ -171,7 +224,7 @@ impl From<AppError> for Response {
         
         // Log server errors
         if should_hide_details {
-            if let Self::Database(db_error) = &error {
+            if let AppError::Database(db_error) = &error {
                 log::error!("Database error: {}", db_error);
             } else {
                 log::error!("Server error: {}", error);
@@ -190,7 +243,7 @@ impl From<AppError> for Response {
         });
         
         // Add validation errors if present
-        if let Self::Validation(validation_errors) = &error {
+        if let AppError::Validation(validation_errors) = &error {
             body["details"] = json!({
                 "errors": validation_errors
             });
@@ -562,27 +615,352 @@ Response:
 }
 ```
 
-## Key Concepts Demonstrated
+## Key Concepts
 
-1. **Centralized Error Handling**: A unified `AppError` type for representing all possible errors.
-2. **Error Categories**: Different error types for various scenarios (validation, authorization, database, etc.).
-3. **Consistent Responses**: All errors are converted to JSON responses with a consistent structure.
-4. **Error Hiding**: Internal server errors don't expose implementation details to clients.
-5. **Validation Errors**: Detailed validation feedback for invalid input data.
-6. **Error Logging**: Server errors are automatically logged.
-7. **HTTP Status Codes**: Appropriate status codes for different error types.
+1. **Centralized Error Types**
+   - A unified `AppError` enum represents all application errors
+   - Each variant corresponds to a common error scenario (not found, unauthorized, etc.)
+   - Factory methods make it easy to create errors with meaningful messages
+
+2. **Consistent Error Responses**
+   - All errors are converted to JSON with the same structure
+   - Includes status code, error code, and human-readable message
+   - Special handling for validation errors to include detailed field information
+
+3. **Error Hiding for Security**
+   - Internal server errors don't expose implementation details to clients
+   - Details are logged server-side for debugging
+   - User only sees a generic message for server errors
+
+4. **Middleware Integration**
+   - Error handling middleware processes all errors consistently
+   - Logging middleware tracks error occurrences
+   - Centralized handling ensures consistent behavior across the application
+
+5. **Validation Framework**
+   - Input validation using the validator crate
+   - Extension trait converts validation errors to application errors
+   - Both schema validation and business rule validation are demonstrated
 
 ## Best Practices
 
-1. **Use Thiserror**: The `thiserror` crate makes it easy to define custom error types.
-2. **Consistent Error Format**: All error responses follow the same JSON structure.
-3. **Hide Internal Details**: Don't expose internal error details in production.
-4. **Appropriate Status Codes**: Use the right HTTP status code for each error type.
-5. **Detailed Validation Errors**: For validation failures, return specific field errors.
-6. **Error Conversion**: Implement `From<OtherError> for AppError` for all error types used in the application.
-7. **Error Middleware**: Use middleware to handle error conversion and logging consistently.
+### Error Type Design
 
-## Related Documentation
+1. **Use Thiserror for Custom Errors**
+   - The `thiserror` crate makes it easy to define error types with good formatting
+   - Derive `Debug` and `Error` traits for all error types
+   - Implement clear `Display` formatting for human-readable messages
 
-- [REST API Example](./rest-api-example.md)
-- [Service Registration Pattern](../reference/patterns/service-registration-pattern.md) 
+2. **Hierarchical Error Types**
+   - Use nested error types for different domains (e.g., `DatabaseError` inside `AppError`)
+   - Implement `From` conversions to easily convert between error types
+   - Group related errors as variants of a domain-specific enum
+
+3. **Factory Methods**
+   - Provide factory methods for creating common errors
+   - Use descriptive names like `not_found` or `unauthorized`
+   - Accept generic string-like parameters for flexible message formatting
+
+### Response Formatting
+
+1. **Consistent Error Format**
+   - All error responses should follow the same JSON structure
+   - Include a numeric status code, string error code, and message
+   - Use meaningful error codes that help identify the error type
+
+2. **Status Code Mapping**
+   - Map each error type to the appropriate HTTP status code
+   - Use standard codes (404 for not found, 400 for bad request, etc.)
+   - Match the semantics of the error to the appropriate status code
+
+3. **Detailed Validation Errors**
+   - For validation failures, include field-specific error details
+   - Provide the field name, error code, and a helpful message
+   - Structure validation errors in a way that's easy for clients to process
+
+### Security and Logging
+
+1. **Hide Internal Details**
+   - Don't expose internal error details in responses to clients
+   - Hide database errors, stack traces, and implementation details
+   - Log full error details server-side for debugging
+
+2. **Appropriate Logging Levels**
+   - Log server errors at ERROR level
+   - Log client errors (400-level) at INFO or WARN level
+   - Include relevant context (request path, method, etc.) in logs
+
+3. **Error Tracing**
+   - Consider adding request IDs to correlate errors with requests
+   - Use structured logging to make errors searchable
+   - In production, ensure errors are monitored and alerted on
+
+## Common Error Patterns
+
+### Input Validation
+
+Input validation should happen as early as possible in request handling:
+
+```rust
+// Schema validation using validator crate
+if let Err(validation_errors) = payload.validate() {
+    return Err(validation_errors.to_app_error());
+}
+
+// Business rule validation
+if !is_valid_business_rule(&payload) {
+    return Err(AppError::validation(vec![
+        ValidationError {
+            field: "field_name".to_string(),
+            code: "BUSINESS_RULE".to_string(),
+            message: "Business rule violation description".to_string(),
+        }
+    ]));
+}
+```
+
+### Resource Not Found
+
+When a requested resource doesn't exist:
+
+```rust
+async fn get_resource(id: &str) -> Result<Resource, AppError> {
+    match db.find_by_id(id).await {
+        Some(resource) => Ok(resource),
+        None => Err(AppError::not_found(format!("Resource with ID {} not found", id)))
+    }
+}
+```
+
+### Authorization Checks
+
+When checking if a user has permission:
+
+```rust
+fn check_permission(user: &User, resource: &Resource) -> Result<(), AppError> {
+    // Check if user owns the resource
+    if resource.owner_id != user.id {
+        return Err(AppError::forbidden("You don't have permission to access this resource"));
+    }
+    
+    // Check if user has required role
+    if !user.roles.contains(&"ADMIN".to_string()) {
+        return Err(AppError::forbidden("This action requires admin privileges"));
+    }
+    
+    Ok(())
+}
+```
+
+### External Service Integration
+
+When calling external services:
+
+```rust
+async fn call_payment_gateway(payment: &Payment) -> Result<PaymentResponse, AppError> {
+    match payment_client.process_payment(payment).await {
+        Ok(response) => Ok(response),
+        Err(PaymentError::ServiceUnavailable(msg)) => {
+            Err(AppError::external_service(format!("Payment gateway unavailable: {}", msg)))
+        },
+        Err(PaymentError::InvalidRequest(msg)) => {
+            Err(AppError::bad_request(format!("Invalid payment request: {}", msg)))
+        },
+        Err(e) => {
+            log::error!("Unexpected payment error: {:?}", e);
+            Err(AppError::internal_server_error("Failed to process payment"))
+        }
+    }
+}
+```
+
+## Error Response Structures
+
+### Basic Error Response
+
+```json
+{
+  "status": 404,
+  "code": "NOT_FOUND",
+  "message": "User with ID 123 not found"
+}
+```
+
+### Validation Error Response
+
+```json
+{
+  "status": 400,
+  "code": "VALIDATION_ERROR",
+  "message": "Validation error",
+  "details": {
+    "errors": [
+      {
+        "field": "email",
+        "code": "email",
+        "message": "Invalid email format"
+      },
+      {
+        "field": "password",
+        "code": "min_length",
+        "message": "Password must be at least 8 characters"
+      }
+    ]
+  }
+}
+```
+
+### Server Error Response
+
+Note how implementation details are hidden:
+
+```json
+{
+  "status": 500,
+  "code": "DATABASE_ERROR",
+  "message": "An internal server error occurred"
+}
+```
+
+## Integrating with External Services
+
+When integrating with external services, follow these patterns for error handling:
+
+1. **Error Categorization**
+   - Map external service errors to appropriate application error types
+   - Distinguish between temporary failures and permanent errors
+   - Use appropriate status codes (e.g., 503 for unavailable services)
+
+2. **Retry Strategies**
+   - Implement retries for transient errors
+   - Use exponential backoff with jitter
+   - Set appropriate timeouts
+
+3. **Circuit Breaking**
+   - Prevent cascading failures with circuit breakers
+   - Fail fast when a service is known to be down
+   - Provide fallback behavior when possible
+
+Example integration:
+
+```rust
+async fn call_with_retry<F, T, E>(
+    operation: F,
+    max_retries: usize,
+) -> Result<T, AppError> 
+where
+    F: Fn() -> Future<Output = Result<T, E>>,
+    E: Into<AppError>,
+{
+    let mut retries = 0;
+    let mut delay = 100; // ms
+    
+    loop {
+        match operation().await {
+            Ok(result) => return Ok(result),
+            Err(err) => {
+                if retries >= max_retries {
+                    return Err(err.into());
+                }
+                
+                retries += 1;
+                tokio::time::sleep(Duration::from_millis(delay)).await;
+                delay *= 2; // Exponential backoff
+            }
+        }
+    }
+}
+```
+
+## Error Handling in Async Code
+
+Async error handling has some unique considerations:
+
+1. **Error Propagation**
+   - Use `?` operator to propagate errors in async functions
+   - Remember that `.await` can produce errors that need to be handled
+
+2. **Cancellation**
+   - Handle task cancellation gracefully
+   - Clean up resources even when tasks are cancelled
+
+3. **Timeouts**
+   - Add timeouts to all external operations
+   - Convert timeout errors to appropriate application errors
+
+Example with timeout:
+
+```rust
+async fn with_timeout<T>(
+    future: impl Future<Output = Result<T, AppError>>,
+    duration: Duration,
+) -> Result<T, AppError> {
+    match tokio::time::timeout(duration, future).await {
+        Ok(result) => result,
+        Err(_) => Err(AppError::external_service("Operation timed out")),
+    }
+}
+```
+
+## Security Considerations
+
+1. **Information Disclosure**
+   - Never expose stack traces, SQL queries, or internal paths in errors
+   - Be careful with validation errors exposing system details
+   - Sanitize error messages from third-party libraries
+
+2. **Error Enumeration**
+   - Consider if detailed validation errors could aid attackers
+   - For security-sensitive fields, consider generic errors
+
+3. **Logging Sensitive Data**
+   - Don't log passwords, tokens, or personal data
+   - Be careful what you include in error details
+   - Use redaction in logs for sensitive fields
+
+4. **Rate Limiting**
+   - Apply rate limiting to error-prone endpoints
+   - Prevent brute force attacks through repeated errors
+   - Consider progressive delays for repeated failures
+
+## Debugging Tips
+
+1. **Error Context**
+   - Add context to errors as they propagate up the stack
+   - Consider using the `anyhow` crate for context in development
+   - Include relevant operation parameters in error messages
+
+2. **Error Tracing**
+   - Use unique identifiers for request tracing
+   - Include these identifiers in error responses
+   - Log the full context with these identifiers
+
+3. **Development vs. Production**
+   - Consider more verbose errors in development
+   - Use feature flags to control error detail level:
+
+```rust
+#[cfg(debug_assertions)]
+fn format_error(err: &AppError) -> String {
+    format!("Detailed error: {:?}", err)
+}
+
+#[cfg(not(debug_assertions))]
+fn format_error(err: &AppError) -> String {
+    format!("Error: {}", err)
+}
+```
+
+## Next Steps
+
+Now that you've implemented a robust error handling system, consider:
+
+1. Exploring more advanced error handling with observability tools
+2. Creating a client-side error handling library to interpret your errors
+3. Implementing custom error serialization for different output formats (XML, etc.)
+4. Adding internationalization (i18n) support for error messages
+
+For related examples, see:
+- [REST API Example](02_examples/rest-api-example.md) for a complete API implementation
+- [Custom Service Example](02_examples/custom-service-example.md) for service-level error handling
+- [Authentication Example](02_examples/authentication-example.md) for security-related error handling 

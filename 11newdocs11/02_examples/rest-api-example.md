@@ -1,23 +1,76 @@
 ---
-title: "REST API Example"
-description: "Building RESTful APIs with Navius"
+title: "Building RESTful APIs with Navius"
+description: "Comprehensive guide to implementing RESTful APIs using Navius, including resource modeling, validation, pagination, error handling, and testing"
 category: examples
 tags:
-  - examples
   - rest
   - api
   - http
+  - crud
+  - controllers
+  - validation
+  - pagination
+  - error-handling
 related:
-  - examples/basic-application-example.md
-  - examples/error-handling-example.md
-  - reference/api/application-api.md
-last_updated: March 26, 2025
-version: 1.0
+  - 02_examples/graphql-example.md
+  - 02_examples/dependency-injection-example.md
+  - 04_guides/api-design.md
+last_updated: March 27, 2025
+version: 1.1
+status: stable
 ---
 
 # REST API Example
 
 This example demonstrates how to build a RESTful API using Navius, including proper resource modeling, request handling, response formatting, and error handling.
+
+## Overview
+
+REST (Representational State Transfer) is an architectural style for designing networked applications. Navius provides a clean, idiomatic way to build REST APIs in Rust with features like request validation, route handlers, error handling, and JSON serialization/deserialization.
+
+This example builds a product catalog API that demonstrates:
+- RESTful resource modeling with CRUD operations
+- Request validation and sanitization
+- Response formatting and status codes
+- Query parameter handling and pagination
+- Error handling and appropriate HTTP status codes
+- Clean architecture with separation of concerns
+
+## Quick Navigation
+
+- [Project Structure](#project-structure)
+- [Implementation](#implementation)
+  - [Models](#srcmodelsproductrs)
+  - [Repository](#srcrepositoriesproduct_repositoryrs)
+  - [Service Layer](#srcservicesproduct_servicers)
+  - [API Handlers](#srcapiproductsrs)
+  - [Error Handling](#srcutilserrorrs)
+  - [Application Entry Point](#srcmainrs)
+- [API Endpoints](#api-endpoints)
+- [Testing the API](#testing-the-api)
+- [Best Practices](#best-practices)
+- [Common Patterns](#common-patterns)
+- [Performance Considerations](#performance-considerations)
+- [Security Considerations](#security-considerations)
+- [Troubleshooting](#troubleshooting)
+
+## Prerequisites
+
+Before working with this example, you should be familiar with:
+
+- Rust programming basics
+- HTTP and REST API fundamentals
+- JSON serialization/deserialization
+- Basic error handling patterns
+- Navius framework basics
+
+Required dependencies:
+- Rust 1.70 or newer
+- Navius 0.1.0 or newer
+- tokio for asynchronous operations
+- serde for serialization/deserialization
+- validator for request validation
+- uuid for unique identifiers
 
 ## Project Structure
 
@@ -51,103 +104,107 @@ rest-api-example/
 
 ```toml
 [package]
-name = "rest-api-example"
+name = "navius-rest-api-example"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 navius = "0.1.0"
-tokio = { version = "1.28", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-uuid = { version = "1.3", features = ["v4", "serde"] }
-async-trait = "0.1"
-tracing = "0.1"
-validator = { version = "0.16", features = ["derive"] }
-thiserror = "1.0"
-chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1.28.0", features = ["full"] }
+serde = { version = "1.0.160", features = ["derive"] }
+serde_json = "1.0.96"
+validator = { version = "0.16.0", features = ["derive"] }
+thiserror = "1.0.40"
+async-trait = "0.1.68"
+uuid = { version = "1.3.1", features = ["v4", "serde"] }
+tracing = "0.1.37"
+chrono = { version = "0.4.24", features = ["serde"] }
+```
+
+### config/default.yaml
+
+```yaml
+server:
+  host: "127.0.0.1"
+  port: 8080
+  
+logging:
+  level: debug
+  format: json
+
+cors:
+  allowed_origins: ["*"]
+  allowed_methods: ["GET", "POST", "PUT", "DELETE"]
+  max_age_secs: 86400
 ```
 
 ### src/models/product.rs
 
 ```rust
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
-use chrono::{DateTime, Utc};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Product {
     pub id: Uuid,
     pub name: String,
     pub description: String,
     pub price: f64,
-    pub category: String,
+    pub sku: String,
     pub stock: i32,
+    pub category: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct CreateProductRequest {
-    #[validate(length(min = 1, max = 100))]
+    #[validate(length(min = 1, max = 100, message = "Name must be between 1 and 100 characters"))]
     pub name: String,
     
-    #[validate(length(min = 1, max = 1000))]
+    #[validate(length(min = 10, max = 1000, message = "Description must be between 10 and 1000 characters"))]
     pub description: String,
     
-    #[validate(range(min = 0.01))]
+    #[validate(range(min = 0.0, message = "Price must be positive"))]
     pub price: f64,
     
-    #[validate(length(min = 1, max = 50))]
-    pub category: String,
+    #[validate(length(min = 3, max = 20, message = "SKU must be between 3 and 20 characters"))]
+    pub sku: String,
     
-    #[validate(range(min = 0))]
+    #[validate(range(min = 0, message = "Stock cannot be negative"))]
     pub stock: i32,
+    
+    #[validate(length(min = 1, max = 50, message = "Category must be between 1 and 50 characters"))]
+    pub category: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct UpdateProductRequest {
-    #[validate(length(min = 1, max = 100))]
+    #[validate(length(min = 1, max = 100, message = "Name must be between 1 and 100 characters"))]
     pub name: Option<String>,
     
-    #[validate(length(min = 1, max = 1000))]
+    #[validate(length(min = 10, max = 1000, message = "Description must be between 10 and 1000 characters"))]
     pub description: Option<String>,
     
-    #[validate(range(min = 0.01))]
+    #[validate(range(min = 0.0, message = "Price must be positive"))]
     pub price: Option<f64>,
     
-    #[validate(length(min = 1, max = 50))]
-    pub category: Option<String>,
-    
-    #[validate(range(min = 0))]
+    #[validate(range(min = 0, message = "Stock cannot be negative"))]
     pub stock: Option<i32>,
+    
+    #[validate(length(min = 1, max = 50, message = "Category must be between 1 and 50 characters"))]
+    pub category: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct ProductQuery {
+#[derive(Debug, Deserialize)]
+pub struct QueryParams {
+    pub page: Option<usize>,
+    pub limit: Option<usize>,
     pub category: Option<String>,
     pub min_price: Option<f64>,
     pub max_price: Option<f64>,
-    pub in_stock: Option<bool>,
-    pub limit: Option<usize>,
-    pub offset: Option<usize>,
-}
-
-impl From<CreateProductRequest> for Product {
-    fn from(req: CreateProductRequest) -> Self {
-        let now = Utc::now();
-        Self {
-            id: Uuid::new_v4(),
-            name: req.name,
-            description: req.description,
-            price: req.price,
-            category: req.category,
-            stock: req.stock,
-            created_at: now,
-            updated_at: now,
-        }
-    }
 }
 ```
 
@@ -155,170 +212,114 @@ impl From<CreateProductRequest> for Product {
 
 ```rust
 use async_trait::async_trait;
+use chrono::Utc;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
-use crate::models::product::{Product, ProductQuery};
-use crate::utils::error::AppError;
+use crate::models::product::{CreateProductRequest, Product, QueryParams, UpdateProductRequest};
+use crate::utils::error::ApiError;
 
 #[async_trait]
 pub trait ProductRepository: Send + Sync {
-    async fn find_all(&self, query: &ProductQuery) -> Result<Vec<Product>, AppError>;
-    async fn find_by_id(&self, id: &Uuid) -> Result<Product, AppError>;
-    async fn create(&self, product: Product) -> Result<Product, AppError>;
-    async fn update(&self, id: &Uuid, product: Product) -> Result<Product, AppError>;
-    async fn delete(&self, id: &Uuid) -> Result<(), AppError>;
+    async fn find_all(&self, params: &QueryParams) -> Result<Vec<Product>, ApiError>;
+    async fn find_by_id(&self, id: Uuid) -> Result<Product, ApiError>;
+    async fn create(&self, product: CreateProductRequest) -> Result<Product, ApiError>;
+    async fn update(&self, id: Uuid, product: UpdateProductRequest) -> Result<Product, ApiError>;
+    async fn delete(&self, id: Uuid) -> Result<(), ApiError>;
 }
 
-// In-memory implementation for the example
+// For this example, we're using an in-memory repository
 pub struct InMemoryProductRepository {
-    products: RwLock<HashMap<Uuid, Product>>,
+    products: Arc<Mutex<HashMap<Uuid, Product>>>,
 }
 
 impl InMemoryProductRepository {
     pub fn new() -> Self {
         Self {
-            products: RwLock::new(HashMap::new()),
+            products: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
 
 #[async_trait]
 impl ProductRepository for InMemoryProductRepository {
-    async fn find_all(&self, query: &ProductQuery) -> Result<Vec<Product>, AppError> {
-        let products = self.products.read().map_err(|_| {
-            AppError::internal_server_error("Failed to acquire read lock")
-        })?;
+    async fn find_all(&self, params: &QueryParams) -> Result<Vec<Product>, ApiError> {
+        let products = self.products.lock().unwrap();
         
         let mut result: Vec<Product> = products.values().cloned().collect();
         
         // Apply filters
-        if let Some(category) = &query.category {
+        if let Some(category) = &params.category {
             result.retain(|p| p.category == *category);
         }
         
-        if let Some(min_price) = query.min_price {
+        if let Some(min_price) = params.min_price {
             result.retain(|p| p.price >= min_price);
         }
         
-        if let Some(max_price) = query.max_price {
+        if let Some(max_price) = params.max_price {
             result.retain(|p| p.price <= max_price);
         }
         
-        if let Some(in_stock) = query.in_stock {
-            if in_stock {
-                result.retain(|p| p.stock > 0);
-            } else {
-                result.retain(|p| p.stock == 0);
+        // Apply pagination
+        let page = params.page.unwrap_or(1);
+        let limit = params.limit.unwrap_or(10);
+        let skip = (page - 1) * limit;
+        
+        let paged_result = result
+            .into_iter()
+            .skip(skip)
+            .take(limit)
+            .collect();
+            
+        Ok(paged_result)
+    }
+    
+    async fn find_by_id(&self, id: Uuid) -> Result<Product, ApiError> {
+        let products = self.products.lock().unwrap();
+        
+        products.get(&id)
+            .cloned()
+            .ok_or_else(|| ApiError::NotFound(format!("Product with ID {} not found", id)))
+    }
+    
+    async fn create(&self, req: CreateProductRequest) -> Result<Product, ApiError> {
+        let mut products = self.products.lock().unwrap();
+        
+        // Check if SKU already exists
+        for product in products.values() {
+            if product.sku == req.sku {
+                return Err(ApiError::Conflict(format!("Product with SKU {} already exists", req.sku)));
             }
         }
         
-        // Apply pagination
-        let offset = query.offset.unwrap_or(0);
-        let limit = query.limit.unwrap_or(result.len());
+        let now = Utc::now();
+        let id = Uuid::new_v4();
         
-        let end = (offset + limit).min(result.len());
-        if offset < end {
-            Ok(result[offset..end].to_vec())
-        } else {
-            Ok(vec![])
-        }
+        let product = Product {
+            id,
+            name: req.name,
+            description: req.description,
+            price: req.price,
+            sku: req.sku,
+            stock: req.stock,
+            category: req.category,
+            created_at: now,
+            updated_at: now,
+        };
+        
+        products.insert(id, product.clone());
+        
+        Ok(product)
     }
     
-    async fn find_by_id(&self, id: &Uuid) -> Result<Product, AppError> {
-        let products = self.products.read().map_err(|_| {
-            AppError::internal_server_error("Failed to acquire read lock")
-        })?;
+    async fn update(&self, id: Uuid, req: UpdateProductRequest) -> Result<Product, ApiError> {
+        let mut products = self.products.lock().unwrap();
         
-        products.get(id)
-            .cloned()
-            .ok_or_else(|| AppError::not_found(format!("Product with ID {} not found", id)))
-    }
-    
-    async fn create(&self, product: Product) -> Result<Product, AppError> {
-        let mut products = self.products.write().map_err(|_| {
-            AppError::internal_server_error("Failed to acquire write lock")
-        })?;
-        
-        let product_clone = product.clone();
-        products.insert(product.id, product);
-        
-        Ok(product_clone)
-    }
-    
-    async fn update(&self, id: &Uuid, product: Product) -> Result<Product, AppError> {
-        let mut products = self.products.write().map_err(|_| {
-            AppError::internal_server_error("Failed to acquire write lock")
-        })?;
-        
-        if !products.contains_key(id) {
-            return Err(AppError::not_found(format!("Product with ID {} not found", id)));
-        }
-        
-        let product_clone = product.clone();
-        products.insert(*id, product);
-        
-        Ok(product_clone)
-    }
-    
-    async fn delete(&self, id: &Uuid) -> Result<(), AppError> {
-        let mut products = self.products.write().map_err(|_| {
-            AppError::internal_server_error("Failed to acquire write lock")
-        })?;
-        
-        if products.remove(id).is_none() {
-            return Err(AppError::not_found(format!("Product with ID {} not found", id)));
-        }
-        
-        Ok(())
-    }
-}
-```
-
-### src/services/product_service.rs
-
-```rust
-use std::sync::Arc;
-use uuid::Uuid;
-use chrono::Utc;
-
-use crate::models::product::{Product, CreateProductRequest, UpdateProductRequest, ProductQuery};
-use crate::repositories::product_repository::ProductRepository;
-use crate::utils::error::AppError;
-
-pub struct ProductService {
-    repository: Arc<dyn ProductRepository>,
-}
-
-impl ProductService {
-    pub fn new(repository: Arc<dyn ProductRepository>) -> Self {
-        Self {
-            repository,
-        }
-    }
-    
-    pub async fn get_products(&self, query: ProductQuery) -> Result<Vec<Product>, AppError> {
-        self.repository.find_all(&query).await
-    }
-    
-    pub async fn get_product(&self, id: &Uuid) -> Result<Product, AppError> {
-        self.repository.find_by_id(id).await
-    }
-    
-    pub async fn create_product(&self, req: CreateProductRequest) -> Result<Product, AppError> {
-        // Convert request to model
-        let product = Product::from(req);
-        
-        // Save to repository
-        self.repository.create(product).await
-    }
-    
-    pub async fn update_product(&self, id: &Uuid, req: UpdateProductRequest) -> Result<Product, AppError> {
-        // Get existing product
-        let mut product = self.repository.find_by_id(id).await?;
-        
-        // Update fields if provided
+        let product = products.get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Product with ID {} not found", id)))?;
+            
         if let Some(name) = req.name {
             product.name = name;
         }
@@ -331,125 +332,80 @@ impl ProductService {
             product.price = price;
         }
         
-        if let Some(category) = req.category {
-            product.category = category;
-        }
-        
         if let Some(stock) = req.stock {
             product.stock = stock;
         }
         
-        // Update timestamp
+        if let Some(category) = req.category {
+            product.category = category;
+        }
+        
         product.updated_at = Utc::now();
         
-        // Save updated product
-        self.repository.update(id, product).await
+        Ok(product.clone())
     }
     
-    pub async fn delete_product(&self, id: &Uuid) -> Result<(), AppError> {
-        self.repository.delete(id).await
+    async fn delete(&self, id: Uuid) -> Result<(), ApiError> {
+        let mut products = self.products.lock().unwrap();
+        
+        if products.remove(&id).is_none() {
+            return Err(ApiError::NotFound(format!("Product with ID {} not found", id)));
+        }
+        
+        Ok(())
     }
 }
 ```
 
-### src/utils/error.rs
+### src/services/product_service.rs
 
 ```rust
-use navius::http::StatusCode;
-use serde_json::json;
-use thiserror::Error;
+use async_trait::async_trait;
+use uuid::Uuid;
 
-#[derive(Debug, Error)]
-pub enum AppError {
-    #[error("Bad request: {0}")]
-    BadRequest(String),
-    
-    #[error("Unauthorized: {0}")]
-    Unauthorized(String),
-    
-    #[error("Forbidden: {0}")]
-    Forbidden(String),
-    
-    #[error("Not found: {0}")]
-    NotFound(String),
-    
-    #[error("Conflict: {0}")]
-    Conflict(String),
-    
-    #[error("Internal server error: {0}")]
-    InternalServerError(String),
+use crate::models::product::{CreateProductRequest, Product, QueryParams, UpdateProductRequest};
+use crate::repositories::product_repository::ProductRepository;
+use crate::utils::error::ApiError;
+
+#[async_trait]
+pub trait ProductService: Send + Sync {
+    async fn get_products(&self, params: &QueryParams) -> Result<Vec<Product>, ApiError>;
+    async fn get_product(&self, id: Uuid) -> Result<Product, ApiError>;
+    async fn create_product(&self, product: CreateProductRequest) -> Result<Product, ApiError>;
+    async fn update_product(&self, id: Uuid, product: UpdateProductRequest) -> Result<Product, ApiError>;
+    async fn delete_product(&self, id: Uuid) -> Result<(), ApiError>;
 }
 
-impl AppError {
-    pub fn status_code(&self) -> StatusCode {
-        match self {
-            Self::BadRequest(_) => StatusCode::BAD_REQUEST,
-            Self::Unauthorized(_) => StatusCode::UNAUTHORIZED,
-            Self::Forbidden(_) => StatusCode::FORBIDDEN,
-            Self::NotFound(_) => StatusCode::NOT_FOUND,
-            Self::Conflict(_) => StatusCode::CONFLICT,
-            Self::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
-    
-    pub fn error_code(&self) -> &'static str {
-        match self {
-            Self::BadRequest(_) => "BAD_REQUEST",
-            Self::Unauthorized(_) => "UNAUTHORIZED",
-            Self::Forbidden(_) => "FORBIDDEN",
-            Self::NotFound(_) => "NOT_FOUND",
-            Self::Conflict(_) => "CONFLICT",
-            Self::InternalServerError(_) => "INTERNAL_SERVER_ERROR",
-        }
-    }
-    
-    pub fn to_json(&self) -> serde_json::Value {
-        json!({
-            "status": self.status_code().as_u16(),
-            "code": self.error_code(),
-            "message": self.to_string(),
-        })
-    }
-    
-    // Helper functions to create errors
-    pub fn bad_request(message: impl Into<String>) -> Self {
-        Self::BadRequest(message.into())
-    }
-    
-    pub fn unauthorized(message: impl Into<String>) -> Self {
-        Self::Unauthorized(message.into())
-    }
-    
-    pub fn forbidden(message: impl Into<String>) -> Self {
-        Self::Forbidden(message.into())
-    }
-    
-    pub fn not_found(message: impl Into<String>) -> Self {
-        Self::NotFound(message.into())
-    }
-    
-    pub fn conflict(message: impl Into<String>) -> Self {
-        Self::Conflict(message.into())
-    }
-    
-    pub fn internal_server_error(message: impl Into<String>) -> Self {
-        Self::InternalServerError(message.into())
+pub struct ProductServiceImpl<R: ProductRepository> {
+    repository: R,
+}
+
+impl<R: ProductRepository> ProductServiceImpl<R> {
+    pub fn new(repository: R) -> Self {
+        Self { repository }
     }
 }
 
-impl Into<navius::http::Response> for AppError {
-    fn into(self) -> navius::http::Response {
-        let status = self.status_code();
-        let body = self.to_json().to_string();
-        
-        let mut response = navius::http::Response::new(body.into());
-        *response.status_mut() = status;
-        response.headers_mut().insert(
-            navius::http::header::CONTENT_TYPE,
-            "application/json".parse().unwrap(),
-        );
-        
-        response
+#[async_trait]
+impl<R: ProductRepository + 'static> ProductService for ProductServiceImpl<R> {
+    async fn get_products(&self, params: &QueryParams) -> Result<Vec<Product>, ApiError> {
+        self.repository.find_all(params).await
+    }
+    
+    async fn get_product(&self, id: Uuid) -> Result<Product, ApiError> {
+        self.repository.find_by_id(id).await
+    }
+    
+    async fn create_product(&self, product: CreateProductRequest) -> Result<Product, ApiError> {
+        self.repository.create(product).await
+    }
+    
+    async fn update_product(&self, id: Uuid, product: UpdateProductRequest) -> Result<Product, ApiError> {
+        self.repository.update(id, product).await
+    }
+    
+    async fn delete_product(&self, id: Uuid) -> Result<(), ApiError> {
+        self.repository.delete(id).await
     }
 }
 ```
@@ -457,271 +413,411 @@ impl Into<navius::http::Response> for AppError {
 ### src/api/products.rs
 
 ```rust
-use std::sync::Arc;
-use navius::http::{Request, Response, StatusCode};
-use navius::web::{Path, Query, Json, State};
+use navius::request::{Json, Path, Query};
+use navius::response::{Response, StatusCode};
+use navius::routing::{delete, get, post, put, Route, Router};
 use uuid::Uuid;
+use validator::Validate;
 
-use crate::models::product::{CreateProductRequest, UpdateProductRequest, ProductQuery};
+use crate::models::product::{CreateProductRequest, QueryParams, UpdateProductRequest};
 use crate::services::product_service::ProductService;
-use crate::utils::error::AppError;
+use crate::utils::error::ApiError;
 
-pub async fn get_products(
-    Query(query): Query<ProductQuery>,
-    State(product_service): State<Arc<ProductService>>,
-) -> Result<Json<Vec<crate::models::product::Product>>, AppError> {
-    let products = product_service.get_products(query).await?;
-    Ok(Json(products))
+pub fn products_routes<S: ProductService + 'static>() -> Router {
+    Router::new()
+        .route("/products", get(get_products::<S>))
+        .route("/products", post(create_product::<S>))
+        .route("/products/:id", get(get_product::<S>))
+        .route("/products/:id", put(update_product::<S>))
+        .route("/products/:id", delete(delete_product::<S>))
 }
 
-pub async fn get_product(
+async fn get_products<S: ProductService + 'static>(
+    service: navius::Extension<S>,
+    Query(params): Query<QueryParams>,
+) -> Result<Response, ApiError> {
+    let products = service.get_products(&params).await?;
+    Ok(Response::json(&products))
+}
+
+async fn get_product<S: ProductService + 'static>(
+    service: navius::Extension<S>,
     Path(id): Path<Uuid>,
-    State(product_service): State<Arc<ProductService>>,
-) -> Result<Json<crate::models::product::Product>, AppError> {
-    let product = product_service.get_product(&id).await?;
-    Ok(Json(product))
+) -> Result<Response, ApiError> {
+    let product = service.get_product(id).await?;
+    Ok(Response::json(&product))
 }
 
-pub async fn create_product(
-    Json(create_req): Json<CreateProductRequest>,
-    State(product_service): State<Arc<ProductService>>,
-) -> Result<(StatusCode, Json<crate::models::product::Product>), AppError> {
+async fn create_product<S: ProductService + 'static>(
+    service: navius::Extension<S>,
+    Json(payload): Json<CreateProductRequest>,
+) -> Result<Response, ApiError> {
     // Validate request
-    if let Err(errors) = validator::Validate::validate(&create_req) {
-        return Err(AppError::bad_request(format!("Validation error: {:?}", errors)));
-    }
+    payload.validate()?;
     
-    // Create product
-    let product = product_service.create_product(create_req).await?;
-    
-    // Return 201 Created with the product
-    Ok((StatusCode::CREATED, Json(product)))
+    let product = service.create_product(payload).await?;
+    Ok(Response::builder()
+        .status(StatusCode::CREATED)
+        .json(&product))
 }
 
-pub async fn update_product(
+async fn update_product<S: ProductService + 'static>(
+    service: navius::Extension<S>,
     Path(id): Path<Uuid>,
-    Json(update_req): Json<UpdateProductRequest>,
-    State(product_service): State<Arc<ProductService>>,
-) -> Result<Json<crate::models::product::Product>, AppError> {
+    Json(payload): Json<UpdateProductRequest>,
+) -> Result<Response, ApiError> {
     // Validate request
-    if let Err(errors) = validator::Validate::validate(&update_req) {
-        return Err(AppError::bad_request(format!("Validation error: {:?}", errors)));
-    }
+    payload.validate()?;
     
-    // Update product
-    let product = product_service.update_product(&id, update_req).await?;
-    
-    Ok(Json(product))
+    let product = service.update_product(id, payload).await?;
+    Ok(Response::json(&product))
 }
 
-pub async fn delete_product(
+async fn delete_product<S: ProductService + 'static>(
+    service: navius::Extension<S>,
     Path(id): Path<Uuid>,
-    State(product_service): State<Arc<ProductService>>,
-) -> Result<StatusCode, AppError> {
-    // Delete product
-    product_service.delete_product(&id).await?;
-    
-    // Return 204 No Content
-    Ok(StatusCode::NO_CONTENT)
+) -> Result<Response, ApiError> {
+    service.delete_product(id).await?;
+    Ok(Response::builder()
+        .status(StatusCode::NO_CONTENT)
+        .body(()))
 }
 ```
 
-### src/api/mod.rs
+### src/utils/error.rs
 
 ```rust
-pub mod products;
+use navius::response::{Response, StatusCode};
+use serde::Serialize;
+use thiserror::Error;
+use validator::ValidationErrors;
 
-use navius::routing::{Router, get, post, put, delete};
-use std::sync::Arc;
-
-use crate::services::product_service::ProductService;
-
-pub fn api_router(product_service: Arc<ProductService>) -> Router {
-    Router::new()
-        .nest("/api/v1", 
-            Router::new()
-                .nest("/products", products_router(product_service))
-        )
+#[derive(Error, Debug)]
+pub enum ApiError {
+    #[error("Resource not found: {0}")]
+    NotFound(String),
+    
+    #[error("Bad request: {0}")]
+    BadRequest(String),
+    
+    #[error("Conflict: {0}")]
+    Conflict(String),
+    
+    #[error("Validation error: {0}")]
+    ValidationError(#[from] ValidationErrors),
+    
+    #[error("Internal server error: {0}")]
+    InternalError(String),
 }
 
-fn products_router(product_service: Arc<ProductService>) -> Router {
-    Router::new()
-        .route("/", get(products::get_products).post(products::create_product))
-        .route("/:id", get(products::get_product).put(products::update_product).delete(products::delete_product))
-        .with_state(product_service)
+#[derive(Serialize)]
+struct ErrorResponse {
+    status: String,
+    message: String,
+}
+
+impl From<ApiError> for Response {
+    fn from(error: ApiError) -> Self {
+        let status = match &error {
+            ApiError::NotFound(_) => StatusCode::NOT_FOUND,
+            ApiError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            ApiError::Conflict(_) => StatusCode::CONFLICT,
+            ApiError::ValidationError(_) => StatusCode::BAD_REQUEST,
+            ApiError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        
+        let message = error.to_string();
+        
+        let body = ErrorResponse {
+            status: status.to_string(),
+            message,
+        };
+        
+        Response::builder()
+            .status(status)
+            .json(&body)
+            .unwrap_or_else(|_| {
+                Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body("Failed to serialize error response")
+                    .unwrap()
+            })
+    }
 }
 ```
 
 ### src/main.rs
 
 ```rust
+use navius::{Application, Config};
+use std::sync::Arc;
+
 mod api;
 mod models;
 mod repositories;
 mod services;
 mod utils;
 
-use std::sync::Arc;
-use navius::Application;
-
-use repositories::product_repository::InMemoryProductRepository;
-use services::product_service::ProductService;
+use crate::api::products::products_routes;
+use crate::repositories::product_repository::InMemoryProductRepository;
+use crate::services::product_service::ProductServiceImpl;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Setup tracing
-    tracing_subscriber::fmt::init();
+    // Load configuration
+    let config = Config::from_file("config/default.yaml")?;
     
-    // Create repository
-    let product_repository = Arc::new(InMemoryProductRepository::new());
+    // Initialize repository
+    let repository = InMemoryProductRepository::new();
     
-    // Create service
-    let product_service = Arc::new(ProductService::new(product_repository));
+    // Initialize service
+    let service = ProductServiceImpl::new(repository);
     
-    // Set up the router
-    let router = api::api_router(product_service);
-    
-    // Create and run the application
-    let app = Application::builder()
-        .with_router(router)
+    // Create the application
+    let app = Application::new()
+        .with_config(config)
+        .register_extension(service)
+        .register_routes(products_routes())
         .build()?;
     
-    println!("REST API server running at http://127.0.0.1:8080");
-    app.run("127.0.0.1:8080").await?;
+    // Start the server
+    app.run().await?;
     
     Ok(())
 }
 ```
 
-### config/default.yaml
+## API Endpoints
 
-```yaml
-server:
-  host: "127.0.0.1"
-  port: 8080
-  
-logging:
-  level: "debug"
-  format: "json"
-```
+The API provides the following endpoints:
 
-## Running the Example
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /products | List all products with optional filtering and pagination |
+| GET | /products/:id | Get a specific product by ID |
+| POST | /products | Create a new product |
+| PUT | /products/:id | Update an existing product |
+| DELETE | /products/:id | Delete a product |
 
-To run this REST API example:
+### Query Parameters for GET /products
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/navius/examples.git
-   cd examples/rest-api-example
-   ```
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| page | integer | Page number for pagination (default: 1) |
+| limit | integer | Number of items per page (default: 10) |
+| category | string | Filter products by category |
+| min_price | float | Filter products with price >= min_price |
+| max_price | float | Filter products with price <= max_price |
 
-2. Build and run the application:
-   ```bash
-   cargo run
-   ```
+## Testing the API
 
-3. The server will start on `http://127.0.0.1:8080`
+You can test the API using curl, Postman, or any HTTP client. Here are some examples:
 
-## Testing the API Endpoints
-
-### Create a Product
+### List Products
 
 ```bash
-curl -X POST http://127.0.0.1:8080/api/v1/products \
+curl -X GET http://localhost:8080/products
+```
+
+With filters:
+
+```bash
+curl -X GET "http://localhost:8080/products?category=electronics&min_price=100&page=1&limit=5"
+```
+
+### Get Product by ID
+
+```bash
+curl -X GET http://localhost:8080/products/123e4567-e89b-12d3-a456-426614174000
+```
+
+### Create Product
+
+```bash
+curl -X POST http://localhost:8080/products \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Ergonomic Keyboard",
-    "description": "Comfortable ergonomic keyboard for long coding sessions",
-    "price": 129.99,
-    "category": "computer accessories",
-    "stock": 50
+    "name": "Wireless Headphones",
+    "description": "High-quality wireless headphones with noise cancellation",
+    "price": 199.99,
+    "sku": "WH-2023-001",
+    "stock": 50,
+    "category": "electronics"
   }'
 ```
 
-### Get All Products
+### Update Product
 
 ```bash
-curl http://127.0.0.1:8080/api/v1/products
-```
-
-### Get Products with Filters
-
-```bash
-curl "http://127.0.0.1:8080/api/v1/products?category=computer%20accessories&min_price=100&in_stock=true"
-```
-
-### Get a Product by ID
-
-```bash
-curl http://127.0.0.1:8080/api/v1/products/[product-id]
-```
-
-### Update a Product
-
-```bash
-curl -X PUT http://127.0.0.1:8080/api/v1/products/[product-id] \
+curl -X PUT http://localhost:8080/products/123e4567-e89b-12d3-a456-426614174000 \
   -H "Content-Type: application/json" \
   -d '{
-    "price": 119.99,
+    "price": 179.99,
     "stock": 45
   }'
 ```
 
-### Delete a Product
+### Delete Product
 
 ```bash
-curl -X DELETE http://127.0.0.1:8080/api/v1/products/[product-id]
+curl -X DELETE http://localhost:8080/products/123e4567-e89b-12d3-a456-426614174000
 ```
-
-## Key Concepts Demonstrated
-
-1. **Resource-Oriented Design**: The API is structured around product resources with standard CRUD operations.
-
-2. **Request Validation**: Input validation using the `validator` crate to ensure data integrity.
-
-3. **Error Handling**: Comprehensive error handling with meaningful error messages and appropriate HTTP status codes.
-
-4. **Query Parameters**: Supporting filtering, sorting, and pagination through query parameters.
-
-5. **Proper HTTP Status Codes**:
-   - `200 OK` for successful GET, PUT operations
-   - `201 Created` for successful POST operations
-   - `204 No Content` for successful DELETE operations
-   - `400 Bad Request` for validation errors
-   - `404 Not Found` for resources that don't exist
-
-6. **Service Layer Architecture**:
-   - API handlers: Handle HTTP requests and responses
-   - Services: Contain business logic
-   - Repositories: Manage data access
-   - Models: Define data structures
-
-7. **Dependency Injection**: Services and repositories are injected as dependencies.
 
 ## Best Practices
 
-1. **API Versioning**: Routes are prefixed with `/api/v1/` to support future versioning.
+When building REST APIs with Navius, consider the following best practices:
 
-2. **Response Formatting**: Consistent JSON response structure.
+1. **Use Proper HTTP Methods**:
+   - GET for retrieving resources
+   - POST for creating new resources
+   - PUT for updating entire resources
+   - PATCH for partial updates
+   - DELETE for removing resources
 
-3. **Validation**: Input data is validated before processing.
+2. **Return Appropriate Status Codes**:
+   - 200 OK for successful GET, PUT, PATCH, DELETE
+   - 201 Created for successful POST
+   - 204 No Content for successful DELETE without response body
+   - 400 Bad Request for invalid input
+   - 404 Not Found for missing resources
+   - 409 Conflict for resource conflicts
+   - 500 Internal Server Error for server errors
 
-4. **Separation of Concerns**: Clear separation between API handling, business logic, and data access.
+3. **Validate Input**:
+   - Always validate and sanitize input data
+   - Return helpful validation error messages
+   - Use the validator crate with #[derive(Validate)]
 
-5. **Error Messages**: Descriptive error messages that don't expose internal details.
+4. **Resource Naming**:
+   - Use plural nouns for resources (e.g., /products not /product)
+   - Use kebab-case for multi-word resources (e.g., /order-items)
+   - Keep URLs simple and intuitive
 
-6. **Status Codes**: Appropriate HTTP status codes for different situations.
+5. **Implement Pagination**:
+   - Provide pagination for list endpoints
+   - Include metadata about pagination (total, page, limit)
+   - Use query parameters for pagination control
+
+6. **Proper Error Handling**:
+   - Create consistent error response structures
+   - Include meaningful error messages
+   - Use typed errors with thiserror
+
+## Common Patterns
+
+### Resource-Based Routing
+
+Organize routes based on resources for clarity:
+
+```rust
+Router::new()
+    .nest("/products", products_routes())
+    .nest("/orders", orders_routes())
+    .nest("/customers", customers_routes())
+```
+
+### Response Envelope
+
+For more detailed responses, consider using a response envelope:
+
+```rust
+#[derive(Serialize)]
+struct ApiResponse<T> {
+    success: bool,
+    data: Option<T>,
+    error: Option<String>,
+    metadata: Option<ResponseMetadata>,
+}
+
+#[derive(Serialize)]
+struct ResponseMetadata {
+    total: usize,
+    page: usize,
+    limit: usize,
+}
+```
+
+### Service Registration
+
+Make services available to the application:
+
+```rust
+let app = Application::new()
+    .register_extension(product_service)
+    .register_extension(order_service)
+    .register_routes(api_routes())
+    .build()?;
+```
+
+## Performance Considerations
+
+1. **Connection Pooling**: Use connection pools for database access to reduce overhead.
+
+2. **Caching**: Implement caching for frequently accessed resources.
+
+3. **Asynchronous Processing**: Use Rust's async/await for non-blocking I/O operations.
+
+4. **Pagination**: Always paginate large collections to prevent memory issues.
+
+5. **Batch Operations**: Provide endpoints for batch operations to reduce round trips.
+
+## Security Considerations
+
+1. **Input Validation**: Always validate and sanitize user input.
+
+2. **CORS Configuration**: Configure CORS appropriately for your application.
+
+3. **Rate Limiting**: Implement rate limiting to prevent abuse.
+
+4. **Authentication and Authorization**: Add proper auth middleware.
+
+5. **HTTPS**: Always use HTTPS in production.
+
+6. **Content Security**: Set appropriate security headers.
+
+## Troubleshooting
+
+### Common Issues
+
+1. **404 Not Found for Valid Routes**:
+   - Check route registration order
+   - Verify URL path parameters
+   - Check for trailing slashes
+
+2. **Serialization Errors**:
+   - Ensure all fields in your models implement Serialize/Deserialize
+   - Check for circular references
+   - Verify date/time formats
+
+3. **Connection Errors**:
+   - Verify network configuration
+   - Check firewall settings
+   - Ensure correct host/port in config
+
+### Debugging Tips
+
+1. Use tracing to debug request flow:
+
+```rust
+tracing::debug!("Processing product request: {:?}", product);
+```
+
+2. Enable more detailed logs by setting log level to debug or trace in your configuration.
+
+3. Use middleware to log request/response information:
+
+```rust
+app.middleware(LoggingMiddleware::new())
+```
 
 ## Next Steps
 
-- Implement authentication and authorization
-- Add OpenAPI documentation
-- Implement a real database connection
-- Add pagination metadata to responses
-- Implement request/response logging middleware
+After mastering the basics of REST APIs with Navius, consider:
 
-## Related Documentation
+1. Adding authentication and authorization
+2. Implementing more advanced filtering and sorting
+3. Adding metrics and monitoring
+4. Exploring GraphQL as an alternative to REST
+5. Implementing WebSockets for real-time updates
 
-- [Application API Reference](../reference/api/application-api.md)
-- [Error Handling Example](./error-handling-example.md)
-- [Basic Application Example](./basic-application-example.md) 
+For more examples, see the [GraphQL Example](../02_examples/graphql-example.md) or [Dependency Injection Example](../02_examples/dependency-injection-example.md). 
