@@ -11,7 +11,7 @@ related:
   - reference/patterns/health-check-pattern.md
   - examples/health-service-example.md
   - reference/api/api-resource.md
-last_updated: March 26, 2025
+last_updated: March 27, 2025
 version: 1.0
 ---
 

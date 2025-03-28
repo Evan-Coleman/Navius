@@ -9,7 +9,7 @@ tags:
 related:
   - 99_misc/migration-priority-list.md
   - README-reorganization.md
-last_updated: 2025-03-27
+last_updated: March 27, 2025
 version: 1.0
 status: in-progress
 ---

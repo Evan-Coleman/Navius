@@ -8,7 +8,7 @@ tags:
   - developer-experience
   - spring-boot
   - ease-of-use
-last_updated: June 5, 2025
+last_updated: March 27, 2025
 version: 1.5
 ---
 

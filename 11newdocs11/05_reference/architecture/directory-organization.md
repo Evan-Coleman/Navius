@@ -10,7 +10,7 @@ related:
   - ../../guides/development/project-navigation.md
   - principles.md
   - ../standards/naming-conventions.md
-last_updated: March 23, 2025
+last_updated: March 27, 2025
 version: 1.0
 ---
 

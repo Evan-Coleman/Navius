@@ -15,7 +15,7 @@ related:
   - ../guides/features/api-integration.md
   - ../reference/configuration/environment-variables.md
   - ../guides/deployment/security-checklist.md
-last_updated: March 23, 2025
+last_updated: March 27, 2025
 version: 1.0
 ---
 # Navius Authentication Guide

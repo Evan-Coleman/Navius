@@ -17,7 +17,7 @@ related:
   - ../guides/deployment/kubernetes-deployment.md
   - ../reference/configuration/environment-variables.md
   - ../guides/features/authentication.md
-last_updated: March 23, 2025
+last_updated: March 27, 2025
 version: 1.0
 ---
 # Navius Deployment Guide

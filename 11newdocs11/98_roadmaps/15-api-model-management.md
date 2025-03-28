@@ -8,7 +8,7 @@ tags:
   - code-generation
   - openapi
   - integration
-last_updated: March 26, 2025
+last_updated: March 27, 2025
 version: 1.0
 ---
 # API Model Management Roadmap

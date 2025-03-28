@@ -12,7 +12,7 @@ related:
   - 05_reference/README.md
   - 03_contributing/README.md
   - 02_examples/README.md
-last_updated: May 30, 2024
+last_updated: March 27, 2025
 version: 1.0
 ---
 

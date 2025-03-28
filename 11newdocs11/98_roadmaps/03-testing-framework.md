@@ -3,7 +3,7 @@ title: Testing Framework
 description: A comprehensive testing strategy for the Navius application
 category: Quality
 tags: [testing, quality, framework]
-last_updated: 2023-06-28
+last_updated: March 27, 2025
 version: 0.5.1
 ---
 

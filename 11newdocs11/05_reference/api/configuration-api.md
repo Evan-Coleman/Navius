@@ -1,15 +1,16 @@
 ---
 title: "Configuration API Reference"
 description: "Comprehensive reference for the Navius Configuration API"
-category: api
+category: reference
 tags:
   - api
   - configuration
   - settings
 related:
-  - reference/patterns/feature-selection-pattern.md
-  - examples/configuration-example.md
-last_updated: March 26, 2025
+  - ../patterns/feature-selection-pattern.md
+  - ../../02_examples/configuration-example.md
+  - ./application-api.md
+last_updated: March 27, 2025
 version: 1.0
 ---
 
@@ -80,6 +81,43 @@ pub enum ConfigValue {
     Null,
 }
 ```
+
+## Implementation Details
+
+### Configuration Flow
+
+The following diagram illustrates how configuration is loaded and accessed in a Navius application:
+
+```mermaid
+flowchart TD
+    A[Configuration Sources] --> B[ConfigLoader]
+    A --> C[Environment Variables]
+    A --> D[Configuration Files]
+    A --> E[Command Line Arguments]
+    A --> F[Remote Sources]
+    B --> G[ConfigManager]
+    C --> G
+    D --> G
+    E --> G
+    F --> G
+    G --> H[ConfigValues]
+    H --> I[ConfigService]
+    I --> J[Application Components]
+    I --> K[Type-Safe Configuration]
+    K --> L[DatabaseConfig]
+    K --> M[ServerConfig]
+    K --> N[LoggingConfig]
+```
+
+### Loading Process
+
+When configuration is loaded, the following process occurs:
+
+1. Each `ConfigLoader` loads configuration from its source
+2. The `ConfigManager` merges all configurations based on priority
+3. Higher priority values override lower priority values
+4. The merged configuration is made available through the `ConfigService`
+5. Application components access the configuration via the `ConfigService`
 
 ## Common Operations
 
@@ -455,6 +493,93 @@ let config = config_manager.load()?;
 let api_key = config.get_string("secrets.api_key")?;
 ```
 
+## Troubleshooting
+
+### Common Issues
+
+| Issue | Possible Cause | Solution |
+|-------|---------------|----------|
+| Configuration not loading | Incorrect file path | Check that configuration files are in the expected location |
+| Missing configuration value | Key not specified in config | Provide a default value or validate at startup |
+| Wrong type for configuration value | Incorrect type specification | Use the appropriate getter method (get_string, get_int, etc.) |
+| Environment-specific config not applied | Wrong environment name | Verify app.environment setting and environment-specific file names |
+| Circular dependencies in configuration | Configuration references itself | Break circular dependencies by refactoring configuration structure |
+
+### Configuration Load Order Issues
+
+If configuration values are not being overridden as expected:
+
+1. Check the priority values of your loaders (higher priority loaders override lower priority ones)
+2. Verify file naming conventions for environment-specific files
+3. Check that environment variables are properly formatted with the expected prefix
+4. Use the `has` method to check if a key exists before attempting to access it
+
+### Debugging Configuration
+
+```rust
+// Print all configuration keys and values (for debugging only)
+fn debug_print_config(config: &dyn ConfigService, prefix: &str) {
+    // This is a simplified example - in a real app, you'd need to recursively
+    // traverse the configuration structure
+    println!("Configuration (prefix: {})", prefix);
+    
+    // Print basic values if they exist
+    for key in ["host", "port", "username", "enabled"] {
+        let full_key = if prefix.is_empty() { 
+            key.to_string() 
+        } else { 
+            format!("{}.{}", prefix, key) 
+        };
+        
+        if config.has(&full_key) {
+            if let Ok(value) = config.get_string(&full_key) {
+                println!("  {} = {}", full_key, value);
+            } else if let Ok(value) = config.get_int(&full_key) {
+                println!("  {} = {}", full_key, value);
+            } else if let Ok(value) = config.get_bool(&full_key) {
+                println!("  {} = {}", full_key, value);
+            }
+        }
+    }
+}
+```
+
+### Validating Configuration
+
+```rust
+// Validate required configuration keys
+fn validate_config(config: &dyn ConfigService) -> Result<(), ConfigError> {
+    // Check required keys
+    for key in ["server.host", "server.port", "database.url"] {
+        if !config.has(key) {
+            return Err(ConfigError::KeyNotFound(key.to_string()));
+        }
+    }
+    
+    // Validate value ranges
+    let port = config.get_int("server.port")?;
+    if port < 1 || port > 65535 {
+        return Err(ConfigError::ParseError {
+            source: "server.port".to_string(),
+            reason: format!("Port must be between 1 and 65535, got {}", port),
+        });
+    }
+    
+    // Check conditional requirements
+    if config.get_bool("tls.enabled").unwrap_or(false) {
+        for key in ["tls.cert_file", "tls.key_file"] {
+            if !config.has(key) {
+                return Err(ConfigError::KeyNotFound(
+                    format!("{} is required when TLS is enabled", key)
+                ));
+            }
+        }
+    }
+    
+    Ok(())
+}
+```
+
 ## Reference
 
 ### Configuration Key Naming Conventions
@@ -497,7 +622,8 @@ Navius supports the following configuration file formats:
 4. Environment variables
 5. Command-line arguments
 
-## Related Examples
+## Related Documents
 
-- [Configuration Example](../../examples/configuration-example.md)
-- [Feature Selection Pattern](../patterns/feature-selection-pattern.md) 
+- [Configuration Example](../../02_examples/configuration-example.md)
+- [Feature Selection Pattern](../patterns/feature-selection-pattern.md)
+- [Application API Reference](./application-api.md) 

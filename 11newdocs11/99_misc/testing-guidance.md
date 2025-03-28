@@ -3,7 +3,7 @@ title: Navius Testing Guidelines
 description: Comprehensive guide for testing practices in the Navius codebase
 category: Development
 tags: [testing, quality, guidelines]
-last_updated: 2025-03-26
+last_updated: March 27, 2025
 version: 1.0.0
 ---
 

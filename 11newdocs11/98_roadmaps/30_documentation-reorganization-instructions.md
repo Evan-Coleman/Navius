@@ -64,7 +64,7 @@ tags:
 related:
   - path/to/related-document1.md
   - path/to/related-document2.md
-last_updated: YYYY-MM-DD
+last_updated: March 27, 2025
 version: 1.0
 ---
 

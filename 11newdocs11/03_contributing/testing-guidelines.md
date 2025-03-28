@@ -12,7 +12,7 @@ related:
   - contributing/development-process.md
   - guides/development/testing-guide.md
   - reference/patterns/testing-patterns.md
-last_updated: March 26, 2025
+last_updated: March 27, 2025
 version: 1.0
 ---
 

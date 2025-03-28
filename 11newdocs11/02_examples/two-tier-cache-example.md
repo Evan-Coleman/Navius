@@ -13,7 +13,7 @@ related:
   - ../guides/caching-strategies.md
   - ../reference/configuration/cache-config.md
   - ../reference/patterns/caching-patterns.md
-last_updated: March 26, 2025
+last_updated: March 27, 2025
 version: 1.0
 ---
 

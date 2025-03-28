@@ -10,7 +10,7 @@ related:
   - ../architecture/principles.md
   - ../../guides/deployment/production-deployment.md
   - ../../guides/deployment/cloud-deployment.md
-last_updated: March 23, 2025
+last_updated: March 27, 2025
 version: 1.0
 ---
 

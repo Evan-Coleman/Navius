@@ -8,7 +8,7 @@ related_documents:
   - 02_examples/error-handling-example.md
   - 01_getting_started/first-steps.md
   - 03_reference/01_api/router-api.md
-last_updated: 2025-03-27
+last_updated: March 27, 2025
 version: 1.1
 status: stable
 ---

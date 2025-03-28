@@ -16,7 +16,7 @@ related:
   - ../guides/deployment/aws-deployment.md
   - ../guides/features/caching.md
   - ../reference/configuration/environment-variables.md
-last_updated: March 23, 2025
+last_updated: March 27, 2025
 version: 1.0
 ---
 # Navius PostgreSQL Integration Guide

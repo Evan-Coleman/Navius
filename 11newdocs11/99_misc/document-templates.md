@@ -41,7 +41,7 @@ tags:
   - [additional tags]
 related:
   - [related document paths]
-last_updated: [Current Date]
+last_updated: March 27, 2025
 version: 1.0
 status: [draft|review|active]
 ---
@@ -107,7 +107,7 @@ tags:
   - [additional tags]
 related:
   - [related document paths]
-last_updated: [Current Date]
+last_updated: March 27, 2025
 version: 1.0
 status: [draft|review|active]
 ---
@@ -187,7 +187,7 @@ tags:
   - [additional tags]
 related:
   - [related document paths]
-last_updated: [Current Date]
+last_updated: March 27, 2025
 version: 1.0
 status: [draft|review|active]
 ---
@@ -250,7 +250,7 @@ tags:
   - [relevant tags]
 related:
   - [related document paths]
-last_updated: [Current Date]
+last_updated: March 27, 2025
 version: 1.0
 status: [draft|review|active]
 ---
@@ -330,7 +330,7 @@ tags:
   - [additional tags]
 related:
   - [related document paths]
-last_updated: [Current Date]
+last_updated: March 27, 2025
 version: 1.0
 status: [draft|review|active]
 ---
@@ -403,7 +403,7 @@ tags:
   - [additional tags]
 related:
   - [related document paths]
-last_updated: [Current Date]
+last_updated: March 27, 2025
 version: 1.0
 status: [draft|review|active]
 ---
@@ -505,7 +505,7 @@ tags:
   - [additional tags]
 related:
   - [related document paths]
-last_updated: [Current Date]
+last_updated: March 27, 2025
 version: 1.0
 status: [planned|in-progress|completed]
 ---

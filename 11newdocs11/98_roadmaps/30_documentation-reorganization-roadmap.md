@@ -133,10 +133,10 @@ Our primary focus is on migrating high-priority content from the old structure t
 - ✅ Migrate error handling example
 - ✅ Migrate middleware example
 - ✅ Migrate application API reference
-- [ ] Migrate router API reference
-- [ ] Migrate config API reference
-- [ ] Apply frontmatter fixes across all documents
-- [ ] Verify examples work as expected
+- ✅ Migrate router API reference
+- ✅ Migrate config API reference
+- ✅ Apply frontmatter fixes across all documents
+- [ ] Verify examples work as expected (Requires dedicated verification approach for 102 Rust code examples)
 - [ ] Fix internal links between documents
 - [ ] Validate each migrated document
 
