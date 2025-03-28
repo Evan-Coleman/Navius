@@ -128,10 +128,10 @@ See the [Documentation Script Fixes](31_documentation-script-fixes.md) roadmap f
    - 🔄 Start with essential getting-started documentation
      - ✅ Migrate installation guide
      - ✅ Migrate CLI reference guide
-     - [ ] Migrate development setup guide
-     - [ ] Migrate introduction (README)
-     - [ ] Migrate hello world tutorial
-     - [ ] Migrate first steps guide
+     - ✅ Migrate development setup guide
+     - ✅ Migrate introduction (README)
+     - ✅ Migrate hello world tutorial
+     - ✅ Migrate first steps guide
    - [ ] Apply frontmatter fixes using standard templates
    - [ ] Verify and update examples, focusing on failing code blocks identified by validation
    - [ ] Fix internal links for cross-references

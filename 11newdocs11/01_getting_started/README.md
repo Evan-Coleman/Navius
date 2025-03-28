@@ -1,138 +1,281 @@
 ---
 title: Getting Started with Navius
-description: "Quick start guides for getting up and running with Navius, including installation, development setup, and first steps in building applications"
+description: "Complete introduction and quick start guides for the Navius framework, including installation, setup, and building your first application"
 category: getting-started
 tags:
-  - getting-started
+  - introduction
   - installation
   - setup
   - quickstart
   - development
   - tutorial
 related:
-  - ../guides/development/README.md
-  - ../reference/architecture/principles.md
-  - ../guides/features/README.md
-last_updated: March 23, 2025
-version: 1.0
+  - installation.md
+  - development-setup.md
+  - first-steps.md
+  - hello-world.md
+  - ../04_guides/development/development-workflow.md
+  - ../05_reference/architecture/principles.md
+last_updated: March 27, 2025
+version: 1.1
+status: active
 ---
 
 # Getting Started with Navius
 
-Welcome to Navius! This section will help you get up and running quickly with the Navius framework. Follow these guides in sequence to set up your development environment and build your first Navius application.
+## Overview
 
-## Quick Start
+Welcome to Navius! This section provides everything you need to start building high-performance, maintainable applications with the Navius framework. Whether you're new to Rust or an experienced developer, these guides will help you quickly set up your environment and build your first application.
 
-1. [Installation](installation.md) - Install Navius and its dependencies
-2. [Development Setup](development-setup.md) - Set up your development environment
-3. [First Steps](first-steps.md) - Create your first Navius application
+Navius is a modern, opinionated web framework for Rust that combines the performance benefits of Rust with the developer experience of frameworks like Spring Boot. It provides built-in support for dependency injection, configuration management, API development, and more.
+
+## Quick Navigation
+
+- [Installation Guide](installation.md) - Set up Navius and its dependencies
+- [Development Setup](development-setup.md) - Configure your development environment
+- [First Steps](first-steps.md) - Create your first Navius application
+- [Hello World Tutorial](hello-world.md) - Build a simple REST API
+
+## Getting Started in 5 Minutes
+
+For experienced developers who want to dive right in:
+
+```bash
+# Install Navius (requires Rust 1.70+)
+git clone https://github.com/your-organization/navius.git
+cd navius
+
+# Build the framework
+cargo build
+
+# Run the development server
+./run_dev.sh
+
+# Create a new project (optional)
+cargo new --bin my-navius-app
+cd my-navius-app
+
+# Add Navius dependency to Cargo.toml
+# [dependencies]
+# navius = { path = "../navius" }
+# tokio = { version = "1", features = ["full"] }
+# axum = "0.6"
+```
 
 ## Prerequisites
 
-Before you begin, ensure you have:
+Before you begin with Navius, ensure you have:
 
-- Rust installed (1.75.0 or later)
-- A code editor (VS Code recommended)
-- Basic knowledge of:
-  - Rust programming language
-  - Web development concepts
-  - Command line usage
+- **Rust** (version 1.70.0 or later)
+  - Install from [rust-lang.org](https://www.rust-lang.org/tools/install)
+  - Verify with `rustc --version`
+
+- **Development Environment**
+  - A code editor or IDE (VS Code or JetBrains CLion recommended)
+  - Git for version control
+  - Terminal/command-line access
+
+- **Recommended Knowledge**
+  - Basic Rust programming concepts
+  - Familiarity with web development concepts (HTTP, REST, APIs)
+  - Understanding of asynchronous programming principles
 
 ## Installation Options
 
-Choose your installation method:
+Navius offers multiple installation methods to fit your workflow:
 
-### Using Cargo
+### Option 1: Using Cargo (Simplest)
+
 ```bash
 cargo install navius
 ```
 
-### From Source
+This installs the Navius CLI tool, allowing you to create and manage Navius projects.
+
+### Option 2: From Source (Recommended for Development)
+
 ```bash
-git clone https://github.com/navius/navius.git
+git clone https://github.com/your-organization/navius.git
 cd navius
 cargo install --path .
 ```
 
-## Development Environment
+This approach gives you access to the latest features and allows you to contribute to the framework.
 
-We recommend:
+### Option 3: As a Dependency in Your Project
 
-1. **IDE Setup**
-   - Visual Studio Code with rust-analyzer
-   - Recommended extensions listed in [Development Setup](development-setup.md)
+Add to your `Cargo.toml`:
 
-2. **Tools**
-   - Git for version control
-   - Docker for containerization
-   - PostgreSQL for database
-   - Redis for caching
+```toml
+[dependencies]
+navius = "0.1.0"
+tokio = { version = "1", features = ["full"] }
+axum = "0.6.0"
+```
+
+## Recommended Development Setup
+
+For the best development experience, we recommend:
+
+### 1. Development Tools
+
+- **VS Code** with these extensions:
+  - rust-analyzer
+  - Even Better TOML
+  - crates
+  - LLDB Debugger
+
+- **Terminal Tools**:
+  - `cargo-watch` for auto-reloading (`cargo install cargo-watch`)
+  - `cargo-expand` for macro debugging (`cargo install cargo-expand`)
+  - `cargo-edit` for dependency management (`cargo install cargo-edit`)
+
+### 2. Environment Setup
+
+- **Docker** for containerized development (databases, Redis, etc.)
+- **Git** with pre-commit hooks (as described in [Development Setup](development-setup.md))
+- **Environment Configuration** (custom `.env` files for different environments)
+
+See the [Development Setup](development-setup.md) guide for detailed instructions.
 
 ## Learning Path
 
-After completing the getting started guides, we recommend:
+We recommend following this path to learn Navius effectively:
 
-1. **Core Concepts**
-   - Review [Architecture Principles](../reference/architecture/principles.md)
-   - Understand [Project Structure](../reference/architecture/project-structure-recommendations.md)
+### 1. Basic Concepts (Start Here)
 
-2. **Essential Features**
-   - Implement [Database Access](../guides/features/postgresql-integration.md)
-   - Add [Authentication](../guides/features/authentication.md)
-   - Set up [Caching](../guides/features/caching.md)
+- Complete the [Installation Guide](installation.md)
+- Set up your environment with [Development Setup](development-setup.md)
+- Build your first app with [First Steps](first-steps.md)
+- Try the [Hello World Tutorial](hello-world.md)
 
-3. **Development Practices**
-   - Follow [Development Workflow](../guides/development/development-workflow.md)
-   - Learn [Testing Practices](../guides/development/testing-guide.md)
+### 2. Core Framework Concepts
+
+- Learn about dependency injection and service architecture
+- Understand configuration management
+- Explore routing and middleware
+- Master error handling and logging
+
+### 3. Advanced Topics
+
+- Database integration with SQLx or Diesel
+- Authentication and authorization
+- Testing strategies
+- Deployment considerations
 
 ## Common Tasks
 
-Quick reference for common tasks:
+Here's a quick reference for common Navius development tasks:
 
-### Create a New Project
+### Create a New Navius Application
+
 ```bash
+# With Navius CLI
 navius new my-project
 cd my-project
+
+# Or manually with Cargo
+cargo new --bin my-project
+cd my-project
+# Then add Navius to dependencies
+```
+
+### Run Your Navius Application
+
+```bash
+# Using the development script
+./run_dev.sh
+
+# With hot reloading
+./run_dev.sh --watch
+
+# Manually with cargo
 cargo run
 ```
 
-### Run Development Server
-```bash
-./run_dev.sh
-```
+### Test Your Application
 
-### Run Tests
 ```bash
+# Run all tests
 cargo test
+
+# Run specific tests
+cargo test --package navius --lib -- app::hello::tests
+
+# Run tests with coverage (requires cargo-tarpaulin)
+cargo tarpaulin --out Html
 ```
 
-### Generate Documentation
+### Build for Production
+
 ```bash
-cargo doc --no-deps --open
+# Build optimized binary
+cargo build --release
+
+# Run in production mode
+./run_prod.sh
 ```
 
-## Next Steps
+## Navius Framework Structure
 
-After completing these getting started guides:
+Understanding the framework structure helps navigate the documentation:
 
-1. Explore [Feature Guides](../guides/features/README.md) for implementing specific functionality
-2. Review [Development Guides](../guides/development/README.md) for best practices
-3. Consult [Reference Documentation](../reference/README.md) for detailed specifications
-4. Check [Deployment Guides](../guides/deployment/README.md) for production deployment
+```
+navius/
+├── src/
+│   ├── app/       # Your application code goes here
+│   ├── core/      # Framework core components
+│   ├── lib.rs     # Library definition
+│   └── main.rs    # Entry point
+├── config/        # Configuration files
+├── tests/         # Integration tests
+└── docs/          # Documentation
+```
 
-## Need Help?
+## Key Concepts
 
-If you encounter issues while getting started:
+Navius is built around these core principles:
 
-1. Check the troubleshooting section in each guide
-2. Review our [Common Issues](../reference/troubleshooting/common-issues.md) documentation
-3. Join our [Discord Community](https://discord.gg/navius) for real-time help
-4. Open an issue on our [GitHub repository](https://github.com/navius/navius)
+1. **Modularity**: Components are organized into cohesive modules
+2. **Dependency Injection**: Services are registered and injected where needed
+3. **Configuration-Driven**: Application behavior is controlled via configuration
+4. **Convention over Configuration**: Sensible defaults with flexibility to override
+5. **Testability**: First-class support for testing at all levels
+
+## Troubleshooting
+
+If you encounter issues during setup:
+
+| Issue | Solution |
+|-------|----------|
+| **Build failures** | Ensure you have the correct Rust version and dependencies |
+| **Missing libraries** | Check OS-specific requirements in the [Installation Guide](installation.md) |
+| **Configuration errors** | Verify your config files match the expected format |
+| **Runtime errors** | Check logs and ensure all required services are running |
+
+## Support Resources
+
+Need help with Navius?
+
+- **Documentation**: Comprehensive guides in this documentation site
+- **Community**: Join our [Discord community](https://discord.gg/navius)
+- **GitHub Issues**: Report bugs or suggest features on our [repository](https://github.com/your-organization/navius)
+- **Stack Overflow**: Ask questions with the `navius` tag
 
 ## Contributing
 
-We welcome contributions! If you find issues or have suggestions:
+We welcome contributions to Navius! Here's how to get involved:
 
-1. Read our [Contributing Guide](../contributing/contribution-guide.md)
-2. Follow our [Code of Conduct](../contributing/code-of-conduct.md)
-3. Submit issues or pull requests on [GitHub](https://github.com/navius/navius) 
+1. Read our [Contributing Guidelines](../03_contributing/README.md)
+2. Set up your development environment
+3. Pick an issue from our tracker or propose a new feature
+4. Submit a pull request with your changes
+
+## Next Steps
+
+Ready to explore more?
+
+- [Examples](../02_examples/README.md) - See Navius in action with practical examples
+- [Guides](../04_guides/README.md) - In-depth guides on specific features
+- [Reference](../05_reference/README.md) - Detailed API and architecture reference
+- [Roadmap](../98_roadmaps/README.md) - See what's coming in future releases 
