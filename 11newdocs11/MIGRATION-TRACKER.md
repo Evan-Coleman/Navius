@@ -35,9 +35,9 @@ This document tracks the progress of migrating documentation from the old struct
 ## Overall Progress
 - Structure creation: ✅ 100%
 - Automated analysis: ✅ 100% 
-- Content migration: 🔄 15% (6/40 priority documents)
-- Quality verification: 🔄 15% (6/40 priority documents)
-- Cross-reference updates: 🔄 15% (6/40 priority documents)
+- Content migration: 🔄 20% (8/40 priority documents)
+- Quality verification: 🔄 20% (8/40 priority documents)
+- Cross-reference updates: 🔄 20% (8/40 priority documents)
 
 ## Content Analysis Results
 
@@ -82,8 +82,8 @@ This section maps source documents to their new locations and tracks migration s
 
 | Source Document | Target Location | Status | Notes |
 |-----------------|----------------|--------|-------|
-| docs/examples/20_spring-boot-comparison.md | 02_examples/spring-boot-comparison.md | Not Started | High value document |
-| docs/examples/graphql-example.md | 02_examples/graphql-example.md | Not Started | High value document |
+| docs/examples/20_spring-boot-comparison.md | 02_examples/spring-boot-comparison.md | ✅ Completed | Enhanced with proper frontmatter, key similarities sections, migration tips, and troubleshooting guide |
+| docs/examples/graphql-example.md | 02_examples/graphql-example.md | ✅ Completed | Enhanced with prerequisites, advanced topics, automated testing examples, pagination, authentication, and comprehensive troubleshooting sections |
 | docs/examples/dependency-injection-example.md | 02_examples/dependency-injection-example.md | Not Started | High value document |
 | docs/examples/rest-api-example.md | 02_examples/rest-api-example.md | Not Started | High value document |
 | docs/examples/custom-service-example.md | 02_examples/custom-service-example.md | Not Started | High value document |

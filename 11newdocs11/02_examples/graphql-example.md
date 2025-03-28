@@ -1,21 +1,71 @@
 ---
-title: "GraphQL API Example"
-description: "Building GraphQL APIs with Navius"
+title: "Building GraphQL APIs with Navius"
+description: "Comprehensive guide to implementing GraphQL APIs using Navius, including schema definition, resolvers, queries, mutations, and error handling"
 category: examples
 tags:
-  - examples
   - graphql
   - api
+  - async-graphql
+  - queries
+  - mutations
+  - resolvers
+  - schema
 related:
-  - examples/rest-api-example.md
-  - examples/error-handling-example.md
-last_updated: March 26, 2025
-version: 1.0
+  - 02_examples/rest-api-example.md
+  - 02_examples/dependency-injection-example.md
+  - 04_guides/api-design.md
+last_updated: March 27, 2025
+version: 1.1
+status: stable
 ---
 
 # GraphQL API Example
 
 This example demonstrates how to implement a GraphQL API using Navius, including schema definition, resolvers, queries, mutations, and error handling.
+
+## Overview
+
+GraphQL provides a powerful alternative to REST APIs, allowing clients to request exactly the data they need. Navius makes it easy to integrate GraphQL into your application using the async-graphql crate, providing a type-safe and elegant way to build GraphQL servers in Rust.
+
+This example builds a complete GraphQL API for a book management system, showing how to:
+- Define GraphQL schemas and types
+- Implement queries and mutations
+- Handle errors gracefully
+- Organize your code for maintainability
+- Test GraphQL endpoints
+
+## Quick Navigation
+
+- [Project Structure](#project-structure)
+- [Implementation](#implementation)
+  - [Cargo.toml](#cargotoml)
+  - [Domain Models](#src/models/bookrs)
+  - [Repositories](#src/repositories/book_repositoryrs)
+  - [GraphQL Schema](#src/graphql/schemars)
+  - [GraphQL Types](#src/graphql/typesrs)
+  - [Queries](#src/graphql/queryrs)
+  - [Mutations](#src/graphql/mutationrs)
+  - [Error Handling](#src/errorrs)
+  - [Application Entry Point](#src/mainrs)
+- [Running the Example](#running-the-example)
+- [Testing the API](#testing-the-api)
+- [Advanced Topics](#advanced-topics)
+- [Troubleshooting](#troubleshooting)
+- [Best Practices](#best-practices)
+
+## Prerequisites
+
+Before working with this example, you should be familiar with:
+
+- Rust programming basics
+- Async programming with Tokio
+- GraphQL fundamentals (queries, mutations, schemas)
+- Navius framework basics
+
+Required dependencies:
+- Rust 1.70 or newer
+- Navius 0.1.0 or newer
+- async-graphql 5.0 or newer
 
 ## Project Structure
 
@@ -707,25 +757,43 @@ input BookUpdateInputType {
 }
 ```
 
-## Testing the GraphQL API
+## Running the Example
 
-### Running the Example
+After setting up the project with all the components shown above, you can run the application using:
 
 ```bash
 cargo run
 ```
 
-The server will start with the following endpoints:
-- GraphQL API: http://127.0.0.1:8080/graphql
-- GraphiQL Interface: http://127.0.0.1:8080/graphiql
-- GraphQL Playground: http://127.0.0.1:8080/playground
+By default, the GraphQL server will be accessible at `http://localhost:8080/graphql`. You can also access the GraphQL Playground at `http://localhost:8080/graphql/playground` for an interactive interface to test your API.
 
-### Sample Queries
+### Configuration
 
-#### Get All Books
+The application loads configuration from `config/default.yaml`. You can customize settings like the server port:
+
+```yaml
+server:
+  port: 8080
+  host: "127.0.0.1"
+
+graphql:
+  path: "/graphql"
+  playground: true
+  introspection: true
+```
+
+## Testing the API
+
+### Using GraphQL Playground
+
+1. Start the application with `cargo run`
+2. Navigate to `http://localhost:8080/graphql/playground` in your browser
+3. Try running some queries and mutations:
+
+**Query all books:**
 
 ```graphql
-query {
+query GetAllBooks {
   books {
     id
     title
@@ -736,124 +804,443 @@ query {
 }
 ```
 
-#### Get a Book by ID
+**Query a specific book:**
 
 ```graphql
-query {
-  book(id: "BOOK_ID_HERE") {
+query GetBookById {
+  book(id: "paste-a-valid-uuid-here") {
     id
     title
     author
     description
     genre
     rating
+    publishedDate
     createdAt
     updatedAt
   }
 }
 ```
 
-#### Books by Author
+**Create a new book:**
 
 ```graphql
-query {
-  booksByAuthor(author: "Martin") {
-    id
-    title
-    author
-    genre
-  }
-}
-```
-
-### Sample Mutations
-
-#### Create a Book
-
-```graphql
-mutation {
+mutation CreateBook {
   createBook(input: {
     title: "GraphQL in Action"
     author: "Samer Buna"
-    description: "A practical guide to GraphQL APIs"
     genre: "Programming"
-    rating: 4.5
+    description: "A practical guide to GraphQL APIs"
+    rating: 4.7
   }) {
     id
     title
     author
     genre
     rating
-    createdAt
   }
 }
 ```
 
-#### Update a Book
+**Update a book:**
 
 ```graphql
-mutation {
+mutation UpdateBook {
   updateBook(
-    id: "BOOK_ID_HERE"
+    id: "paste-a-valid-uuid-here"
     input: {
-      rating: 4.7
+      title: "Updated Title"
+      author: "Same Author"
+      genre: "Programming"
       description: "Updated description"
+      rating: 4.9
     }
   ) {
     id
     title
     description
     rating
-    updatedAt
   }
 }
 ```
 
-#### Delete a Book
+**Delete a book:**
 
 ```graphql
-mutation {
-  deleteBook(id: "BOOK_ID_HERE")
+mutation DeleteBook {
+  deleteBook(id: "paste-a-valid-uuid-here")
 }
 ```
 
-## Key Concepts Demonstrated
+### Automated Testing
 
-1. **GraphQL Schema Definition**: Using `async-graphql` to define the schema in a type-safe way.
+You can also write automated tests for your GraphQL API. Here's an example of a test for the book queries:
 
-2. **GraphQL Types and Resolvers**: Mapping between Rust types and GraphQL types.
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_graphql::Request;
+    use navius::core::test::TestApp;
 
-3. **GraphQL Queries and Mutations**: Implementing query and mutation resolvers.
+    #[tokio::test]
+    async fn test_get_all_books() {
+        // Create a test app with the book repository
+        let app = TestApp::new()
+            .with_service(|registry| {
+                let repo = Arc::new(InMemoryBookRepository::new());
+                registry.register::<dyn BookRepository>(repo);
+            })
+            .build();
 
-4. **GraphQL Error Handling**: Converting application errors to GraphQL errors with appropriate extensions.
+        // Prepare the GraphQL query
+        let query = r#"
+            query {
+                books {
+                    id
+                    title
+                    author
+                }
+            }
+        "#;
 
-5. **Repository Pattern**: Separating data access from the GraphQL resolvers.
+        // Execute the query
+        let request = Request::new(query);
+        let response = app.execute_graphql(request).await;
 
-6. **GraphiQL and Playground Integration**: Providing interactive interfaces for exploring the API.
+        // Assert that there are no errors
+        assert!(response.errors.is_empty());
+        
+        // Check the response data
+        let data = response.data.into_json().unwrap();
+        let books = data["books"].as_array().unwrap();
+        
+        // Should have our sample books
+        assert_eq!(books.len(), 2);
+    }
+}
+```
+
+## Advanced Topics
+
+### Adding Authentication
+
+To add authentication to your GraphQL API, you can:
+
+1. Create a custom context with the authenticated user:
+
+```rust
+pub struct GraphQLContext {
+    pub user_id: Option<Uuid>,
+    pub book_repository: Arc<dyn BookRepository>,
+}
+
+impl From<&RequestContext> for GraphQLContext {
+    fn from(ctx: &RequestContext) -> Self {
+        // Extract user ID from the request context (e.g., from JWT)
+        let user_id = ctx.get_user_id();
+        
+        // Resolve the repository from the service registry
+        let book_repository = ctx.service_registry().resolve::<dyn BookRepository>().unwrap();
+        
+        Self {
+            user_id,
+            book_repository,
+        }
+    }
+}
+```
+
+2. Update your resolvers to check for authentication:
+
+```rust
+#[Object]
+impl QueryRoot {
+    async fn books(&self, ctx: &Context<'_>) -> Result<Vec<Book>, Error> {
+        let gql_ctx = ctx.data::<GraphQLContext>()?;
+        
+        // Check if user is authenticated
+        if gql_ctx.user_id.is_none() {
+            return Err("Unauthorized".into());
+        }
+        
+        // Proceed with the authorized query
+        let books = gql_ctx.book_repository.find_all().await?;
+        Ok(books)
+    }
+}
+```
+
+### Implementing Pagination
+
+For larger datasets, implement pagination with cursor-based or offset-based approaches:
+
+```rust
+#[derive(InputObject)]
+struct PaginationInput {
+    first: Option<i32>,
+    after: Option<String>,
+}
+
+#[derive(SimpleObject)]
+struct BookConnection {
+    edges: Vec<BookEdge>,
+    page_info: PageInfo,
+}
+
+#[derive(SimpleObject)]
+struct BookEdge {
+    node: Book,
+    cursor: String,
+}
+
+#[derive(SimpleObject)]
+struct PageInfo {
+    has_next_page: bool,
+    end_cursor: Option<String>,
+}
+
+#[Object]
+impl QueryRoot {
+    async fn books(&self, ctx: &Context<'_>, pagination: Option<PaginationInput>) -> Result<BookConnection, Error> {
+        let gql_ctx = ctx.data::<GraphQLContext>()?;
+        let pagination = pagination.unwrap_or_default();
+        
+        // Fetch one more than requested to determine if there are more items
+        let limit = pagination.first.unwrap_or(10) + 1;
+        let after_id = pagination.after.and_then(|cursor| decode_cursor(&cursor).ok());
+        
+        let books = gql_ctx.book_repository.find_with_pagination(after_id, limit).await?;
+        
+        // Check if there are more items
+        let has_next_page = books.len() > pagination.first.unwrap_or(10);
+        
+        // Remove the extra item if we fetched more than requested
+        let edges = books.into_iter()
+            .take(pagination.first.unwrap_or(10))
+            .map(|book| BookEdge {
+                cursor: encode_cursor(&book.id),
+                node: book,
+            })
+            .collect();
+            
+        let end_cursor = if edges.is_empty() {
+            None
+        } else {
+            Some(edges.last().unwrap().cursor.clone())
+        };
+        
+        Ok(BookConnection {
+            edges,
+            page_info: PageInfo {
+                has_next_page,
+                end_cursor,
+            },
+        })
+    }
+}
+```
+
+### Real-time Updates with Subscriptions
+
+GraphQL subscriptions allow for real-time updates. Here's how to implement them:
+
+```rust
+#[derive(Default)]
+pub struct SubscriptionRoot;
+
+#[Subscription]
+impl SubscriptionRoot {
+    async fn book_updates(&self, ctx: &Context<'_>) -> impl Stream<Item = Book> {
+        let gql_ctx = ctx.data::<GraphQLContext>()?;
+        
+        // Get the event broker from the context
+        let event_broker = gql_ctx.event_broker.clone();
+        
+        // Subscribe to book updates
+        event_broker.subscribe::<BookUpdatedEvent>().map(|event| event.book)
+    }
+}
+
+// In your schema.rs
+pub type BookSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
+
+// In main.rs
+let schema = BookSchema::build(QueryRoot, MutationRoot, SubscriptionRoot)
+    .data(event_broker.clone())
+    .finish();
+```
+
+## Troubleshooting
+
+### Common Errors and Solutions
+
+#### "Field does not exist on type"
+
+**Problem**: The GraphQL server returns an error saying a requested field doesn't exist on the type.
+
+**Solution**: 
+1. Check if the field is properly defined in your GraphQL type
+2. Ensure field names match exactly (GraphQL is case-sensitive)
+3. Verify that the field is exposed in the `#[Object]` implementation
+
+#### Resolver Function Errors
+
+**Problem**: Your resolver function returns an error or doesn't compile.
+
+**Solution**:
+1. Check the function signature matches what `async-graphql` expects
+2. Ensure the return type implements the appropriate traits
+3. For `Result` types, make sure the error type can be converted to `Error`
+
+#### Context Access Issues
+
+**Problem**: Can't access data from the context in a resolver.
+
+**Solution**:
+1. Make sure you've added the data to the schema with `.data(...)` 
+2. Use `ctx.data::<YourType>()` to extract it
+3. Handle the potential error if the data isn't found
+
+### Debugging Tips
+
+1. **Enable detailed error messages**:
+
+```rust
+let schema = BookSchema::build(QueryRoot, MutationRoot, SubscriptionRoot)
+    .extension(async_graphql::extensions::Logger)
+    .finish();
+```
+
+2. **Use introspection** in GraphQL Playground to examine your schema
+
+3. **Log resolver executions** to track the flow of requests
+
+4. **Check the GraphQL query** for syntax errors in variables or arguments
 
 ## Best Practices
 
-1. **Type Safety**: Using Rust's type system to ensure GraphQL schema correctness.
+### Schema Design
 
-2. **Error Handling**: Consistent error handling with meaningful messages and codes.
+1. **Follow GraphQL naming conventions**:
+   - Types: PascalCase (e.g., `Book`, `User`)
+   - Fields: camelCase (e.g., `title`, `authorName`)
+   - Enums: PascalCase for type, uppercase for values (e.g., `Genre.FICTION`)
 
-3. **Data Layer Separation**: Repository pattern to abstract data access.
+2. **Design types around business domains**, not database structures
 
-4. **Input Validation**: Separate input types for create and update operations.
+3. **Use meaningful field names** that describe what the field represents
 
-5. **Context Injection**: Passing repositories through the GraphQL context.
+4. **Provide descriptions** for types and fields using doc comments:
 
-6. **Schema Organization**: Splitting queries and mutations into separate modules.
+```rust
+/// Represents a book in the library
+#[derive(SimpleObject)]
+pub struct Book {
+    /// Unique identifier for the book
+    pub id: Uuid,
+    // Other fields...
+}
+```
 
-## Next Steps
+### Performance Optimization
 
-- Add authentication and authorization
-- Implement GraphQL subscriptions for real-time updates
-- Add dataloader for efficient resolving of related data
-- Implement filtering, sorting, and pagination
-- Connect to a real database
+1. **Implement DataLoader for N+1 query problems**:
 
-## Related Documentation
+```rust
+pub struct BookLoader {
+    repository: Arc<dyn BookRepository>,
+}
 
-- [REST API Example](./rest-api-example.md)
-- [Error Handling Example](./error-handling-example.md) 
+#[async_trait::async_trait]
+impl Loader<Uuid> for BookLoader {
+    type Value = Book;
+    type Error = Error;
+
+    async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, Self::Value>, Self::Error> {
+        let books = self.repository.find_by_ids(keys).await?;
+        Ok(books.into_iter().map(|book| (book.id, book)).collect())
+    }
+}
+
+// In your query resolver:
+async fn author_books(&self, ctx: &Context<'_>, author_id: Uuid) -> Result<Vec<Book>, Error> {
+    let book_loader = ctx.data_unchecked::<DataLoader<BookLoader>>();
+    let book_ids = get_book_ids_for_author(author_id).await?;
+    
+    // Load all books in a single batch
+    let books = book_loader.load_many(book_ids).await?;
+    Ok(books)
+}
+```
+
+2. **Use field complexity analysis** to prevent DoS attacks:
+
+```rust
+let schema = BookSchema::build(QueryRoot, MutationRoot, SubscriptionRoot)
+    .limit_complexity(50)
+    .finish();
+```
+
+3. **Implement timeouts** for long-running queries:
+
+```rust
+let schema = BookSchema::build(QueryRoot, MutationRoot, SubscriptionRoot)
+    .limit_depth(10)
+    .limit_complexity(50)
+    .extension(async_graphql::extensions::Timeout::new(Duration::from_secs(5)))
+    .finish();
+```
+
+### Error Handling
+
+1. **Return meaningful error messages** that help clients understand what went wrong
+
+2. **Don't expose sensitive information** in error messages
+
+3. **Use custom error types** for different error categories:
+
+```rust
+#[derive(SimpleObject)]
+struct ValidationError {
+    field: String,
+    message: String,
+}
+
+#[derive(SimpleObject)]
+struct GraphQLError {
+    message: String,
+    code: String,
+    validation_errors: Option<Vec<ValidationError>>,
+}
+
+// In your resolver:
+if input.title.is_empty() {
+    return Err(Error::new("Title cannot be empty")
+        .extend_with(|_, e| {
+            let mut validation_errors = Vec::new();
+            validation_errors.push(ValidationError {
+                field: "title".to_string(),
+                message: "Title cannot be empty".to_string(),
+            });
+            
+            e.set("code", "VALIDATION_ERROR");
+            e.set("validation_errors", validation_errors);
+        }));
+}
+```
+
+## Conclusion
+
+This example has demonstrated how to build a complete GraphQL API using Navius and async-graphql. You've learned:
+
+- How to define GraphQL schemas, types, queries, and mutations
+- How to implement repositories for data access
+- How to handle errors in a GraphQL context
+- Advanced topics like authentication, pagination, and subscriptions
+- Troubleshooting tips and best practices
+
+For more examples and in-depth information, refer to:
+- [Navius API Documentation](../05_reference/api/graphql.md)
+- [async-graphql Crate Documentation](https://docs.rs/async-graphql)
+- [GraphQL Official Specification](https://spec.graphql.org/) 
