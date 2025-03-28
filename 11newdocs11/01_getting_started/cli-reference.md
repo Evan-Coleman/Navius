@@ -1,6 +1,50 @@
-# CLI Reference
+---
+title: Navius CLI Reference
+description: Comprehensive reference for the Navius command-line interface
+category: getting-started
+tags:
+  - cli
+  - reference
+  - commands
+  - development
+  - tooling
+related:
+  - installation.md
+  - development-setup.md
+  - first-steps.md
+last_updated: March 27, 2025
+version: 1.0
+status: active
+---
 
-This document provides a comprehensive reference for the Navius command-line interface (CLI).
+# Navius CLI Reference
+
+## Overview
+
+This document provides a comprehensive reference for the Navius command-line interface (CLI), including all available commands, options, environment variables, and exit codes.
+
+## Prerequisites
+
+- Rust and Cargo installed
+- Navius project cloned and dependencies installed (see [Installation Guide](installation.md))
+
+## Quick Start
+
+Most commonly used commands:
+
+```shell
+# Run the application with default settings
+cargo run
+
+# Run in release mode
+cargo run --release
+
+# Run with specific features
+cargo run --features "feature1,feature2"
+
+# Run tests
+cargo test
+```
 
 ## Basic Commands
 
@@ -152,7 +196,9 @@ cargo bloat --release
 
 Analyzes the binary size to identify large dependencies.
 
-## Environment Variables
+## Key Concepts
+
+### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -162,7 +208,7 @@ Analyzes the binary size to identify large dependencies.
 | `PORT` | Server port | `3000` |
 | `HOST` | Server host | `127.0.0.1` |
 
-## Exit Codes
+### Exit Codes
 
 | Code | Meaning |
 |------|---------|
@@ -170,4 +216,30 @@ Analyzes the binary size to identify large dependencies.
 | 1 | General error |
 | 2 | Configuration error |
 | 3 | Database connection error |
-| 4 | Permission error | 
+| 4 | Permission error |
+
+### Script Files
+
+Navius provides several convenience scripts in the project root:
+
+| Script | Purpose |
+|--------|---------|
+| `run_dev.sh` | Runs the application in development mode with hot reloading |
+| `run_prod.sh` | Runs the application in production mode |
+| `test.sh` | Runs tests with common options |
+| `reset_db.sh` | Resets the database and reruns migrations |
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Command not found | Make sure you're in the project root directory |
+| Permission denied | Check file permissions or use `sudo` if appropriate |
+| Dependency errors | Run `cargo update` to update dependencies |
+| Test failures | Check error messages and review related code |
+
+## Next Steps
+
+- Review the [Installation Guide](installation.md) for setup instructions
+- See [Development Setup](development-setup.md) for creating a development environment
+- Learn about basic concepts in [First Steps](first-steps.md) 

@@ -50,6 +50,7 @@ This document provides a comprehensive index of all documentation in the Navius 
 ## Miscellaneous
 
 - [Document Templates](99_misc/document-templates.md) - Templates for different document types
+- [Migration Priority List](99_misc/migration-priority-list.md) - Prioritized list of documents for migration
 
 ## About This Documentation
 

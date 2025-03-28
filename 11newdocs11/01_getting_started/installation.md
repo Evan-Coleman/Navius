@@ -10,15 +10,18 @@ tags:
   - deployment
 related:
   - development-setup.md
-  - ../guides/development/development-workflow.md
-  - ../guides/deployment.md
-last_updated: March 23, 2025
-version: 1.0
+  - first-steps.md
+  - hello-world.md
+  - ../04_guides/deployment/README.md
+last_updated: March 27, 2025
+version: 1.1
+status: active
 ---
 
 # Navius Installation Guide
 
 ## Overview
+
 This guide provides comprehensive instructions for installing, configuring, and running Navius across different environments. It covers prerequisites, installation steps, configuration options, and verification procedures.
 
 ## Prerequisites
@@ -36,6 +39,27 @@ This guide provides comprehensive instructions for installing, configuring, and 
   - Version 14 or later recommended
   - Docker (for containerized setup)
 - **Redis** (optional, for caching functionality)
+
+## Quick Start
+
+For those familiar with Rust development, here's the quick setup process:
+
+```shell
+# Clone the repository
+git clone https://github.com/your-organization/navius.git
+cd navius
+
+# Install dependencies
+cargo build
+
+# Create environment config
+cp .env.example .env
+
+# Run the application in development mode
+./run_dev.sh
+```
+
+The server will start on http://localhost:3000 by default.
 
 ## Installation
 
@@ -243,35 +267,28 @@ API documentation is automatically generated and available at http://localhost:3
 
 ### Common Issues
 
-- **Compiler errors**: Ensure you have the correct Rust version (`rustc --version`)
-- **Database connection errors**: Check your `.env` file and database credentials
-- **Port conflicts**: Ensure port 3000 is not in use by another application
+| Issue | Solution |
+|-------|----------|
+| Compiler errors | Ensure you have the correct Rust version (`rustc --version`) |
+| Database connection errors | Check your `.env` file and database credentials |
+| Port conflicts | Ensure port 3000 is not in use by another application |
+| Cargo build failures | Try `cargo clean` followed by `cargo build` |
+| Missing dependencies | Install missing system dependencies (e.g., OpenSSL) |
 
 ### Database Connection Issues
 
-If you encounter database connection problems:
+If you encounter database connection issues:
 
-1. Verify PostgreSQL is running:
-   ```bash
-   pg_isready -h localhost -p 5432
-   ```
+1. Ensure PostgreSQL is running: `docker ps` or `pg_isready`
+2. Verify the database exists: `psql -l`
+3. Check your connection string in `.env`
+4. Ensure firewall settings allow the connection
 
-2. Check connection credentials in `.env` file and YAML configuration
+## Next Steps
 
-3. Ensure the database exists:
-   ```bash
-   psql -l | grep navius
-   ```
-
-## Production Deployment
-
-For production deployment, refer to the [Deployment Guide](/docs/guides/deployment.md) which covers:
-
-- AWS infrastructure setup
-- Container deployment options
-- Security best practices
-- Scaling considerations
-- Monitoring and observability
+- Continue to [First Steps](first-steps.md) to learn about basic Navius concepts
+- Try building a [Hello World Application](hello-world.md)
+- Set up your [Development Environment](development-setup.md) for contributing
 
 ## Related Documents
 
