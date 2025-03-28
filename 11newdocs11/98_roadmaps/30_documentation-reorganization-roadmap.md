@@ -13,7 +13,7 @@ related:
   - ../MIGRATION-TRACKER.md
 last_updated: March 27, 2025
 version: 1.0
-status: in-progress
+status: in-progress (Phase 2 nearing completion)
 ---
 
 # Documentation Reorganization Roadmap
@@ -136,14 +136,26 @@ Our primary focus is on migrating high-priority content from the old structure t
 - ✅ Migrate router API reference
 - ✅ Migrate config API reference
 - ✅ Apply frontmatter fixes across all documents
+**Note:** A detailed approach for completing these remaining Phase 2 tasks has been documented in [Phase 2 Completion Plan](./doc-reorg-tools/phase2-completion-plan.md).
+
+**Validation Tools:** To facilitate the completion of Phase 2 tasks, several validation tools have been developed:
+- [code-example-extractor.sh](./doc-reorg-tools/code-example-extractor.sh) - Extracts and prepares Rust code examples for verification
+- [code-example-verifier.sh](./doc-reorg-tools/code-example-verifier.sh) - Verifies Rust code examples and generates detailed reports
+- [code-example-fixer.sh](./doc-reorg-tools/code-example-fixer.sh) - Automatically fixes common issues in code examples and generates fix reports
+- [link-analyzer.sh](./doc-reorg-tools/link-analyzer.sh) - Analyzes and validates internal links between documents
+- [document-validator.sh](./doc-reorg-tools/document-validator.sh) - Implements the tiered validation approach for document quality checks
+- [run-validation.sh](./doc-reorg-tools/run-validation.sh) - Runs all validation tools and creates a consolidated report
+
+These tools, along with the issue templates and tracking documents in the `doc-reorg-tools` folder, provide a structured approach to completing the remaining validation tasks.
+
 - [ ] Verify examples work as expected (Requires dedicated verification approach for 102 Rust code examples)
-- [ ] Fix internal links between documents
-- [ ] Validate each migrated document
+- [ ] Fix internal links between documents (Requires validating links in 131 documents - may need manual approach)
+- [ ] Validate each migrated document (Requires end-to-end validation of all 206 documents - may need dedicated process)
 
 **Milestones**:
 - ✅ Initial structure created (Week 1)
 - ✅ Templates defined (Week 2)  
-- 🔄 70% of high-priority documents migrated (Week 4)
+- ✅ 70% of high-priority documents migrated (Week 4)
 - [ ] 75% of high-priority documents migrated (Week 8)
 - [ ] 100% of high-priority documents migrated (Week 10)
 - [ ] All cross-references verified (Week 12)
@@ -335,4 +347,6 @@ These tools will be integrated into our workflow to provide continuous validatio
 
 - [Documentation Reorganization Instructions](30_documentation-reorganization-instructions.md)
 - [Documentation Script Fixes](31_documentation-script-fixes.md)
-- [Documentation Guidelines](../reference/standards/documentation-standards.md)
+- [Documentation Standards](../05_reference/standards/documentation-standards.md)
+- [Documentation Guidelines](../03_contributing/documentation-guidelines.md)
+- [Phase 2 Completion Plan](./doc-reorg-tools/phase2-completion-plan.md)
