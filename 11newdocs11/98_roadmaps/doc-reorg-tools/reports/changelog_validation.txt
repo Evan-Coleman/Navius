@@ -1,0 +1,25 @@
+===== Simple Document Validator =====
+Validating: 11newdocs11/98_roadmaps/changelog.md
+Timestamp: Fri Mar 28 01:47:07 PDT 2025
+
+## Frontmatter validation
+❌ No frontmatter found
+
+## Document structure validation
+✅ Main heading (H1) found
+❌ Overview section missing
+❌ Related Documents section missing
+
+## Code examples validation
+Found 0 code blocks (0 Rust blocks)
+
+## Link validation
+Found 0 internal links
+⚠️ No internal links to validate
+
+## Validation Summary
+Document: 11newdocs11/98_roadmaps/changelog.md
+Timestamp: Fri Mar 28 01:47:07 PDT 2025
+Code Blocks: 0
+Internal Links: 0
+Broken Links: 0

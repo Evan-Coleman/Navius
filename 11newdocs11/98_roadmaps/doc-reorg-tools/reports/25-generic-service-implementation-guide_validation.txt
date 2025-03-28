@@ -1,0 +1,33 @@
+===== Simple Document Validator =====
+Validating: 11newdocs11/98_roadmaps/roadmap-instructions/25-generic-service-implementation-guide.md
+Timestamp: Fri Mar 28 01:47:07 PDT 2025
+
+## Frontmatter validation
+✅ Frontmatter found
+✅ Required field 'title' present
+✅ Required field 'description' present
+✅ Required field 'category' present
+✅ Required field 'last_updated' present
+
+## Document structure validation
+✅ Main heading (H1) found
+❌ Overview section missing
+❌ Related Documents section missing
+
+## Code examples validation
+Found 44 code blocks (44 Rust blocks)
+
+## Link validation
+Found 4 internal links
+❌ Broken link: features/{}.md -> 11newdocs11/98_roadmaps/roadmap-instructions/features/{}.md
+❌ Broken link: api/index.md -> 11newdocs11/98_roadmaps/roadmap-instructions/api/index.md
+❌ Broken link: config/index.md -> 11newdocs11/98_roadmaps/roadmap-instructions/config/index.md
+❌ Broken link: deployment/index.md -> 11newdocs11/98_roadmaps/roadmap-instructions/deployment/index.md
+❌ Found 4 broken internal links
+
+## Validation Summary
+Document: 11newdocs11/98_roadmaps/roadmap-instructions/25-generic-service-implementation-guide.md
+Timestamp: Fri Mar 28 01:47:07 PDT 2025
+Code Blocks: 44
+Internal Links: 4
+Broken Links: 4

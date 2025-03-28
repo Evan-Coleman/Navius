@@ -196,8 +196,26 @@ These templates can be adapted to spreadsheets, issue trackers, or other trackin
 4. Use as the basis for status reports
 5. Identify bottlenecks and adjust resource allocation as needed
 
+### Automating Data Collection with the Consolidated Validation Script
+
+The `run-consolidated-validation.sh` script can be used to automatically gather data for this tracking document:
+
+1. Run the script on your target directory or file:
+   ```bash
+   ./run-consolidated-validation.sh --dir ../../01_getting_started/ --tier 1
+   ```
+
+2. Review the generated report in the `reports/` directory
+
+3. Transfer the summary data to the appropriate tables in this tracking document
+
+4. For document-specific issues, transfer the detailed data to the Detail Tracking Tables
+
+This integrated approach ensures consistency between validation results and tracking data, making it easier to monitor progress and identify areas needing attention.
+
 ## Related Documents
 
 - [Phase 2 Completion Plan](./phase2-completion-plan.md)
 - [Code Example Issue Templates](./code-example-issues.md)
-- [Documentation Reorganization Roadmap](../30_documentation-reorganization-roadmap.md) 
+- [Documentation Reorganization Roadmap](../30_documentation-reorganization-roadmap.md)
+- [Consolidated Validation Script Usage Guide](./consolidated-validation-usage.md) 

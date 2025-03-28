@@ -137,6 +137,51 @@ The `.devtools/scripts/doc-overhaul/` directory contains tools for implementing 
   - Supports both old and new directory structures
   - Integrates all other documentation tools in a streamlined workflow
 
+### New Validation Tools
+
+As part of the documentation reorganization, we've developed a set of specialized validation tools in the `11newdocs11/98_roadmaps/doc-reorg-tools/` directory:
+
+- **code-example-extractor.sh**: Extracts Rust code examples from Markdown files for verification
+- **code-example-verifier.sh**: Validates Rust code examples for syntactic correctness and API compatibility
+- **code-example-fixer.sh**: Automatically fixes common issues in code examples
+- **link-analyzer.sh**: Checks internal links for correctness in the new directory structure
+- **document-validator.sh**: Validates document structure, frontmatter, and content quality
+- **run-consolidated-validation.sh**: Integrated validation script that runs all tools and generates a consolidated report
+
+#### Simplified Validation Tools
+
+To address challenges with the more complex validation tools, we've also created simplified alternatives that are easier to use and more reliable:
+
+- **simple-validate.sh**: Validates a single document's frontmatter, structure, code examples, and links
+- **simple-batch-validate.sh**: Runs validation on multiple documents and generates a consolidated report
+- **generate-summary.sh**: Creates an executive summary of validation results with actionable recommendations
+
+These tools provide basic validation capabilities with minimal dependencies and are recommended for initial validation passes. For detailed instructions on using these simplified validation tools, see the [Documentation Validation Tools README](../../98_roadmaps/doc-reorg-tools/README.md).
+
+#### Tiered Validation Approach
+
+To efficiently validate the large number of documents, we implement a three-tier validation approach:
+
+1. **Tier 1 (100% Validation)**
+   - Getting started guides
+   - Installation instructions
+   - Core API references
+   - Frequently accessed examples
+
+2. **Tier 2 (50% Sample Validation)**
+   - Secondary examples
+   - Feature-specific guides
+   - Specialized patterns
+   - Contributing guidelines
+
+3. **Tier 3 (Spot Checking)**
+   - Supplementary materials
+   - Advanced topics
+   - Historical roadmaps
+   - Specialized configurations
+
+For detailed instructions on using these validation tools, see the [Consolidated Validation Script Usage Guide](../../98_roadmaps/doc-reorg-tools/consolidated-validation-usage.md).
+
 ## Writing Style Guide
 
 Consistent writing style is as important as consistent formatting. Follow these guidelines for clear, accessible content:
@@ -574,29 +619,4 @@ This guide explains how to implement authentication in your Navius application.
    ```
 
 2. **Add Authentication Middleware**
-   ```rust
-   // Add authentication middleware code example
    ```
-
-## Examples
-Here's a complete example of a protected route:
-```rust
-// Full example code
-```
-
-## Troubleshooting
-- **Token validation fails**: Check your tenant ID configuration
-- **Auth middleware errors**: Ensure environment variables are set
-
-## Related Documents
-- [Security Standards](./security-standards.md)
-- [API Integration Guide](../../04_guides/features/api-integration.md)
-```
-
-## Getting Started
-
-To start implementing these standards on a new or existing document:
-
-1. Review the [Documentation Reorganization Instructions](../../98_roadmaps/30_documentation-reorganization-instructions.md)
-2. Follow the example migration process detailed in that document
-3. Use the provided tools to validate and improve your documentation

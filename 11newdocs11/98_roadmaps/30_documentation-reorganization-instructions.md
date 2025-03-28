@@ -249,76 +249,68 @@ For each document to be migrated:
    # Auto-apply changes without confirmation
    .devtools/scripts/doc-overhaul/fix_frontmatter.sh [target_path] auto
    ```
-   - Ensure all required metadata is present
-   - Verify category, tags, and related documents
-   - Reading time will be automatically calculated based on content length
 
-4. **Add Standard Sections**:
-   - Use the section adding script:
+4. **Update Internal Links**:
+   - Update internal links to reflect the new directory structure
+   - Use the link analyzer tool to identify and fix internal links:
    ```bash
-   # Add missing sections to a single file
-   .devtools/scripts/doc-overhaul/add_sections.sh [target_path]
+   # Analyze links in a single file
+   ./doc-reorg-tools/link-analyzer.sh --file [target_path]
    
    # Process an entire directory
-   .devtools/scripts/doc-overhaul/add_sections.sh --dir [directory] --recursive
+   ./doc-reorg-tools/link-analyzer.sh --dir [directory]
    
-   # Auto-apply changes without confirmation
-   .devtools/scripts/doc-overhaul/add_sections.sh [target_path] auto
-   
-   # Add specific sections to a document
-   .devtools/scripts/doc-overhaul/add_sections.sh --sections "Overview,Prerequisites,Troubleshooting" [target_path]
-   
-   # Add all recommended sections based on document type
-   .devtools/scripts/doc-overhaul/add_sections.sh --add-all [target_path]
-   
-   # Only check for missing sections without making changes
-   .devtools/scripts/doc-overhaul/add_sections.sh --check-only --dir [directory] --report
+   # Generate a report without making changes
+   ./doc-reorg-tools/link-analyzer.sh --dir [directory] --report-only
    ```
-   - Ensure consistent document structure across all files
 
-5. **Improve Readability**:
-   - For documents marked as "Complex":
-     - Break down long sentences
-     - Simplify wording
-     - Use more subheadings and lists
-   - For documents marked as "Simple":
-     - Add more detailed explanations
-     - Provide context and background information
-   - Follow the writing style guidelines in the [Documentation Standards](../05_reference/standards/documentation-standards.md)
-
-6. **Fix Code Examples**:
-   - Focus on examples marked as "FAIL" in the validation
-   - Verify all code examples work with current version
-   - Add context and explanations
-   - Use consistent syntax highlighting
-
-7. **Fix Links**:
-   - Use the link fixing script:
+5. **Validate Code Examples**:
+   - Extract and verify code examples using the code example tools:
    ```bash
-   # Fix links in a single file
-   .devtools/scripts/doc-overhaul/fix_links.sh [target_path]
+   # Extract code examples from a document
+   ./doc-reorg-tools/code-example-extractor.sh --file [target_path]
    
-   # Process an entire directory
-   .devtools/scripts/doc-overhaul/fix_links.sh --dir [directory] --recursive
+   # Verify extracted code examples
+   ./doc-reorg-tools/code-example-verifier.sh --file [extracted_examples_file]
    
-   # Auto-apply changes without confirmation
-   .devtools/scripts/doc-overhaul/fix_links.sh [target_path] auto
-   
-   # Only check for broken links without making changes
-   .devtools/scripts/doc-overhaul/fix_links.sh --check-only --dir [directory] --report
+   # Fix common issues in code examples
+   ./doc-reorg-tools/code-example-fixer.sh --file [extracted_examples_file]
    ```
-   - Ensure all internal links use absolute paths
-   - Add cross-references to related documents
 
-8. **Final Review**:
-   - Run document-specific validation:
+6. **Validate Document Structure**:
+   - Ensure the document follows the required structure for its type
+   - Use the document validator to check compliance:
    ```bash
-   .devtools/scripts/doc-overhaul/generate_report.sh --file [target_path]
+   # Validate a single document
+   ./doc-reorg-tools/document-validator.sh --file [target_path]
+   
+   # Validate a directory of documents
+   ./doc-reorg-tools/document-validator.sh --dir [directory] --tier [1|2|3]
+   
+   # Generate a validation report
+   ./doc-reorg-tools/document-validator.sh --dir [directory] --report
    ```
-   - Review quality score improvements
-   - Verify code validation passes
-   - Check readability improvements
-   - Confirm all recommendations have been addressed
+
+7. **Run Complete Validation Suite**:
+   - Run the comprehensive validation tool to check all aspects of the document:
+   ```bash
+   # Validate a single document
+   ./doc-reorg-tools/run-validation.sh --file [target_path]
+   
+   # Validate a directory of documents
+   ./doc-reorg-tools/run-validation.sh --dir [directory]
+   
+   # Generate a consolidated validation report
+   ./doc-reorg-tools/run-validation.sh --dir [directory] --report
+   ```
+
+8. **Track Validation Progress**:
+   - Update the validation tracking document with the status of each document
+   - Use the validation tracking template in `doc-reorg-tools/validation-tracking-template.md`
+
+4. **Update Internal References**:
+   - Fix links to other documents to use the new paths
+   - Use the improved link fixing script
 
 ### Automated Document Processing
 
