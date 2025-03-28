@@ -1,661 +1,655 @@
-#!/bin/bash
+#!/bin/sh
+# Script to add missing sections to Markdown files based on document type
 
-# Script to add missing sections to Markdown files
-# 
-# IMPORTANT: This script enforces the document standards defined in:
-# - /docs/roadmaps/30_documentation-reorganization-roadmap.md
-# - /docs/roadmaps/30_documentation-reorganization-instructions.md
-# - /docs/reference/standards/documentation-standards.md
-#
-# The section standards implemented here should always be kept in sync with those documents.
-#
-# Usage: 
-#   Single file: ./add_sections.sh <markdown_file> [auto]
-#   Directory: ./add_sections.sh --dir <directory> [--recursive]
-#   Help: ./add_sections.sh --help
+SCRIPT_DIR="$(dirname "$0")"
+. "$SCRIPT_DIR/shell_utils.sh"
 
-set -e
+set_strict_mode
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPORT_FILE="target/reports/docs_validation/sections_report_$(date '+%Y%m%d_%H%M%S').md"
-PROCESS_DIR=false
+# Default configuration
 TARGET_DIR="docs"
+SINGLE_FILE=""
+CHECK_ONLY=false
 RECURSIVE=false
 GENERATE_REPORT=false
-AUTO_MODE=""
+AUTO_CONFIRM=false
 VERBOSE=false
-CHECK_ONLY=false
 ADD_ALL_SECTIONS=false
 CUSTOM_SECTIONS=""
-EXIT_CODE=0
-CURRENT_DATE=$(date '+%B %d, %Y')
+REPORTS_DIR="target/reports/docs_validation"
+REPORT_FILE="${REPORTS_DIR}/sections_report_$(get_today_date)_$(date '+%H%M%S').md"
 
-# Terminal colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+print_usage() {
+    echo "Usage: add_sections.sh [OPTIONS]"
+    echo "Options:"
+    echo "  --dir DIRECTORY           Process markdown files in specific directory"
+    echo "  --file FILE               Process a single file only"
+    echo "  --recursive, -r           Process directories recursively"
+    echo "  --check-only              Only check for missing sections without making changes"
+    echo "  --report                  Generate a detailed report of validation results"
+    echo "  --auto                    Apply changes automatically without confirmation"
+    echo "  --verbose, -v             Show detailed information about each file"
+    echo "  --add-all                 Add all possible sections appropriate for document type"
+    echo "  --sections \"sec1,sec2\"    Specify custom sections to add (comma-separated)"
+    echo "  --help                    Display this help message"
+}
+
+# Parse command line arguments
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --dir)
+            if [ -z "$2" ] || [ "${2:0:1}" = "-" ]; then
+                log_error "Error: --dir requires a directory path"
+                print_usage
+                exit 1
+            fi
+            TARGET_DIR="$2"
+            shift 2
+            ;;
+        --file)
+            if [ -z "$2" ] || [ "${2:0:1}" = "-" ]; then
+                log_error "Error: --file requires a file path"
+                print_usage
+                exit 1
+            fi
+            SINGLE_FILE="$2"
+            shift 2
+            ;;
+        --recursive|-r)
+            RECURSIVE=true
+            shift
+            ;;
+        --check-only)
+            CHECK_ONLY=true
+            shift
+            ;;
+        --report)
+            GENERATE_REPORT=true
+            shift
+            ;;
+        --auto)
+            AUTO_CONFIRM=true
+            shift
+            ;;
+        --verbose|-v)
+            VERBOSE=true
+            shift
+            ;;
+        --add-all)
+            ADD_ALL_SECTIONS=true
+            shift
+            ;;
+        --sections)
+            if [ -z "$2" ] || [ "${2:0:1}" = "-" ]; then
+                log_error "Error: --sections requires a comma-separated list"
+                print_usage
+                exit 1
+            fi
+            CUSTOM_SECTIONS="$2"
+            shift 2
+            ;;
+        --help|-h)
+            print_usage
+            exit 0
+            ;;
+        *)
+            log_error "Unknown option: $1"
+            print_usage
+            exit 1
+            ;;
+    esac
+done
+
+# Verify inputs
+if [ -n "$SINGLE_FILE" ] && [ "$CHECK_ONLY" = true ]; then
+    log_error "Cannot specify a file with --check-only. Use --dir instead."
+    exit 1
+fi
+
+if [ -n "$SINGLE_FILE" ] && [ -n "$TARGET_DIR" ] && [ "$TARGET_DIR" != "docs" ]; then
+    log_error "Cannot specify both a file and --dir"
+    exit 1
+fi
+
+if [ -z "$SINGLE_FILE" ] && [ "$TARGET_DIR" = "docs" ] && [ "$CHECK_ONLY" = false ]; then
+    log_info "No file or directory specified, using docs directory"
+fi
+
+# Verify directory exists
+if [ -n "$TARGET_DIR" ] && [ ! -d "$TARGET_DIR" ]; then
+    log_error "Directory $TARGET_DIR does not exist"
+    exit 1
+fi
+
+# Verify file exists and is a markdown file
+if [ -n "$SINGLE_FILE" ]; then
+    if [ ! -f "$SINGLE_FILE" ]; then
+        log_error "File $SINGLE_FILE does not exist"
+        exit 1
+    elif ! echo "$SINGLE_FILE" | grep -q "\.md$"; then
+        log_error "File $SINGLE_FILE is not a Markdown file"
+        exit 1
+    fi
+fi
+
+# Create reports directory if generating a report
+if [ "$GENERATE_REPORT" = true ]; then
+    ensure_dir "$REPORTS_DIR"
+    
+    # Initialize report
+    log_info "Initializing report: $REPORT_FILE"
+    {
+        echo "# Section Validation Report"
+        echo "Generated on: $(date)"
+        echo 
+        echo "## Summary"
+        echo 
+        echo "| Metric | Count |"
+        echo "|--------|-------|"
+        echo "| Total files | 0 |"
+        echo "| Files with missing sections | 0 |"
+        echo "| Total missing sections | 0 |"
+        echo "| Fixed files | 0 |"
+        echo 
+        echo "## Detailed Results"
+        echo 
+    } > "$REPORT_FILE"
+fi
 
 # Counters for reporting
 TOTAL_FILES=0
 FIXED_FILES=0
 MISSING_SECTIONS_COUNT=0
 
-# Display help message
-show_help() {
-    echo -e "${BLUE}Section Adding Tool${NC}"
-    echo -e "This script adds missing standard sections to Markdown files."
-    echo
-    echo -e "${CYAN}Usage:${NC}"
-    echo "  ./add_sections.sh <markdown_file> [auto]       # Process a single file"
-    echo "  ./add_sections.sh --dir <directory>            # Process all markdown files in a directory" 
-    echo "  ./add_sections.sh --check-only                 # Check for missing sections without making changes"
-    echo "  ./add_sections.sh --help                       # Display this help message"
-    echo
-    echo -e "${CYAN}Options:${NC}"
-    echo "  auto                  Apply changes automatically without confirmation"
-    echo "  --dir <directory>     Specify the directory to process (default: docs)"
-    echo "  --recursive, -r       Process directories recursively"
-    echo "  --check-only          Only check for missing sections without making changes"
-    echo "  --report              Generate a detailed report of validation results"
-    echo "  --verbose, -v         Show more detailed information during processing"
-    echo "  --add-all             Add all possible sections appropriate for document type"
-    echo "  --sections \"sec1,sec2\"  Specify custom sections to add (comma-separated)"
-    echo "  --help, -h            Display this help message"
-    echo
-    echo -e "${CYAN}Examples:${NC}"
-    echo "  ./add_sections.sh docs/guides/authentication.md"
-    echo "  ./add_sections.sh --dir docs/guides --recursive"
-    echo "  ./add_sections.sh --check-only --dir docs --report"
-    echo "  ./add_sections.sh --sections \"Prerequisites,Troubleshooting\" docs/guides/setup.md"
-    echo
-    echo -e "${CYAN}Integration:${NC}"
-    echo "  This tool works with other documentation validation tools:"
-    echo "  - generate_report.sh: Comprehensive documentation quality report"
-    echo "  - fix_frontmatter.sh: Fix or validate document frontmatter"
-    echo "  - fix_links.sh: Fix broken internal links"
-    echo "  - comprehensive_test.sh: In-depth documentation analysis"
-    echo
-}
-
-# Parse command line arguments
-parse_args() {
-    if [ $# -eq 0 ]; then
-        show_help
-        exit 0
-    fi
-
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --help|-h)
-                show_help
-                exit 0
-                ;;
-            --dir)
-                if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
-                    TARGET_DIR="$2"
-                    PROCESS_DIR=true
-                    shift 2
-                else
-                    echo -e "${RED}Error: Argument for $1 is missing${NC}" >&2
-                    exit 1
-                fi
-                ;;
-            --recursive|-r)
-                RECURSIVE=true
-                shift
-                ;;
-            --check-only)
-                CHECK_ONLY=true
-                shift
-                ;;
-            --report)
-                GENERATE_REPORT=true
-                mkdir -p "$(dirname "$REPORT_FILE")"
-                shift
-                ;;
-            --verbose|-v)
-                VERBOSE=true
-                shift
-                ;;
-            --add-all)
-                ADD_ALL_SECTIONS=true
-                shift
-                ;;
-            --sections)
-                if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
-                    CUSTOM_SECTIONS="$2"
-                    shift 2
-                else
-                    echo -e "${RED}Error: Argument for $1 is missing${NC}" >&2
-                    exit 1
-                fi
-                ;;
-            auto)
-                AUTO_MODE="auto"
-                shift
-                ;;
-            -*)
-                echo -e "${RED}Error: Unknown option $1${NC}" >&2
-                show_help
-                exit 1
-                ;;
-            *)
-                if [ -z "$FILE" ]; then
-                    FILE="$1"
-                    shift
-                else
-                    echo -e "${RED}Error: Unexpected argument $1${NC}" >&2
-                    show_help
-                    exit 1
-                fi
-                ;;
-        esac
-    done
-
-    # Validate arguments
-    if [ "$CHECK_ONLY" = true ] && [ -n "$FILE" ]; then
-        echo -e "${RED}Error: Cannot specify a file with --check-only. Use --dir instead.${NC}" >&2
-        exit 1
-    fi
-
-    if [ "$PROCESS_DIR" = true ] && [ -n "$FILE" ]; then
-        echo -e "${RED}Error: Cannot specify both a file and --dir${NC}" >&2
-        exit 1
-    fi
-
-    if [ -z "$FILE" ] && [ "$PROCESS_DIR" = false ] && [ "$CHECK_ONLY" = false ]; then
-        echo -e "${RED}Error: No file or directory specified${NC}" >&2
-        show_help
-        exit 1
-    fi
-
-    # Verify directory exists
-    if [ "$PROCESS_DIR" = true ] && [ ! -d "$TARGET_DIR" ]; then
-        echo -e "${RED}Error: Directory $TARGET_DIR does not exist${NC}" >&2
-        exit 1
-    fi
-
-    # Verify file exists and is a markdown file
-    if [ -n "$FILE" ]; then
-        if [ ! -f "$FILE" ]; then
-            echo -e "${RED}Error: $FILE does not exist${NC}" >&2
-            exit 1
-        elif [[ "$FILE" != *.md ]]; then
-            echo -e "${RED}Error: $FILE is not a Markdown file${NC}" >&2
-            exit 1
-        fi
-    fi
-}
-
-# Initialize report
-init_report() {
-    if [ "$GENERATE_REPORT" = true ]; then
-        echo "# Section Validation Report" > "$REPORT_FILE"
-        echo "Generated on: $CURRENT_DATE" >> "$REPORT_FILE"
-        echo >> "$REPORT_FILE"
-        echo "## Summary" >> "$REPORT_FILE"
-        echo >> "$REPORT_FILE"
-        echo "| Metric | Count |" >> "$REPORT_FILE"
-        echo "|--------|-------|" >> "$REPORT_FILE"
-        echo "| Total files | 0 |" >> "$REPORT_FILE"
-        echo "| Files with missing sections | 0 |" >> "$REPORT_FILE"
-        echo "| Total missing sections | 0 |" >> "$REPORT_FILE"
-        echo "| Fixed files | 0 |" >> "$REPORT_FILE"
-        echo >> "$REPORT_FILE"
-        echo "## Detailed Results" >> "$REPORT_FILE"
-        echo >> "$REPORT_FILE"
-    fi
-}
-
-# Update report counts
-update_report_counts() {
-    if [ "$GENERATE_REPORT" = true ]; then
-        local MISSING_FILES=$(($TOTAL_FILES - $FIXED_FILES))
-        sed -i.bak "s/| Total files | [0-9]* |/| Total files | $TOTAL_FILES |/g" "$REPORT_FILE"
-        sed -i.bak "s/| Files with missing sections | [0-9]* |/| Files with missing sections | $MISSING_FILES |/g" "$REPORT_FILE"
-        sed -i.bak "s/| Total missing sections | [0-9]* |/| Total missing sections | $MISSING_SECTIONS_COUNT |/g" "$REPORT_FILE"
-        sed -i.bak "s/| Fixed files | [0-9]* |/| Fixed files | $FIXED_FILES |/g" "$REPORT_FILE"
-        rm "${REPORT_FILE}.bak"
-    fi
-}
-
-# Add entry to report
-add_to_report() {
-    local file="$1"
-    local status="$2"
-    local details="$3"
-
-    if [ "$GENERATE_REPORT" = true ]; then
-        echo "### $file" >> "$REPORT_FILE"
-        echo >> "$REPORT_FILE"
-        echo "**Status**: $status" >> "$REPORT_FILE"
-        echo >> "$REPORT_FILE"
-        if [ -n "$details" ]; then
-            echo "**Details**:" >> "$REPORT_FILE"
-            echo "$details" >> "$REPORT_FILE"
-            echo >> "$REPORT_FILE"
-        fi
-    fi
-}
-
-# Determine document type based on path
-get_document_type() {
-    local file="$1"
+# Get standard sections for document type
+get_standard_sections() {
+    doc_type="$1"
     
-    # Support for both old and new directory structure
-    if [[ "$file" =~ (getting-started|01_getting_started) ]]; then
-        echo "getting-started"
-    elif [[ "$file" =~ (guides|04_guides) ]]; then
-        echo "guide"
-    elif [[ "$file" =~ (reference|05_reference) ]]; then
-        echo "reference"
-    elif [[ "$file" =~ (contributing|03_contributing) ]]; then
-        echo "contributing"
-    elif [[ "$file" =~ (roadmaps|98_roadmaps) ]]; then
-        echo "roadmap" 
-    elif [[ "$file" =~ (architecture|05_reference/architecture) ]]; then
-        echo "architecture"
-    elif [[ "$file" =~ (examples|02_examples) ]]; then
-        echo "example"
-    elif [[ "$file" =~ 99_misc ]]; then
-        echo "misc"
-    else
-        # Try to determine from frontmatter
-        local category=$(grep -n "^category:" "$file" | head -1 | sed 's/^[0-9]*:category: *//' | sed 's/^"//' | sed 's/"$//')
-        if [ -n "$category" ]; then
-            case "$category" in
-                "getting-started") echo "getting-started" ;;
-                "guides"|"guide") echo "guide" ;;
-                "reference") echo "reference" ;;
-                "contributing") echo "contributing" ;;
-                "roadmap"|"roadmaps") echo "roadmap" ;;
-                "architecture") echo "architecture" ;;
-                "example"|"examples") echo "example" ;;
-                "misc") echo "misc" ;;
-                *) echo "documentation" ;;
-            esac
-        else
-            echo "documentation"
-        fi
-    fi
-}
-
-# Get the title from the file
-get_title() {
-    local file="$1"
+    # Common sections for all document types
+    common_sections="Related Documents"
     
-    # First try to get the title from frontmatter
-    title=$(grep -n "^title:" "$file" | head -1 | sed 's/^[0-9]*:title: *//' | sed 's/^"//' | sed 's/"$//')
-    
-    # If no title in frontmatter, try to get it from first heading
-    if [ -z "$title" ]; then
-        title=$(grep -m 1 "^# " "$file" | sed 's/^# //')
-    fi
-    
-    # If still no title, use the filename
-    if [ -z "$title" ]; then
-        filename=$(basename "$file" .md)
-        # Convert kebab-case or snake_case to Title Case
-        title=$(echo "$filename" | sed 's/[-_]/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)} 1')
-    fi
-    
-    echo "$title"
-}
-
-# Check if a file has a section
-has_section() {
-    local file="$1"
-    local section="$2"
-    
-    grep -q "^## $section\|^# $section" "$file"
-    return $?
-}
-
-# Add a section to a file
-add_section() {
-    local file="$1"
-    local section="$2"
-    local content="$3"
-    
-    # If the file does not end with a newline, add one
-    if [ -s "$file" ] && [ "$(tail -c 1 "$file" | xxd -p)" != "0a" ]; then
-        echo "" >> "$file"
-    fi
-    
-    # Add the section
-    echo -e "$content" >> "$file"
-    if [ "$VERBOSE" = true ]; then
-        echo -e "${GREEN}✅ Added $section section to $file${NC}"
-    fi
-}
-
-# Check and update last_updated field in frontmatter
-update_last_updated() {
-    local file="$1"
-    
-    # Check if frontmatter exists and has last_updated field
-    if grep -q "^---" "$file" && grep -q "^last_updated:" "$file"; then
-        # Update last_updated field with current date
-        sed -i.bak "s/^last_updated:.*$/last_updated: $CURRENT_DATE/" "$file"
-        rm "${file}.bak"
-        if [ "$VERBOSE" = true ]; then
-            echo -e "${GREEN}✅ Updated last_updated to $CURRENT_DATE in $file${NC}"
-        fi
-    fi
-}
-
-# Get appropriate links for related documents based on document type
-get_related_doc_examples() {
-    local file_type="$1"
-    
-    case "$file_type" in
-        "guide")
-            echo "- [Installation Guide](/docs/01_getting_started/installation.md) - How to install the application\n- [Development Workflow](/docs/04_guides/development/development-workflow.md) - Development best practices"
-            ;;
-        "getting-started")
-            echo "- [Project Structure](/docs/01_getting_started/project-structure.md) - Overview of the codebase\n- [First Steps](/docs/01_getting_started/first-steps.md) - Getting started with the application"
-            ;;
-        "reference")
-            echo "- [API Standards](/docs/05_reference/standards/api-standards.md) - API design guidelines\n- [Error Handling](/docs/05_reference/error-handling.md) - Error handling patterns"
-            ;;
-        "contributing")
-            echo "- [Contributing Guide](/docs/03_contributing/contributing.md) - How to contribute to the project\n- [Development Setup](/docs/01_getting_started/development-setup.md) - Setting up your development environment"
-            ;;
-        "roadmap")
-            echo "- [Project Structure Roadmap](/docs/98_roadmaps/completed/11_project_structure_future_improvements.md) - Future improvements\n- [Documentation Reorganization](/docs/98_roadmaps/30_documentation-reorganization-roadmap.md) - Documentation plans"
-            ;;
-        "architecture")
-            echo "- [Project Structure](/docs/05_reference/architecture/project-structure.md) - Overall structure\n- [Module Dependencies](/docs/05_reference/architecture/module-dependencies.md) - Dependencies between modules"
-            ;;
-        "example")
-            echo "- [Basic Usage](/docs/02_examples/basic-usage.md) - Simple usage examples\n- [Advanced Patterns](/docs/02_examples/advanced-patterns.md) - Advanced usage patterns"
-            ;;
-        "misc")
-            echo "- [Documentation Standards](/docs/05_reference/standards/documentation-standards.md) - Documentation formatting and writing style guidelines\n- [Documentation Reorganization Roadmap](/docs/98_roadmaps/30_documentation-reorganization-roadmap.md) - Strategic plan for restructuring documentation"
-            ;;
-        *)
-            echo "- [Documentation Standards](/docs/05_reference/standards/documentation-standards.md) - Documentation formatting and writing style guidelines\n- [Related Document](/docs/path/to/related-document.md) - Brief description"
-            ;;
-    esac
-}
-
-# Get content for standard sections based on document type
-get_section_content() {
-    local section="$1"
-    local doc_type="$2"
-    local title="$3"
-    
-    case "$section" in
-        "Overview")
-            echo "\n## Overview\n\nBrief introduction to ${title}.\n"
-            ;;
-        "Prerequisites")
-            echo "\n## Prerequisites\n\nBefore you begin, ensure you have the following:\n\n- Navius development environment set up\n- Rust installed (version 1.70 or higher)\n- Basic understanding of Rust and Axum framework\n"
-            ;;
-        "Installation")
-            if [[ "$doc_type" == "getting-started" ]]; then
-                echo "\n## Installation\n\n\`\`\`bash\n# Clone the repository\ngit clone https://github.com/your-org/navius.git\ncd navius\n\n# Install dependencies\ncargo build\n\`\`\`\n"
-            fi
-            ;;
-        "Usage")
-            if [[ "$doc_type" == "guide" || "$doc_type" == "example" ]]; then
-                echo "\n## Usage\n\nBasic usage examples:\n\n\`\`\`rust\n// Example code for using this feature\nuse navius::core::feature;\n\nfn main() {\n    let result = feature::process();\n    println!(\"Result: {:?}\", result);\n}\n\`\`\`\n"
-            fi
-            ;;
-        "Configuration")
-            if [[ "$doc_type" == "guide" || "$doc_type" == "reference" ]]; then
-                echo "\n## Configuration\n\nConfiguration options and examples:\n\n\`\`\`yaml\n# Configuration example\nfeature:\n  enabled: true\n  options:\n    timeout: 30\n    retry: 3\n\`\`\`\n"
-            fi
-            ;;
-        "Examples")
-            if [[ "$doc_type" != "example" ]]; then
-                echo "\n## Examples\n\nCode examples demonstrating key functionality:\n\n\`\`\`rust\n// Basic example\nuse navius::core::feature;\n\n// Advanced usage example\nfeature::configure(Config {\n    timeout: 30,\n    retry: true,\n});\n\`\`\`\n"
-            fi
-            ;;
-        "Troubleshooting")
-            echo "\n## Troubleshooting\n\nCommon issues and solutions:\n\n### Common Issue 1\n\nDescription of the issue.\n\n**Solution**: Steps to resolve the issue.\n\n### Common Issue 2\n\nDescription of another common issue.\n\n**Solution**: Steps to resolve the issue.\n"
-            ;;
-        "Implementation Details")
-            if [[ "$doc_type" == "reference" || "$doc_type" == "architecture" ]]; then
-                echo "\n## Implementation Details\n\nTechnical details about how this feature is implemented.\n\n```mermaid\nflowchart TD\n    A[Client] -->|Request| B(API)\n    B -->|Process| C{Logic}\n    C -->|Success| D[Response]\n    C -->|Error| E[Error Handler]\n```\n"
-            fi
-            ;;
-        "Related Documents")
-            related_examples=$(get_related_doc_examples "$doc_type")
-            echo "\n## Related Documents\n\n$related_examples\n"
-            ;;
-    esac
-}
-
-# Get list of appropriate sections based on document type
-get_sections_for_type() {
-    local doc_type="$1"
-    
-    # All document types should have Overview and Related Documents
-    sections=("Overview" "Related Documents")
-    
-    # If add-all is enabled, add all relevant sections
     if [ "$ADD_ALL_SECTIONS" = true ]; then
         case "$doc_type" in
-            "getting-started")
-                sections=("Overview" "Prerequisites" "Installation" "Usage" "Troubleshooting" "Related Documents")
+            getting-started)
+                echo "Overview Prerequisites Installation Configuration Usage Related Documents"
                 ;;
-            "guide")
-                sections=("Overview" "Prerequisites" "Usage" "Configuration" "Examples" "Troubleshooting" "Related Documents")
+            guide)
+                echo "Overview Prerequisites Step-by-Step Guide Advanced Configuration Examples Troubleshooting Related Documents"
                 ;;
-            "reference")
-                sections=("Overview" "Configuration" "Examples" "Implementation Details" "Related Documents")
+            tutorial)
+                echo "Overview Prerequisites Setup Steps Summary Next Steps Related Documents"
                 ;;
-            "example")
-                sections=("Overview" "Prerequisites" "Usage" "Related Documents")
+            reference)
+                echo "Overview API Reference Examples Configuration Options Related Documents"
                 ;;
-            "contributing")
-                sections=("Overview" "Prerequisites" "Related Documents")
+            architecture)
+                echo "Overview Design Principles Components Data Flow Deployment Related Documents"
                 ;;
-            "architecture")
-                sections=("Overview" "Implementation Details" "Related Documents")
+            concept)
+                echo "Overview Key Concepts Implementation Details Trade-offs Related Documents"
                 ;;
-            "roadmap")
-                sections=("Overview" "Current State" "Target State" "Implementation Phases" "Success Criteria" "Related Documents")
+            roadmap)
+                echo "Overview Current State Target State Implementation Phases Dependencies Risks Progress Tracking Related Documents"
                 ;;
-            "misc")
-                sections=("Overview" "Related Documents")
+            example)
+                echo "Overview Code Example Explanation Usage Notes Related Documents"
+                ;;
+            faq)
+                echo "Overview Frequently Asked Questions Related Documents"
+                ;;
+            standard)
+                echo "Overview Rules Best Practices Exceptions Examples Related Documents"
+                ;;
+            misc)
+                echo "Overview Content Related Documents"
                 ;;
             *)
-                sections=("Overview" "Related Documents")
+                echo "$common_sections"
                 ;;
         esac
+    else
+        # If custom sections are provided, use them
+        if [ -n "$CUSTOM_SECTIONS" ]; then
+            echo "$CUSTOM_SECTIONS Related Documents"
+        else
+            # Otherwise only include the required Related Documents section
+            echo "$common_sections"
+        fi
     fi
-    
-    # If custom sections are specified, use those instead
-    if [ -n "$CUSTOM_SECTIONS" ]; then
-        IFS=',' read -ra sections <<< "$CUSTOM_SECTIONS"
-    fi
-    
-    echo "${sections[@]}"
 }
 
-# Process a single file
-process_file() {
-    local file="$1"
-    local status=""
-    local details=""
-    local missing_sections_list=""
-    local file_missing_count=0
+# Check which sections exist in a file
+check_existing_sections() {
+    file="$1"
     
-    # Determine document type and title
-    doc_type=$(get_document_type "$file")
-    title=$(get_title "$file")
+    # Read the file content
+    content=$(cat "$file")
     
-    # Get appropriate sections for this document type
-    mapfile -t sections < <(get_sections_for_type "$doc_type")
+    # Check for each section by looking for "## Section Name" pattern
+    existing_sections=""
     
-    # Check for missing sections
-    missing_sections=()
-    for section in "${sections[@]}"; do
-        if ! has_section "$file" "$section"; then
-            missing_sections+=("$section")
-            missing_sections_list="${missing_sections_list}- $section\n"
-            file_missing_count=$((file_missing_count + 1))
-            MISSING_SECTIONS_COUNT=$((MISSING_SECTIONS_COUNT + 1))
+    # Get all level 2 headings (## Heading)
+    headings=$(echo "$content" | grep -E "^## [A-Za-z0-9 ]+" | sed 's/^## //')
+    
+    # Convert to space-separated list
+    for heading in $headings; do
+        if [ -z "$existing_sections" ]; then
+            existing_sections="$heading"
+        else
+            existing_sections="$existing_sections $heading"
         fi
     done
     
-    # If no missing sections, exit
-    if [ ${#missing_sections[@]} -eq 0 ]; then
-        if [ "$VERBOSE" = true ]; then
-            echo -e "${GREEN}✅ No missing sections found in $file.${NC}"
-        fi
-        status="Complete"
-        FIXED_FILES=$((FIXED_FILES + 1))
-        add_to_report "$file" "$status" "All required sections are present."
-        return 0
-    fi
+    echo "$existing_sections"
+}
+
+# Get missing sections
+get_missing_sections() {
+    file="$1"
     
-    # In check-only mode, just report the missing sections
-    if [ "$CHECK_ONLY" = true ]; then
-        echo -e "${YELLOW}⚠️ Missing sections in $file:${NC}"
-        echo -e "${missing_sections_list}"
-        
-        status="Missing sections"
-        details="The following sections are missing:\n${missing_sections_list}"
-        add_to_report "$file" "$status" "$details"
+    # Determine document type
+    doc_type=$(get_document_type "$file")
+    
+    # Get standard sections for this document type
+    standard_sections=$(get_standard_sections "$doc_type")
+    
+    # Get existing sections
+    existing_sections=$(check_existing_sections "$file")
+    
+    # Find missing sections
+    missing_sections=""
+    
+    for section in $standard_sections; do
+        # Check if section exists
+        if ! echo "$existing_sections" | grep -q -w "$section"; then
+            if [ -z "$missing_sections" ]; then
+                missing_sections="$section"
+            else
+                missing_sections="$missing_sections $section"
+            fi
+        fi
+    done
+    
+    echo "$missing_sections"
+}
+
+# Generate section content
+generate_section_content() {
+    section="$1"
+    doc_type="$2"
+    file="$3"
+    
+    case "$section" in
+        "Related Documents")
+            # Generate list of related documents based on document type and path
+            related_content=$(generate_related_documents "$file" "$doc_type")
+            
+            echo "## Related Documents\n\nThe following documents may be useful for additional context:\n\n$related_content\n"
+            ;;
+        "Overview")
+            echo "## Overview\n\nTODO: Add a brief overview of what this document covers.\n"
+            ;;
+        "Prerequisites")
+            echo "## Prerequisites\n\nBefore proceeding, ensure you have the following:\n\n- Requirement 1\n- Requirement 2\n- Requirement 3\n"
+            ;;
+        "Installation")
+            echo "## Installation\n\nFollow these steps to install:\n\n\`\`\`bash\n# Example installation command\n\`\`\`\n"
+            ;;
+        "Configuration")
+            echo "## Configuration\n\nConfigure the settings as follows:\n\n\`\`\`yaml\n# Example configuration\nkey: value\n\`\`\`\n"
+            ;;
+        "Usage")
+            echo "## Usage\n\nUse the feature as follows:\n\n\`\`\`rust\n// Example code\n\`\`\`\n"
+            ;;
+        "Examples")
+            echo "## Examples\n\nHere are some examples of common use cases:\n\n### Example 1\n\n\`\`\`rust\n// Code example 1\n\`\`\`\n\n### Example 2\n\n\`\`\`rust\n// Code example 2\n\`\`\`\n"
+            ;;
+        "Step-by-Step Guide")
+            echo "## Step-by-Step Guide\n\n1. First step\n2. Second step\n3. Third step\n"
+            ;;
+        "Advanced Configuration")
+            echo "## Advanced Configuration\n\nFor advanced use cases, you can configure additional options:\n\n- Option 1: Description\n- Option 2: Description\n"
+            ;;
+        "Troubleshooting")
+            echo "## Troubleshooting\n\n### Common Issue 1\n\n**Problem:** Description of the problem\n\n**Solution:** How to fix it\n\n### Common Issue 2\n\n**Problem:** Description of the problem\n\n**Solution:** How to fix it\n"
+            ;;
+        "Setup")
+            echo "## Setup\n\nPrepare your environment:\n\n\`\`\`bash\n# Setup commands\n\`\`\`\n"
+            ;;
+        "Steps")
+            echo "## Steps\n\n1. First step with detailed explanation\n2. Second step with detailed explanation\n3. Third step with detailed explanation\n"
+            ;;
+        "Summary")
+            echo "## Summary\n\nIn this document, we covered:\n\n- Key point 1\n- Key point 2\n- Key point 3\n"
+            ;;
+        "Next Steps")
+            echo "## Next Steps\n\nAfter completing this tutorial, you might want to explore:\n\n- Related topic 1\n- Related topic 2\n- Advanced techniques\n"
+            ;;
+        "API Reference")
+            echo "## API Reference\n\n### Function/Endpoint 1\n\n**Description:** What it does\n\n**Parameters:**\n- param1: Description\n- param2: Description\n\n**Returns:** What it returns\n\n### Function/Endpoint 2\n\n**Description:** What it does\n\n**Parameters:**\n- param1: Description\n- param2: Description\n\n**Returns:** What it returns\n"
+            ;;
+        "Design Principles")
+            echo "## Design Principles\n\nThis component is designed with these principles in mind:\n\n1. Principle 1: Explanation\n2. Principle 2: Explanation\n3. Principle 3: Explanation\n"
+            ;;
+        "Components")
+            echo "## Components\n\nThe system consists of these main components:\n\n### Component 1\n\nPurpose and responsibility\n\n### Component 2\n\nPurpose and responsibility\n"
+            ;;
+        "Data Flow")
+            echo "## Data Flow\n\nData flows through the system as follows:\n\n1. Input enters through...\n2. Processing happens in...\n3. Output is delivered via...\n\n```mermaid\ngraph LR\n    A[Input] --> B[Process]\n    B --> C[Output]\n```\n"
+            ;;
+        "Deployment")
+            echo "## Deployment\n\nThis component is deployed using:\n\n- Infrastructure requirements\n- Deployment process\n- Configuration details\n"
+            ;;
+        "Key Concepts")
+            echo "## Key Concepts\n\n### Concept 1\n\nExplanation of the concept and its importance\n\n### Concept 2\n\nExplanation of the concept and its importance\n"
+            ;;
+        "Implementation Details")
+            echo "## Implementation Details\n\nThe implementation has these notable characteristics:\n\n- Technical detail 1\n- Technical detail 2\n- Technical detail 3\n"
+            ;;
+        "Trade-offs")
+            echo "## Trade-offs\n\nThis approach has the following trade-offs:\n\n### Advantages\n\n- Advantage 1\n- Advantage 2\n\n### Disadvantages\n\n- Disadvantage 1\n- Disadvantage 2\n"
+            ;;
+        "Current State")
+            echo "## Current State\n\nThe current implementation has these characteristics:\n\n- Feature 1: Status\n- Feature 2: Status\n- Feature 3: Status\n"
+            ;;
+        "Target State")
+            echo "## Target State\n\nAfter implementation, the system will have:\n\n- Capability 1\n- Capability 2\n- Capability 3\n"
+            ;;
+        "Implementation Phases")
+            echo "## Implementation Phases\n\n### Phase 1: Title\n\n- Task 1\n- Task 2\n- Task 3\n\n### Phase 2: Title\n\n- Task 1\n- Task 2\n- Task 3\n"
+            ;;
+        "Dependencies")
+            echo "## Dependencies\n\nThis implementation depends on:\n\n- Dependency 1: Reason\n- Dependency 2: Reason\n- Dependency 3: Reason\n"
+            ;;
+        "Risks")
+            echo "## Risks\n\n| Risk | Impact | Likelihood | Mitigation |\n|------|--------|------------|------------|\n| Risk 1 | High/Medium/Low | High/Medium/Low | How to mitigate |\n| Risk 2 | High/Medium/Low | High/Medium/Low | How to mitigate |\n"
+            ;;
+        "Progress Tracking")
+            echo "## Progress Tracking\n\n| Task | Status | Notes |\n|------|--------|-------|\n| Task 1 | Not Started/In Progress/Complete | Additional details |\n| Task 2 | Not Started/In Progress/Complete | Additional details |\n"
+            ;;
+        "Code Example")
+            echo "## Code Example\n\n\`\`\`rust\n// Example code demonstrating the concept\n\`\`\`\n"
+            ;;
+        "Explanation")
+            echo "## Explanation\n\nThis example works as follows:\n\n1. First, it initializes...\n2. Then, it processes...\n3. Finally, it outputs...\n"
+            ;;
+        "Usage Notes")
+            echo "## Usage Notes\n\nWhen using this example, keep in mind:\n\n- Important note 1\n- Important note 2\n- Important note 3\n"
+            ;;
+        "Frequently Asked Questions")
+            echo "## Frequently Asked Questions\n\n### Question 1?\n\nAnswer to question 1.\n\n### Question 2?\n\nAnswer to question 2.\n\n### Question 3?\n\nAnswer to question 3.\n"
+            ;;
+        "Rules")
+            echo "## Rules\n\n1. Rule 1: Explanation\n2. Rule 2: Explanation\n3. Rule 3: Explanation\n"
+            ;;
+        "Best Practices")
+            echo "## Best Practices\n\n- Practice 1: Rationale\n- Practice 2: Rationale\n- Practice 3: Rationale\n"
+            ;;
+        "Exceptions")
+            echo "## Exceptions\n\nThese standards have the following exceptions:\n\n- Exception 1: When and why\n- Exception 2: When and why\n"
+            ;;
+        "Content")
+            echo "## Content\n\nTODO: Add relevant content for this document.\n"
+            ;;
+        *)
+            echo "## $section\n\nTODO: Add content for this section.\n"
+            ;;
+    esac
+}
+
+# Generate related documents based on document type and path
+generate_related_documents() {
+    file="$1"
+    doc_type="$2"
+    
+    related_content=""
+    
+    # Common related documents based on document type
+    case "$doc_type" in
+        getting-started)
+            related_content="- [Installation](/docs/getting-started/installation.md)\n- [Configuration](/docs/getting-started/configuration.md)"
+            ;;
+        guide)
+            related_content="- [Getting Started Guide](/docs/getting-started/overview.md)\n- [API Reference](/docs/reference/api-reference.md)"
+            ;;
+        tutorial)
+            related_content="- [Getting Started Guide](/docs/getting-started/overview.md)\n- [Examples](/docs/examples/README.md)"
+            ;;
+        reference)
+            related_content="- [API Overview](/docs/reference/api-overview.md)\n- [Configuration Reference](/docs/reference/configuration.md)"
+            ;;
+        architecture)
+            related_content="- [System Overview](/docs/architecture/overview.md)\n- [Component Design](/docs/architecture/components.md)"
+            ;;
+        roadmap)
+            related_content="- [Project Roadmap](/docs/roadmaps/README.md)\n- [Contribution Guidelines](/docs/contributing/how-to-contribute.md)"
+            ;;
+        *)
+            related_content="- [Documentation Overview](/docs/README.md)\n- [Getting Started](/docs/getting-started/overview.md)"
+            ;;
+    esac
+    
+    # Add dynamically discovered related documents
+    # Find markdown files that might be related based on similar path
+    dir_path=$(dirname "$file")
+    file_basename=$(basename "$file" .md)
+    
+    # Find files in the same directory
+    related_files=$(find "$dir_path" -maxdepth 1 -type f -name "*.md" | grep -v "$file" | head -3)
+    
+    for related_file in $related_files; do
+        related_basename=$(basename "$related_file" .md)
+        # Create relative path from docs directory
+        related_path=$(echo "$related_file" | sed "s|^docs|/docs|")
+        related_content="$related_content\n- [$related_basename]($related_path)"
+    done
+    
+    echo "$related_content"
+}
+
+# Add missing sections to a file
+add_sections_to_file() {
+    file="$1"
+    
+    if [ ! -f "$file" ]; then
+        log_error "File does not exist: $file"
         return 1
     fi
     
-    echo -e "${BLUE}Adding missing sections to $file...${NC}"
+    # Determine document type
+    doc_type=$(get_document_type "$file")
     
-    # Make a backup
-    cp "$file" "${file}.bak"
-    
-    # Add missing sections
-    for section in "${missing_sections[@]}"; do
-        content=$(get_section_content "$section" "$doc_type" "$title")
-        add_section "$file" "$section" "$content"
-    done
-    
-    # Update last_updated field in frontmatter if we made changes
-    update_last_updated "$file"
-    
-    # Show diff
     if [ "$VERBOSE" = true ]; then
-        echo -e "${PURPLE}Changes made:${NC}"
-        diff -u "${file}.bak" "$file" || true
-        echo ""
+        log_info "Document type: $doc_type"
     fi
     
-    # Auto-confirm or ask for confirmation
-    if [ "$AUTO_MODE" = "auto" ]; then
-        rm "${file}.bak"
-        echo -e "${GREEN}Changes automatically saved.${NC}"
-        status="Fixed"
-        details="Added the following sections:\n${missing_sections_list}"
-        FIXED_FILES=$((FIXED_FILES + 1))
-    else
-        echo -e "${BLUE}Does this look good?${NC}"
-        echo "y - Keep all changes"
-        echo "n - Discard all changes"
-        echo ""
-        read -p "Keep these changes? (y/n): " confirm
-        
-        if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
-            rm "${file}.bak"
-            echo -e "${GREEN}Changes saved.${NC}"
-            status="Fixed"
-            details="Added the following sections:\n${missing_sections_list}"
-            FIXED_FILES=$((FIXED_FILES + 1))
-        else
-            mv "${file}.bak" "$file"
-            echo -e "${YELLOW}Changes discarded.${NC}"
-            status="Changes discarded"
-            details="The following sections were proposed but changes were discarded:\n${missing_sections_list}"
+    # Get missing sections
+    missing_sections=$(get_missing_sections "$file")
+    missing_count=$(echo "$missing_sections" | wc -w)
+    
+    if [ -z "$missing_sections" ]; then
+        if [ "$VERBOSE" = true ]; then
+            log_success "No missing sections in $file"
         fi
-    fi
-    
-    add_to_report "$file" "$status" "$details"
-    return 0
-}
-
-# Process all Markdown files in a directory
-process_directory() {
-    local dir="$1"
-    local count=0
-    local find_cmd="find \"$dir\" -type f -name \"*.md\""
-    
-    if [ "$RECURSIVE" = false ]; then
-        find_cmd="find \"$dir\" -maxdepth 1 -type f -name \"*.md\""
-    fi
-    
-    local files=$(eval "$find_cmd")
-    local total=$(echo "$files" | wc -l)
-    total=$(echo "$total" | tr -d '[:space:]')
-    
-    if [ -z "$files" ]; then
-        echo -e "${YELLOW}No Markdown files found in $dir${NC}"
         return 0
     fi
     
-    echo -e "${BLUE}Processing $total Markdown files in $dir...${NC}"
-    
-    for file in $files; do
-        count=$((count + 1))
-        TOTAL_FILES=$((TOTAL_FILES + 1))
-        
-        if [ "$VERBOSE" = true ] || [ "$CHECK_ONLY" = false ]; then
-            echo -e "${CYAN}[$count/$total] Processing:${NC} $file"
-        fi
-        
-        if ! process_file "$file"; then
-            EXIT_CODE=1
-        fi
-    done
-    
+    # In check-only mode, just report missing sections
     if [ "$CHECK_ONLY" = true ]; then
-        echo -e "${BLUE}Section checking completed with exit code ${EXIT_CODE}${NC}"
-        echo -e "${YELLOW}Found $MISSING_SECTIONS_COUNT missing sections in $((TOTAL_FILES - FIXED_FILES)) files${NC}"
+        log_warning "Missing sections in $file: $missing_sections"
+        MISSING_SECTIONS_COUNT=$((MISSING_SECTIONS_COUNT + missing_count))
         
+        # Add to report
         if [ "$GENERATE_REPORT" = true ]; then
-            echo -e "${GREEN}Report generated:${NC} $REPORT_FILE"
+            add_to_report "$file" "Missing sections" "Missing sections: $missing_sections"
+        fi
+        
+        return 1
+    fi
+    
+    # Create a temporary file
+    temp_file=$(mktemp)
+    
+    # Add content up to frontmatter, if any
+    if grep -q "^---" "$file"; then
+        # File has frontmatter
+        front_part=$(sed -n '1,/^---$/p' "$file" | head -1)
+        
+        if [ "$front_part" = "---" ]; then
+            # Extract frontmatter and content separately
+            frontmatter=$(extract_frontmatter "$file")
+            content=$(get_content_without_frontmatter "$file")
+            
+            # Write frontmatter to temp file
+            echo "---" > "$temp_file"
+            echo "$frontmatter" >> "$temp_file"
+            
+            # Update last_updated field in frontmatter
+            if ! echo "$frontmatter" | grep -q "^last_updated:"; then
+                echo "last_updated: $(get_today_date)" >> "$temp_file"
+            fi
+            
+            echo "---" >> "$temp_file"
+            
+            # Write content to temp file
+            echo "$content" >> "$temp_file"
+        else
+            # No frontmatter, copy the entire file
+            cat "$file" > "$temp_file"
         fi
     else
-        echo -e "${GREEN}Processing completed for $count files.${NC}"
-        echo -e "${GREEN}- Successfully processed: $FIXED_FILES files${NC}"
-        if [ $MISSING_SECTIONS_COUNT -gt 0 ]; then
-            echo -e "${YELLOW}- Added $MISSING_SECTIONS_COUNT sections total${NC}"
-        fi
+        # No frontmatter, copy the entire file
+        cat "$file" > "$temp_file"
+    fi
+    
+    # Prepare section content to add
+    sections_to_add=""
+    for section in $missing_sections; do
+        section_content=$(generate_section_content "$section" "$doc_type" "$file")
+        sections_to_add="${sections_to_add}${section_content}\n"
+    done
+    
+    # Remove trailing newline
+    sections_to_add=$(echo "$sections_to_add" | sed '$s/\\n$//')
+    
+    # Add the new sections to the end of the file
+    echo "" >> "$temp_file"
+    echo -e "$sections_to_add" >> "$temp_file"
+    
+    # Show diff and ask for confirmation
+    if [ "$AUTO_CONFIRM" = true ]; then
+        # Automatically apply changes
+        mv "$temp_file" "$file"
+        log_success "Automatically added missing sections to $file: $missing_sections"
+        FIXED_FILES=$((FIXED_FILES + 1))
         
+        # Add to report
         if [ "$GENERATE_REPORT" = true ]; then
-            echo -e "${GREEN}Report generated:${NC} $REPORT_FILE"
+            add_to_report "$file" "Fixed" "Added sections: $missing_sections"
         fi
+    else
+        # Show diff and ask for confirmation
+        log_info "Missing sections in $file: $missing_sections"
+        log_info "Changes to be applied:"
+        diff -u "$file" "$temp_file" | grep -v "^---" | grep -v "^+++"
+        
+        printf "Apply these changes? [y/N]: "
+        read -r confirm
+        
+        if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+            mv "$temp_file" "$file"
+            log_success "Added missing sections to $file: $missing_sections"
+            FIXED_FILES=$((FIXED_FILES + 1))
+            
+            # Add to report
+            if [ "$GENERATE_REPORT" = true ]; then
+                add_to_report "$file" "Fixed" "Added sections: $missing_sections"
+            fi
+        else
+            rm "$temp_file"
+            log_info "Skipped adding sections to $file"
+            
+            # Add to report
+            if [ "$GENERATE_REPORT" = true ]; then
+                add_to_report "$file" "Skipped" "User chose not to add sections: $missing_sections"
+            fi
+        fi
+    fi
+    
+    # Update missing sections count
+    MISSING_SECTIONS_COUNT=$((MISSING_SECTIONS_COUNT + missing_count))
+    
+    return 0
+}
+
+# Process all files in a directory
+process_directory() {
+    dir="$1"
+    recursive="$2"
+    
+    log_info "Processing directory: $dir (recursive: $recursive)"
+    
+    # Find markdown files
+    if [ "$recursive" = true ]; then
+        file_list=$(find_files "$dir" "*.md")
+    else
+        file_list=$(find "$dir" -maxdepth 1 -type f -name "*.md")
+    fi
+    
+    # Process each file
+    for file in $file_list; do
+        TOTAL_FILES=$((TOTAL_FILES + 1))
+        
+        # Process the file
+        add_sections_to_file "$file"
+    done
+    
+    # Output summary
+    log_info "Directory $dir summary:"
+    log_info "  Total files: $TOTAL_FILES"
+    log_info "  Files with missing sections: $((TOTAL_FILES - FIXED_FILES))"
+    log_info "  Total missing sections: $MISSING_SECTIONS_COUNT"
+    
+    if [ $FIXED_FILES -gt 0 ]; then
+        log_success "  Fixed files: $FIXED_FILES"
+    fi
+    
+    # Update report
+    if [ "$GENERATE_REPORT" = true ]; then
+        update_report_counts
+    fi
+    
+    # Return error code if files need fixing
+    if [ $MISSING_SECTIONS_COUNT -gt 0 ] && [ $FIXED_FILES -lt $TOTAL_FILES ]; then
+        return 1
+    else
+        return 0
     fi
 }
 
 # Main execution
-main() {
-    parse_args "$@"
-    
-    # Initialize report
-    init_report
-    
-    # Print date for logging purposes
-    if [ "$VERBOSE" = true ]; then
-        echo -e "${BLUE}Current date: $CURRENT_DATE${NC}"
-    fi
-    
-    if [ "$CHECK_ONLY" = true ] || [ "$PROCESS_DIR" = true ]; then
-        process_directory "$TARGET_DIR"
-        update_report_counts
-        exit $EXIT_CODE
-    else
-        TOTAL_FILES=1
-        process_file "$FILE"
-        update_report_counts
-        exit $EXIT_CODE
-    fi
-}
+exit_code=0
 
-main "$@" 
+if [ -n "$SINGLE_FILE" ]; then
+    TOTAL_FILES=1
+    add_sections_to_file "$SINGLE_FILE"
+    exit_code=$?
+else
+    process_directory "$TARGET_DIR" "$RECURSIVE"
+    exit_code=$?
+    
+    if [ "$CHECK_ONLY" = true ]; then
+        if [ $MISSING_SECTIONS_COUNT -gt 0 ]; then
+            log_warning "Found $MISSING_SECTIONS_COUNT missing sections in $((TOTAL_FILES - FIXED_FILES)) files"
+        else
+            log_success "All files have required sections!"
+        fi
+    fi
+fi
+
+# Output report location if generated
+if [ "$GENERATE_REPORT" = true ]; then
+    log_success "Section validation report generated: $REPORT_FILE"
+fi
+
+exit $exit_code 

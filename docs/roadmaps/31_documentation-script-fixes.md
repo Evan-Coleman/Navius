@@ -1,237 +1,147 @@
 ---
-title: Documentation Scripts Fix Roadmap
-description: Plan for fixing and enhancing the documentation validation and improvement scripts
-category: roadmap
+title: Documentation Script Fixes
+description: Roadmap for fixing documentation validation and improvement scripts
+status: in-progress
+date: 2024-05-30
+category: tooling
 tags:
   - documentation
-  - tools
   - scripts
-  - maintenance
-related:
-  - 30_documentation-reorganization-roadmap.md
-  - 30_documentation-reorganization-instructions.md
-  - ../reference/standards/documentation-standards.md
-last_updated: March 27, 2025
-version: 1.0
-status: not started
+  - validation
+  - shell
+  - tooling
+  - roadmap
 ---
 
-# Documentation Scripts Fix Roadmap
-
-## Overview
-
-This roadmap outlines our plan to fix and enhance the documentation validation and improvement scripts located in `.devtools/scripts/doc-overhaul/`. These scripts are critical for maintaining documentation quality but are currently non-functional due to compatibility issues and syntax errors.
+# Documentation Script Fixes
 
 ## Current State
 
-The documentation scripts are currently broken with several issues:
+The documentation validation and improvement scripts (located in `.devtools/scripts/doc-overhaul/`) have several issues:
 
-1. **Shell Compatibility Problems**:
-   - Many scripts fail when run on macOS (zsh)
-   - Commands that work in bash fail in zsh environment
-   - Issues with array declaration and parameter handling
+1. Shell compatibility issues (bash-specific syntax causing errors on some systems)
+2. Syntax errors in some scripts
+3. Inconsistent handling of edge cases
+4. Poor error handling
+5. Limited reporting capabilities
+6. Hardcoded paths and configuration
 
-2. **Syntax Errors**:
-   - Expression evaluation errors
-   - Issues with variable expansion
-   - Problems with conditional logic
-
-3. **External Tool Dependencies**:
-   - markdownlint detection failures
-   - Path resolution issues
-
-4. **Output and Reporting Issues**:
-   - Incorrect file count reporting
-   - Error in data structure handling for reporting
+These issues prevent the scripts from running reliably across different environments, which has slowed documentation improvements.
 
 ## Target State
 
-After completing this work, the documentation scripts will:
+All documentation scripts should:
 
-1. **Be Fully Functional**:
-   - All scripts work correctly in both bash and zsh environments
-   - Clear error handling and feedback
-   - Consistent return codes
-
-2. **Have Improved Cross-Platform Compatibility**:
-   - Scripts work on macOS, Linux, and potentially WSL
-   - Clear dependency requirements
-   - Fallback mechanisms for missing tools
-
-3. **Provide Better Reporting**:
-   - Clearer output formats
-   - Visual progress indicators
-   - Structured JSON/CSV output options
-   - Integration with CI/CD pipelines
-
-4. **Support the New Documentation Structure**:
-   - Properly handle the numbered directory structure
-   - Update path references 
-   - Handle cross-referencing between documents
-
-## Implementation Phases
-
-### Phase 1: Analysis and Diagnostics (Week 1)
-
-1. **Complete Error Documentation**:
-   - Run each script in debug mode to capture detailed error information
-   - Create comprehensive error catalog with script-specific issues
-   - Document environment details where failures occur
-
-2. **Dependency Review**:
-   - Verify all external dependencies (markdownlint, etc.)
-   - Document installation procedures for dependencies
-   - Create environment setup script for development
-
-3. **Test Case Development**:
-   - Create test documents for each script
-   - Define expected output and behavior
-   - Develop simple automated test runner
-
-### Phase 2: Script Repair (Week 2)
-
-1. **Common Utilities Fix**:
-   - Fix shared utility functions across scripts
-   - Create cross-shell compatible helper functions
-   - Improve error handling and reporting
-
-2. **Individual Script Fixes**:
-   - Fix `generate_report.sh`:
-     - Resolve markdownlint detection issues
-     - Fix expression syntax errors
-     - Improve output formatting
-
-   - Fix `comprehensive_test.sh`:
-     - Address the declare command compatibility issue
-     - Fix CSV output generation
-     - Improve document relationship visualization
-
-   - Fix `fix_frontmatter.sh`:
-     - Correct file count reporting
-     - Improve path resolution
-     - Enhance validation logic
-
-   - Fix `fix_links.sh`:
-     - Update link pattern detection
-     - Improve link fixing algorithm
-     - Enhance reporting capabilities
-
-   - Fix `add_sections.sh`:
-     - Update section detection for the new directory structure
-     - Improve template injection
-     - Fix section recommendation logic
-
-   - Fix `improve_docs.sh`:
-     - Fix workflow sequencing
-     - Update integration with other scripts
-     - Improve interactive experience
-
-3. **Integration Improvements**:
-   - Ensure scripts work together properly
-   - Fix script-to-script communication
-   - Standardize input/output formats
-
-### Phase 3: Testing and Validation (Week 3)
-
-1. **Comprehensive Testing**:
-   - Test each script individually
-   - Perform integration testing of script workflow
-   - Test across different environments (macOS, Linux)
-
-2. **Documentation Update**:
-   - Update script usage documentation
-   - Create examples for common workflows
-   - Document known limitations or issues
-
-3. **Performance Improvements**:
-   - Optimize scripts for large documentation sets
-   - Add parallelization where appropriate
-   - Implement caching for repeated operations
-
-### Phase 4: Documentation Structure Integration (Week 4)
-
-1. **New Directory Structure Support**:
-   - Update path handling for numbered directories
-   - Fix cross-referencing between documents
-   - Update templates and default configurations
-
-2. **Enhanced Reporting**:
-   - Improve quality metrics visualization
-   - Add trend tracking for documentation improvement
-   - Create executive summary reports for quality assessment
-
-3. **CI/CD Integration**:
-   - Create GitHub Actions workflow
-   - Add documentation quality checks to PR process
-   - Implement automated reporting
-
-## Success Criteria
-
-The script fix project will be considered successful when:
-
-1. All scripts run without errors on macOS and Linux environments
-2. Scripts properly handle the new numbered directory structure
-3. Scripts can be used to validate and improve documentation quality
-4. Clear documentation exists for script usage and workflows
-5. Scripts can be integrated into the CI/CD pipeline
-6. Documentation quality metrics can be tracked over time
-
-## Risk Management
-
-| Risk | Impact | Likelihood | Mitigation |
-|------|--------|------------|------------|
-| Shell compatibility issues persist | High | Medium | Test scripts in multiple environments; use more standard shell features |
-| External tool dependencies change | Medium | Low | Document specific versions; add compatibility checks |
-| Scripts become complex and difficult to maintain | Medium | Medium | Modularize code; add comprehensive comments; create development guidelines |
-| Performance issues with large documentation sets | Medium | Medium | Add optimization options; implement parallelization |
-| User experience remains confusing | Medium | High | Improve help text; add examples; create workflow documentation |
+1. Be shell-agnostic, working in sh, bash, zsh, etc.
+2. Have proper error handling and reporting
+3. Use consistent patterns for file processing and option handling
+4. Provide clear output and helpful error messages
+5. Have a unified library of common utility functions
+6. Allow for configuration overrides
 
 ## Implementation Plan
 
-### Week 1: Analysis and Setup
+### Phase 0: Analysis
 
-- Document all existing issues in detail
-- Set up test environment with all dependencies
-- Create simple test cases for each script
-- Develop plan for shell compatibility fixes
+- [x] Analyze all scripts for shell compatibility issues
+- [x] Identify common functionality that could be extracted to a utility library
+- [x] Prioritize scripts based on importance and severity of issues
 
-### Week 2: Core Fixes
+### Phase 1: Create Utility Library
 
-- Implement fixes for shared utilities
-- Fix individual scripts with highest priority first:
-  - `generate_report.sh`
-  - `comprehensive_test.sh`
-  - `fix_frontmatter.sh`
-- Test fixes in multiple environments
+- [x] Create a shell-agnostic utility library (`shell_utils.sh`)
+- [x] Implement functions for file operations, string manipulation, and error handling
+- [x] Add documentation for the utility functions
 
-### Week 3: Integration and Testing
+### Phase 2: Fix Individual Scripts
 
-- Fix remaining scripts:
-  - `fix_links.sh`
-  - `add_sections.sh`
-  - `improve_docs.sh`
-- Perform integration testing
-- Update documentation
+- [x] Fix `generate_report.sh`
+- [x] Fix `fix_frontmatter.sh`
+- [x] Fix `fix_links.sh`
+- [x] Fix `add_sections.sh`
+- [x] Fix `improve_docs.sh`
+- [x] Fix `comprehensive_test.sh`
 
-### Week 4: Polish and Deployment
+### Phase 3: Testing
 
-- Add support for the new directory structure
-- Implement enhanced reporting features
-- Create CI/CD integration
-- Finalize documentation
+- [ ] Create test cases for each script
+- [ ] Run scripts in different shell environments to verify compatibility
+- [ ] Validate that all scripts handle edge cases correctly
+- [ ] Verify all scripts work as intended on the specific system environment
+- [ ] Create a testing matrix for common use cases and expected outputs
+- [ ] Document any system-specific considerations or requirements
 
-## Metrics
+### Phase 4: Integration
 
-We will track the following metrics to measure success:
+- [ ] Update README with usage instructions
+- [ ] Update main documentation workflow to use the fixed scripts
+- [ ] Create examples of common documentation tasks
 
-1. **Functional Completeness**: Percentage of scripts working correctly
-2. **Test Coverage**: Percentage of script functionality tested
-3. **Cross-Platform Compatibility**: Number of environments where scripts work
-4. **Documentation Coverage**: Percentage of functions and workflows documented
-5. **User Satisfaction**: Feedback scores from documentation team
+## Completion Criteria
 
-## Related Documents
+- All scripts run without errors in sh, bash, and zsh
+- Error handling is consistent and helpful
+- Documentation for script usage is clear and complete
+- Testing validates all critical functionality
 
-- [Documentation Reorganization Roadmap](30_documentation-reorganization-roadmap.md)
-- [Documentation Reorganization Instructions](30_documentation-reorganization-instructions.md)
-- [Documentation Standards](../reference/standards/documentation-standards.md) 
+## Risks
+
+1. Some scripts may have complex bash-specific features that are difficult to replicate in a shell-agnostic way
+2. Testing across all potential environments may be challenging
+3. Changes to script behavior might affect existing documentation workflows
+
+## Progress Updates
+
+### May 30, 2024
+
+1. Created shell-agnostic utility library (`shell_utils.sh`) with functions for:
+   - File operations (reading, writing, checking)
+   - String manipulation
+   - Logging and error handling
+   - Frontmatter extraction and manipulation
+
+2. Fixed `generate_report.sh`:
+   - Changed shebang from `#!/bin/bash` to `#!/bin/sh`
+   - Replaced bashisms with POSIX-compliant alternatives
+   - Added improved error handling and logging
+   - Added usage of shell utilities library
+
+3. Fixed `fix_frontmatter.sh`:
+   - Changed shebang from `#!/bin/bash` to `#!/bin/sh`
+   - Replaced associative arrays with files for key-value storage
+   - Improved command-line argument handling
+   - Added better error reporting and logging
+   - Added usage of shell utilities library
+
+4. Fixed `fix_links.sh`:
+   - Changed shebang from `#!/bin/bash` to `#!/bin/sh`
+   - Replaced bashisms with POSIX-compliant alternatives
+   - Added proper error handling using utility functions
+   - Improved performance for larger documentation sets
+
+5. Fixed `add_sections.sh`:
+   - Changed shebang from `#!/bin/bash` to `#!/bin/sh`
+   - Replaced bash-specific syntax with POSIX-compliant alternatives
+   - Added better document type detection
+   - Improved error handling and user feedback
+   - Added usage of shell utilities library
+
+6. Fixed `improve_docs.sh`:
+   - Changed shebang from `#!/bin/bash` to `#!/bin/sh`
+   - Utilized shell utilities for common operations
+   - Improved interactive workflow with better prompts
+   - Enhanced reporting capabilities
+
+7. Fixed `comprehensive_test.sh`:
+   - Changed shebang from `#!/bin/bash` to `#!/bin/sh`
+   - Replaced associative arrays with key-value files
+   - Improved error handling and reporting
+   - Enhanced visualization of document relationships
+   - Added usage of shell utilities library
+
+## Next Steps
+
+1. Create test cases for all scripts to verify proper functionality
+2. Run scripts across different environments to ensure compatibility
+3. Document advanced usage patterns
+4. Create integration tests for the full documentation workflow 

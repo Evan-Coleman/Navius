@@ -1,212 +1,202 @@
-#!/bin/bash
+#!/bin/sh
 
 # Documentation Report Generator
 # This script generates a comprehensive documentation quality report by running
 # both basic validation (syntax, links, frontmatter) and advanced analysis (relationships, quality, etc.)
 
-set -e
-
+# Load utility functions
 SCRIPT_DIR="$(dirname "$0")"
-DOCS_DIR="docs"
-REPORTS_DIR="target/reports/docs_validation"
-DATE_STAMP=$(date "+%Y-%m-%d")
-FULL_REPORT_FILE="${REPORTS_DIR}/documentation_quality_report_${DATE_STAMP}.md"
-HTML_REPORT_FILE="${REPORTS_DIR}/documentation_quality_report_${DATE_STAMP}.html"
+. "$SCRIPT_DIR/shell_utils.sh"
 
-# Command-line options
+# Set strict mode
+set -e  # Exit on error
+set -u  # Error on undefined variables
+
+# Default values
 DIR_TO_ANALYZE=""
 SINGLE_FILE=""
-FULL_VISUALIZATION=false
+GENERATE_VIS=false
 SKIP_LINTING=false
-CONFIG_FILE=".devtools/config/docs_report_config.json"
+CI_THRESHOLD=70  # Default threshold for CI pipeline
 
-# Parse command line arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
+# Version information
+VERSION="1.0.0"
+
+# Report file paths
+TIMESTAMP=$(date "+%Y%m%d_%H%M%S")
+REPORTS_DIR="target/reports/docs_validation"
+FULL_REPORT_FILE="${REPORTS_DIR}/documentation_quality_report_${TIMESTAMP}.md"
+HTML_REPORT_FILE="${REPORTS_DIR}/documentation_quality_report_${TIMESTAMP}.html"
+GRAPH_VIS_FILE="${REPORTS_DIR}/doc_relationships_${TIMESTAMP}.html"
+
+# Create temporary file
+create_temp_file() {
+    mktemp
+}
+
+# Display help information
+print_usage() {
+    echo "Documentation Quality Report Generator v${VERSION}"
+    echo ""
+    echo "Usage: generate_report.sh [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --dir DIR         Process all markdown files in the specified directory"
+    echo "  --file FILE       Process a single file"
+    echo "  --vis             Generate a visualization of documentation relationships"
+    echo "  --skip-linting    Skip the markdownlint validation step"
+    echo "  --help            Display this help message"
+    echo ""
+    echo "Example:"
+    echo "  ./generate_report.sh --dir docs"
+    echo "  ./generate_report.sh --file docs/README.md --vis"
+}
+
+# Parse command-line arguments
+while [ $# -gt 0 ]; do
+    case "$1" in
         --dir)
+            if [ -z "$2" ] || [ "${2:0:1}" = "-" ]; then
+                log_error "Error: --dir requires a directory path"
+                print_usage
+                exit 1
+            fi
             DIR_TO_ANALYZE="$2"
             shift 2
             ;;
         --file)
+            if [ -z "$2" ] || [ "${2:0:1}" = "-" ]; then
+                log_error "Error: --file requires a file path"
+                print_usage
+                exit 1
+            fi
             SINGLE_FILE="$2"
             shift 2
             ;;
         --vis)
-            FULL_VISUALIZATION=true
+            GENERATE_VIS=true
             shift
             ;;
         --skip-linting)
             SKIP_LINTING=true
             shift
             ;;
-        --config)
-            CONFIG_FILE="$2"
-            shift 2
-            ;;
-        --help)
-            echo "Usage: generate_report.sh [OPTIONS]"
-            echo "Options:"
-            echo "  --dir DIRECTORY   Focus analysis on a specific directory"
-            echo "  --file FILE       Analyze a single file only"
-            echo "  --vis             Generate full visualization"
-            echo "  --skip-linting    Skip markdown linting (faster)"
-            echo "  --config FILE     Specify custom configuration file"
-            echo "  --help            Display this help message"
+        --help|-h)
+            print_usage
             exit 0
             ;;
         *)
-            echo "Unknown option: $1"
-            echo "Use --help for usage information"
+            log_error "Unknown option: $1"
+            print_usage
             exit 1
             ;;
     esac
 done
 
-# Create reports directory if it doesn't exist
-mkdir -p "$REPORTS_DIR"
-
-# Colors for terminal output
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Default settings
-INCLUDE_CODE_VALIDATION=true
-INCLUDE_READABILITY=true
-INCLUDE_VISUALIZATION=true
-MINIMUM_QUALITY_THRESHOLD="Good"
-CI_THRESHOLD=70
-
-# Load configuration if file exists and jq is available
-if [ -f "$CONFIG_FILE" ] && command -v jq &> /dev/null; then
-    echo -e "${BLUE}Loading configuration from $CONFIG_FILE...${NC}"
-    INCLUDE_CODE_VALIDATION=$(jq -r '.include_code_validation // true' "$CONFIG_FILE")
-    INCLUDE_READABILITY=$(jq -r '.include_readability // true' "$CONFIG_FILE")
-    INCLUDE_VISUALIZATION=$(jq -r '.include_visualization // true' "$CONFIG_FILE")
-    MINIMUM_QUALITY_THRESHOLD=$(jq -r '.minimum_quality_threshold // "Good"' "$CONFIG_FILE")
-    CI_THRESHOLD=$(jq -r '.ci_threshold // 70' "$CONFIG_FILE")
+# Validate inputs
+if [ -n "$SINGLE_FILE" ] && [ -n "$DIR_TO_ANALYZE" ]; then
+    log_error "Error: Cannot specify both --dir and --file"
+    print_usage
+    exit 1
 fi
 
-# Set up options for comprehensive_test.sh
-COMP_TEST_OPTS=""
-if [ -n "$DIR_TO_ANALYZE" ]; then
-    COMP_TEST_OPTS="--dir $DIR_TO_ANALYZE"
-    DOCS_DIR="$DIR_TO_ANALYZE"
-    echo -e "${BLUE}Analyzing directory: $DIR_TO_ANALYZE${NC}"
-elif [ -n "$SINGLE_FILE" ]; then
-    COMP_TEST_OPTS="--file $SINGLE_FILE"
-    echo -e "${BLUE}Analyzing single file: $SINGLE_FILE${NC}"
-fi
-
-echo -e "${BLUE}Generating comprehensive documentation quality report...${NC}"
-
-# Start building the report
-echo "# Navius Documentation Quality Report" > $FULL_REPORT_FILE
-echo "" >> $FULL_REPORT_FILE
-echo "**Generated:** $(date '+%B %d, %Y at %H:%M:%S')" >> $FULL_REPORT_FILE
-echo "" >> $FULL_REPORT_FILE
-
-if [ -n "$DIR_TO_ANALYZE" ]; then
-    echo "**Scope:** Directory - $DIR_TO_ANALYZE" >> $FULL_REPORT_FILE
-elif [ -n "$SINGLE_FILE" ]; then
-    echo "**Scope:** Single file - $SINGLE_FILE" >> $FULL_REPORT_FILE
-else
-    echo "**Scope:** All documentation" >> $FULL_REPORT_FILE
-fi
-echo "" >> $FULL_REPORT_FILE
-
-echo "## Overview" >> $FULL_REPORT_FILE
-echo "" >> $FULL_REPORT_FILE
-echo "This report provides a comprehensive assessment of the Navius documentation quality." >> $FULL_REPORT_FILE
-echo "It combines both basic validation (syntax, links, formatting) and advanced analysis (document relationships, content quality, readability, code validation)." >> $FULL_REPORT_FILE
-echo "" >> $FULL_REPORT_FILE
-
-# Count documents
 if [ -n "$SINGLE_FILE" ]; then
-    TOTAL_DOCS=1
-else
-    TOTAL_DOCS=$(find $DOCS_DIR -name "*.md" | wc -l)
-fi
-
-# Run markdown linting if not skipped
-LINTING_ISSUES=0
-if [ "$SKIP_LINTING" = false ]; then
-    echo -e "${BLUE}Running markdown linting...${NC}"
-    echo "## Markdown Linting" >> $FULL_REPORT_FILE
-    echo "" >> $FULL_REPORT_FILE
-    echo "```" >> $FULL_REPORT_FILE
-
-    # Ensure markdownlint-cli is installed
-    if ! command -v markdownlint &> /dev/null; then
-        echo "markdownlint not found. Installing..."
-        npm install -g markdownlint-cli
+    if [ ! -f "$SINGLE_FILE" ]; then
+        log_error "Error: File not found: $SINGLE_FILE"
+        exit 1
     fi
-
-    # Run markdownlint and capture output
-    if [ -n "$SINGLE_FILE" ]; then
-        LINTING_OUTPUT=$(markdownlint "$SINGLE_FILE" --config .devtools/config/markdownlint.json 2>&1 || true)
-    elif [ -n "$DIR_TO_ANALYZE" ]; then
-        LINTING_OUTPUT=$(markdownlint "$DIR_TO_ANALYZE/**/*.md" --config .devtools/config/markdownlint.json 2>&1 || true)
-    else
-        LINTING_OUTPUT=$(markdownlint docs/**/*.md --config .devtools/config/markdownlint.json 2>&1 || true)
-    fi
-    echo "$LINTING_OUTPUT" >> $FULL_REPORT_FILE
-    echo "```" >> $FULL_REPORT_FILE
-    echo "" >> $FULL_REPORT_FILE
-
-    # Count linting issues
-    LINTING_ISSUES=$(echo "$LINTING_OUTPUT" | wc -l)
-    if [ $LINTING_ISSUES -eq 0 ]; then
-        echo "✅ No markdown linting issues found." >> $FULL_REPORT_FILE
-    else
-        echo "⚠️ Found $LINTING_ISSUES markdown linting issues." >> $FULL_REPORT_FILE
-    fi
-    echo "" >> $FULL_REPORT_FILE
-fi
-
-# Run link checker
-echo -e "${BLUE}Checking for broken links...${NC}"
-echo "## Link Validation" >> $FULL_REPORT_FILE
-echo "" >> $FULL_REPORT_FILE
-
-# Create a temporary file for link check results
-LINK_CHECK_FILE=$(mktemp)
-BROKEN_LINKS=0
-
-echo "### Internal Links" >> $FULL_REPORT_FILE
-echo "" >> $FULL_REPORT_FILE
-
-# Run internal link checker using our own script
-LINK_CHECK_OPTS="--check-only"
-if [ -n "$SINGLE_FILE" ]; then
-    LINK_CHECK_OPTS="$LINK_CHECK_OPTS --file $SINGLE_FILE"
+    log_info "Analyzing file: $SINGLE_FILE"
 elif [ -n "$DIR_TO_ANALYZE" ]; then
-    LINK_CHECK_OPTS="$LINK_CHECK_OPTS --dir $DIR_TO_ANALYZE"
-fi
-
-bash "$SCRIPT_DIR/fix_links.sh" $LINK_CHECK_OPTS > $LINK_CHECK_FILE 2>&1 || true
-cat $LINK_CHECK_FILE >> $FULL_REPORT_FILE
-echo "" >> $FULL_REPORT_FILE
-
-# Count broken internal links
-BROKEN_INTERNAL=$(grep -c "Broken link" $LINK_CHECK_FILE || echo 0)
-if [ $BROKEN_INTERNAL -eq 0 ]; then
-    echo "✅ No broken internal links found." >> $FULL_REPORT_FILE
+    if [ ! -d "$DIR_TO_ANALYZE" ]; then
+        log_error "Error: Directory not found: $DIR_TO_ANALYZE"
+        exit 1
+    fi
+    log_info "Analyzing directory: $DIR_TO_ANALYZE"
 else
-    BROKEN_LINKS=$((BROKEN_LINKS + BROKEN_INTERNAL))
-    echo "⚠️ Found $BROKEN_INTERNAL broken internal links." >> $FULL_REPORT_FILE
+    DIR_TO_ANALYZE="docs"
+    log_info "No directory or file specified. Defaulting to: $DIR_TO_ANALYZE"
 fi
-echo "" >> $FULL_REPORT_FILE
+
+# Ensure reports directory exists
+ensure_dir "$REPORTS_DIR"
+
+# Start generating the report
+log_info "Generating comprehensive documentation quality report..."
+
+# Initialize report file
+cat > "$FULL_REPORT_FILE" << EOT
+# Documentation Quality Report
+
+Generated on $(date '+%B %d, %Y')
+
+## Overview
+
+This report provides a comprehensive analysis of documentation quality, including:
+
+- Markdown syntax validation
+- Frontmatter validation
+- Link validation
+- Content quality assessment
+- Readability metrics
+- Code validation
+
+EOT
+
+# Set up comprehensive test options
+COMP_TEST_OPTS=""
+if [ -n "$SINGLE_FILE" ]; then
+    COMP_TEST_OPTS="--file $SINGLE_FILE"
+elif [ -n "$DIR_TO_ANALYZE" ]; then
+    COMP_TEST_OPTS="--dir $DIR_TO_ANALYZE"
+fi
+
+if [ "$GENERATE_VIS" = true ]; then
+    COMP_TEST_OPTS="$COMP_TEST_OPTS --vis"
+fi
+
+# Run markdown validation if linting is not skipped
+if [ "$SKIP_LINTING" != true ]; then
+    echo "## Markdown Validation" >> "$FULL_REPORT_FILE"
+    echo "" >> "$FULL_REPORT_FILE"
+    
+    if command -v markdownlint > /dev/null 2>&1; then
+        echo "Running markdownlint validation..." >> "$FULL_REPORT_FILE"
+        echo '```' >> "$FULL_REPORT_FILE"
+        
+        MARKDOWNLINT_FILE=$(create_temp_file)
+        
+        if [ -n "$SINGLE_FILE" ]; then
+            markdownlint "$SINGLE_FILE" > "$MARKDOWNLINT_FILE" 2>&1 || true
+        elif [ -n "$DIR_TO_ANALYZE" ]; then
+            markdownlint "$DIR_TO_ANALYZE" > "$MARKDOWNLINT_FILE" 2>&1 || true
+        fi
+        
+        cat "$MARKDOWNLINT_FILE" >> "$FULL_REPORT_FILE"
+        LINT_ISSUES=$(grep -c ":" "$MARKDOWNLINT_FILE" || echo 0)
+        
+        echo '```' >> "$FULL_REPORT_FILE"
+        echo "" >> "$FULL_REPORT_FILE"
+        
+        if [ "$LINT_ISSUES" = "" ] || [ "$LINT_ISSUES" = "0" ]; then
+            echo "✅ No markdown syntax issues found." >> "$FULL_REPORT_FILE"
+        else
+            echo "⚠️ Found $LINT_ISSUES markdown syntax issues." >> "$FULL_REPORT_FILE"
+        fi
+    else
+        echo "⚠️ markdownlint not found. Skipping markdown validation." >> "$FULL_REPORT_FILE"
+        echo "" >> "$FULL_REPORT_FILE"
+        echo "Install markdownlint with: npm install -g markdownlint-cli" >> "$FULL_REPORT_FILE"
+    fi
+    
+    echo "" >> "$FULL_REPORT_FILE"
+fi
 
 # Run frontmatter validation
-echo -e "${BLUE}Validating frontmatter...${NC}"
-echo "## Frontmatter Validation" >> $FULL_REPORT_FILE
-echo "" >> $FULL_REPORT_FILE
-echo "```" >> $FULL_REPORT_FILE
+echo "## Frontmatter Validation" >> "$FULL_REPORT_FILE"
+echo "" >> "$FULL_REPORT_FILE"
+echo '```' >> "$FULL_REPORT_FILE"
 
-# Run frontmatter validation script with proper options
+# Set up frontmatter validation options
 FRONTMATTER_OPTS=""
 if [ -n "$SINGLE_FILE" ]; then
     FRONTMATTER_OPTS="--file $SINGLE_FILE"
@@ -214,28 +204,101 @@ elif [ -n "$DIR_TO_ANALYZE" ]; then
     FRONTMATTER_OPTS="--dir $DIR_TO_ANALYZE"
 fi
 
-# Use fix_frontmatter.sh in validation mode
-bash "$SCRIPT_DIR/fix_frontmatter.sh" --validate-all $FRONTMATTER_OPTS 2>&1 | tee $LINK_CHECK_FILE
-cat $LINK_CHECK_FILE >> $FULL_REPORT_FILE
-echo "```" >> $FULL_REPORT_FILE
-echo "" >> $FULL_REPORT_FILE
+# Create temp file for frontmatter results
+FRONTMATTER_CHECK_FILE=$(create_temp_file)
 
-# Count frontmatter issues
-FRONTMATTER_ISSUES=$(grep -c "Error:" $LINK_CHECK_FILE || echo 0)
-if [ $FRONTMATTER_ISSUES -eq 0 ]; then
-    echo "✅ No frontmatter issues found." >> $FULL_REPORT_FILE
-else
-    echo "⚠️ Found $FRONTMATTER_ISSUES documents with frontmatter issues." >> $FULL_REPORT_FILE
+# Use fix_frontmatter.sh in validation mode
+sh "$SCRIPT_DIR/fix_frontmatter.sh" $FRONTMATTER_OPTS > "$FRONTMATTER_CHECK_FILE" 2>&1 || true
+cat "$FRONTMATTER_CHECK_FILE" >> "$FULL_REPORT_FILE"
+echo '```' >> "$FULL_REPORT_FILE"
+echo "" >> "$FULL_REPORT_FILE"
+
+# Count frontmatter issues - handle cross-platform issues with grep
+FRONTMATTER_ISSUES=$(grep -c "Error:" "$FRONTMATTER_CHECK_FILE" || echo 0)
+if [ -z "$FRONTMATTER_ISSUES" ]; then
+    FRONTMATTER_ISSUES=0
 fi
-echo "" >> $FULL_REPORT_FILE
+
+if [ "$FRONTMATTER_ISSUES" = "" ] || [ "$FRONTMATTER_ISSUES" = "0" ]; then
+    echo "✅ No frontmatter issues found." >> "$FULL_REPORT_FILE"
+else
+    echo "⚠️ Found $FRONTMATTER_ISSUES documents with frontmatter issues." >> "$FULL_REPORT_FILE"
+fi
+echo "" >> "$FULL_REPORT_FILE"
+
+# Run link check on docs
+echo "## Link Validation" >> "$FULL_REPORT_FILE"
+echo "" >> "$FULL_REPORT_FILE"
+echo '```' >> "$FULL_REPORT_FILE"
+
+# Create temp file for link check results
+LINK_CHECK_FILE=$(create_temp_file)
+
+# Determine which files to check
+LINK_CHECK_OPTS=""
+if [ -n "$SINGLE_FILE" ]; then
+    LINK_CHECK_OPTS="--file $SINGLE_FILE --verbose"
+elif [ -n "$DIR_TO_ANALYZE" ]; then
+    LINK_CHECK_OPTS="--dir $DIR_TO_ANALYZE --check-only"
+fi
+
+# Run link check and capture output
+sh "$SCRIPT_DIR/fix_links.sh" $LINK_CHECK_OPTS > "$LINK_CHECK_FILE" 2>&1 || true
+cat "$LINK_CHECK_FILE" >> "$FULL_REPORT_FILE"
+echo '```' >> "$FULL_REPORT_FILE"
+echo "" >> "$FULL_REPORT_FILE"
+
+# Count broken links
+BROKEN_LINKS=0
+BROKEN_INTERNAL=0
+BROKEN_EXTERNAL=0
+
+# Try to count the links, but default to 0 if grep fails
+BROKEN_INTERNAL_COUNT=$(grep -c "Broken internal link" "$LINK_CHECK_FILE" 2>/dev/null || echo "0")
+BROKEN_EXTERNAL_COUNT=$(grep -c "Broken external link" "$LINK_CHECK_FILE" 2>/dev/null || echo "0")
+
+# Convert to numbers (may be empty or have spaces)
+BROKEN_INTERNAL=$(echo "$BROKEN_INTERNAL_COUNT" | tr -d ' \n\t')
+BROKEN_EXTERNAL=$(echo "$BROKEN_EXTERNAL_COUNT" | tr -d ' \n\t')
+
+# Ensure they are valid numbers for arithmetic
+case "$BROKEN_INTERNAL" in
+    ''|*[!0-9]*) BROKEN_INTERNAL=0 ;;
+esac
+
+case "$BROKEN_EXTERNAL" in
+    ''|*[!0-9]*) BROKEN_EXTERNAL=0 ;;
+esac
+
+# Calculate total broken links
+BROKEN_LINKS=$BROKEN_INTERNAL
+TOTAL_LINKS=$((BROKEN_INTERNAL + BROKEN_EXTERNAL))
+
+# Display link validation summary
+if [ "$TOTAL_LINKS" -eq 0 ]; then
+    echo "✅ No broken links found." >> "$FULL_REPORT_FILE"
+else
+    if [ "$BROKEN_INTERNAL" -gt 0 ]; then
+        echo "⚠️ Found $BROKEN_INTERNAL broken internal links." >> "$FULL_REPORT_FILE"
+    fi
+    
+    if [ "$BROKEN_EXTERNAL" -gt 0 ]; then
+        echo "⚠️ Found $BROKEN_EXTERNAL broken external links (these should be manually verified)." >> "$FULL_REPORT_FILE"
+    fi
+fi
+echo "" >> "$FULL_REPORT_FILE"
 
 # Run comprehensive documentation testing with CSV output for metrics extraction
-echo -e "${BLUE}Running comprehensive document analysis...${NC}"
+log_info "Running comprehensive document analysis..."
 
 # Generate CSV output for metrics
-QUALITY_CSV=$(mktemp)
-echo -e "${BLUE}Extracting quality metrics...${NC}"
-bash "$SCRIPT_DIR/comprehensive_test.sh" $COMP_TEST_OPTS --csv > $QUALITY_CSV
+QUALITY_CSV=$(create_temp_file)
+log_info "Extracting quality metrics..."
+sh "$SCRIPT_DIR/comprehensive_test.sh" $COMP_TEST_OPTS --csv > "$QUALITY_CSV" || true
+
+# Process CSV output to extract metrics
+# Skip the header row
+SCORE_DATA=$(tail -n +2 "$QUALITY_CSV" || echo "")
 
 # Initialize counters for quality metrics
 EXCELLENT_COUNT=0
@@ -248,392 +311,225 @@ VERY_POOR_COUNT=0
 COMPLEX_COUNT=0
 GOOD_READABILITY_COUNT=0
 SIMPLE_COUNT=0
-AVG_WPS=0
 
-# Initialize code validation metrics
+# Count code validation results
 CODE_PASS_COUNT=0
 CODE_FAIL_COUNT=0
-CODE_TOTAL=0
-CODE_PASS_PERCENT=0
+CODE_NA_COUNT=0
 
-# Process CSV output to extract metrics if file is not empty
-if [ -s "$QUALITY_CSV" ]; then
-    # Skip header line
-    tail -n +2 "$QUALITY_CSV" > "${QUALITY_CSV}.tmp"
-    mv "${QUALITY_CSV}.tmp" "$QUALITY_CSV"
-    
-    # Extract quality counts
-    EXCELLENT_COUNT=$(grep -c "Excellent" $QUALITY_CSV || echo 0)
-    GOOD_COUNT=$(grep -c "Good" $QUALITY_CSV || echo 0)
-    ADEQUATE_COUNT=$(grep -c "Adequate" $QUALITY_CSV || echo 0)
-    POOR_COUNT=$(grep -c "Poor" $QUALITY_CSV || echo 0)
-    VERY_POOR_COUNT=$(grep -c "Very Poor" $QUALITY_CSV || echo 0)
-    
-    # Extract readability metrics
-    COMPLEX_COUNT=$(grep -c "Complex" $QUALITY_CSV || echo 0)
-    GOOD_READABILITY_COUNT=$(grep -c "Good" $QUALITY_CSV || echo 0)
-    SIMPLE_COUNT=$(grep -c "Simple" $QUALITY_CSV || echo 0)
-    
-    # Calculate average words per sentence if awk is available
-    if command -v awk &> /dev/null; then
-        WPS_SUM=$(awk -F',' '{sum+=$8} END {print sum}' $QUALITY_CSV 2>/dev/null || echo 0)
-        WPS_COUNT=$(wc -l < $QUALITY_CSV)
-        if [ $WPS_COUNT -gt 0 ]; then
-            AVG_WPS=$(echo "scale=2; $WPS_SUM / $WPS_COUNT" | bc)
-        fi
-    fi
-    
-    # Extract code validation metrics
-    CODE_PASS_COUNT=$(grep -c "PASS" $QUALITY_CSV || echo 0)
-    CODE_FAIL_COUNT=$(grep -c "FAIL" $QUALITY_CSV || echo 0)
-    CODE_TOTAL=$((CODE_PASS_COUNT + CODE_FAIL_COUNT))
-    
-    if [ $CODE_TOTAL -gt 0 ]; then
-        CODE_PASS_PERCENT=$((CODE_PASS_COUNT * 100 / CODE_TOTAL))
-    else
-        CODE_PASS_PERCENT=100  # No code examples means perfect score
-    fi
-fi
-
-# Run comprehensive test and capture the report path for detailed analysis
-echo -e "${BLUE}Generating detailed document analysis...${NC}"
-echo "## Advanced Document Analysis" >> $FULL_REPORT_FILE
-echo "" >> $FULL_REPORT_FILE
-
-COMPREHENSIVE_REPORT=$(bash "$SCRIPT_DIR/comprehensive_test.sh" $COMP_TEST_OPTS | grep -o "target/reports/docs_validation/comprehensive_test_.*\.md" || echo "")
-
-if [ -n "$COMPREHENSIVE_REPORT" ] && [ -f "$COMPREHENSIVE_REPORT" ]; then
-    # Extract only the content sections we want (skip the first 3 lines which are the title and empty line)
-    sed -n '4,$p' "$COMPREHENSIVE_REPORT" >> $FULL_REPORT_FILE
-else
-    echo "⚠️ Could not generate comprehensive analysis report." >> $FULL_REPORT_FILE
-fi
-
-# Add content quality distribution section
-echo -e "${BLUE}Adding quality metrics...${NC}"
-echo "## Content Quality Distribution" >> $FULL_REPORT_FILE
-echo "" >> $FULL_REPORT_FILE
-
-if [ $TOTAL_DOCS -gt 0 ]; then
-    EXCELLENT_PERCENT=$((EXCELLENT_COUNT * 100 / TOTAL_DOCS))
-    GOOD_PERCENT=$((GOOD_COUNT * 100 / TOTAL_DOCS))
-    ADEQUATE_PERCENT=$((ADEQUATE_COUNT * 100 / TOTAL_DOCS))
-    POOR_PERCENT=$((POOR_COUNT * 100 / TOTAL_DOCS))
-    VERY_POOR_PERCENT=$((VERY_POOR_COUNT * 100 / TOTAL_DOCS))
-else
-    EXCELLENT_PERCENT=0
-    GOOD_PERCENT=0
-    ADEQUATE_PERCENT=0
-    POOR_PERCENT=0
-    VERY_POOR_PERCENT=0
-fi
-
-echo "| Quality Level | Count | Percentage |" >> $FULL_REPORT_FILE
-echo "|---------------|-------|------------|" >> $FULL_REPORT_FILE
-echo "| Excellent | $EXCELLENT_COUNT | $EXCELLENT_PERCENT% |" >> $FULL_REPORT_FILE
-echo "| Good | $GOOD_COUNT | $GOOD_PERCENT% |" >> $FULL_REPORT_FILE
-echo "| Adequate | $ADEQUATE_COUNT | $ADEQUATE_PERCENT% |" >> $FULL_REPORT_FILE
-echo "| Poor | $POOR_COUNT | $POOR_PERCENT% |" >> $FULL_REPORT_FILE
-echo "| Very Poor | $VERY_POOR_COUNT | $VERY_POOR_PERCENT% |" >> $FULL_REPORT_FILE
-echo "" >> $FULL_REPORT_FILE
-
-# Add readability metrics if included
-if [ "$INCLUDE_READABILITY" = true ]; then
-    echo -e "${BLUE}Adding readability metrics...${NC}"
-    echo "## Readability Analysis" >> $FULL_REPORT_FILE
-    echo "" >> $FULL_REPORT_FILE
-    
-    if [ $TOTAL_DOCS -gt 0 ]; then
-        COMPLEX_PERCENT=$((COMPLEX_COUNT * 100 / TOTAL_DOCS))
-        GOOD_READABILITY_PERCENT=$((GOOD_READABILITY_COUNT * 100 / TOTAL_DOCS))
-        SIMPLE_PERCENT=$((SIMPLE_COUNT * 100 / TOTAL_DOCS))
-    else
-        COMPLEX_PERCENT=0
-        GOOD_READABILITY_PERCENT=0
-        SIMPLE_PERCENT=0
-    fi
-    
-    echo "| Readability Level | Count | Percentage |" >> $FULL_REPORT_FILE
-    echo "|-------------------|-------|------------|" >> $FULL_REPORT_FILE
-    echo "| Complex | $COMPLEX_COUNT | $COMPLEX_PERCENT% |" >> $FULL_REPORT_FILE
-    echo "| Good | $GOOD_READABILITY_COUNT | $GOOD_READABILITY_PERCENT% |" >> $FULL_REPORT_FILE
-    echo "| Simple | $SIMPLE_COUNT | $SIMPLE_PERCENT% |" >> $FULL_REPORT_FILE
-    echo "" >> $FULL_REPORT_FILE
-    echo "- **Average Words Per Sentence:** $AVG_WPS" >> $FULL_REPORT_FILE
-    echo "" >> $FULL_REPORT_FILE
-fi
-
-# Add code validation results if included
-if [ "$INCLUDE_CODE_VALIDATION" = true ]; then
-    echo -e "${BLUE}Adding code validation results...${NC}"
-    echo "## Code Example Validation" >> $FULL_REPORT_FILE
-    echo "" >> $FULL_REPORT_FILE
-    
-    echo "- **Code Examples:** $CODE_TOTAL total" >> $FULL_REPORT_FILE
-    echo "- **Passing:** $CODE_PASS_COUNT ($CODE_PASS_PERCENT%)" >> $FULL_REPORT_FILE
-    echo "- **Failing:** $CODE_FAIL_COUNT ($((100 - CODE_PASS_PERCENT))%)" >> $FULL_REPORT_FILE
-    
-    # List documents with failing code examples
-    if [ $CODE_FAIL_COUNT -gt 0 ]; then
-        echo "" >> $FULL_REPORT_FILE
-        echo "### Documents with Failing Code Examples" >> $FULL_REPORT_FILE
-        echo "" >> $FULL_REPORT_FILE
-        grep "FAIL" $QUALITY_CSV | cut -d',' -f1,2 | sed 's/,/ - /' >> $FULL_REPORT_FILE
-    fi
-    echo "" >> $FULL_REPORT_FILE
-fi
-
-# Include document relationship visualization if enabled
-if [ "$INCLUDE_VISUALIZATION" = true ] || [ "$FULL_VISUALIZATION" = true ]; then
-    echo -e "${BLUE}Adding document relationship visualization...${NC}"
-    
-    # Find the latest graph visualization
-    GRAPH_HTML=$(find "$REPORTS_DIR" -name "document_graph_*.html" -type f -exec ls -t {} \; | head -1)
-    
-    if [ -n "$GRAPH_HTML" ] && [ -f "$GRAPH_HTML" ]; then
-        echo "## Document Relationship Visualization" >> $FULL_REPORT_FILE
-        echo "" >> $FULL_REPORT_FILE
-        echo "Document relationship visualization is available [here]($(basename $GRAPH_HTML))" >> $FULL_REPORT_FILE
-        echo "" >> $FULL_REPORT_FILE
+# Process each line if there's data
+if [ -n "$SCORE_DATA" ]; then
+    echo "$SCORE_DATA" | while IFS=',' read -r file quality_str readability code_status rest; do
+        # Convert quality string to numeric value
+        quality=${quality_str:-0}
         
-        # If generating HTML report, embed the SVG directly
-        if command -v pandoc &> /dev/null; then
-            GRAPH_SVG=$(find "$REPORTS_DIR" -name "document_graph_*.svg" -type f -exec ls -t {} \; | head -1)
-            if [ -n "$GRAPH_SVG" ] && [ -f "$GRAPH_SVG" ]; then
-                cp "$GRAPH_SVG" "$(dirname $HTML_REPORT_FILE)/$(basename $GRAPH_SVG)"
-            fi
-        fi
-    fi
+        # Count by quality level
+        case $quality in
+            *"9"*|*"10"*) EXCELLENT_COUNT=$((EXCELLENT_COUNT + 1));;
+            *"7"*|*"8"*) GOOD_COUNT=$((GOOD_COUNT + 1));;
+            *"5"*|*"6"*) ADEQUATE_COUNT=$((ADEQUATE_COUNT + 1));;
+            *"3"*|*"4"*) POOR_COUNT=$((POOR_COUNT + 1));;
+            *) VERY_POOR_COUNT=$((VERY_POOR_COUNT + 1));;
+        esac
+        
+        # Count by readability
+        case $readability in
+            *"Complex"*) COMPLEX_COUNT=$((COMPLEX_COUNT + 1));;
+            *"Good"*) GOOD_READABILITY_COUNT=$((GOOD_READABILITY_COUNT + 1));;
+            *"Simple"*) SIMPLE_COUNT=$((SIMPLE_COUNT + 1));;
+        esac
+        
+        # Count by code validation status
+        case $code_status in
+            *"PASS"*) CODE_PASS_COUNT=$((CODE_PASS_COUNT + 1));;
+            *"FAIL"*) CODE_FAIL_COUNT=$((CODE_FAIL_COUNT + 1));;
+            *) CODE_NA_COUNT=$((CODE_NA_COUNT + 1));;
+        esac
+    done
 fi
 
-# Include AI-assisted improvement recommendations
-echo -e "${BLUE}Adding improvement recommendations...${NC}"
-echo "## Top Improvement Recommendations" >> $FULL_REPORT_FILE
-echo "" >> $FULL_REPORT_FILE
+# Ensure we have valid numbers for arithmetic
+EXCELLENT_COUNT=${EXCELLENT_COUNT:-0}
+GOOD_COUNT=${GOOD_COUNT:-0}
+ADEQUATE_COUNT=${ADEQUATE_COUNT:-0}
+POOR_COUNT=${POOR_COUNT:-0}
+VERY_POOR_COUNT=${VERY_POOR_COUNT:-0}
+COMPLEX_COUNT=${COMPLEX_COUNT:-0}
+GOOD_READABILITY_COUNT=${GOOD_READABILITY_COUNT:-0}
+SIMPLE_COUNT=${SIMPLE_COUNT:-0}
+CODE_PASS_COUNT=${CODE_PASS_COUNT:-0}
+CODE_FAIL_COUNT=${CODE_FAIL_COUNT:-0}
+CODE_NA_COUNT=${CODE_NA_COUNT:-0}
 
-if [ -n "$COMPREHENSIVE_REPORT" ] && [ -f "$COMPREHENSIVE_REPORT" ]; then
-    # Extract the improvement recommendations section
-    sed -n '/^## Improvement Recommendations/,/^## /p' "$COMPREHENSIVE_REPORT" | sed '$ d' >> $FULL_REPORT_FILE
+# Calculate total docs with quality assessment
+QUALITY_TOTAL=$((EXCELLENT_COUNT + GOOD_COUNT + ADEQUATE_COUNT + POOR_COUNT + VERY_POOR_COUNT))
+if [ "$QUALITY_TOTAL" -eq 0 ]; then
+    QUALITY_TOTAL=1  # Avoid division by zero
+fi
+
+# Add quality metrics summary to report
+echo "## Content Quality Analysis" >> "$FULL_REPORT_FILE"
+echo "" >> "$FULL_REPORT_FILE"
+echo "### Quality Distribution" >> "$FULL_REPORT_FILE"
+echo "" >> "$FULL_REPORT_FILE"
+echo "| Quality Level | Count | Percentage |" >> "$FULL_REPORT_FILE"
+echo "|---------------|-------|------------|" >> "$FULL_REPORT_FILE"
+
+# Calculate percentages safely
+if [ "$QUALITY_TOTAL" -gt 0 ]; then
+    PCT_EXCELLENT=$((EXCELLENT_COUNT * 100 / QUALITY_TOTAL))
+    PCT_GOOD=$((GOOD_COUNT * 100 / QUALITY_TOTAL))
+    PCT_ADEQUATE=$((ADEQUATE_COUNT * 100 / QUALITY_TOTAL))
+    PCT_POOR=$((POOR_COUNT * 100 / QUALITY_TOTAL))
+    PCT_VERY_POOR=$((VERY_POOR_COUNT * 100 / QUALITY_TOTAL))
 else
-    echo "No improvement recommendations available." >> $FULL_REPORT_FILE
-fi
-echo "" >> $FULL_REPORT_FILE
-
-# Add historical trend tracking
-HISTORY_FILE="${REPORTS_DIR}/documentation_metrics_history.csv"
-
-# Create the history file if it doesn't exist
-if [ ! -f "$HISTORY_FILE" ]; then
-    echo "Date,TotalDocs,HealthScore,LintingIssues,BrokenLinks,FrontmatterIssues,Excellent,Good,Adequate,Poor,VeryPoor,CodePass,CodeFail" > "$HISTORY_FILE"
+    PCT_EXCELLENT=0
+    PCT_GOOD=0
+    PCT_ADEQUATE=0
+    PCT_POOR=0
+    PCT_VERY_POOR=0
 fi
 
-# Generate executive summary
-echo -e "${BLUE}Generating executive summary...${NC}"
+echo "| Excellent (9-10) | $EXCELLENT_COUNT | ${PCT_EXCELLENT}% |" >> "$FULL_REPORT_FILE"
+echo "| Good (7-8) | $GOOD_COUNT | ${PCT_GOOD}% |" >> "$FULL_REPORT_FILE"
+echo "| Adequate (5-6) | $ADEQUATE_COUNT | ${PCT_ADEQUATE}% |" >> "$FULL_REPORT_FILE"
+echo "| Poor (3-4) | $POOR_COUNT | ${PCT_POOR}% |" >> "$FULL_REPORT_FILE"
+echo "| Very Poor (0-2) | $VERY_POOR_COUNT | ${PCT_VERY_POOR}% |" >> "$FULL_REPORT_FILE"
+echo "" >> "$FULL_REPORT_FILE"
 
-# Calculate health score based on issues found
-# This is a more comprehensive scoring system including new metrics
-HEALTH_SCORE=100
-
-# Basic issues impact
-if [ $LINTING_ISSUES -gt 0 ]; then
-    HEALTH_SCORE=$((HEALTH_SCORE - LINTING_ISSUES / 2))
-fi
-if [ $BROKEN_LINKS -gt 0 ]; then
-    HEALTH_SCORE=$((HEALTH_SCORE - BROKEN_LINKS * 5))
-fi
-if [ $FRONTMATTER_ISSUES -gt 0 ]; then
-    HEALTH_SCORE=$((HEALTH_SCORE - FRONTMATTER_ISSUES * 3))
-fi
-
-# Quality metrics impact
-if [ $TOTAL_DOCS -gt 0 ]; then
-    # Quality distribution impact (weighted)
-    QUALITY_SCORE=$((EXCELLENT_COUNT * 5 + GOOD_COUNT * 3 + ADEQUATE_COUNT * 1))
-    MAX_QUALITY_SCORE=$((TOTAL_DOCS * 5))
-    if [ $MAX_QUALITY_SCORE -gt 0 ]; then
-        QUALITY_PERCENT=$((QUALITY_SCORE * 100 / MAX_QUALITY_SCORE))
-        QUALITY_IMPACT=$((100 - QUALITY_PERCENT))
-        HEALTH_SCORE=$((HEALTH_SCORE - QUALITY_IMPACT / 5))
-    fi
-    
-    # Code validation impact
-    if [ $CODE_TOTAL -gt 0 ]; then
-        CODE_IMPACT=$((100 - CODE_PASS_PERCENT))
-        HEALTH_SCORE=$((HEALTH_SCORE - CODE_IMPACT / 10))
-    fi
-    
-    # Readability impact
-    if [ $TOTAL_DOCS -gt 0 ]; then
-        READABILITY_PERCENT=$((GOOD_READABILITY_COUNT * 100 / TOTAL_DOCS))
-        READABILITY_IMPACT=$((100 - READABILITY_PERCENT))
-        HEALTH_SCORE=$((HEALTH_SCORE - READABILITY_IMPACT / 10))
-    fi
-fi
-
-# Ensure score doesn't go below 0
-if [ $HEALTH_SCORE -lt 0 ]; then
+# Calculate health score
+if [ "$QUALITY_TOTAL" -gt 0 ]; then
+    WEIGHTED_SCORE=$((EXCELLENT_COUNT * 100 + GOOD_COUNT * 75 + ADEQUATE_COUNT * 50 + POOR_COUNT * 25))
+    HEALTH_SCORE=$((WEIGHTED_SCORE / QUALITY_TOTAL))
+else
     HEALTH_SCORE=0
 fi
 
-# Ensure score doesn't go above 100
-if [ $HEALTH_SCORE -gt 100 ]; then
-    HEALTH_SCORE=100
-fi
+# Add health score to report
+echo "### Documentation Health Score" >> "$FULL_REPORT_FILE"
+echo "" >> "$FULL_REPORT_FILE"
+echo "**Overall Documentation Health Score: $HEALTH_SCORE / 100**" >> "$FULL_REPORT_FILE"
+echo "" >> "$FULL_REPORT_FILE"
 
-# Determine health rating
-if [ $HEALTH_SCORE -ge 90 ]; then
-    HEALTH_RATING="Excellent 🟢"
-elif [ $HEALTH_SCORE -ge 70 ]; then
-    HEALTH_RATING="Good 🟡"
-elif [ $HEALTH_SCORE -ge 50 ]; then
-    HEALTH_RATING="Fair 🟠"
+if [ "$HEALTH_SCORE" -ge 90 ]; then
+    echo "🟢 **Excellent** - Documentation is in exceptional condition with minimal issues." >> "$FULL_REPORT_FILE"
+elif [ "$HEALTH_SCORE" -ge 75 ]; then
+    echo "🟢 **Good** - Documentation is generally high quality with room for some improvements." >> "$FULL_REPORT_FILE"
+elif [ "$HEALTH_SCORE" -ge 60 ]; then
+    echo "🟡 **Adequate** - Documentation has significant areas that need improvement." >> "$FULL_REPORT_FILE"
+elif [ "$HEALTH_SCORE" -ge 40 ]; then
+    echo "🟠 **Below Average** - Documentation has major quality issues that need to be addressed." >> "$FULL_REPORT_FILE"
 else
-    HEALTH_RATING="Poor 🔴"
+    echo "🔴 **Poor** - Documentation requires immediate attention and significant rework." >> "$FULL_REPORT_FILE"
+fi
+echo "" >> "$FULL_REPORT_FILE"
+
+# Add readability metrics to report
+echo "### Readability Assessment" >> "$FULL_REPORT_FILE"
+echo "" >> "$FULL_REPORT_FILE"
+echo "| Readability Level | Count | Percentage |" >> "$FULL_REPORT_FILE"
+echo "|-------------------|-------|------------|" >> "$FULL_REPORT_FILE"
+
+# Calculate readability percentages safely
+READABILITY_TOTAL=$((COMPLEX_COUNT + GOOD_READABILITY_COUNT + SIMPLE_COUNT))
+if [ $READABILITY_TOTAL -eq 0 ]; then
+    READABILITY_TOTAL=1  # Avoid division by zero
 fi
 
-# Add today's metrics to the history file
-if [ -z "$SINGLE_FILE" ]; then
-    echo "$DATE_STAMP,$TOTAL_DOCS,$HEALTH_SCORE,$LINTING_ISSUES,$BROKEN_LINKS,$FRONTMATTER_ISSUES,$EXCELLENT_COUNT,$GOOD_COUNT,$ADEQUATE_COUNT,$POOR_COUNT,$VERY_POOR_COUNT,$CODE_PASS_COUNT,$CODE_FAIL_COUNT" >> "$HISTORY_FILE"
+PCT_COMPLEX=$((COMPLEX_COUNT * 100 / READABILITY_TOTAL))
+PCT_GOOD_READ=$((GOOD_READABILITY_COUNT * 100 / READABILITY_TOTAL))
+PCT_SIMPLE=$((SIMPLE_COUNT * 100 / READABILITY_TOTAL))
+
+echo "| Complex | $COMPLEX_COUNT | ${PCT_COMPLEX}% |" >> "$FULL_REPORT_FILE"
+echo "| Good | $GOOD_READABILITY_COUNT | ${PCT_GOOD_READ}% |" >> "$FULL_REPORT_FILE"
+echo "| Simple | $SIMPLE_COUNT | ${PCT_SIMPLE}% |" >> "$FULL_REPORT_FILE"
+echo "" >> "$FULL_REPORT_FILE"
+
+# Add recommendations based on results
+echo "## Improvement Recommendations" >> "$FULL_REPORT_FILE"
+echo "" >> "$FULL_REPORT_FILE"
+
+# Add quality recommendations
+echo "### Priority Actions" >> "$FULL_REPORT_FILE"
+echo "" >> "$FULL_REPORT_FILE"
+
+# Initialize recommendation counter
+RECOMMENDATION_COUNT=0
+
+# Link issues recommendations
+if [ "$BROKEN_LINKS" -gt 0 ]; then
+    RECOMMENDATION_COUNT=$((RECOMMENDATION_COUNT + 1))
+    echo "$RECOMMENDATION_COUNT. **Fix Broken Links**: Fix the $BROKEN_LINKS broken internal links identified in the link validation section." >> "$FULL_REPORT_FILE"
 fi
 
-# Generate trend visualization if gnuplot is available and we have enough data
-if command -v gnuplot &> /dev/null && [ $(wc -l < "$HISTORY_FILE") -gt 2 ] && [ -z "$SINGLE_FILE" ]; then
-    echo -e "${BLUE}Generating trend visualization...${NC}"
-    TREND_PLOT="${REPORTS_DIR}/quality_trend_${DATE_STAMP}.png"
-    
-    gnuplot <<EOF
-    set terminal png size 800,400
-    set output "$TREND_PLOT"
-    set title "Documentation Quality Trends"
-    set xlabel "Date"
-    set ylabel "Score"
-    set xdata time
-    set timefmt "%Y-%m-%d"
-    set format x "%y-%m-%d"
-    set key outside
-    set grid
-    
-    plot "$HISTORY_FILE" using 1:3 with lines title "Health Score", \
-         "$HISTORY_FILE" using 1:7 with lines title "Excellent Docs", \
-         "$HISTORY_FILE" using 1:12 with lines title "Code Pass Rate"
-EOF
-
-    echo "## Quality Trends" >> $FULL_REPORT_FILE
-    echo "" >> $FULL_REPORT_FILE
-    echo "![Quality Trends]($(basename $TREND_PLOT))" >> $FULL_REPORT_FILE
-    echo "" >> $FULL_REPORT_FILE
-    
-    if command -v pandoc &> /dev/null; then
-        cp "$TREND_PLOT" "$(dirname $HTML_REPORT_FILE)/$(basename $TREND_PLOT)"
-    fi
+# Frontmatter recommendations
+if [ "$FRONTMATTER_ISSUES" != "" ] && [ "$FRONTMATTER_ISSUES" != "0" ]; then
+    RECOMMENDATION_COUNT=$((RECOMMENDATION_COUNT + 1))
+    echo "$RECOMMENDATION_COUNT. **Fix Frontmatter Issues**: Address the $FRONTMATTER_ISSUES documents with frontmatter problems." >> "$FULL_REPORT_FILE"
+    echo "   - Run: \`.devtools/scripts/doc-overhaul/fix_frontmatter.sh\` to automatically fix common issues." >> "$FULL_REPORT_FILE"
 fi
 
-# Add executive summary at the top
-EXEC_SUMMARY=$(mktemp)
-echo "## Executive Summary" > $EXEC_SUMMARY
-echo "" >> $EXEC_SUMMARY
-
-# Basic metrics
-echo "- **Total Documents:** $TOTAL_DOCS" >> $EXEC_SUMMARY
-echo "- **Documentation Health Score:** $HEALTH_SCORE/100 ($HEALTH_RATING)" >> $EXEC_SUMMARY
-echo "- **Linting Issues:** $LINTING_ISSUES" >> $EXEC_SUMMARY
-echo "- **Broken Links:** $BROKEN_LINKS" >> $EXEC_SUMMARY
-echo "- **Frontmatter Issues:** $FRONTMATTER_ISSUES" >> $EXEC_SUMMARY
-
-# Quality metrics
-echo "- **Quality Distribution:** $EXCELLENT_COUNT Excellent, $GOOD_COUNT Good, $ADEQUATE_COUNT Adequate, $POOR_COUNT Poor, $VERY_POOR_COUNT Very Poor" >> $EXEC_SUMMARY
-
-# Code validation metrics if enabled
-if [ "$INCLUDE_CODE_VALIDATION" = true ]; then
-    echo "- **Code Validation:** $CODE_PASS_COUNT/$CODE_TOTAL passing ($CODE_PASS_PERCENT%)" >> $EXEC_SUMMARY
+# Quality recommendations
+NEED_QUALITY_IMPROVEMENT=0
+if [ "$POOR_COUNT" -gt 0 ]; then
+    NEED_QUALITY_IMPROVEMENT=1
+fi
+if [ "$VERY_POOR_COUNT" -gt 0 ]; then
+    NEED_QUALITY_IMPROVEMENT=1
 fi
 
-# Readability metrics if enabled
-if [ "$INCLUDE_READABILITY" = true ]; then
-    echo "- **Readability:** $GOOD_READABILITY_COUNT/$TOTAL_DOCS documents with good readability ($GOOD_READABILITY_PERCENT%)" >> $EXEC_SUMMARY
+if [ "$NEED_QUALITY_IMPROVEMENT" -eq 1 ]; then
+    RECOMMENDATION_COUNT=$((RECOMMENDATION_COUNT + 1))
+    LOW_QUALITY_COUNT=$((POOR_COUNT + VERY_POOR_COUNT))
+    echo "$RECOMMENDATION_COUNT. **Improve Low Quality Content**: Prioritize improving the $LOW_QUALITY_COUNT documents rated as 'Poor' or 'Very Poor'." >> "$FULL_REPORT_FILE"
+    echo "   - Use: \`.devtools/scripts/doc-overhaul/comprehensive_test.sh\` to identify lowest quality documents." >> "$FULL_REPORT_FILE"
 fi
 
-echo "" >> $EXEC_SUMMARY
-
-# Insert actions needed if there are issues
-if [ $LINTING_ISSUES -gt 0 ] || [ $BROKEN_LINKS -gt 0 ] || [ $FRONTMATTER_ISSUES -gt 0 ] || [ $POOR_COUNT -gt 0 ] || [ $VERY_POOR_COUNT -gt 0 ] || [ $CODE_FAIL_COUNT -gt 0 ]; then
-    echo "### Recommended Actions" >> $EXEC_SUMMARY
-    echo "" >> $EXEC_SUMMARY
-    
-    # Critical issues first
-    if [ $BROKEN_LINKS -gt 0 ]; then
-        echo "- **High Priority:** Fix $BROKEN_LINKS broken links using fix_links.sh" >> $EXEC_SUMMARY
-    fi
-    
-    if [ $CODE_FAIL_COUNT -gt 0 ]; then
-        echo "- **High Priority:** Fix $CODE_FAIL_COUNT failing code examples" >> $EXEC_SUMMARY
-    fi
-    
-    if [ $POOR_COUNT -gt 0 ] || [ $VERY_POOR_COUNT -gt 0 ]; then
-        TOTAL_POOR=$((POOR_COUNT + VERY_POOR_COUNT))
-        echo "- **Medium Priority:** Improve $TOTAL_POOR documents with poor/very poor quality scores" >> $EXEC_SUMMARY
-    fi
-    
-    if [ $FRONTMATTER_ISSUES -gt 0 ]; then
-        echo "- **Medium Priority:** Fix $FRONTMATTER_ISSUES frontmatter issues using fix_frontmatter.sh" >> $EXEC_SUMMARY
-    fi
-    
-    if [ $COMPLEX_COUNT -gt 0 ]; then
-        echo "- **Low Priority:** Simplify $COMPLEX_COUNT documents with complex readability" >> $EXEC_SUMMARY
-    fi
-    
-    if [ $LINTING_ISSUES -gt 0 ]; then
-        echo "- **Low Priority:** Address $LINTING_ISSUES markdown linting issues" >> $EXEC_SUMMARY
-    fi
-    
-    echo "" >> $EXEC_SUMMARY
+# Readability recommendations
+if [ "$COMPLEX_COUNT" -gt 0 ]; then
+    RECOMMENDATION_COUNT=$((RECOMMENDATION_COUNT + 1))
+    echo "$RECOMMENDATION_COUNT. **Improve Document Readability**: Simplify content in documents with 'Complex' readability ratings." >> "$FULL_REPORT_FILE"
+    echo "   - Break long sentences into shorter ones" >> "$FULL_REPORT_FILE"
+    echo "   - Use simpler language where possible" >> "$FULL_REPORT_FILE"
+    echo "   - Add more section headers to break up content" >> "$FULL_REPORT_FILE"
 fi
 
-# Add trend information
-echo "### Trends" >> $EXEC_SUMMARY
-echo "" >> $EXEC_SUMMARY
-if [ $(wc -l < "$HISTORY_FILE") -gt 2 ] && [ -z "$SINGLE_FILE" ]; then
-    echo "See the Quality Trends section for historical quality metrics." >> $EXEC_SUMMARY
-else
-    echo "This is the current documentation quality snapshot. Run this report regularly to track improvements." >> $EXEC_SUMMARY
+# Code validation recommendations
+if [ "$CODE_FAIL_COUNT" -gt 0 ]; then
+    RECOMMENDATION_COUNT=$((RECOMMENDATION_COUNT + 1))
+    echo "$RECOMMENDATION_COUNT. **Fix Code Examples**: Ensure code examples in documentation are syntactically valid." >> "$FULL_REPORT_FILE"
+    echo "   - Found $CODE_FAIL_COUNT documents with invalid code blocks" >> "$FULL_REPORT_FILE"
 fi
-echo "" >> $EXEC_SUMMARY
 
-# Insert the executive summary at the beginning of the report
-sed -i '' -e "/^# Navius Documentation Quality Report/r $EXEC_SUMMARY" $FULL_REPORT_FILE
+# General recommendations
+RECOMMENDATION_COUNT=$((RECOMMENDATION_COUNT + 1))
+echo "$RECOMMENDATION_COUNT. **Regular Maintenance**: Schedule regular documentation reviews and updates." >> "$FULL_REPORT_FILE"
+echo "   - Run this report weekly or monthly" >> "$FULL_REPORT_FILE"
+echo "   - Add documentation checks to CI pipeline" >> "$FULL_REPORT_FILE"
+echo "   - Assign documentation maintenance responsibilities" >> "$FULL_REPORT_FILE"
+echo "" >> "$FULL_REPORT_FILE"
 
 # Generate HTML version if pandoc is available
-if command -v pandoc &> /dev/null; then
-    echo -e "${BLUE}Generating HTML report...${NC}"
-    pandoc -s --toc -c https://cdn.jsdelivr.net/npm/water.css@2/out/water.css -o $HTML_REPORT_FILE $FULL_REPORT_FILE
-    HTML_URL="file://$(pwd)/$HTML_REPORT_FILE"
-    echo -e "${GREEN}HTML report generated: ${BLUE}$HTML_URL${NC}"
-fi
-
-# Clean up temporary files
-rm -f $LINK_CHECK_FILE $EXEC_SUMMARY $QUALITY_CSV
-
-# Generate report URL
-REPORT_URL="file://$(pwd)/$FULL_REPORT_FILE"
-echo -e "${GREEN}Documentation quality report completed.${NC}"
-echo -e "${GREEN}Report saved to: ${BLUE}$FULL_REPORT_FILE${NC}"
-echo -e "${GREEN}View the report at: ${BLUE}$REPORT_URL${NC}"
-
-# CI integration - set exit code based on health score if in CI environment
-if [ "${CI:-false}" = "true" ]; then
-    # Simplified output for CI
-    echo "::group::Documentation Quality Report"
-    echo "Health Score: $HEALTH_SCORE/100 ($HEALTH_RATING)"
-    echo "Quality Distribution: $EXCELLENT_COUNT Excellent, $GOOD_COUNT Good, $ADEQUATE_COUNT Adequate, $POOR_COUNT Poor, $VERY_POOR_COUNT Very Poor"
-    echo "Code Validation: $CODE_PASS_PERCENT% passing"
-    echo "::endgroup::"
+if command -v pandoc > /dev/null 2>&1; then
+    log_info "Generating HTML report with pandoc..."
+    pandoc "$FULL_REPORT_FILE" -f markdown -t html -s -o "$HTML_REPORT_FILE" || true
     
-    # Set exit code based on health score threshold
-    if [ $HEALTH_SCORE -lt $CI_THRESHOLD ]; then
-        echo "::error::Documentation quality score ($HEALTH_SCORE) is below threshold ($CI_THRESHOLD)"
-        exit 1
+    if [ -f "$HTML_REPORT_FILE" ]; then
+        log_success "HTML report generated: $HTML_REPORT_FILE"
+    else
+        log_warning "Failed to generate HTML report. Please install pandoc or check for errors."
     fi
 fi
 
-# Return success status
-exit 0 
+# Final summary
+log_success "Documentation quality report generated: $FULL_REPORT_FILE"
+echo "Documentation Health Score: $HEALTH_SCORE / 100"
+
+if [ "$HEALTH_SCORE" -ge "$CI_THRESHOLD" ]; then
+    log_success "Documentation quality meets CI threshold ($CI_THRESHOLD)."
+    exit 0
+else
+    log_error "Documentation quality below CI threshold ($CI_THRESHOLD)."
+    log_error "Please address issues outlined in the report."
+    exit 1
+fi 
