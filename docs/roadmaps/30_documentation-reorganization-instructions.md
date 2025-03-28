@@ -607,7 +607,18 @@ The `.devtools/scripts/doc-overhaul/` directory contains a comprehensive set of 
   - Check-only mode for validation without changes
   - Report generation for section compliance
   - Integration with quality reporting system
-- **improve_docs.sh**: Interactive tool for guided documentation improvement
+- **improve_docs.sh**: Interactive workflow for guided documentation improvement with these features:
+  - Step-by-step guided process for improving individual documents
+  - Batch processing options for common documentation issues (frontmatter, sections, links)
+  - Integration with all documentation validation tools
+  - Automatic detection and updating of frontmatter metadata
+  - Readability metrics calculation with words per sentence analysis
+  - Document quality assessment with detailed reporting
+  - Support for both old and new directory structures
+  - Frontmatter last_updated field maintenance with current date (March 27, 2025)
+  - Document relationship visualization generation
+  - Quality report generation with visualization options
+  - Interactive document improvement workflow
 
 Use these tools throughout the migration process to ensure high-quality results.
 

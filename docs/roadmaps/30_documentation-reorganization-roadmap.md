@@ -262,6 +262,18 @@ We will leverage the documentation validation tools in `.devtools/scripts/doc-ov
   - Integration with quality reporting system
   - Check-only mode for validation without changes
 
+- **improve_docs.sh**: Interactive workflow for guided documentation improvement:
+  - Step-by-step guided process for improving individual documents
+  - Batch processing options for common documentation issues
+  - Integration with all documentation validation tools
+  - Automatic detection and updating of frontmatter metadata
+  - Readability metrics calculation with recommendations
+  - Quality assessment reporting
+  - Support for both old and new directory structures
+  - Frontmatter last_updated field maintenance
+  - Document relationship visualization generation
+  - Advanced options for documentation refactoring
+
 These tools will be integrated into our workflow to provide continuous validation throughout the reorganization process.
 
 ## Responsible Parties

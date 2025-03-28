@@ -123,12 +123,19 @@ For quick reference, here are the key standards that all documentation should fo
 
 The `.devtools/scripts/doc-overhaul/` directory contains tools for implementing and validating these standards:
 
-- **generate_report.sh**: Comprehensive quality reports
-- **add_sections.sh**: Adding standardized sections based on document type
-- **fix_frontmatter.sh**: Validating and fixing document metadata
-- **fix_links.sh**: Verifying and repairing document links
-- **comprehensive_test.sh**: In-depth documentation analysis
-- **improve_docs.sh**: Interactive documentation improvement workflow
+- **generate_report.sh**: Comprehensive quality reports with health scores and recommendations
+- **add_sections.sh**: Adding standardized sections based on document type with support for both directory structures
+- **fix_frontmatter.sh**: Validating and fixing document metadata including automatic date handling
+- **fix_links.sh**: Verifying and repairing document links with intelligent path suggestions
+- **comprehensive_test.sh**: In-depth documentation analysis with detailed quality metrics
+- **improve_docs.sh**: Interactive documentation improvement workflow that:
+  - Guides users through step-by-step document improvement processes
+  - Provides batch operations for fixing common documentation issues
+  - Calculates and reports readability metrics with improvement suggestions
+  - Automatically updates frontmatter metadata including last_updated field
+  - Generates quality reports with visualization options
+  - Supports both old and new directory structures
+  - Integrates all other documentation tools in a streamlined workflow
 
 ## Writing Style Guide
 
