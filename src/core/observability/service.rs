@@ -4,7 +4,10 @@ use tracing::{error, info};
 
 use crate::core::observability::config::ObservabilityConfig;
 use crate::core::observability::error::ObservabilityError;
-use crate::core::observability::opentelemetry::{JaegerProvider, OtlpProvider};
+#[cfg(feature = "otlp")]
+use crate::core::observability::opentelemetry::OtlpProvider;
+#[cfg(any(feature = "opentelemetry-jaeger", feature = "otlp"))]
+use crate::core::observability::opentelemetry::{JaegerProvider, OpenTelemetryProvider};
 use crate::core::observability::operations::{
     MetricType, MetricValue, ObservabilityOperations, ProfilingSession, SpanContext, SpanStatus,
 };

@@ -23,6 +23,7 @@
 
 pub mod config;
 pub mod error;
+#[cfg(any(feature = "opentelemetry-jaeger", feature = "otlp"))]
 pub mod opentelemetry;
 pub mod operations;
 pub mod prometheus;
@@ -32,6 +33,9 @@ pub mod service;
 // Re-export key types
 pub use config::ObservabilityConfig;
 pub use error::ObservabilityError;
+#[cfg(feature = "otlp")]
+pub use opentelemetry::OtlpProvider;
+#[cfg(any(feature = "opentelemetry-jaeger", feature = "otlp"))]
 pub use opentelemetry::{JaegerProvider, OpenTelemetryProvider};
 pub use operations::{
     MetricType, MetricValue, ObservabilityOperations, ProfilingSession, SpanContext, SpanStatus,
@@ -53,6 +57,18 @@ pub async fn init_observability(
 
     let config = ObservabilityConfig::new("prometheus", service_name);
     ObservabilityService::new(registry, config).await
+}
+
+/// Initialize the observability system with all available providers
+///
+/// This is a convenience function that registers all providers that have been
+/// compiled into the binary.
+#[cfg(any(feature = "opentelemetry-jaeger", feature = "otlp"))]
+pub async fn init_with_all_providers(
+    service_name: &str,
+) -> Result<ObservabilityService, ObservabilityError> {
+    let config = ObservabilityConfig::new("prometheus", service_name);
+    ObservabilityService::new_with_all_providers(config).await
 }
 
 #[cfg(test)]
