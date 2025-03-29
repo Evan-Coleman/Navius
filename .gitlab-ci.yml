@@ -19,6 +19,8 @@ pages:
     - apt-get install -y clang llvm-dev libclang-dev lld
     # Install mdbook and plugins
     - cargo install mdbook --version ${MDBOOK_VERSION} --no-default-features
+    - export PATH="$CARGO_HOME/bin:$PATH"
+    - which mdbook || echo "mdbook not found in PATH"
     - cargo install mdbook-mermaid --version 0.12.6
     # Build documentation
     - cd docs
@@ -29,7 +31,7 @@ pages:
     paths:
       - public
   cache:
-    key: mdbook-cache
+    key: mdbook-cache-${MDBOOK_VERSION}
     paths:
       - $CARGO_HOME/bin/
       - $CARGO_HOME/.crates.toml
