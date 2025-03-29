@@ -89,6 +89,11 @@ impl Error {
         Self::Response(msg.to_string())
     }
 
+    /// Create a new client error from a reqwest::Error.
+    pub fn client(err: reqwest::Error) -> Self {
+        Self::Client(err)
+    }
+
     /// Get the HTTP status code for this error, if applicable.
     pub fn status_code(&self) -> Option<u16> {
         match self {

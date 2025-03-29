@@ -4,6 +4,7 @@
 [workspace]
 members = [
     "crates/navius-core",
+    "crates/navius-http",
     # Add new crates here as they are created
 ]
 
@@ -119,6 +120,8 @@ categories = ["web-programming", "asynchronous"]
 [dependencies]
 # Core crate
 navius-core = { path = "crates/navius-core", version = "0.1.0" }
+# HTTP crate
+navius-http = { path = "crates/navius-http", version = "0.1.0" }
 
 # Add other crates as they are created
 
