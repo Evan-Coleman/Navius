@@ -23,6 +23,7 @@
 
 pub mod config;
 pub mod error;
+pub mod opentelemetry;
 pub mod operations;
 pub mod prometheus;
 pub mod provider;
@@ -31,6 +32,7 @@ pub mod service;
 // Re-export key types
 pub use config::ObservabilityConfig;
 pub use error::ObservabilityError;
+pub use opentelemetry::{JaegerProvider, OpenTelemetryProvider};
 pub use operations::{
     MetricType, MetricValue, ObservabilityOperations, ProfilingSession, SpanContext, SpanStatus,
 };

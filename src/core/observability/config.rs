@@ -28,6 +28,15 @@ pub struct ObservabilityConfig {
     /// Sample rate for tracing (0.0 - 1.0)
     pub trace_sample_rate: f64,
 
+    /// Whether correlation between metrics and traces is enabled
+    pub correlation_enabled: bool,
+
+    /// Distributed tracing endpoint (for providers that support it)
+    pub tracing_endpoint: Option<String>,
+
+    /// Propagation headers for distributed tracing (trace context or similar)
+    pub propagation_headers: Vec<String>,
+
     /// Provider-specific configuration
     pub provider_config: HashMap<String, String>,
 }
@@ -43,6 +52,9 @@ impl Default for ObservabilityConfig {
             tracing_enabled: true,
             profiling_enabled: false,
             trace_sample_rate: 0.1,
+            correlation_enabled: true,
+            tracing_endpoint: None,
+            propagation_headers: vec!["traceparent".to_string(), "tracestate".to_string()],
             provider_config: HashMap::new(),
         }
     }
@@ -94,6 +106,24 @@ impl ObservabilityConfig {
         self
     }
 
+    /// Set correlation enabled
+    pub fn with_correlation_enabled(mut self, enabled: bool) -> Self {
+        self.correlation_enabled = enabled;
+        self
+    }
+
+    /// Set tracing endpoint
+    pub fn with_tracing_endpoint(mut self, endpoint: Option<&str>) -> Self {
+        self.tracing_endpoint = endpoint.map(|s| s.to_string());
+        self
+    }
+
+    /// Set propagation headers
+    pub fn with_propagation_headers(mut self, headers: Vec<String>) -> Self {
+        self.propagation_headers = headers;
+        self
+    }
+
     /// Add provider-specific configuration
     pub fn with_provider_config(mut self, key: &str, value: &str) -> Self {
         self.provider_config
@@ -118,6 +148,9 @@ mod tests {
         assert!(config.tracing_enabled);
         assert!(!config.profiling_enabled);
         assert!((config.trace_sample_rate - 0.1).abs() < f64::EPSILON);
+        assert!(config.correlation_enabled);
+        assert_eq!(config.tracing_endpoint, None);
+        assert_eq!(config.propagation_headers.len(), 2);
         assert!(config.provider_config.is_empty());
     }
 
@@ -130,6 +163,9 @@ mod tests {
             .with_tracing_enabled(false)
             .with_profiling_enabled(true)
             .with_trace_sample_rate(0.5)
+            .with_correlation_enabled(false)
+            .with_tracing_endpoint(Some("http://jaeger:14268/api/traces"))
+            .with_propagation_headers(vec!["x-trace-id".to_string()])
             .with_provider_config("api-key", "test-key");
 
         assert_eq!(config.provider, "dynatrace");
@@ -140,6 +176,12 @@ mod tests {
         assert!(!config.tracing_enabled);
         assert!(config.profiling_enabled);
         assert!((config.trace_sample_rate - 0.5).abs() < f64::EPSILON);
+        assert!(!config.correlation_enabled);
+        assert_eq!(
+            config.tracing_endpoint,
+            Some("http://jaeger:14268/api/traces".to_string())
+        );
+        assert_eq!(config.propagation_headers, vec!["x-trace-id".to_string()]);
         assert_eq!(
             config.provider_config.get("api-key"),
             Some(&"test-key".to_string())

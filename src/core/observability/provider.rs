@@ -68,6 +68,11 @@ impl ObservabilityProviderRegistry {
         })
     }
 
+    /// Check if a provider exists
+    pub fn provider_exists(&self, name: &str) -> bool {
+        self.providers.contains_key(name)
+    }
+
     /// Get the default provider
     pub fn get_default_provider(
         &self,

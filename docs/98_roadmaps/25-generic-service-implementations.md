@@ -22,8 +22,8 @@ This roadmap outlines the steps to transform hardcoded service implementations i
 - **Phase 3 (Cache Service Generalization)**: 100% Complete
 - **Phase 4 (Collection Model Generalization)**: 100% Complete
 - **Phase 5 (Logging Service Generalization)**: 100% Complete
-- **Phase 6 (Observability Service Generalization)**: 50% Complete
-- **Overall Progress**: 75% (5.5/7 phases completed)
+- **Phase 6 (Observability Service Generalization)**: 90% Complete
+- **Overall Progress**: 82% (5.9/7 phases completed)
 
 ## Current Status
 We've identified several hardcoded implementations in the core that should be made generic:
@@ -191,17 +191,17 @@ Services in the core module should:
    - [x] Adapt current metrics to provider interface
    - [x] Create separate metrics module
    - [x] Implement adapter for current metrics
-   - [ ] Add telemetry correlation support
+   - [x] Add telemetry correlation support
    
-   *Updated at: March 28, 2025 - Created a PrometheusProvider implementation that adapts the existing metrics system to the new generic observability interface*
+   *Updated at: March 28, 2025 - Created a PrometheusProvider implementation that adapts the existing metrics system to the new generic observability interface, and added telemetry correlation support*
 
 3. **Add Enterprise Observability Providers**
    - [ ] Create Dynatrace integration
-   - [ ] Add OpenTelemetry support
+   - [x] Add OpenTelemetry support
    - [x] Implement Prometheus metrics provider
-   - [ ] Support distributed tracing with Jaeger
+   - [x] Support distributed tracing with Jaeger
    
-   *Updated at: March 28, 2025 - Implemented Prometheus metrics provider and added initial support for distributed tracing*
+   *Updated at: March 28, 2025 - Implemented Prometheus metrics provider, added OpenTelemetry providers with Jaeger and OTLP support for distributed tracing*
 
 ### Phase 7: Configuration Service Generalization
 1. **Define Configuration Interface**
@@ -229,10 +229,10 @@ Services in the core module should:
    *Updated at: Not started*
 
 ## Implementation Status
-- **Overall Progress**: 75% complete (Phases 1-5 fully completed, Phase 6 at 50%)
+- **Overall Progress**: 82% complete (Phases 1-5 fully completed, Phase 6 at 90%)
 - **Last Updated**: March 28, 2025
 - **Next Milestone**: Complete Observability Service Generalization (Phase 6)
-- **Current Focus**: Implementing the generic observability interface with Prometheus provider and preparing for additional enterprise providers
+- **Current Focus**: Completing the generic observability implementation and starting the Configuration Service generalization (Phase 7)
 
 ## Success Criteria
 1. No hardcoded service implementations in the core module

@@ -6,6 +6,8 @@ use std::fmt;
 pub enum ObservabilityError {
     /// Provider not found
     ProviderNotFound(String),
+    /// Provider not supported (feature flag not enabled)
+    ProviderNotSupported(String),
     /// Configuration is not supported
     UnsupportedConfiguration(String),
     /// No default provider set
@@ -18,6 +20,8 @@ pub enum ObservabilityError {
     MetricQueryError(String),
     /// Failed to export metrics
     MetricExportError(String),
+    /// Metric type mismatch
+    MetricError(String),
     /// Failed to create span
     SpanCreationError(String),
     /// Failed to start profiling
@@ -30,6 +34,9 @@ impl fmt::Display for ObservabilityError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let message = match self {
             ObservabilityError::ProviderNotFound(msg) => format!("Provider not found: {}", msg),
+            ObservabilityError::ProviderNotSupported(msg) => {
+                format!("Provider not supported: {}", msg)
+            }
             ObservabilityError::UnsupportedConfiguration(msg) => {
                 format!("Unsupported configuration: {}", msg)
             }
@@ -42,6 +49,7 @@ impl fmt::Display for ObservabilityError {
             }
             ObservabilityError::MetricQueryError(msg) => format!("Metric query error: {}", msg),
             ObservabilityError::MetricExportError(msg) => format!("Metric export error: {}", msg),
+            ObservabilityError::MetricError(msg) => format!("Metric error: {}", msg),
             ObservabilityError::SpanCreationError(msg) => format!("Span creation error: {}", msg),
             ObservabilityError::ProfilingError(msg) => format!("Profiling error: {}", msg),
             ObservabilityError::InternalError(msg) => format!("Internal error: {}", msg),
@@ -78,6 +86,16 @@ mod tests {
     fn test_error_display() {
         let error = ObservabilityError::ProviderNotFound("test-provider".to_string());
         assert_eq!(error.to_string(), "Provider not found: test-provider");
+
+        let error =
+            ObservabilityError::ProviderNotSupported("jaeger feature not enabled".to_string());
+        assert_eq!(
+            error.to_string(),
+            "Provider not supported: jaeger feature not enabled"
+        );
+
+        let error = ObservabilityError::MetricError("wrong metric type".to_string());
+        assert_eq!(error.to_string(), "Metric error: wrong metric type");
     }
 
     #[test]

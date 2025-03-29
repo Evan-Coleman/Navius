@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
-use tracing::{error, info};
+use tracing::{Level, error, info, span};
 use uuid::Uuid;
 
 use crate::core::observability::config::ObservabilityConfig;
@@ -22,8 +22,12 @@ pub struct PrometheusClient {
     service_name: String,
     /// Profiling sessions
     profiling_sessions: Arc<Mutex<HashMap<String, ProfilingSession>>>,
+    /// Active spans
+    active_spans: Arc<Mutex<HashMap<String, SpanContext>>>,
     /// Initialization time
     init_time: Instant,
+    /// Correlation enabled
+    correlation_enabled: bool,
 }
 
 impl PrometheusClient {
@@ -43,13 +47,40 @@ impl PrometheusClient {
             handle,
             service_name: config.service_name.clone(),
             profiling_sessions: Arc::new(Mutex::new(HashMap::new())),
+            active_spans: Arc::new(Mutex::new(HashMap::new())),
             init_time: Instant::now(),
+            correlation_enabled: config.correlation_enabled,
         })
     }
 
     /// Create prefixed metric name
     fn create_metric_name(&self, name: &str) -> String {
         format!("{}_{}", self.service_name, name)
+    }
+
+    /// Add current trace context to labels if correlation is enabled
+    fn add_correlation_context<'a>(&self, labels: &[(&'a str, String)]) -> Vec<(&'a str, String)> {
+        if !self.correlation_enabled {
+            return labels.to_vec();
+        }
+
+        // Get current trace information from the tracing context
+        let mut result = labels.to_vec();
+
+        // Get current span if available
+        let current_span = span::Span::current();
+        if current_span.id().is_some() {
+            // Add trace ID and span ID as labels
+            let span_id = current_span
+                .id()
+                .map(|id| id.into_u64().to_string())
+                .unwrap_or_default();
+            if !span_id.is_empty() {
+                result.push(("span_id", span_id));
+            }
+        }
+
+        result
     }
 }
 
@@ -61,12 +92,13 @@ impl ObservabilityOperations for PrometheusClient {
         labels: &[(&str, String)],
     ) -> Result<(), ObservabilityError> {
         let metric_name = self.create_metric_name(name);
+        let correlated_labels = self.add_correlation_context(labels);
 
-        if labels.is_empty() {
+        if correlated_labels.is_empty() {
             metrics::counter!(metric_name).increment(value);
         } else {
             // Create owned data for each iteration to avoid lifetime issues
-            let labels_owned: Vec<(String, String)> = labels
+            let labels_owned: Vec<(String, String)> = correlated_labels
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.clone()))
                 .collect();
@@ -88,12 +120,13 @@ impl ObservabilityOperations for PrometheusClient {
         labels: &[(&str, String)],
     ) -> Result<(), ObservabilityError> {
         let metric_name = self.create_metric_name(name);
+        let correlated_labels = self.add_correlation_context(labels);
 
-        if labels.is_empty() {
+        if correlated_labels.is_empty() {
             metrics::gauge!(metric_name).set(value);
         } else {
             // Create owned data for each iteration to avoid lifetime issues
-            let labels_owned: Vec<(String, String)> = labels
+            let labels_owned: Vec<(String, String)> = correlated_labels
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.clone()))
                 .collect();
@@ -115,12 +148,13 @@ impl ObservabilityOperations for PrometheusClient {
         labels: &[(&str, String)],
     ) -> Result<(), ObservabilityError> {
         let metric_name = self.create_metric_name(name);
+        let correlated_labels = self.add_correlation_context(labels);
 
-        if labels.is_empty() {
+        if correlated_labels.is_empty() {
             metrics::histogram!(metric_name).record(value);
         } else {
             // Create owned data for each iteration to avoid lifetime issues
-            let labels_owned: Vec<(String, String)> = labels
+            let labels_owned: Vec<(String, String)> = correlated_labels
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.clone()))
                 .collect();
@@ -139,7 +173,7 @@ impl ObservabilityOperations for PrometheusClient {
         &self,
         name: &str,
         metric_type: MetricType,
-        _labels: &[(&str, String)],
+        labels: &[(&str, String)],
     ) -> Result<Option<MetricValue>, ObservabilityError> {
         // Prometheus doesn't provide a direct way to get metric values
         // We use placeholder implementations that always return fixed values for test purposes
@@ -151,36 +185,97 @@ impl ObservabilityOperations for PrometheusClient {
     }
 
     fn start_span(&self, name: &str) -> SpanContext {
-        // Create a simple span context with a UUID
-        SpanContext {
-            span_id: Uuid::new_v4().to_string(),
-            trace_id: Uuid::new_v4().to_string(),
+        // Create a span context with a UUID
+        let span_id = Uuid::new_v4().to_string();
+        let trace_id = Uuid::new_v4().to_string();
+
+        // Create a tracing span for correlation
+        let span = span!(
+            Level::INFO,
+            "trace_span",
+            name = name,
+            span_id = span_id,
+            trace_id = trace_id
+        );
+        span.in_scope(|| {
+            // Record span start as a metric
+            let labels = vec![
+                ("name", name.to_string()),
+                ("span_id", span_id.clone()),
+                ("trace_id", trace_id.clone()),
+            ];
+
+            if let Err(e) = self.record_counter("span_start_total", 1, &labels) {
+                error!("Failed to record span start: {}", e);
+            }
+        });
+
+        let context = SpanContext {
+            span_id,
+            trace_id,
             name: name.to_string(),
             start_time: Instant::now(),
             attributes: Vec::new(),
+        };
+
+        // Store the span context if correlation is enabled
+        if self.correlation_enabled {
+            if let Ok(mut spans) = self.active_spans.lock() {
+                spans.insert(context.span_id.clone(), context.clone());
+            }
         }
+
+        context
     }
 
     fn end_span(&self, context: SpanContext) {
         // Calculate duration and record it as a histogram
         let duration = context.start_time.elapsed().as_secs_f64();
-        let labels = vec![("name", context.name)];
+        let labels = vec![
+            ("name", context.name.clone()),
+            ("span_id", context.span_id.clone()),
+            ("trace_id", context.trace_id.clone()),
+        ];
 
         if let Err(e) = self.record_histogram("span_duration_seconds", duration, &labels) {
             error!("Failed to record span duration: {}", e);
         }
+
+        // Remove span from active spans
+        if self.correlation_enabled {
+            if let Ok(mut spans) = self.active_spans.lock() {
+                spans.remove(&context.span_id);
+            }
+        }
     }
 
-    fn set_span_attribute(&self, _context: &SpanContext, _key: &str, _value: &str) {
-        // In a real implementation, this would add attributes to the span
-        // But in Prometheus, we just use this for debugging
+    fn set_span_attribute(&self, context: &SpanContext, key: &str, value: &str) {
+        // Add the attribute to the span context
+        if self.correlation_enabled {
+            if let Ok(mut spans) = self.active_spans.lock() {
+                if let Some(span) = spans.get_mut(&context.span_id) {
+                    span.attributes.push((key.to_string(), value.to_string()));
+                }
+            }
+        }
+
+        // Also record it as a metric
+        let labels = vec![
+            ("span_id", context.span_id.clone()),
+            ("name", context.name.clone()),
+            (key, value.to_string()),
+        ];
+
+        if let Err(e) = self.record_counter("span_attribute", 1, &labels) {
+            error!("Failed to record span attribute: {}", e);
+        }
     }
 
     fn set_span_status(
         &self,
         context: &SpanContext,
         status: SpanStatus,
-        _description: Option<&str>,
+        description: Option<&str>,
     ) {
         // Record span status as a counter
         let status_name = match status {
@@ -189,10 +284,17 @@ impl ObservabilityOperations for PrometheusClient {
             SpanStatus::Canceled => "canceled",
         };
 
-        let labels = vec![
+        let mut labels = vec![
             ("name", context.name.clone()),
+            ("span_id", context.span_id.clone()),
+            ("trace_id", context.trace_id.clone()),
             ("status", status_name.to_string()),
         ];
+
+        // Add description if available
+        if let Some(desc) = description {
+            labels.push(("description", desc.to_string()));
+        }
 
         if let Err(e) = self.record_counter("span_status", 1, &labels) {
             error!("Failed to record span status: {}", e);

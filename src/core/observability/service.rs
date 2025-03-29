@@ -4,9 +4,11 @@ use tracing::{error, info};
 
 use crate::core::observability::config::ObservabilityConfig;
 use crate::core::observability::error::ObservabilityError;
+use crate::core::observability::opentelemetry::{JaegerProvider, OtlpProvider};
 use crate::core::observability::operations::{
     MetricType, MetricValue, ObservabilityOperations, ProfilingSession, SpanContext, SpanStatus,
 };
+use crate::core::observability::prometheus::PrometheusProvider;
 use crate::core::observability::provider::ObservabilityProviderRegistry;
 
 /// Main service for observability operations
@@ -61,6 +63,44 @@ impl ObservabilityService {
             registry,
             config,
         })
+    }
+
+    /// Create a new observability service with all available providers registered
+    pub async fn new_with_all_providers(
+        config: ObservabilityConfig,
+    ) -> Result<Self, ObservabilityError> {
+        let mut registry = ObservabilityProviderRegistry::new();
+
+        // Register all available providers
+        registry.register(PrometheusProvider::new());
+
+        #[cfg(feature = "opentelemetry-jaeger")]
+        registry.register(JaegerProvider::new());
+
+        #[cfg(feature = "otlp")]
+        registry.register(OtlpProvider::new());
+
+        // Use the specified provider from config, or the first available one
+        let provider_name = config.provider.clone();
+        if !registry.provider_exists(&provider_name) {
+            // If the requested provider isn't available, use the first available one
+            let default_provider = "prometheus";
+            info!(
+                "Requested provider '{}' not available, using '{}' instead",
+                provider_name, default_provider
+            );
+
+            registry.set_default_provider(default_provider)?;
+
+            let mut new_config = config.clone();
+            new_config.provider = default_provider.to_string();
+
+            Self::new_default(registry, new_config).await
+        } else {
+            // Use the requested provider
+            registry.set_default_provider(&provider_name)?;
+            Self::new(registry, config).await
+        }
     }
 
     /// Get the configuration
@@ -226,5 +266,19 @@ mod tests {
         let labels = vec![("test_key", "test_value".to_string())];
         let result = service.record_counter_with_labels("test_counter_labeled", 1, &labels);
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_observability_service_with_all_providers() {
+        // Create configuration
+        let config = ObservabilityConfig::new("prometheus", "test-service");
+
+        // Create service with all providers
+        let service_result = ObservabilityService::new_with_all_providers(config).await;
+        assert!(service_result.is_ok());
+
+        // Check that the service uses the requested provider
+        let service = service_result.unwrap();
+        assert_eq!(service.config().provider, "prometheus");
     }
 }
