@@ -11,10 +11,10 @@ tags:
   - transactions
   - orm
 related:
-  - 02_examples/custom-service-example.md
-  - 02_examples/rest-api-example.md
-  - 04_guides/data-modeling.md
-last_updated: March 27, 2025
+  - custom-service-example.md
+  - rest-api-example.md
+  - ../04_guides/data-modeling.md
+last_updated: March 31, 2025
 version: 1.0
 status: stable
 ---

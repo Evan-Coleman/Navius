@@ -10,11 +10,11 @@ tags:
   - memory-cache
   - reference
 related:
-  - guides/caching-strategies.md
-  - reference/configuration/cache-config.md
-  - reference/patterns/caching-patterns.md
-  - examples/two-tier-cache-example.md
-last_updated: March 27, 2025
+  - ../../04_guides/caching-strategies.md
+  - ../configuration/cache-config.md
+  - ../patterns/caching-patterns.md
+  - ../../02_examples/two-tier-cache-example.md
+last_updated: March 31, 2025
 version: 1.0
 ---
 
@@ -346,7 +346,7 @@ let custom_cache = TwoTierCache::new(
 
 ## Related Documentation
 
-- [Caching Strategies Guide](../guides/caching-strategies.md) - Advanced caching concepts and strategies
-- [Cache Configuration](../reference/configuration/cache-config.md) - Configuration options for the caching system
-- [Caching Patterns](../reference/patterns/caching-patterns.md) - Common caching patterns and best practices
-- [Two-Tier Cache Example](../examples/two-tier-cache-example.md) - Example implementation and usage 
+- [Caching Strategies Guide](../../04_guides/caching-strategies.md) - Advanced caching concepts and strategies
+- [Cache Configuration](../configuration/cache-config.md) - Configuration options for the caching system
+- [Caching Patterns](../patterns/caching-patterns.md) - Common caching patterns and best practices
+- [Two-Tier Cache Example](../../02_examples/two-tier-cache-example.md) - Example implementation and usage 

@@ -252,5 +252,5 @@ async fn example_usage(service: &DatabaseService) -> Result<(), ServiceError> {
 ## Related Documentation
 
 - [Repository Pattern Example](repository-pattern-example.md)
-- [Generic Service Implementations Roadmap](../roadmaps/25-generic-service-implementations.md)
-- [Database API Reference](../reference/api/database-api.md) 
+- [Generic Service Implementations Roadmap](../98_roadmaps/25_generic-service-implementations.md)
+- [Database API Reference](../05_reference/api/database-api.md) 

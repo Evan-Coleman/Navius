@@ -12,11 +12,11 @@ tags:
   - state-management
   - lifecycle
 related:
-  - 05_reference/api/router-api.md
-  - 05_reference/api/config-api.md
-  - 02_examples/basic-application-example.md
-  - 02_examples/custom-service-example.md
-last_updated: March 27, 2025
+  - router-api.md
+  - config-api.md
+  - ../../02_examples/basic-application-example.md
+  - ../../02_examples/custom-service-example.md
+last_updated: March 31, 2025
 version: 1.1
 status: stable
 ---

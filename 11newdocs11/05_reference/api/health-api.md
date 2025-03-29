@@ -8,10 +8,10 @@ tags:
   - monitoring
   - actuator
 related:
-  - reference/patterns/health-check-pattern.md
-  - examples/health-service-example.md
-  - reference/api/api-resource.md
-last_updated: March 27, 2025
+  - ../patterns/health-check-pattern.md
+  - ../../02_examples/health-service-example.md
+  - api-resource.md
+last_updated: March 31, 2025
 version: 1.0
 ---
 

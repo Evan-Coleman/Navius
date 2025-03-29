@@ -9,10 +9,10 @@ tags:
   - memory
   - redis
 related:
-  - reference/patterns/cache-provider-pattern.md
-  - examples/cache-provider-example.md
-  - examples/two-tier-cache-example.md
-last_updated: March 27, 2025
+  - ../patterns/cache-provider-pattern.md
+  - ../../02_examples/cache-provider-example.md
+  - ../../02_examples/two-tier-cache-example.md
+last_updated: March 31, 2025
 version: 1.0
 ---
 

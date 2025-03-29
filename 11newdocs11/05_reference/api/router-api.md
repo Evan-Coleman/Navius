@@ -8,10 +8,10 @@ tags:
   - router
   - axum
 related:
-  - ./application-api.md
+  - application-api.md
   - ../../04_guides/features/api-integration.md
-  - ../../04_guides/middleware/custom-middleware.md
-last_updated: March 27, 2025
+  - ../../02_examples/middleware-example.md
+last_updated: March 31, 2025
 version: 1.0
 ---
 
@@ -302,7 +302,7 @@ let app = Router::new()
 
 ## Related Documents
 
-- [Application API Reference](./application-api.md)
+- [Application API Reference](application-api.md)
 - [API Integration Guide](../../04_guides/features/api-integration.md)
-- [Custom Middleware Guide](../../04_guides/middleware/custom-middleware.md)
+- [Middleware Example](../../02_examples/middleware-example.md)
 - [Axum Router Documentation](https://docs.rs/axum/latest/axum/routing/struct.Router.html)

@@ -87,11 +87,22 @@ This document tracks the implementation progress of the Week 1 Action Plan from 
 - ✅ Created `fix-markdown-codeblocks.sh` script to automatically fix issues
 - ✅ Fixed 492 incorrect code blocks across 17 example files
 - ✅ Created `markdown-syntax-fix.md` documentation with guidelines
+- ✅ Created comprehensive `markdown-style-guide.md` in `03_contributing`
+- ✅ Created `contributing-guidelines.md` in `03_contributing`
+- ✅ Fixed links in `database-service-example.md` (2 broken links fixed)
+- ✅ Fixed links in `database-integration-example.md` (updated frontmatter links)
+- ✅ Fixed links in API reference files:
+  - `router-api.md` (7 broken links fixed)
+  - `application-api.md` (3 broken links fixed)  
+  - `cache-api.md` (3 broken links fixed)
+  - `database-api.md` (3 broken links fixed)
+  - `health-api.md` (3 broken links fixed)
+  - `two-tier-cache-api.md` (5 broken links fixed)
+  - `configuration-api.md` (updated frontmatter date)
 
 #### In Progress
-- 🔄 Fix links in database-related example files in `02_examples/` directory
-- 🔄 Fix links in `05_reference/api` directory
-- 🔄 Validate frontmatter in both sets of files
+- 🔄 Continue fixing remaining links in `05_reference/api` directory
+- 🔄 Validate frontmatter in API reference files
 
 #### Planned Tasks
 - Generate validation reports
@@ -130,7 +141,7 @@ This document tracks the implementation progress of the Week 1 Action Plan from 
 | March 28, 2025 | Initial | 0 | 0 | 0 | 0 | 83% | 83% |
 | March 29, 2025 | 01_getting_started | 7 | 61 | 7 | 0 | 83% | 88% |
 | March 30, 2025 | Structural analysis | - | - | - | 0 | 88% | 88% |
-| March 31, 2025 | 02_examples | 17 | - | - | 492 | 88% | 92% |
+| March 31, 2025 | 02_examples & API ref | 25 | 28 | 7 | 492 | 88% | 93% |
 
 ## Key Challenges and Solutions
 

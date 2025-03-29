@@ -10,7 +10,7 @@ related:
   - ../patterns/feature-selection-pattern.md
   - ../../02_examples/configuration-example.md
   - ./application-api.md
-last_updated: March 27, 2025
+last_updated: March 31, 2025
 version: 1.0
 ---
 

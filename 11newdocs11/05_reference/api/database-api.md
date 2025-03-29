@@ -8,10 +8,10 @@ tags:
   - storage
   - repository
 related:
-  - reference/patterns/database-service-pattern.md
-  - examples/database-service-example.md
-  - reference/patterns/repository-pattern.md
-last_updated: March 27, 2025
+  - ../patterns/database-service-pattern.md
+  - ../../02_examples/database-service-example.md
+  - ../patterns/repository-pattern.md
+last_updated: March 31, 2025
 version: 1.0
 ---
 
