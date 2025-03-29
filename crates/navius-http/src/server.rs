@@ -39,13 +39,9 @@ impl HttpServer {
     }
 
     /// Create a new HTTP server with a custom router.
-    pub fn with_router(router: axum::Router) -> Self {
-        Self {
-            router,
-            address: None,
-            timeout: None,
-            shutdown_signal: None,
-        }
+    pub fn with_router(mut self, router: axum::Router) -> Self {
+        self.router = router;
+        self
     }
 
     /// Configure the router for the server.
@@ -201,22 +197,6 @@ impl RouterBuilder {
     /// Add a route to the router.
     pub fn route(mut self, path: &str, method_router: axum::routing::MethodRouter) -> Self {
         self.router = self.router.route(path, method_router);
-        self
-    }
-
-    /// Add a layer to the router.
-    pub fn layer<L>(mut self, layer: L) -> Self
-    where
-        L: tower::Layer<axum::routing::Route> + Clone + Send + Sync + 'static,
-        L::Service:
-            tower::Service<axum::http::Request<axum::body::Body>> + Clone + Send + Sync + 'static,
-        <L::Service as tower::Service<axum::http::Request<axum::body::Body>>>::Response: 'static,
-        <L::Service as tower::Service<axum::http::Request<axum::body::Body>>>::Error:
-            Into<Box<dyn std::error::Error + Send + Sync>> + 'static,
-        <L::Service as tower::Service<axum::http::Request<axum::body::Body>>>::Future:
-            Send + 'static,
-    {
-        self.router = self.router.layer(layer);
         self
     }
 

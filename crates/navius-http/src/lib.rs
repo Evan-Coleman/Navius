@@ -17,6 +17,12 @@ pub mod util;
 // Re-exports
 pub use error::{Error, Result};
 
+#[cfg(feature = "server")]
+pub use server::{HttpServer, HttpServerHandle};
+
+#[cfg(feature = "client")]
+pub use client::HttpClient;
+
 /// Navius HTTP version information
 pub struct Version;
 

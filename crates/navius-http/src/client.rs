@@ -5,7 +5,6 @@
 use crate::error::{Error, Result};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::time::Duration;
-use tracing::debug;
 
 /// HTTP client for making requests.
 pub struct HttpClient {
