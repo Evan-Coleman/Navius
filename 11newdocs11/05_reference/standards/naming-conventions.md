@@ -1,5 +1,14 @@
 ---
 title: "Naming Conventions"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
+title: "Naming Conventions"
 description: "Documentation about Naming Conventions"
 category: reference
 tags:
@@ -158,4 +167,3 @@ This script identifies files with uppercase characters in their names, which may
 ## Related Documents
 - [API Standards](api-standards.md) - API design guidelines
 - [Error Handling](error-handling.md) - Error handling patterns
-

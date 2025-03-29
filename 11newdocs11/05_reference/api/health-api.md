@@ -1,4 +1,13 @@
 ---
+title: "Health Api"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: "Health API Reference"
 description: "API documentation for Navius health monitoring endpoints"
 category: api

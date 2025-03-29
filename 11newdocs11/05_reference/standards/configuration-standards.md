@@ -1,3 +1,12 @@
+---
+title: "Configuration Standards"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
 # Configuration Standards
 
 This document outlines the configuration standards and patterns used throughout the Navius framework, providing a reference for consistent configuration implementation.

@@ -1,3 +1,12 @@
+---
+title: "Authentication Error Handling"
+description: "Comprehensive guide to handling authentication and authorization errors in Navius applications"
+category: "Reference"
+tags: ["authentication", "error-handling", "security", "troubleshooting"]
+last_updated: "April 2, 2025"
+version: "1.0"
+---
+
 # Authentication Error Reference
 
 ## Error Types

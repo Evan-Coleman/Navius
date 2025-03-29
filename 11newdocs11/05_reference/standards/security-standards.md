@@ -12,7 +12,7 @@ tags:
   - integration
   - security
   - testing
-last_updated: March 27, 2025
+last_updated: April 2, 2025
 version: 1.0
 ---
 # Navius Security Guide
@@ -173,4 +173,3 @@ Navius can be used as part of a compliant application architecture for:
 ## Related Documents
 - [API Standards](api-standards.md) - API design guidelines
 - [Error Handling](error-handling.md) - Error handling patterns
-

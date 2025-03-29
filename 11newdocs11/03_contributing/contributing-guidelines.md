@@ -1,5 +1,14 @@
 ---
 title: "Contributing Guidelines"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
+title: "Contributing Guidelines"
 description: "Guidelines for contributing to the Navius project"
 category: "Contributing"
 tags: ["contributing", "guidelines", "development", "documentation", "pull-requests"]

@@ -1,5 +1,14 @@
 ---
 title: "Development Process"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
+title: "Development Process"
 description: "A guide to the development workflow and processes for contributing to Navius"
 category: contributing
 tags:

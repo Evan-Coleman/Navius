@@ -1,3 +1,12 @@
+---
+title: "Authentication Provider Implementation Guide"
+description: "Technical reference for implementing custom authentication providers in Navius applications"
+category: "Reference"
+tags: ["authentication", "security", "implementation", "providers", "integration"]
+last_updated: "April 2, 2025"
+version: "1.0"
+---
+
 ## Adding a New Provider
 
 1. Create a new module in `src/core/auth/providers/`

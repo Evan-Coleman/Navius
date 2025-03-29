@@ -1,3 +1,12 @@
+---
+title: "Testing Standards"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
 # Testing Standards
 
 This document outlines the testing standards and patterns used throughout the Navius framework, providing a reference for consistent testing implementation.

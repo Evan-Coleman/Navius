@@ -1,3 +1,12 @@
+---
+title: "Development Setup"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
 # Development Setup for Contributors
 
 This guide provides instructions for setting up a development environment specifically for contributing to the Navius project. If you're just using Navius in your own projects, refer to the [general development setup](../getting-started/development-setup.md) guide instead.

@@ -3,7 +3,7 @@ title: "Markdown Style Guide"
 description: "Guidelines for consistent markdown formatting in Navius documentation"
 category: "Contributing"
 tags: ["documentation", "markdown", "style", "guidelines", "formatting"]
-last_updated: "March 31, 2025"
+last_updated: "April 2, 2025"
 version: "1.0"
 ---
 

@@ -1,4 +1,13 @@
 ---
+title: "Generated Code Standards"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: "Generated Code Management"
 description: "# Add a new API client"
 category: reference
@@ -122,4 +131,3 @@ use crate::generated_apis::petstore_api::models::Pet;
 ## Related Documents
 - [API Standards](api-standards.md) - API design guidelines
 - [Error Handling](error-handling.md) - Error handling patterns
-

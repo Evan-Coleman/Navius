@@ -1,4 +1,13 @@
 ---
+title: "Ide Setup"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: "IDE Setup for Navius Development"
 description: "Documentation about IDE Setup for Navius Development"
 category: contributing
@@ -106,4 +115,3 @@ If debugging doesn't work properly:
 ## Related Documents
 - [Contributing Guide](CONTRIBUTING.md) - How to contribute to the project
 - [Development Setup](../01_getting_started/development-setup.md) - Setting up your development environment
-

@@ -1,5 +1,14 @@
 ---
 title: "Testing Guidelines"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
+title: "Testing Guidelines"
 description: "Guidelines for testing Navius components, with special focus on complex features"
 category: contributing
 tags:

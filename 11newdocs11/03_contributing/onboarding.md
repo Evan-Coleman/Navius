@@ -1,4 +1,13 @@
 ---
+title: "Onboarding"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: "Developer Onboarding Guide"
 description: "# Find files in the auth component"
 category: contributing
@@ -420,4 +429,3 @@ If you need help with the codebase:
 ## Related Documents
 - [Contributing Guide](CONTRIBUTING.md) - How to contribute to the project
 - [Development Setup](../01_getting_started/development-setup.md) - Setting up your development environment
-

@@ -1,4 +1,13 @@
 ---
+title: "Application Api"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: "Application API Reference"
 description: "Comprehensive reference guide for the Navius Application API, including core components, lifecycle management, routing, middleware, error handling, and state management"
 category: api

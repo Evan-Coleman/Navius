@@ -1,4 +1,13 @@
 ---
+title: "Pet Database Api"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: "Pet Database API Reference"
 description: "Reference documentation for the Pet Database API, including CRUD operations and architecture details"
 category: reference

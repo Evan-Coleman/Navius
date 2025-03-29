@@ -1,4 +1,13 @@
 ---
+title: "Two Tier Cache Api"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: "Two-Tier Cache API Reference"
 description: "Comprehensive API reference for the Two-Tier Cache implementation in Navius"
 category: reference

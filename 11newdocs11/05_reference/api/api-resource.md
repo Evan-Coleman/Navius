@@ -1,4 +1,13 @@
 ---
+title: "Api Resource"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: "API Resource Abstraction"
 description: "Documentation about API Resource Abstraction"
 category: reference
@@ -268,4 +277,3 @@ Planned enhancements to the pattern include:
 ## Related Documents
 - [API Standards](../standards/api-standards.md) - API design guidelines
 - [Error Handling](../standards/error-handling.md) - Error handling patterns
-

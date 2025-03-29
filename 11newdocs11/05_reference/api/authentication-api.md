@@ -1,12 +1,11 @@
 ---
-title: Authentication API
-description: 
-category: documentation
-tags:
-  - docs
-last_updated: 2025-03-28
+title: "Authentication API"
+description: "Reference documentation for the Navius authentication API, including methods, types, and implementation guidelines"
+category: "Reference"
+tags: ["authentication", "api", "security", "jwt", "oauth"]
+last_updated: "April 2, 2025"
+version: "1.0"
 ---
-
 
 # Authentication API
 
@@ -43,4 +42,3 @@ When using this API, consider the following best practices:
 ## Related Topics
 - [Related API](./related-api.md)
 - [Implementation details](./implementation-details.md)
-

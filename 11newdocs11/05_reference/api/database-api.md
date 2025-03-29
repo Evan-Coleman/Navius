@@ -1,4 +1,13 @@
 ---
+title: "Database Api"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: "Database API Reference"
 description: "API documentation for Navius database service and operations"
 category: api

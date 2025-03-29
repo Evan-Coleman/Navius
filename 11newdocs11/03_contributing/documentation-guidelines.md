@@ -1,3 +1,12 @@
+---
+title: "Documentation Guidelines"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
 # Documentation Guidelines
 
 This guide provides standards and best practices for contributing to Navius framework documentation. Following these guidelines ensures our documentation remains consistent, clear, and valuable to users.
