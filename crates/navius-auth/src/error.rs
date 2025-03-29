@@ -304,6 +304,7 @@ mod tests {
         // Server errors (500)
         assert_eq!(Error::configuration("test").status_code(), 500);
         assert_eq!(Error::provider("test").status_code(), 500);
+        #[cfg(feature = "oauth")]
         assert_eq!(Error::oauth("test").status_code(), 500);
         assert_eq!(Error::internal("test").status_code(), 500);
         assert_eq!(Error::core("test").status_code(), 500);

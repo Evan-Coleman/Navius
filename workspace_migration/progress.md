@@ -25,11 +25,17 @@ This document tracks progress on the migration of the Navius project to a Cargo 
    - ✅ Created provider interface for authentication backends
    - ✅ Implemented basic authentication provider
    - ✅ Implemented JWT token provider
+     - ✅ Fixed token revocation functionality to properly blacklist tokens
+     - ✅ Updated token validation to check blacklist
+     - ✅ Improved error handling for expired tokens
    - ✅ Created authorization system with role-based access control
    - ✅ Added integration with navius-http through middleware
    - ✅ Created `AuthChecker` for role-based access control
    - ✅ Configured feature flags (basic, jwt, oauth, http)
    - ✅ Added comprehensive tests for authentication and authorization components
+     - ✅ Added token lifecycle tests for JWT provider
+     - ✅ Added token revocation tests
+     - ✅ Added token expiration tests
    - ✅ Created examples demonstrating the authentication and authorization functionality:
      - ✅ Basic authentication example
      - ✅ JWT token authentication example
@@ -54,6 +60,8 @@ This document tracks progress on the migration of the Navius project to a Cargo 
 2. 🔄 Refactor existing application code to use the new crate structure
 3. 🔄 Update build scripts and CI/CD pipeline
 4. 🔄 Create comprehensive documentation for each crate
+5. 🔄 Fix warnings in the codebase with `cargo fix`
+6. 🔄 Fix example code to work with updated APIs
 
 ## Issues Encountered and Resolved
 
@@ -72,6 +80,15 @@ This document tracks progress on the migration of the Navius project to a Cargo 
    - ✅ Token validation
    - ✅ Error handling
    - ✅ Path-based exemptions
+7. ✅ **Token Revocation**: Fixed the token revocation functionality in the JWT provider to properly blacklist tokens.
+   - ✅ Modified implementation to use a clone of the blacklist for thread-safe updates
+   - ✅ Added tests to verify tokens are properly invalidated after revocation
+   - ✅ Updated error handling to provide clear error messages for revoked tokens
+8. ✅ **Test Coverage**: Improved test coverage for core authentication functionality:
+   - ✅ Added tests for token lifecycle (creation, validation)
+   - ✅ Added dedicated test for token expiration
+   - ✅ Added test for token revocation with validation
+   - ✅ Added test for token refresh with validation
 
 ## Timeline
 
