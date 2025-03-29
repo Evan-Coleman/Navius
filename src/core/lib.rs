@@ -17,6 +17,7 @@ pub mod handlers;
 pub mod macros;
 pub mod metrics;
 pub mod models;
+pub mod observability; // Generalized observability operations (metrics, tracing, profiling)
 pub mod reliability; // Now points to reliability.rs instead of reliability/mod.rs
 pub mod router;
 pub mod services;

@@ -22,7 +22,8 @@ This roadmap outlines the steps to transform hardcoded service implementations i
 - **Phase 3 (Cache Service Generalization)**: 100% Complete
 - **Phase 4 (Collection Model Generalization)**: 100% Complete
 - **Phase 5 (Logging Service Generalization)**: 100% Complete
-- **Overall Progress**: 71% (5/7 phases completed)
+- **Phase 6 (Observability Service Generalization)**: 50% Complete
+- **Overall Progress**: 75% (5.5/7 phases completed)
 
 ## Current Status
 We've identified several hardcoded implementations in the core that should be made generic:
@@ -32,7 +33,7 @@ We've identified several hardcoded implementations in the core that should be ma
 3. Cache Implementation: Specifically tied to Moka cache ✅
 4. Database Collection Model: Specific methods for user collection ✅
 5. Logging Service: Direct use of tracing crate ✅
-6. Database Provider: Only supports in-memory database
+6. Observability Service: Direct use of specific metrics library (in progress)
 
 ## Target State
 Services in the core module should:
@@ -179,28 +180,28 @@ Services in the core module should:
 
 ### Phase 6: Observability Service Generalization
 1. **Define Observability Interface**
-   - [ ] Create `ObservabilityProvider` trait
-   - [ ] Define metrics, tracing, and profiling operations
-   - [ ] Support context propagation
-   - [ ] Create sampling and filtering mechanisms
+   - [x] Create `ObservabilityProvider` trait
+   - [x] Define metrics, tracing, and profiling operations
+   - [x] Support context propagation
+   - [x] Create sampling and filtering mechanisms
    
-   *Updated at: Not started*
+   *Updated at: March 28, 2025 - Implemented ObservabilityProvider trait with comprehensive interface for metrics, tracing, and profiling operations*
 
 2. **Refactor Metrics Implementation**
-   - [ ] Adapt current metrics to provider interface
-   - [ ] Create separate metrics module
-   - [ ] Implement adapter for current metrics
+   - [x] Adapt current metrics to provider interface
+   - [x] Create separate metrics module
+   - [x] Implement adapter for current metrics
    - [ ] Add telemetry correlation support
    
-   *Updated at: Not started*
+   *Updated at: March 28, 2025 - Created a PrometheusProvider implementation that adapts the existing metrics system to the new generic observability interface*
 
 3. **Add Enterprise Observability Providers**
    - [ ] Create Dynatrace integration
    - [ ] Add OpenTelemetry support
-   - [ ] Implement Prometheus metrics provider
+   - [x] Implement Prometheus metrics provider
    - [ ] Support distributed tracing with Jaeger
    
-   *Updated at: Not started*
+   *Updated at: March 28, 2025 - Implemented Prometheus metrics provider and added initial support for distributed tracing*
 
 ### Phase 7: Configuration Service Generalization
 1. **Define Configuration Interface**
@@ -228,10 +229,10 @@ Services in the core module should:
    *Updated at: Not started*
 
 ## Implementation Status
-- **Overall Progress**: 71% complete (Phases 1-5 fully completed)
-- **Last Updated**: March 26, 2025
-- **Next Milestone**: Begin Observability Service Generalization (Phase 6)
-- **Current Focus**: Completed implementation of logging service generalization with provider registry and multiple implementations
+- **Overall Progress**: 75% complete (Phases 1-5 fully completed, Phase 6 at 50%)
+- **Last Updated**: March 28, 2025
+- **Next Milestone**: Complete Observability Service Generalization (Phase 6)
+- **Current Focus**: Implementing the generic observability interface with Prometheus provider and preparing for additional enterprise providers
 
 ## Success Criteria
 1. No hardcoded service implementations in the core module

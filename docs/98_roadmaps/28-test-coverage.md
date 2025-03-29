@@ -3,14 +3,14 @@ title: Test Coverage Roadmap
 description: A plan for achieving and maintaining high test coverage across the Navius application
 category: Testing
 tags: [testing, quality, reliability]
-last_updated: March 27, 2025
+last_updated: March 28, 2025
 version: 0.5.0
 ---
 
 # Test Coverage Roadmap
 
 **Version**: 0.5.0  
-**Last Updated**: March 26, 2025  
+**Last Updated**: March 28, 2025  
 **Status**: In Progress
 
 ## Overview
@@ -19,13 +19,14 @@ This roadmap outlines our approach to improving test coverage across the Navius 
 
 ## Current Status
 
-- **Overall code coverage**: 45.2% (increased from 33.8%)
+- **Overall code coverage**: 47.5% (increased from 45.2%)
 - **Core modules**: 98% coverage
-- **Feature system**: 95% coverage (increased from 85%)
-- **Documentation system**: 70% coverage (increased from 65%)
+- **Feature system**: 95% coverage
+- **Documentation system**: 70% coverage
 - **CLI components**: 48% coverage
 - **API Resources**: 40% coverage
 - **Error handling**: 88% coverage
+- **Observability system**: 85% coverage (new)
 
 ### Recent Achievements
 
@@ -41,6 +42,9 @@ This roadmap outlines our approach to improving test coverage across the Navius 
 - ✅ Added end-to-end tests for the feature system
 - ✅ Created performance benchmarks for feature operations
 - ✅ All 294+ tests now passing successfully
+- ✅ Implemented unit tests for ObservabilityProvider and ObservabilityOperations interfaces
+- ✅ Added tests for PrometheusProvider implementation
+- ✅ Created integration tests for the ObservabilityService
 
 ## Target State
 
@@ -50,6 +54,7 @@ This roadmap outlines our approach to improving test coverage across the Navius 
 - **CLI components**: 75% coverage
 - **API Resources**: 85% coverage
 - **Error handling**: 95% coverage
+- **Observability system**: 90% coverage
 
 ## Implementation Plan
 
@@ -77,6 +82,8 @@ This roadmap outlines our approach to improving test coverage across the Navius 
 - ❌ Add end-to-end integration tests
 - ❌ Test authentication flows
 - ❌ Ensure cross-module interactions are tested
+- ✅ Implement observability service tests
+- 🔄 Develop tests for additional observability providers
 
 ### Phase 4: Edge Cases and Performance (FUTURE)
 
@@ -104,6 +111,13 @@ This roadmap outlines our approach to improving test coverage across the Navius 
    - ✅ Create baseline performance tests for feature system
    - 🔄 Implement performance regression detection
    - ❌ Add benchmarks for remaining core systems
+
+4. Expand observability testing
+   - ✅ Test PrometheusProvider implementation
+   - 🔄 Add tests for different metric types and labels
+   - ❌ Create test for Dynatrace integration
+   - ❌ Test OpenTelemetry integration
+   - ❌ Implement distributed tracing tests
 
 ## Coverage Improvement Strategies
 

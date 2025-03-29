@@ -13,19 +13,26 @@ categories = ["web-programming", "asynchronous"]
 
 # Feature flags
 [features]
-default = ["metrics", "caching", "auth", "reliability"]
+default = ["production", "tracing", "metrics", "logging", "database", "examples", "prometheus"]
 production = []
+development = []
+tracing = ["tracing-subscriber", "tracing-appender"]
+metrics = ["metrics-exporter-prometheus"]
+logging = ["tracing"]
+redis = []
+database = []
 examples = []
-
-# Server Customization System features
-metrics = []
-advanced_metrics = ["metrics"]
-caching = []
-auth = []
+test-utils = []
+experimental = []
 reliability = []
-core = []
-error_handling = ["core"]
-config = ["core"]
+# Observability providers
+prometheus = ["metrics-exporter-prometheus"]
+dynatrace = ["dep:opentelemetry-dynatrace"]
+
+# For compatibility with older projects
+postgres = ["database"]
+sqlx-macros = []
+rusqlite = []  # Placeholder for future SQLite support
 
 # Suppress specific warnings
 [lints.rust]
@@ -33,16 +40,17 @@ dead_code = "allow"
 unused_imports = "allow"
 
 [dependencies]
-axum = { version = "0.8.1", features = ["macros"] }
+axum = { version = "0.8.3", features = ["macros"] }
 async-trait = "0.1.88"
 base64 = "0.22.1"
 reqwest = { version = "0.12.15", features = ["json"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-serde_yaml = "0.9.33"
+serde_yaml = "0.9.34+deprecated"
 tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }
 tracing = { version = "0.1.41", features = ["log"] }
-tracing-subscriber = "0.3.19"
+tracing-subscriber = { version = "0.3.19", optional = true }
+tracing-appender = { version = "0.2.3", optional = true }
 # Configuration dependencies
 config = { version = "0.15.11", features = ["yaml"] }
 dotenvy = "0.15.7"
@@ -53,7 +61,9 @@ bincode = "2.0.1"
 bincode_derive = "2.0.1"
 # Metrics dependencies
 metrics = "0.24.1"
-metrics-exporter-prometheus = { version = "0.16.2", features = ["http-listener"] }
+metrics-exporter-prometheus = { version = "0.16.2", features = ["http-listener"], optional = true }
+opentelemetry = "0.29.0"
+opentelemetry-dynatrace = { version = "0.4.0", optional = true }
 # Time handling
 chrono = { version = "0.4.40", features = ["serde"] }
 # Middleware and error handling
@@ -75,11 +85,11 @@ futures-util = { version = "0.3.31", features = ["std"] }
 pin-project = "1.1.10"
 rand = "0.9.0"
 rand_chacha = "0.9.0"
-lazy_static = "1.5"
+lazy_static = "1.5.0"
 bytes = "1.10.1"
 
 # Add these missing dependencies
-governor = "0.9.0"
+governor = "0.10.0"
 nonzero_ext = "0.3.0"
 
 # New dependency
@@ -109,7 +119,7 @@ fake = { version = "4.2.0", features = ["derive", "chrono", "uuid"] }
 # Test utilities
 test-context = "0.4.1"
 assert_matches = "1.5.0"
-once_cell = "1.21.1"
+once_cell = "1.21.3"
 mockall = "0.13.1"
 tempfile = "3.19.1"
 
