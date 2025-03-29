@@ -14,8 +14,13 @@ pages:
   variables:
     GIT_DEPTH: "1"
   script:
+    # Install required dependencies
+    - apt-get update
+    - apt-get install -y clang llvm-dev libclang-dev lld
+    # Install mdbook and plugins
     - cargo install mdbook --version ${MDBOOK_VERSION} --no-default-features
     - cargo install mdbook-mermaid --version 0.12.6
+    # Build documentation
     - cd docs
     - mdbook build
     - mkdir -p ../public
