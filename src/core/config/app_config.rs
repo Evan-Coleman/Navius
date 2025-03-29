@@ -774,7 +774,9 @@ pub struct ProviderConfig {
     pub enabled: bool,
     pub client_id: String,
     pub jwks_uri: String,
+    #[serde(default)]
     pub issuer_url: String,
+    #[serde(default)]
     pub audience: String,
     #[serde(default)]
     pub role_mappings: RoleMappings,

@@ -327,16 +327,37 @@ pub struct ProviderConfig {
 impl ProviderConfig {
     // Convert from app_config::ProviderConfig
     pub fn from_app_config(config: &crate::core::config::app_config::ProviderConfig) -> Self {
+        // Extract tenant_id from provider_specific for Entra
+        let tenant_id = config
+            .provider_specific
+            .get("entra_tenant_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+
+        // Derive standard values if not explicitly provided
+        let audience = if config.audience.is_empty() {
+            format!("api://{}", config.client_id)
+        } else {
+            config.audience.clone()
+        };
+
+        let issuer = if config.issuer_url.is_empty() {
+            format!("https://sts.windows.net/{}/", tenant_id)
+        } else {
+            config.issuer_url.clone()
+        };
+
         Self {
             enabled: config.enabled,
             client_id: config.client_id.clone(),
-            audience: config.audience.clone(),
+            audience,
             jwks_uri: config.jwks_uri.clone(),
-            issuer: config.issuer_url.clone(),
+            issuer,
             role_mappings: config.role_mappings.clone(),
             provider_specific: config.provider_specific.clone(),
             refresh_rate_limit: default_refresh_rate(),
-            tenant_id: String::new(),
+            tenant_id,
         }
     }
 }

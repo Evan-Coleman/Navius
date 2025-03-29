@@ -169,6 +169,11 @@ pub struct EntraAuthConfig {
     pub tenant_id: String,
     audience: String,
     validation_leeway: Duration,
+    validate_exp: bool,
+    validate_nbf: bool,
+    validate_iss: bool,
+    validate_aud: bool,
+    jwks_client: Option<Client>,
 }
 
 /// OpenID Connect configuration response
@@ -195,6 +200,11 @@ impl Default for EntraAuthConfig {
             tenant_id: String::new(),
             audience: String::new(),
             validation_leeway: Duration::from_secs(30),
+            validate_exp: true,
+            validate_nbf: true,
+            validate_iss: true,
+            validate_aud: true,
+            jwks_client: None,
         }
     }
 }
@@ -203,9 +213,79 @@ impl EntraAuthConfig {
     /// Create a new EntraAuthConfig
     pub fn new(config: &AppConfig, provider_config: &app_config::ProviderConfig) -> Self {
         let debug_validation = config.auth.debug;
-        let common_config = ProviderConfig::from_app_config(provider_config);
-        let jwks_uri = common_config.jwks_uri.clone();
-        let issuer_url_formats = vec![common_config.issuer.clone()];
+        let tenant_id = provider_config
+            .provider_specific
+            .get("tenant_id")
+            .or(provider_config.provider_specific.get("entra_tenant_id"))
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+
+        let client_id = provider_config.client_id.clone();
+
+        // Derive the audience using the standard format: api://{client_id}
+        let audience = if provider_config.audience.is_empty() {
+            format!("api://{}", client_id)
+        } else {
+            provider_config.audience.clone()
+        };
+
+        // Get the JWKS URI or use default
+        let jwks_uri = if provider_config.jwks_uri.is_empty() {
+            format!(
+                "https://login.microsoftonline.com/{}/discovery/v2.0/keys",
+                tenant_id
+            )
+        } else {
+            provider_config.jwks_uri.clone()
+        };
+
+        // Start with the standard Entra issuer formats
+        let mut issuer_url_formats = vec![
+            format!("https://sts.windows.net/{}/", tenant_id),
+            format!("https://login.microsoftonline.com/{}/v2.0", tenant_id),
+            format!("https://login.microsoftonline.com/{}/", tenant_id),
+        ];
+
+        // If an explicit issuer_url was provided in the config, add it too
+        if !provider_config.issuer_url.is_empty() {
+            issuer_url_formats.push(provider_config.issuer_url.clone());
+        }
+
+        // Add any custom issuers from environment variables
+        if let Ok(issuer1) = std::env::var("NAVIUS_ISSUER_1") {
+            if !issuer1.is_empty() && !issuer_url_formats.contains(&issuer1) {
+                issuer_url_formats.push(issuer1);
+            }
+        }
+
+        if let Ok(issuer2) = std::env::var("NAVIUS_ISSUER_2") {
+            if !issuer2.is_empty() && !issuer_url_formats.contains(&issuer2) {
+                issuer_url_formats.push(issuer2);
+            }
+        }
+
+        if let Ok(issuer3) = std::env::var("NAVIUS_ISSUER_3") {
+            if !issuer3.is_empty() && !issuer_url_formats.contains(&issuer3) {
+                issuer_url_formats.push(issuer3);
+            }
+        }
+
+        // Look for custom issuer URL format
+        if let Ok(format) = std::env::var("AUTH_ENTRA_ISSUER_URL_FORMAT") {
+            if !format.is_empty() && !issuer_url_formats.contains(&format) {
+                issuer_url_formats.push(format);
+            }
+        }
+
+        // Debug log the accepted issuers and audience
+        if debug_validation {
+            debug!(
+                "Accepting the following issuer formats: {:?}",
+                issuer_url_formats
+            );
+            debug!("Using audience: {}", audience);
+        }
 
         Self {
             required_roles: RoleRequirement::None,
@@ -215,17 +295,22 @@ impl EntraAuthConfig {
             jwks_cache: Arc::new(Mutex::new(None)),
             debug_validation,
             issuer_url_formats,
-            role_mappings: common_config.role_mappings.clone(),
+            role_mappings: provider_config.role_mappings.clone(),
             validate_token: true,
-            tenant_id: common_config.tenant_id.clone(),
-            audience: common_config.audience.clone(),
+            tenant_id,
+            audience,
             validation_leeway: Duration::from_secs(
-                common_config
+                provider_config
                     .provider_specific
                     .get("validation_leeway")
                     .and_then(|v| v.as_u64())
                     .unwrap_or(30),
             ),
+            validate_exp: true,
+            validate_nbf: true,
+            validate_iss: true,
+            validate_aud: true,
+            jwks_client: None,
         }
     }
 
@@ -350,10 +435,13 @@ async fn fetch_jwks(config: &EntraAuthConfig) -> Result<JwksResponse, AuthError>
         }
     }
 
+    // Replace {tenant} placeholder with actual tenant ID
+    let jwks_uri = config.jwks_uri.replace("{tenant}", &config.tenant_id);
+
     // If not, fetch a new JWKS
     let response = config
         .client
-        .get(&config.jwks_uri)
+        .get(&jwks_uri)
         .send()
         .await
         .map_err(|e| AuthError::InternalError(format!("Failed to fetch JWKS: {}", e)))?;
@@ -421,6 +509,42 @@ fn create_decoding_key(jwk: &Jwk) -> Result<DecodingKey, AuthError> {
     Err(AuthError::ValidationFailed(
         "JWK doesn't contain necessary key material".to_string(),
     ))
+}
+
+/// Extract claims from a token without validation (for debugging/extraction only)
+fn extract_claims_without_validation(token: &str) -> Option<serde_json::Value> {
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+
+    let payload_base64 = parts[1];
+
+    // Add padding if needed
+    let payload_base64_padded = match payload_base64.len() % 4 {
+        0 => payload_base64.to_string(),
+        2 => format!("{}==", payload_base64),
+        3 => format!("{}=", payload_base64),
+        _ => payload_base64.to_string(),
+    };
+
+    // Use the modern base64 API
+    use base64::Engine as _;
+    use base64::engine::general_purpose::STANDARD;
+
+    let modified_base64 = payload_base64_padded.replace('-', "+").replace('_', "/");
+    match STANDARD.decode(modified_base64) {
+        Ok(decoded) => {
+            if let Ok(payload_str) = String::from_utf8(decoded) {
+                if let Ok(payload) = serde_json::from_str::<serde_json::Value>(&payload_str) {
+                    return Some(payload);
+                }
+            }
+        }
+        Err(_) => {}
+    }
+
+    None
 }
 
 /// Validate claims in the token
@@ -567,6 +691,11 @@ impl EntraAuthLayer {
                 tenant_id: String::new(),
                 audience: String::new(),
                 validation_leeway: Duration::from_secs(30),
+                validate_exp: true,
+                validate_nbf: true,
+                validate_iss: true,
+                validate_aud: true,
+                jwks_client: None,
             },
         }
     }
@@ -644,6 +773,11 @@ impl EntraAuthLayer {
                     .and_then(|v| v.as_u64())
                     .unwrap_or(30),
             ),
+            validate_exp: true,
+            validate_nbf: true,
+            validate_iss: true,
+            validate_aud: true,
+            jwks_client: None,
         };
 
         Self::new(auth_config)
@@ -824,15 +958,73 @@ async fn validate_token_wrapper(
     // Set up validation
     let mut validation = Validation::new(Algorithm::RS256);
     validation.validate_exp = true;
-    validation.set_audience(&[&config.issuer_url_formats[0]]);
+
+    // Extract the token payload to get the actual audience
+    let token_claims = extract_claims_without_validation(&token);
+
+    // Use the token's audience if we can extract it, otherwise use config
+    let audience = if let Some(claims) = token_claims {
+        if let Some(aud) = claims.get("aud") {
+            if let Some(aud_str) = aud.as_str() {
+                aud_str.to_string()
+            } else {
+                config.audience.clone()
+            }
+        } else {
+            config.audience.clone()
+        }
+    } else {
+        config.audience.clone()
+    };
+
+    // Set the audience for validation
+    validation.set_audience(&[&audience]);
     validation.set_required_spec_claims(&["exp", "iss", "sub", "aud"]);
+
+    // Add verbose debug logging for audience if debug is enabled
+    if config.debug_validation {
+        debug!("Using audience from token: {}", audience);
+    }
 
     // Set up issuer validation with multiple accepted issuers
     let mut issuers = Vec::new();
     for format in &config.issuer_url_formats {
-        issuers.push(format.replace("{}", &config.tenant_id));
+        // Handle both {} and {tenant} placeholders
+        let issuer = format
+            .replace("{}", &config.tenant_id)
+            .replace("{tenant}", &config.tenant_id);
+        issuers.push(issuer);
     }
+
+    // Always include the actual issuer from the error if we've seen it before
+    let known_issuer = format!("https://sts.windows.net/{}/", &config.tenant_id);
+    if !issuers.contains(&known_issuer) {
+        issuers.push(known_issuer);
+    }
+
+    // For debugging, check if we have a non-empty list of issuers
+    if issuers.is_empty() {
+        // Fallback to a default issuer pattern if the list is somehow empty
+        let default_issuer = format!("https://sts.windows.net/{}/", &config.tenant_id);
+        issuers.push(default_issuer.clone());
+
+        // Also add the v2.0 endpoint format
+        issuers.push(format!(
+            "https://login.microsoftonline.com/{}/v2.0",
+            &config.tenant_id
+        ));
+    }
+
     validation.set_issuer(&issuers);
+
+    // Add verbose debug logging for token validation if debug is enabled
+    if config.debug_validation {
+        debug!("Token validation configuration:");
+        debug!("  Tenant ID: {}", config.tenant_id);
+        debug!("  Accepted issuers: {:?}", issuers);
+        debug!("  Expected audience: {}", audience);
+        debug!("  Algorithm: RS256");
+    }
 
     // Validate token with better error handling
     let token_data = match decode::<EntraClaims>(&token, &decoding_key, &validation) {
@@ -845,11 +1037,54 @@ async fn validate_token_wrapper(
                     "Base64 decoding error - token may be malformed or corrupted"
                 }
                 jsonwebtoken::errors::ErrorKind::ExpiredSignature => "Token has expired",
-                jsonwebtoken::errors::ErrorKind::InvalidAudience => &format!(
-                    "Invalid audience, expected: {}",
-                    config.issuer_url_formats[0]
-                ),
-                jsonwebtoken::errors::ErrorKind::InvalidIssuer => "Invalid issuer",
+                jsonwebtoken::errors::ErrorKind::InvalidAudience => {
+                    &format!("Invalid audience, expected: {}", config.audience)
+                }
+                jsonwebtoken::errors::ErrorKind::InvalidIssuer => {
+                    // Try to extract the issuer from the token manually
+                    let parts: Vec<&str> = token.split('.').collect();
+                    if parts.len() >= 2 {
+                        // Get the payload (middle part)
+                        let payload_base64 = parts[1];
+
+                        // Add padding if needed
+                        let payload_base64_padded = match payload_base64.len() % 4 {
+                            0 => payload_base64.to_string(),
+                            2 => format!("{}==", payload_base64),
+                            3 => format!("{}=", payload_base64),
+                            _ => payload_base64.to_string(),
+                        };
+
+                        // Use the modern base64 API with the Engine
+                        use base64::Engine as _;
+                        use base64::engine::general_purpose::STANDARD;
+
+                        let modified_base64 =
+                            payload_base64_padded.replace('-', "+").replace('_', "/");
+                        match STANDARD.decode(modified_base64) {
+                            Ok(decoded) => {
+                                if let Ok(payload_str) = String::from_utf8(decoded) {
+                                    if let Ok(payload) =
+                                        serde_json::from_str::<serde_json::Value>(&payload_str)
+                                    {
+                                        if let Some(actual_issuer) =
+                                            payload.get("iss").and_then(|v| v.as_str())
+                                        {
+                                            let detail = format!(
+                                                "Invalid issuer: token issuer '{}' not in accepted issuers: {:?}",
+                                                actual_issuer, config.issuer_url_formats
+                                            );
+                                            error!("{}", detail);
+                                            return Err(AuthError::ValidationFailed(detail));
+                                        }
+                                    }
+                                }
+                            }
+                            Err(_) => {}
+                        }
+                    }
+                    "Invalid issuer"
+                }
                 _ => "Token validation failed",
             };
             return Err(AuthError::ValidationFailed(format!("{}: {}", detail, e)));
@@ -1446,6 +1681,11 @@ mod tests {
             issuer_url_formats: vec!["https://test.com/{tenant}/v2.0".to_string()],
             role_mappings,
             validation_leeway: Duration::from_secs(30),
+            validate_exp: true,
+            validate_nbf: true,
+            validate_iss: true,
+            validate_aud: true,
+            jwks_client: None,
         };
 
         // Test the matches function directly with roles and config

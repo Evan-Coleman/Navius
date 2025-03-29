@@ -1,2 +1,3 @@
 # Ignore Bruno environment files
 *_environment.bru 
+.env

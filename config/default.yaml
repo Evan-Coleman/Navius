@@ -34,23 +34,20 @@ auth:
   # The following values must be set through environment variables:
   # - NAVIUS_TENANT_ID
   # - NAVIUS_CLIENT_ID
-  # - NAVIUS_AUDIENCE
-  # - NAVIUS_SCOPE
-  # - NAVIUS_TOKEN_URL
+  # - NAVIUS_CLIENT_SECRET
   default_provider: "entra"
   providers:
     entra:
       enabled: true
-      client_id: "${ENTRA_CLIENT_ID}"
+      client_id: "${NAVIUS_CLIENT_ID}"
       jwks_uri: "https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys"
-      issuer_url: "https://sts.windows.net/{tenant}/v2.0"
-      audience: "api://${CLIENT_ID}"
+      # Audience and issuer are derived automatically
       role_mappings:
-        admin: ["Application.Admin"]
-        read_only: ["Application.Read"]
-        full_access: ["Application.FullAccess"]
+        admin: ["admin"]
+        read_only: ["read"]
+        full_access: ["full"]
       provider_specific:
-        entra_tenant_id: "${ENTRA_TENANT_ID}"
+        entra_tenant_id: "${NAVIUS_TENANT_ID}"
         entra_token_version: "2.0"
       refresh_rate_limit:
         max_requests: 5
