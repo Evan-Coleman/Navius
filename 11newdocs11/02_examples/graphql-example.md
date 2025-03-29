@@ -1241,6 +1241,6 @@ This example has demonstrated how to build a complete GraphQL API using Navius a
 - Troubleshooting tips and best practices
 
 For more examples and in-depth information, refer to:
-- [Navius API Documentation](../05_reference/api/graphql.md)
+- [Navius API Documentation](../05_reference/01_api/graphql.md)
 - [async-graphql Crate Documentation](https://docs.rs/async-graphql)
 - [GraphQL Official Specification](https://spec.graphql.org/) 

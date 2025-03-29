@@ -7,8 +7,8 @@ related_documents:
   - 02_examples/database-integration-example.md
   - 02_examples/error-handling-example.md
   - 01_getting_started/first-steps.md
-  - 03_reference/01_api/router-api.md
-last_updated: March 27, 2025
+  - 05_reference/01_api/router-api.md
+last_updated: March 30, 2025
 version: 1.1
 status: stable
 ---
@@ -332,7 +332,7 @@ After mastering the basics of REST APIs with Navius, consider:
 4. Exploring GraphQL as an alternative to REST
 5. Implementing WebSockets for real-time updates
 
-For more examples, see the [GraphQL Example](../02_examples/graphql-example.md) or [Dependency Injection Example](../02_examples/dependency-injection-example.md).
+For more examples, see the [GraphQL Example](graphql-example.md) or [Dependency Injection Example](dependency-injection-example.md).
 
 ### Task Service Implementation
 

@@ -106,7 +106,7 @@ authentication-example/
 
 First, let's set up the authentication configuration in `config/default.yaml`:
 
-```yaml
+```
 server:
   host: "127.0.0.1"
   port: 8080
@@ -124,7 +124,7 @@ auth:
     login: "/auth/login"
     register: "/auth/register"
     refresh: "/auth/refresh"
-```rust
+```
 
 ### Models
 
@@ -1086,7 +1086,7 @@ pub async fn authenticate_with_oidc(&self, provider: &str, code: &str) -> Result
     // Generate application tokens
     self.generate_tokens(&user)
 }
-```rust
+```
 
 ### Multi-Factor Authentication
 
@@ -1110,7 +1110,7 @@ pub async fn verify_totp(&self, user_id: &str, token: &str) -> Result<bool, AppE
     // Check if token is valid (allowing one interval before/after for clock skew)
     Ok(totp.check(token, 1))
 }
-```rust
+```
 
 ## Troubleshooting
 
@@ -1163,7 +1163,10 @@ After implementing basic authentication:
 5. **Set up monitoring for suspicious auth activity**
 6. **Create a token blacklist** for immediate token revocation
 
-For more examples, see:
-- [REST API Example](02_examples/rest-api-example.md) for a complete API implementation
-- [Error Handling Example](02_examples/error-handling-example.md) for robust error handling
-- [Custom Service Example](02_examples/custom-service-example.md) for service architecture
+## Related Examples
+
+For more advanced usage and context, check out these related examples:
+
+- [REST API Example](rest-api-example.md) for a complete API implementation
+- [Error Handling Example](error-handling-example.md) for robust error handling
+- [Custom Service Example](custom-service-example.md) for service architecture

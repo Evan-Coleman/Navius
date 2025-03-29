@@ -960,7 +960,9 @@ Now that you've implemented a robust error handling system, consider:
 3. Implementing custom error serialization for different output formats (XML, etc.)
 4. Adding internationalization (i18n) support for error messages
 
-For related examples, see:
-- [REST API Example](02_examples/rest-api-example.md) for a complete API implementation
-- [Custom Service Example](02_examples/custom-service-example.md) for service-level error handling
-- [Authentication Example](02_examples/authentication-example.md) for security-related error handling 
+## Related Examples
+
+For additional examples and error handling patterns, see:
+- [REST API Example](rest-api-example.md) for a complete API implementation
+- [Custom Service Example](custom-service-example.md) for service-level error handling
+- [Authentication Example](authentication-example.md) for security-related error handling 
