@@ -1,0 +1,96 @@
+{
+  "defined_features": {
+    "default": [
+      "production",
+      "tracing",
+      "metrics",
+      "logging",
+      "database",
+      "examples",
+      "prometheus"
+    ],
+    "production": [],
+    "development": [],
+    "tracing": [
+      "tracing-subscriber",
+      "tracing-appender"
+    ],
+    "metrics": [
+      "metrics-exporter-prometheus"
+    ],
+    "logging": [
+      "tracing"
+    ],
+    "redis": [],
+    "database": [],
+    "examples": [],
+    "test-utils": [],
+    "experimental": [],
+    "reliability": [],
+    "caching": [],
+    "auth": [],
+    "advanced_metrics": [],
+    "prometheus": [
+      "metrics-exporter-prometheus"
+    ],
+    "dynatrace": [
+      "dep:opentelemetry-dynatrace"
+    ],
+    "opentelemetry-jaeger": [
+      "dep:opentelemetry-jaeger"
+    ],
+    "otlp": [
+      "dep:opentelemetry-otlp"
+    ],
+    "postgres": [
+      "database"
+    ],
+    "sqlx-macros": [],
+    "rusqlite": [
+      "[]  # Placeholder for future SQLite support"
+    ]
+  },
+  "feature_usage": {
+    "std": [
+      "target/release/build/crunchy-57f5b2c92120eeec/out/lib.rs"
+    ],
+    "metrics": [
+      "src/core/features/runtime.rs"
+    ],
+    "caching": [
+      "src/core/features/runtime.rs"
+    ],
+    "reliability": [
+      "src/core/features/runtime.rs"
+    ],
+    "advanced_metrics": [
+      "src/core/features/runtime.rs"
+    ],
+    "auth": [
+      "src/core/features/runtime.rs"
+    ],
+    "opentelemetry-jaeger": [
+      "src/core/observability/mod.rs",
+      "src/core/observability/opentelemetry.rs",
+      "src/core/observability/service.rs"
+    ],
+    "otlp": [
+      "src/core/observability/mod.rs",
+      "src/core/observability/opentelemetry.rs",
+      "src/core/observability/service.rs"
+    ],
+    "default": [
+      "src/core/handlers/core_actuator.rs"
+    ],
+    "examples": [
+      "src/core/handlers/core_actuator.rs"
+    ],
+    "production": [
+      "src/core/handlers/core_actuator.rs"
+    ]
+  },
+  "stats": {
+    "total_files": 165,
+    "files_with_features": 6
+  }
+}

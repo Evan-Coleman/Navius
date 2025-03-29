@@ -19,6 +19,7 @@ use crate::{
     utils::api_resource::ApiResourceRegistry,
 };
 
+#[cfg(feature = "auth")]
 use crate::core::auth::MockTokenClient;
 use crate::core::cache::CacheRegistry;
 use crate::core::models::DependencyStatus;

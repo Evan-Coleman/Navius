@@ -2,14 +2,16 @@ use axum::{
     extract::State,
     routing::{Router, get, post},
 };
+#[cfg(feature = "metrics")]
 use metrics_exporter_prometheus::PrometheusBuilder;
 use std::{sync::Arc, time::SystemTime};
 
+#[cfg(feature = "auth")]
+use crate::core::auth::middleware::EntraAuthLayer;
 use crate::core::handlers::health_dashboard_handler::{
     clear_dashboard_history, health_dashboard_handler, register_dynamic_indicator,
 };
 use crate::core::{
-    auth::middleware::EntraAuthLayer,
     config::app_config::AppConfig,
     handlers::{
         self, core_actuator, core_docs,
@@ -31,6 +33,7 @@ impl CoreRouter {
         let auth_enabled = state.config.auth.enabled;
 
         // Create admin auth middleware only if auth is enabled
+        #[cfg(feature = "auth")]
         let admin_auth = if auth_enabled {
             Some(EntraAuthLayer::from_app_config_require_admin(&state.config))
         } else {
@@ -55,6 +58,7 @@ impl CoreRouter {
             .route("/dashboard/register", post(register_dynamic_indicator));
 
         // Apply authentication layers if enabled
+        #[cfg(feature = "auth")]
         let actuator_routes = if auth_enabled {
             actuator_routes.layer(admin_auth.unwrap())
         } else {
@@ -72,10 +76,11 @@ impl CoreRouter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        core::{auth::EntraTokenClient, utils::api_resource::ApiResourceRegistry},
-        models::{DetailedHealthResponse, HealthCheckResponse},
-    };
+    #[cfg(feature = "auth")]
+    use crate::core::auth::EntraTokenClient;
+    use crate::core::utils::api_resource::ApiResourceRegistry;
+    use crate::models::{DetailedHealthResponse, HealthCheckResponse};
+
     use axum::{
         Router,
         body::{self, Body},
@@ -92,6 +97,7 @@ mod tests {
         config.auth.enabled = auth_enabled;
 
         // Add a default provider and role mappings to avoid the "Default provider not found" error
+        #[cfg(feature = "auth")]
         if auth_enabled {
             use crate::core::config::app_config::ProviderConfig;
             use std::collections::HashMap;
@@ -121,15 +127,21 @@ mod tests {
             config.auth.default_provider = "test-provider".to_string();
         }
 
-        let metrics_recorder = PrometheusBuilder::new().build_recorder();
-        let metrics_handle = metrics_recorder.handle();
+        #[cfg(feature = "metrics")]
+        let metrics_handle = {
+            let metrics_recorder = PrometheusBuilder::new().build_recorder();
+            Some(metrics_recorder.handle())
+        };
+
+        #[cfg(not(feature = "metrics"))]
+        let metrics_handle = None;
 
         Arc::new(AppState {
             client: None,
             config,
             start_time: SystemTime::now(),
             cache_registry: None,
-            metrics_handle: Some(metrics_handle),
+            metrics_handle,
             token_client: None,
             resource_registry: None,
             service_registry: Arc::new(ServiceRegistry::new()),

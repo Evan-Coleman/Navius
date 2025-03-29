@@ -2,6 +2,7 @@ pub mod metrics_handler;
 pub mod metrics_service;
 
 // Import required external dependencies
+#[cfg(feature = "metrics")]
 use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
 
 // Re-export key components for easier access
@@ -12,10 +13,17 @@ pub use metrics_handler::{
 pub use metrics_service::metrics_endpoint_handler;
 
 /// Initialize metrics with Prometheus for easy recording
+#[cfg(feature = "metrics")]
 pub fn init_metrics() -> PrometheusHandle {
     PrometheusBuilder::new()
         .install_recorder()
         .expect("Failed to install Prometheus recorder")
+}
+
+#[cfg(not(feature = "metrics"))]
+pub fn init_metrics() -> () {
+    // No-op when metrics feature is disabled
+    ()
 }
 
 // Metric recording functions with static strings

@@ -1,9 +1,11 @@
 //! Middleware module for Navius application
 
 // Re-export middleware components from their respective modules
+#[cfg(feature = "auth")]
 pub use crate::core::auth::middleware::*;
 
 /// Auth middleware
+#[cfg(feature = "auth")]
 pub mod auth {
     use axum::http::StatusCode;
     use axum::response::IntoResponse;

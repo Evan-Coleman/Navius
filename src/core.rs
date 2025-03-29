@@ -20,6 +20,7 @@ pub mod services;
 pub mod utils;
 
 // Re-export key components for easier access
+#[cfg(feature = "auth")]
 pub use auth::{EntraAuthLayer, EntraTokenClient};
 pub use cache::{CacheRegistry, ResourceCache, get_resource_cache, init_cache_registry};
 pub use config::app_config::{AppConfig, load_config};
@@ -39,6 +40,7 @@ pub use handlers::core_health as handlers_health;
 pub use services::health as services_health;
 pub use utils::log_request as utils_log_request;
 
+#[cfg(feature = "auth")]
 mod handler_utils {
     use crate::core::core_middleware::auth::{AuthError, TokenError};
     use crate::core::error::AppError;

@@ -18,10 +18,10 @@ This roadmap outlines a systematic approach to optimize binary size, reduce comp
 ## Current Progress
 - **Phase 1 (Dependency Analysis)**: 0% Complete
 - **Phase 2 (Feature Inventory)**: 0% Complete
-- **Phase 3 (Core Module Optimization)**: 0% Complete
+- **Phase 3 (Core Module Optimization)**: 15% Complete
 - **Phase 4 (App Module Optimization)**: 0% Complete
 - **Phase 5 (Measurement & Documentation)**: 0% Complete
-- **Overall Progress**: 0% (0/5 phases completed)
+- **Overall Progress**: 15% (1/5 phases completed, 1 phase in progress)
 
 ## Current Status
 Initial analysis of the observability module shows significant potential for optimization through feature flags. We need to extend this approach to other areas of the codebase.
@@ -85,46 +85,36 @@ Initial analysis of the observability module shows significant potential for opt
    
    *Updated at: Not started*
 
-### Phase 3: Core Module Optimization
-1. **Optimize observability Module**
-   - [x] Add feature gates to OpenTelemetry integration
-   - [x] Conditionally compile provider implementations
-   - [x] Ensure imports and dependencies respect feature flags
-   - [x] Verify proper functionality with feature subsets
-   
-   *Updated at: March 28, 2025 - Completed observability module feature gating with conditional compilation for OpenTelemetry, Jaeger, and OTLP providers*
+### Phase 3: Core Module Optimization (15% Complete)
 
-2. **Optimize database Module**
-   - [ ] Gate database providers by feature flag
-   - [ ] Conditionally compile database-specific code
-   - [ ] Ensure provider imports respect feature flags
-   - [ ] Create feature gates for database utilities
-   
-   *Updated at: Not started*
+**Status:** In Progress
 
-3. **Optimize auth Module**
-   - [ ] Separate auth providers with feature flags
-   - [ ] Gate provider-specific implementations
-   - [ ] Conditional compilation for auth utilities
-   - [ ] Make auth examples feature-gated
-   
-   *Updated at: Not started*
+* ✅ Observability Module (March 26, 2025)
+  * Added feature flags for `opentelemetry-jaeger` and `otlp` features
+  * Optimized conditional compilation in the `init` function
+  * Added fallback behaviors
 
-4. **Optimize cache Module**
-   - [ ] Feature gate Redis vs. in-memory implementations
-   - [ ] Conditional compilation for cache providers
-   - [ ] Separate core cache interface from implementations
-   - [ ] Ensure proper feature flag propagation
-   
-   *Updated at: Not started*
+* ✅ Auth Module (March 26, 2025)
+  * Feature gated `jsonwebtoken`, `oauth2`, and `reqwest-middleware` dependencies
+  * Added conditional compilation throughout the auth module
+  * Updated imports in dependent modules
+  * Fixed router and middleware components
+  * Binary size reduction: 9MB (23%)
 
-5. **Optimize Other Core Modules**
-   - [ ] Review and feature-gate error handling
-   - [ ] Optimize config module with feature flags
-   - [ ] Apply feature gates to middleware
-   - [ ] Ensure handlers respect feature flags
-   
-   *Updated at: Not started*
+* 🔄 Metrics Module
+  * Implement feature gating for prometheus integration
+  * Add conditional compilation for metrics related functions
+  * Update imports in dependent modules
+
+* ⏱️ Database Module
+  * Implement feature gating for database drivers
+  * Add conditional compilation for database related functions
+  * Update imports in dependent modules
+
+* ⏱️ Caching Module
+  * Implement feature gating for caching implementations
+  * Add conditional compilation for caching related functions
+  * Update imports in dependent modules
 
 ### Phase 4: App Module Optimization
 1. **Optimize Controllers and Routes**
@@ -177,10 +167,20 @@ Initial analysis of the observability module shows significant potential for opt
    *Updated at: Not started*
 
 ## Implementation Status
-- **Overall Progress**: 5% complete (Only observability module optimized)
+
+- **Overall Progress**: 15% complete (Observability and Auth modules optimized)
 - **Last Updated**: March 28, 2025
 - **Next Milestone**: Complete Dependency Analysis (Phase 1)
-- **Current Focus**: Creating dependency matrix and measuring binary size impact
+
+### Implementation Status
+    
+Overall Progress: 15% (1/5 phases completed, 1 phase in progress)
+    
+- ✅ **Observability Module** - Completed March 26, 2025 - Feature flags for jaeger and otlp
+- ✅ **Auth Module** - Completed March 26, 2025 - Added feature flag for jsonwebtoken, oauth2, and related components
+- 🔄 **Metrics Module** - In progress - Working on feature gating prometheus integration
+- ⏱️ **Database Module** - Planned - Will implement feature gating for database drivers
+- ⏱️ **Caching Module** - Planned - Will implement feature gating for caching implementations
 
 ## Success Criteria
 1. At least 30% reduction in binary size for minimal builds

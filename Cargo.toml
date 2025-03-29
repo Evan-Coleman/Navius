@@ -27,7 +27,7 @@ experimental = []
 reliability = []
 # Features referenced in runtime.rs
 caching = []
-auth = []
+auth = ["dep:jsonwebtoken", "dep:oauth2", "dep:reqwest-middleware"]
 advanced_metrics = []
 # Observability providers
 prometheus = ["metrics-exporter-prometheus"]
@@ -85,9 +85,9 @@ tracing-futures = "0.2.5"
 validator = { version = "0.20.0", features = ["derive"] }
 
 # Authentication
-jsonwebtoken = "9.3.1"
-oauth2 = { version = "5.0.0", features = ["reqwest"] }
-reqwest-middleware = "0.4.1"
+jsonwebtoken = { version = "9.3.1", optional = true }
+oauth2 = { version = "5.0.0", features = ["reqwest"], optional = true }
+reqwest-middleware = { version = "0.4.1", optional = true }
 futures = "0.3.31"
 futures-util = { version = "0.3.31", features = ["std"] }
 

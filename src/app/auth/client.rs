@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(feature = "auth")]
 //! User authentication extensions and customizations
 //!
 //! This module allows developers to customize and extend the core authentication functionality.

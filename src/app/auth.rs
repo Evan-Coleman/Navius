@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(feature = "auth")]
 //! # Application Authentication
 //!
 //! This module contains user-facing authentication functionality that can be customized.
 //! Core authentication capabilities are provided by `crate::core::auth`.
 
 // Re-export core auth functionality
+#[cfg(feature = "auth")]
 pub use crate::core::auth::*;
 
 // Example: Create a custom client module
+#[cfg(feature = "auth")]
 pub mod client;

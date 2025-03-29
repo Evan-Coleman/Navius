@@ -1,4 +1,5 @@
 use metrics::{Label, counter, gauge, histogram};
+#[cfg(feature = "metrics")]
 use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
 use std::collections::HashMap;
 use tracing::error;
@@ -6,6 +7,7 @@ use tracing::error;
 use crate::core::error::AppError;
 
 /// Initialize metrics with Prometheus
+#[cfg(feature = "metrics")]
 pub fn init_metrics() -> PrometheusHandle {
     PrometheusBuilder::new()
         .install_recorder()
@@ -13,8 +15,14 @@ pub fn init_metrics() -> PrometheusHandle {
 }
 
 /// Export metrics in Prometheus format
+#[cfg(feature = "metrics")]
 pub fn export_metrics(handle: &PrometheusHandle) -> String {
     handle.render()
+}
+
+#[cfg(not(feature = "metrics"))]
+pub fn export_metrics(_handle: &()) -> String {
+    "Metrics disabled: feature 'metrics' not enabled".to_string()
 }
 
 /// Create a unique key for a metric
@@ -132,6 +140,7 @@ pub fn try_get_gauge_with_labels(_name: &str, _labels: &[(&str, String)]) -> Opt
 }
 
 /// Try to record metrics and return the raw metrics text
+#[cfg(feature = "metrics")]
 pub fn try_record_metrics(handle: &PrometheusHandle) -> Result<String, String> {
     // Record a test metric to ensure there's always something in the output
     record_counter("test_metric", 1);
@@ -139,10 +148,21 @@ pub fn try_record_metrics(handle: &PrometheusHandle) -> Result<String, String> {
     Ok(export_metrics(handle))
 }
 
+#[cfg(not(feature = "metrics"))]
+pub fn try_record_metrics(_handle: &()) -> Result<String, String> {
+    Ok("Metrics disabled: feature 'metrics' not enabled".to_string())
+}
+
 /// Handle metrics requests and return the metrics endpoint
+#[cfg(feature = "metrics")]
 pub fn metrics_handler(handle: &PrometheusHandle) -> Result<String, AppError> {
     let metrics_text = export_metrics(handle);
     Ok(metrics_text)
+}
+
+#[cfg(not(feature = "metrics"))]
+pub fn metrics_handler(_handle: &()) -> Result<String, AppError> {
+    Ok("Metrics disabled: feature 'metrics' not enabled".to_string())
 }
 
 #[cfg(test)]

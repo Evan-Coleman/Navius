@@ -6,7 +6,9 @@
 pub mod core;
 pub mod registry;
 
+#[cfg(feature = "auth")]
 use crate::core::auth::TokenClient;
+#[cfg(feature = "auth")]
 use crate::core::auth::mock::MockTokenClient;
 use crate::core::cache;
 use crate::core::cache::CacheRegistry;
@@ -91,6 +93,7 @@ pub fn register_resource<T: ApiResource + 'static>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "auth")]
     use crate::core::auth::MockTokenClient;
     use crate::core::cache::CacheRegistry;
     use crate::core::router::ServiceRegistry;

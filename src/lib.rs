@@ -32,6 +32,7 @@ pub mod core {
     pub mod api;
 
     // Authentication and authorization
+    #[cfg(feature = "auth")]
     pub mod auth;
 
     // Caching functionality
@@ -121,6 +122,7 @@ pub mod core {
     pub mod utils;
 
     // Re-export key components for easier access
+    #[cfg(feature = "auth")]
     pub use self::auth::middleware::EntraAuthLayer;
     pub use self::cache::ResourceCache;
     pub use self::cache::cache_manager::{CacheRegistry, get_resource_cache, init_cache_registry};
@@ -133,6 +135,7 @@ pub mod core {
     pub use self::utils::api_resource::{
         ApiHandlerOptions, ApiResource, ApiResourceRegistry, create_api_handler,
     };
+    #[cfg(feature = "auth")]
     pub use crate::core::auth::TokenClient;
 
     // Export specific items from modules to avoid name conflicts
@@ -229,6 +232,7 @@ pub mod utils {
 }
 
 /// Authentication and authorization
+#[cfg(feature = "auth")]
 pub mod auth {
     pub use crate::core::auth::*;
 }

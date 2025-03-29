@@ -3,13 +3,16 @@ use axum::{
     extract::State,
     routing::{get, post},
 };
+#[cfg(feature = "metrics")]
 use metrics_exporter_prometheus::PrometheusHandle;
 use reqwest::Client;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+#[cfg(feature = "auth")]
+use crate::core::auth::TokenClient;
 use crate::core::{
-    auth::TokenClient, cache::cache_manager::CacheRegistry, config::app_config::AppConfig,
+    cache::cache_manager::CacheRegistry, config::app_config::AppConfig,
     utils::api_resource::ApiResourceRegistry,
 };
 
@@ -64,10 +67,18 @@ pub struct AppState {
     pub cache_registry: Option<Arc<CacheRegistry>>,
 
     /// Token client for authentication
+    #[cfg(feature = "auth")]
     pub token_client: Option<Arc<dyn TokenClient>>,
 
+    #[cfg(not(feature = "auth"))]
+    pub token_client: Option<()>,
+
     /// Metrics handler for prometheus metrics
+    #[cfg(feature = "metrics")]
     pub metrics_handle: Option<PrometheusHandle>,
+
+    #[cfg(not(feature = "metrics"))]
+    pub metrics_handle: Option<()>,
 
     /// API resource registry
     pub resource_registry: Option<Arc<ApiResourceRegistry>>,
@@ -137,12 +148,14 @@ impl RouterBuilder {
     }
 
     /// Add a token client for authentication
+    #[cfg(feature = "auth")]
     pub fn with_token_client(mut self, token_client: Option<Arc<dyn TokenClient>>) -> Self {
         self.app_state.token_client = token_client;
         self
     }
 
     /// Add a metrics handle
+    #[cfg(feature = "metrics")]
     pub fn with_metrics(mut self, metrics_handle: Option<PrometheusHandle>) -> Self {
         self.app_state.metrics_handle = metrics_handle;
         self

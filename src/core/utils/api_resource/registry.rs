@@ -4,6 +4,7 @@ use std::fmt::Debug;
 use std::sync::{Arc, RwLock};
 use tracing::{debug, info};
 
+#[cfg(feature = "auth")]
 use crate::core::auth::MockTokenClient;
 use crate::core::cache::CacheRegistry;
 use crate::core::models::DependencyStatus;
@@ -188,6 +189,7 @@ impl ApiResourceError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "auth")]
     use crate::core::auth::MockTokenClient;
     use crate::core::cache::CacheRegistry;
     use crate::core::router::ServiceRegistry;

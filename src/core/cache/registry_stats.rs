@@ -4,6 +4,7 @@ use super::cache_manager::{CacheRegistry, CacheStats};
 use crate::core::metrics::metrics_handler::export_metrics;
 
 /// Get cache statistics with metrics data for all resource types in the registry
+#[cfg(feature = "metrics")]
 pub fn get_all_cache_stats_with_metrics(
     registry: &CacheRegistry,
     handle: &metrics_exporter_prometheus::PrometheusHandle,
@@ -51,6 +52,15 @@ pub fn get_all_cache_stats_with_metrics(
     }
 
     result
+}
+
+#[cfg(not(feature = "metrics"))]
+pub fn get_all_cache_stats_with_metrics(
+    registry: &CacheRegistry,
+    _handle: &(),
+) -> HashMap<String, CacheStats> {
+    // When metrics are disabled, just return stats from registry
+    registry.get_all_stats()
 }
 
 /// Extract the resource type from a metric line
