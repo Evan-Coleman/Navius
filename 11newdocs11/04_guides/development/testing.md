@@ -8,14 +8,17 @@ tags:
   - integration-tests
   - test-coverage
 related:
+  - testing-guide.md
   - development-workflow.md
   - ../../reference/standards/naming-conventions.md
   - ../../contributing/test-implementation-template.md
-last_updated: March 27, 2025
-version: 1.0
+last_updated: April 8, 2025
+version: 1.1
 ---
 
 # Navius Testing Guide
+
+> **Note:** For a more comprehensive and detailed guide to testing in Navius, please refer to the [Complete Testing Guide](./testing-guide.md), which covers all testing aspects in depth.
 
 ## Overview
 This guide outlines the testing methodology, tools, and best practices used in Navius applications. It covers different testing approaches, from unit testing to integration testing, as well as utilities and patterns that make testing easier and more effective.

@@ -366,9 +366,14 @@ To verify your development environment:
 
 ## Next Steps
 
-- Continue to [First Steps](./) to learn about basic Navius concepts
-- Try building a [Hello World Application](./)
-- Review the [Coding Standards](./) before contributing code
+After setting up your development environment, we recommend exploring:
+
+- [IDE Setup Guide](../04_guides/development/ide-setup.md) - Configure your editor for optimal Navius development
+- [Git Workflow Guide](../04_guides/development/git-workflow.md) - Learn version control best practices for Navius
+- [Testing Guide](../04_guides/development/testing-guide.md) - Understand how to test Navius applications
+- [Debugging Guide](../04_guides/development/debugging-guide.md) - Learn techniques for troubleshooting issues
+
+For a quick start project, see our [Hello World Tutorial](./hello-world.md).
 
 ## Related Documents
 

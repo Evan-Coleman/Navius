@@ -11,13 +11,14 @@ tags:
   - tutorial
 related:
   - installation.md
+  - quickstart.md
   - development-setup.md
   - first-steps.md
   - hello-world.md
   - ../04_guides/development/development-workflow.md
   - ../05_reference/architecture/principles.md
-last_updated: March 27, 2025
-version: 1.1
+last_updated: April 8, 2025
+version: 1.2
 status: active
 ---
 
@@ -31,10 +32,11 @@ Navius is a modern, opinionated web framework for Rust that combines the perform
 
 ## Quick Navigation
 
-- [Installation Guide](./) - Set up Navius and its dependencies
-- [Development Setup](./) - Configure your development environment
-- [First Steps](./) - Create your first Navius application
-- [Hello World Tutorial](./) - Build a simple REST API
+- [Quickstart Guide](./quickstart.md) - Get up and running in minutes
+- [Installation Guide](./installation.md) - Set up Navius and its dependencies
+- [Development Setup](./development-setup.md) - Configure your development environment
+- [First Steps](./first-steps.md) - Create your first Navius application
+- [Hello World Tutorial](./hello-world.md) - Build a simple REST API
 
 ## Getting Started in 5 Minutes
 
