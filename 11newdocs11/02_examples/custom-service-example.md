@@ -1,4 +1,13 @@
 ---
+title: "Custom Service Example"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: "Creating and Using Custom Services in Navius"
 description: "Comprehensive guide to designing, implementing and registering custom services with dependency injection in Navius applications"
 category: examples

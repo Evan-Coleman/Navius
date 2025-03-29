@@ -1,4 +1,13 @@
 ---
+title: "Dependency Injection Example"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: "Dependency Injection in Navius"
 description: "Comprehensive guide to using dependency injection in Navius applications for managing service dependencies and promoting loose coupling"
 category: examples

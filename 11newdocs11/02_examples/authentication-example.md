@@ -14,7 +14,7 @@ related:
   - 02_examples/rest-api-example.md
   - 02_examples/error-handling-example.md
   - 04_guides/security.md
-last_updated: March 27, 2025
+last_updated: March 31, 2025
 version: 1.0
 status: stable
 ---

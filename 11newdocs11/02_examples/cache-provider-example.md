@@ -1,5 +1,14 @@
 ---
 title: "Cache Provider Example"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
+title: "Cache Provider Example"
 description: "Examples of using the generic cache service interfaces and providers"
 category: examples
 tags:

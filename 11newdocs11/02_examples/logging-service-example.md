@@ -1,3 +1,12 @@
+---
+title: "Logging Service Example"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
 # Logging Service Generalization
 
 This document explains how to use the generic logging interface in the Navius application. The logging service has been redesigned to use a provider-based approach with pluggable implementations.

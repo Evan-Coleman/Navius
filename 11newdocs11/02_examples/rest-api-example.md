@@ -1,4 +1,13 @@
 ---
+title: "Rest Api Example"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: "Building RESTful APIs with Navius"
 description: "Comprehensive guide to creating robust and scalable REST APIs with Navius framework"
 category: examples

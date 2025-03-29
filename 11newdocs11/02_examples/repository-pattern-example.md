@@ -1,3 +1,12 @@
+---
+title: "Repository Pattern Example"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
 # Repository Pattern Example
 
 This guide demonstrates how to use the generic repository pattern in Navius to manage domain entities.

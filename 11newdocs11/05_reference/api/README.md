@@ -8,8 +8,8 @@ tags:
   - patterns
 related:
   - ../README.md
-  - ../../guides/features/api-integration.md
-last_updated: March 27, 2025
+  - ../../04_guides/features/api-integration.md
+last_updated: March 31, 2025
 version: 1.0
 ---
 
@@ -26,8 +26,8 @@ This section contains detailed technical documentation for the Navius API. It in
 
 For API development, the following documents are essential:
 
-- [API Resources](resources.md)
-- [API Integration Guide](../../guides/features/api-integration.md)
+- [API Resources](api-resource.md)
+- [API Integration Guide](../../04_guides/features/api-integration.md)
 
 ## API Overview
 

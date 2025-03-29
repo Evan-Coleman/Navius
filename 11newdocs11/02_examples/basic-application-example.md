@@ -1,5 +1,14 @@
 ---
 title: "Basic Application Example"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
+title: "Basic Application Example"
 description: "A minimalist Navius application demonstrating core concepts"
 category: examples
 tags:

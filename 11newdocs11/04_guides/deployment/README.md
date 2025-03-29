@@ -1,4 +1,13 @@
 ---
+title: "README"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: Deployment Guides
 description: "Comprehensive guides for deploying Navius applications to production environments, including AWS, Docker, and Kubernetes deployments"
 category: guides

@@ -1,3 +1,20 @@
+---
+title: "Pet Database API Reference"
+description: "Reference documentation for the Pet Database API, including CRUD operations and architecture details"
+category: reference
+tags:
+  - api
+  - database
+  - pets
+  - repository
+related:
+  - database-api.md
+  - ../patterns/repository-pattern.md
+  - ../../02_examples/database-service-example.md
+last_updated: March 31, 2025
+version: 1.0
+---
+
 # Pet Database API
 
 ## Overview

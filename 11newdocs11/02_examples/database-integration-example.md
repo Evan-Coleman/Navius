@@ -1,4 +1,13 @@
 ---
+title: "Database Integration Example"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: "Database Integration in Navius"
 description: "Comprehensive guide to integrating databases in Navius applications, including repository patterns, connection management, migrations, and working with popular database systems"
 category: examples

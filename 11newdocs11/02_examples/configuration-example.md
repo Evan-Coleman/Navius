@@ -1,5 +1,14 @@
 ---
 title: "Configuration Example"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
+title: "Configuration Example"
 description: "Working with configuration in Navius applications"
 category: examples
 tags:

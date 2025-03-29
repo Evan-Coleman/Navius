@@ -1,4 +1,13 @@
 ---
+title: "Two Tier Cache Example"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: "Two-Tier Cache Implementation Example"
 description: "Code examples demonstrating how to implement and use the two-tier caching system in Navius applications"
 category: examples

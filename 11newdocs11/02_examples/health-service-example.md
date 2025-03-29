@@ -1,5 +1,14 @@
 ---
 title: "Health Service Example"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
+title: "Health Service Example"
 description: "Examples of using the generic health service with custom indicators and providers"
 category: examples
 tags:

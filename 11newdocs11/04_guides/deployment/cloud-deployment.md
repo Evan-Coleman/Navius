@@ -10,9 +10,9 @@ tags:
   - gcp
 related:
   - production-deployment.md
-  - ../../reference/configuration/environment-variables.md
+  - ../../05_reference/configuration/environment-variables.md
   - ../development/project-navigation.md
-last_updated: March 27, 2025
+last_updated: April 1, 2025
 version: 1.0
 ---
 
@@ -463,5 +463,5 @@ gcloud alpha monitoring policies create \
 ## Related Documents
 
 - [Production Deployment Guide](production-deployment.md) - General production deployment guidelines
-- [Environment Variables Reference](../../reference/configuration/environment-variables.md) - Configuration options
+- [Environment Variables Reference](../../05_reference/configuration/environment-variables.md) - Configuration options
 - [Project Navigation](../development/project-navigation.md) - Understanding the project structure 

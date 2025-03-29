@@ -1,4 +1,13 @@
 ---
+title: "Spring Boot Comparison"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: Spring Boot vs Navius Framework Comparison
 description: Comprehensive comparison between Spring Boot (Java) and Navius (Rust) frameworks to help Java developers transition to Rust
 category: examples

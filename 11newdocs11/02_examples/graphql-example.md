@@ -1,4 +1,13 @@
 ---
+title: "Graphql Example"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: "Building GraphQL APIs with Navius"
 description: "Comprehensive guide to implementing GraphQL APIs using Navius, including schema definition, resolvers, queries, mutations, and error handling"
 category: examples

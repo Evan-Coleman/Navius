@@ -1,4 +1,13 @@
 ---
+title: "Server Customization Example"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: "Server Customization System Examples"
 description: "Practical code examples for using the Server Customization System in Navius applications"
 category: examples

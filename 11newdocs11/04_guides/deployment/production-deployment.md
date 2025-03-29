@@ -12,12 +12,12 @@ tags:
   - ci-cd
   - infrastructure
 related:
-  - ../guides/deployment/aws-deployment.md
-  - ../guides/deployment/docker-deployment.md
-  - ../guides/deployment/kubernetes-deployment.md
-  - ../reference/configuration/environment-variables.md
-  - ../guides/features/authentication.md
-last_updated: March 27, 2025
+  - aws-deployment.md
+  - docker-deployment.md
+  - kubernetes-deployment.md
+  - ../../05_reference/configuration/environment-variables.md
+  - ../features/authentication.md
+last_updated: April 1, 2025
 version: 1.0
 ---
 # Navius Deployment Guide
@@ -449,4 +449,3 @@ Navius's efficient resource usage, fast startup time, and resilient design make 
 ## Related Documents
 - [Installation Guide](../../01_getting_started/installation.md) - How to install the application
 - [Development Workflow](../development/development-workflow.md) - Development best practices
-

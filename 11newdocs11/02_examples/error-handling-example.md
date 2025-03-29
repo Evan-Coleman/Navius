@@ -1,4 +1,13 @@
 ---
+title: "Error Handling Example"
+description: ""
+category: "Documentation"
+tags: []
+last_updated: "March 28, 2025"
+version: "1.0"
+---
+
+---
 title: "Comprehensive Error Handling in Navius"
 description: "A complete guide to implementing robust, consistent error handling in Navius applications with centralized error types, validation error handling, middleware integration, and client-friendly error responses"
 category: examples
