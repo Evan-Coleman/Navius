@@ -22,7 +22,7 @@ This pattern is implemented in the Navius framework through these components:
 
 Here's a simple example of how to use the repository pattern with a User entity:
 
-```rust
+```
 use uuid::Uuid;
 use serde::{Serialize, Deserialize};
 use async_trait::async_trait;
@@ -64,13 +64,13 @@ async fn user_repository_example() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-```rust
+```
 
 ## Creating Custom Entity Types
 
 To create your own entity type, implement the `Entity` trait:
 
-```rust
+```
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use crate::core::models::Entity;
@@ -121,13 +121,13 @@ impl Product {
         }
     }
 }
-```rust
+```
 
 ## Using Different Repository Providers
 
 The framework supports different storage providers:
 
-```rust
+```
 use crate::core::models::RepositoryConfig;
 use crate::core::services::repository_service::RepositoryService;
 
@@ -151,13 +151,13 @@ async fn configure_repository_providers() -> Result<(), Box<dyn std::error::Erro
     
     Ok(())
 }
-```rust
+```
 
 ## Creating Custom Repository Methods
 
 For specialized query needs beyond basic CRUD, you can create custom repository implementations:
 
-```rust
+```
 use crate::core::models::{Entity, Repository};
 use crate::core::services::error::ServiceError;
 use std::marker::PhantomData;
@@ -194,13 +194,13 @@ impl<R: Repository<User>> CustomUserRepository<R> {
         Ok(all_users.into_iter().filter(|u| u.role == role).collect())
     }
 }
-```rust
+```
 
 ## Testing With Mock Repositories
 
 The repository pattern makes testing business logic easy:
 
-```rust
+```
 use mockall::predicate::*;
 use mockall::mock;
 
@@ -243,7 +243,7 @@ async fn test_user_service() {
     assert!(result.is_some());
     assert_eq!(result.unwrap().username, "testuser");
 }
-```rust
+```
 
 ## Benefits of the Repository Pattern
 

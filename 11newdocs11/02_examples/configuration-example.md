@@ -19,7 +19,7 @@ This example demonstrates how to work with configuration in Navius applications.
 
 ## Project Structure
 
-```rust
+```
 configuration-example/
 ├── Cargo.toml
 ├── config/
@@ -38,7 +38,7 @@ configuration-example/
         ├── mod.rs
         ├── config.rs
         └── error.rs
-```rust
+```
 
 ## Implementation
 
@@ -46,7 +46,7 @@ configuration-example/
 
 #### `core/config.rs`
 
-```rust
+```
 use config::{Config, ConfigBuilder, ConfigError, Environment, File};
 use serde::Deserialize;
 use std::env;
@@ -177,7 +177,7 @@ pub fn load_test_config() -> Arc<AppConfig> {
         Err(_) => Arc::new(AppConfig::default()),
     }
 }
-```rust
+```
 
 ### Application Configuration Service
 
@@ -185,7 +185,7 @@ A service to access configuration values in a type-safe way.
 
 #### `app/services/config_service.rs`
 
-```rust
+```
 use crate::core::config::AppConfig;
 use std::sync::Arc;
 
@@ -246,13 +246,13 @@ impl ConfigService {
         format!("{}?user={}&password={}", db.url, db.username, db.password)
     }
 }
-```rust
+```
 
 ### Using Configuration in Main
 
 #### `main.rs`
 
-```rust
+```
 use std::net::SocketAddr;
 use std::sync::Arc;
 use axum::{Router, routing::get};
@@ -319,13 +319,13 @@ async fn main() -> Result<(), AppError> {
     
     Ok(())
 }
-```rust
+```
 
 ## Configuration Files
 
 ### `config/default.yaml`
 
-```yaml
+```
 app_name: "Configuration Example"
 environment: "development"
 
@@ -358,11 +358,11 @@ features:
 api_keys:
   weather_service: "dev_weather_api_key"
   payment_gateway: "dev_payment_api_key"
-```rust
+```
 
 ### `config/production.yaml`
 
-```yaml
+```
 environment: "production"
 
 server:
@@ -393,11 +393,11 @@ features:
 api_keys:
   weather_service: "${WEATHER_API_KEY}"
   payment_gateway: "${PAYMENT_API_KEY}"
-```rust
+```
 
 ### `config/test.yaml`
 
-```yaml
+```
 environment: "test"
 
 server:
@@ -415,7 +415,7 @@ logging:
 features:
   enable_metrics: false
   enable_tracing: false
-```rust
+```
 
 ## Running the Example
 
@@ -423,27 +423,27 @@ features:
 2. Navigate to the `examples/configuration-example` directory
 3. Run with default configuration:
 
-```bash
+```
 cargo run
-```rust
+```
 
 4. Run with production configuration:
 
-```bash
+```
 APP_ENV=production cargo run
-```rust
+```
 
 5. Override specific values with environment variables:
 
-```bash
+```
 APP_SERVER__PORT=9000 cargo run
-```rust
+```
 
 6. Access the configuration endpoint:
 
-```bash
+```
 curl http://localhost:3000/config
-```rust
+```
 
 ## Key Concepts Demonstrated
 

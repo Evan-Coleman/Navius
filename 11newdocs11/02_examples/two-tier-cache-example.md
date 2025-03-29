@@ -23,7 +23,7 @@ This example demonstrates how to implement and use the two-tier caching system i
 
 ## Basic Implementation
 
-```rust
+```
 use navius::app::cache::{create_two_tier_cache, create_typed_two_tier_cache};
 use navius::core::services::cache_service::CacheService;
 use std::time::Duration;
@@ -65,13 +65,13 @@ async fn setup_user_cache(cache_service: &CacheService) -> Result<(), AppError> 
     
     Ok(())
 }
-```rust
+```
 
 ## Fallback Behavior Demonstration
 
 This example shows how the two-tier cache handles fallback behavior:
 
-```rust
+```
 use navius::app::cache::create_two_tier_cache;
 use navius::core::services::cache_service::CacheService;
 use std::time::Duration;
@@ -106,13 +106,13 @@ async fn demonstrate_fallback(cache_service: &CacheService) -> Result<(), AppErr
     
     Ok(())
 }
-```rust
+```
 
 ## Development Environment Setup
 
 For development environments without Redis, you can use the memory-only two-tier cache:
 
-```rust
+```
 use navius::app::cache::create_memory_only_two_tier_cache;
 use navius::core::services::cache_service::CacheService;
 use std::time::Duration;
@@ -133,13 +133,13 @@ async fn setup_dev_cache(cache_service: &CacheService) -> Result<(), AppError> {
     
     Ok(())
 }
-```rust
+```
 
 ## Integration with Service Layer
 
 Here's how to integrate the two-tier cache with a service layer:
 
-```rust
+```
 use navius::app::cache::create_typed_two_tier_cache;
 use navius::core::services::cache_service::CacheService;
 use std::time::Duration;
@@ -183,13 +183,13 @@ impl UserService {
         Ok(None)
     }
 }
-```rust
+```
 
 ## Complete Application Example
 
 Here's a complete example showing how to set up and use the two-tier cache in an API endpoint:
 
-```rust
+```
 use axum::{
     routing::get,
     Router,
@@ -235,7 +235,7 @@ async fn get_user(
     let user = state.user_service.get_user(&id).await.unwrap();
     Json(user)
 }
-```rust
+```
 
 ## Best Practices
 

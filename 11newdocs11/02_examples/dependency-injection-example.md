@@ -65,7 +65,7 @@ Required dependencies:
 
 ## Project Structure
 
-```rust
+```
 dependency-injection-example/
 ├── Cargo.toml
 ├── config/
@@ -102,13 +102,13 @@ dependency-injection-example/
         └── services/
             ├── mod.rs
             └── service_registry.rs
-```rust
+```
 
 ## Core Dependency Injection Framework
 
 ### `core/services/service_registry.rs`
 
-```rust
+```
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -181,13 +181,13 @@ impl ServiceRegistry {
         Err(AppError::not_implemented("Trait-based service resolution is not implemented in this example"))
     }
 }
-```rust
+```
 
 ## Service Interfaces
 
 ### `app/services/interfaces/order_repository.rs`
 
-```rust
+```
 use async_trait::async_trait;
 use crate::app::models::order::{Order, OrderId};
 use crate::core::error::AppError;
@@ -200,11 +200,11 @@ pub trait OrderRepository: Send + Sync {
     async fn update(&self, order: &Order) -> Result<Order, AppError>;
     async fn delete(&self, id: OrderId) -> Result<bool, AppError>;
 }
-```rust
+```
 
 ### `app/services/interfaces/payment_processor.rs`
 
-```rust
+```
 use async_trait::async_trait;
 use crate::app::models::order::{Order, PaymentDetails};
 use crate::core::error::AppError;
@@ -215,11 +215,11 @@ pub trait PaymentProcessor: Send + Sync {
     async fn refund_payment(&self, payment_id: &str) -> Result<bool, AppError>;
     async fn verify_payment(&self, payment_id: &str) -> Result<bool, AppError>;
 }
-```rust
+```
 
 ### `app/services/interfaces/notifier.rs`
 
-```rust
+```
 use async_trait::async_trait;
 use crate::app::models::order::Order;
 use crate::core::error::AppError;
@@ -231,13 +231,13 @@ pub trait Notifier: Send + Sync {
     async fn notify_order_cancelled(&self, order: &Order) -> Result<(), AppError>;
     async fn notify_payment_processed(&self, order: &Order, payment_id: &str) -> Result<(), AppError>;
 }
-```rust
+```
 
 ## Model Definitions
 
 ### `app/models/order.rs`
 
-```rust
+```
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use std::fmt;
@@ -289,13 +289,13 @@ impl fmt::Display for Order {
                self.id, self.customer_id, self.total_amount, self.status)
     }
 }
-```rust
+```
 
 ## Service Implementations
 
 ### `app/services/order_service.rs`
 
-```rust
+```
 use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::Utc;
@@ -426,11 +426,11 @@ impl OrderService {
         self.order_repository.find_all().await
     }
 }
-```rust
+```
 
 ### Repository Implementations for Testing
 
-```rust
+```
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
@@ -500,11 +500,11 @@ impl OrderRepository for InMemoryOrderRepository {
         Ok(orders.remove(&id).is_some())
     }
 }
-```rust
+```
 
 ### Mock Payment Processor
 
-```rust
+```
 use async_trait::async_trait;
 use uuid::Uuid;
 
@@ -544,11 +544,11 @@ impl PaymentProcessor for MockPaymentProcessor {
         Ok(true)
     }
 }
-```rust
+```
 
 ### Console Notifier
 
-```rust
+```
 use async_trait::async_trait;
 
 use crate::app::models::order::Order;
@@ -585,13 +585,13 @@ impl Notifier for ConsoleNotifier {
         Ok(())
     }
 }
-```rust
+```
 
 ## API Handlers
 
 ### `app/api/order_handler.rs`
 
-```rust
+```
 use std::sync::Arc;
 
 use axum::{
@@ -676,13 +676,13 @@ pub async fn cancel_order(
     
     Ok(Json(cancelled_order))
 }
-```rust
+```
 
 ## Main Application
 
 ### `main.rs`
 
-```rust
+```
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -755,7 +755,7 @@ async fn main() -> Result<(), AppError> {
     
     Ok(())
 }
-```rust
+```
 
 ## Working with DI in Tests
 
@@ -765,7 +765,7 @@ Testing services that use dependency injection is straightforward thanks to Navi
 
 First, implement mock versions of your service interfaces:
 
-```rust
+```
 use mockall::predicate::*;
 use mockall::mock;
 
@@ -794,13 +794,13 @@ mock! {
         async fn verify_payment(&self, payment_id: &str) -> Result<bool, AppError>;
     }
 }
-```rust
+```
 
 ### Unit Testing with Mocks
 
 Now you can use these mocks in your unit tests:
 
-```rust
+```
     #[tokio::test]
 async fn test_process_order() {
     // Create mock instances
@@ -863,13 +863,13 @@ async fn test_process_order() {
     assert_eq!(order.status, OrderStatus::Paid);
     assert_eq!(order.payment_id, Some("payment-123".to_string()));
 }
-```rust
+```
 
 ### Integration Testing with a Test ServiceRegistry
 
 For integration tests, you can create a test ServiceRegistry with mock or real implementations:
 
-```rust
+```
 #[tokio::test]
 async fn test_order_handler_integration() {
     // Create a test ServiceRegistry
@@ -902,7 +902,7 @@ async fn test_order_handler_integration() {
     assert!(result.is_ok());
     // Further assertions...
 }
-```rust
+```
 
 ## Best Practices
 
@@ -910,7 +910,7 @@ async fn test_order_handler_integration() {
 
 Create well-defined interfaces (traits) that describe the behavior of your services:
 
-```rust
+```
 #[async_trait]
 pub trait ProductService: Send + Sync {
     // Clear contract with detailed documentation
@@ -924,13 +924,13 @@ pub trait ProductService: Send + Sync {
     /// Creates a new product
     async fn create_product(&self, product: CreateProductRequest) -> Result<Product, AppError>;
 }
-```rust
+```
 
 ### 2. Program to Interfaces, Not Implementations
 
 Whenever possible, accept trait objects rather than concrete implementations:
 
-```rust
+```
 // Good approach
 pub struct OrderServiceImpl {
     order_repository: Arc<dyn OrderRepository>,
@@ -945,13 +945,13 @@ pub struct OrderServiceImpl {
     payment_processor: Arc<StripePaymentProcessor>,
     notifier: Arc<EmailNotifier>,
 }
-```rust
+```
 
 ### 3. Use Constructor Injection
 
 Pass dependencies through the constructor rather than creating them inside the service:
 
-```rust
+```
 // Good approach
 impl OrderServiceImpl {
     pub fn new(
@@ -978,13 +978,13 @@ impl OrderServiceImpl {
         }
     }
 }
-```rust
+```
 
 ### 4. Consider Factory Methods
 
 When constructing services with many dependencies, use factory methods with the ServiceRegistry:
 
-```rust
+```
 impl OrderServiceImpl {
     pub async fn new_with_registry(registry: &ServiceRegistry) -> Result<Self, AppError> {
         let order_repository = registry.get::<Box<dyn OrderRepository>>().await?;
@@ -998,13 +998,13 @@ impl OrderServiceImpl {
         })
     }
 }
-```rust
+```
 
 ### 5. Register Services as Trait Objects
 
 Register your services as trait objects to enable polymorphism:
 
-```rust
+```
 // Setup function
 pub fn setup_services(registry: &ServiceRegistry) -> Result<(), AppError> {
     // Create the concrete implementations
@@ -1028,7 +1028,7 @@ pub fn setup_services(registry: &ServiceRegistry) -> Result<(), AppError> {
     
     Ok(())
 }
-```rust
+```
 
 ## Common Pitfalls
 
@@ -1037,7 +1037,7 @@ pub fn setup_services(registry: &ServiceRegistry) -> Result<(), AppError> {
 Avoid circular dependencies between services, as they can cause initialization problems and infinite loops.
 
 **Problem:**
-```rust
+```
 // Service A depends on Service B
 pub struct ServiceA {
     service_b: Arc<ServiceB>,
@@ -1047,7 +1047,7 @@ pub struct ServiceA {
 pub struct ServiceB {
     service_a: Arc<ServiceA>,
 }
-```rust
+```
 
 **Solution:**
 - Restructure your services to remove the circular dependency
@@ -1059,7 +1059,7 @@ pub struct ServiceB {
 Avoid using the ServiceRegistry directly in your business logic:
 
 **Anti-pattern:**
-```rust
+```
 // Service locator anti-pattern
 impl OrderService {
     async fn process_order(&self, registry: &ServiceRegistry, order: Order) -> Result<Order, AppError> {
@@ -1070,10 +1070,10 @@ impl OrderService {
         // Business logic...
     }
 }
-```rust
+```
 
 **Better approach:**
-```rust
+```
 // Constructor injection
 impl OrderService {
     pub fn new(
@@ -1091,7 +1091,7 @@ impl OrderService {
         // Business logic...
     }
 }
-```rust
+```
 
 ### 3. Over-Abstraction
 
@@ -1107,7 +1107,7 @@ If the answer to all these questions is "no," a direct implementation may be sim
 
 Since services are shared across async tasks, ensure your services are thread-safe:
 
-```rust
+```
 // Ensure all services implement Send + Sync
 #[async_trait]
 pub trait OrderRepository: Send + Sync {
@@ -1119,7 +1119,7 @@ pub struct InMemoryOrderRepository {
     // Use RwLock or Mutex for shared mutable state
     orders: RwLock<HashMap<OrderId, Order>>,
 }
-```rust
+```
 
 ## Advanced Techniques
 
@@ -1127,20 +1127,20 @@ pub struct InMemoryOrderRepository {
 
 When you need multiple implementations of the same interface, use named dependencies:
 
-```rust
+```
 // Register named implementations
 registry.register_named::<Box<dyn PaymentProcessor>>("stripe", Box::new(StripeProcessor::new()));
 registry.register_named::<Box<dyn PaymentProcessor>>("paypal", Box::new(PayPalProcessor::new()));
 
 // Retrieve a specific implementation
 let stripe_processor = registry.get_named::<Box<dyn PaymentProcessor>>("stripe")?;
-```rust
+```
 
 ### 2. Conditional Registration
 
 Register different implementations based on configuration:
 
-```rust
+```
 pub fn setup_services(registry: &ServiceRegistry, config: &AppConfig) -> Result<(), AppError> {
     // Choose implementation based on configuration
     if config.use_real_payment_processor {
@@ -1153,13 +1153,13 @@ pub fn setup_services(registry: &ServiceRegistry, config: &AppConfig) -> Result<
     
     Ok(())
 }
-```rust
+```
 
 ### 3. Service Lifetimes
 
 Control the lifetime of your services by using different registration strategies:
 
-```rust
+```
 // Singleton (default) - one instance shared across the application
 registry.register_singleton::<UserService>(Arc::new(UserServiceImpl::new()));
 
@@ -1172,13 +1172,13 @@ registry.register_transient::<UserService, _>(|| {
 registry.register_scoped::<UserService, _>(|| {
     Arc::new(UserServiceImpl::new())
 });
-```rust
+```
 
 ### 4. Decorators and Middleware
 
 Use the decorator pattern to add cross-cutting concerns:
 
-```rust
+```
 // Base implementation
 pub struct BasicOrderProcessor {
     repository: Arc<dyn OrderRepository>,
@@ -1208,7 +1208,7 @@ impl OrderProcessor for LoggingOrderProcessor {
 let base_processor = Arc::new(BasicOrderProcessor::new(repository));
 let logging_processor = Arc::new(LoggingOrderProcessor::new(base_processor, logger));
 registry.register::<Box<dyn OrderProcessor>>(Box::new(logging_processor));
-```rust
+```
 
 ## Conclusion
 

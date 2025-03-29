@@ -19,7 +19,7 @@ This example demonstrates a minimal Navius application, showing the essential co
 
 ## Project Structure
 
-```rust
+```
 basic-app/
 ├── Cargo.toml
 ├── config/
@@ -42,7 +42,7 @@ basic-app/
         ├── config.rs
         ├── error.rs
         └── router.rs
-```rust
+```
 
 ## Implementation
 
@@ -50,7 +50,7 @@ basic-app/
 
 #### `main.rs`
 
-```rust
+```
 use std::net::SocketAddr;
 use navius::core::config::load_config;
 use navius::core::error::AppError;
@@ -80,11 +80,11 @@ async fn main() -> Result<(), AppError> {
     
     Ok(())
 }
-```rust
+```
 
 #### `core/config.rs`
 
-```rust
+```
 use config::{Config, ConfigError, File};
 use serde::Deserialize;
 use std::sync::Arc;
@@ -109,11 +109,11 @@ pub fn load_config() -> Result<Arc<AppConfig>, ConfigError> {
     let app_config: AppConfig = config.try_deserialize()?;
     Ok(Arc::new(app_config))
 }
-```rust
+```
 
 #### `core/router.rs`
 
-```rust
+```
 use crate::app::api::hello_handler;
 use crate::core::config::AppConfig;
 use crate::core::error::AppError;
@@ -128,13 +128,13 @@ pub fn build_router(config: Arc<AppConfig>) -> Result<Router, AppError> {
     
     Ok(router)
 }
-```rust
+```
 
 ### Application Components
 
 #### `app/api/hello_handler.rs`
 
-```rust
+```
 use crate::app::models::greeting::Greeting;
 use crate::core::config::AppConfig;
 use axum::{
@@ -157,22 +157,22 @@ pub async fn greet_user(
         message: format!("Hello, {}! Welcome to {}!", name, config.app_name),
     })
 }
-```rust
+```
 
 #### `app/models/greeting.rs`
 
-```rust
+```
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Greeting {
     pub message: String,
 }
-```rust
+```
 
 #### `app/services/greeting_service.rs`
 
-```rust
+```
 use crate::app::models::greeting::Greeting;
 
 pub struct GreetingService;
@@ -194,23 +194,23 @@ impl GreetingService {
         }
     }
 }
-```rust
+```
 
 ## Configuration
 
 ### `config/default.yaml`
 
-```yaml
+```
 server:
   address: "127.0.0.1"
   port: 3000
 
 app_name: "Basic Navius App"
-```rust
+```
 
 ## Cargo.toml
 
-```toml
+```
 [package]
 name = "basic-navius-app"
 version = "0.1.0"
@@ -224,7 +224,7 @@ config = "0.13.3"
 serde = { version = "1.0.188", features = ["derive"] }
 tracing = "0.1.37"
 tracing-subscriber = "0.3.17"
-```rust
+```
 
 ## Running the Example
 
@@ -232,19 +232,19 @@ tracing-subscriber = "0.3.17"
 2. Navigate to the `examples/basic-app` directory
 3. Run the application:
 
-```bash
+```
 cargo run
-```rust
+```
 
 4. Test the endpoints:
 
-```bash
+```
 # Get default greeting
 curl http://localhost:3000/
 
 # Get personalized greeting
 curl http://localhost:3000/greeting/YourName
-```rust
+```
 
 ## Key Concepts Demonstrated
 

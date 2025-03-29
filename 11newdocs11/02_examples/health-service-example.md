@@ -46,7 +46,7 @@ The health service consists of several key components:
 
 The health service is accessible through the application's service registry:
 
-```rust
+```
 use crate::core::services::ServiceRegistry;
 use crate::core::services::health::HealthService;
 
@@ -56,13 +56,13 @@ let health_service = service_registry.get::<HealthService>();
 // Get the health status
 let health_status = health_service.check_health().await?;
 println!("System health: {}", health_status.status);
-```rust
+```
 
 ### Implementing a Custom Health Indicator
 
 Create a custom health indicator by implementing the `HealthIndicator` trait:
 
-```rust
+```
 use crate::core::services::health::{HealthIndicator, DependencyStatus};
 use std::sync::Arc;
 use crate::core::router::AppState;
@@ -119,13 +119,13 @@ fn check_database_connection(connection_string: &str) -> Result<(), Box<dyn std:
     // Actual implementation would connect to database
     Ok(())
 }
-```rust
+```
 
 ### Creating a Health Provider
 
 Create a provider that generates health indicators:
 
-```rust
+```
 use crate::core::services::health::{HealthIndicator, HealthProvider};
 use crate::core::config::AppConfig;
 
@@ -154,13 +154,13 @@ impl HealthProvider for InfrastructureHealthProvider {
         config.get_bool("health.infrastructure_checks_enabled").unwrap_or(true)
     }
 }
-```rust
+```
 
 ### Registering Health Indicators and Providers
 
 Register custom health indicators and providers:
 
-```rust
+```
 use crate::core::services::health::{HealthService, HealthIndicator, HealthProvider};
 
 // Setup health service with indicators
@@ -181,13 +181,13 @@ async fn setup_health_service() -> HealthService {
     
     health_service
 }
-```rust
+```
 
 ### Using the Health Discovery Service
 
 The Health Discovery Service automatically finds and registers health indicators:
 
-```rust
+```
 use crate::core::services::health_discovery::HealthDiscoveryService;
 use crate::core::services::health::HealthService;
 
@@ -207,13 +207,13 @@ async fn setup_with_discovery() -> HealthService {
     
     health_service
 }
-```rust
+```
 
 ## Health Dashboard
 
 The Health Dashboard provides detailed health history:
 
-```rust
+```
 use crate::core::services::health_dashboard::HealthDashboard;
 use crate::core::services::health::HealthService;
 use std::sync::Arc;
@@ -229,13 +229,13 @@ async fn setup_dashboard(health_service: Arc<HealthService>) -> HealthDashboard 
     
     dashboard
 }
-```rust
+```
 
 ## Complete Example
 
 Here's a complete example showing how to set up and use the health service:
 
-```rust
+```
 use crate::core::services::health::{
     HealthService, HealthIndicator, DependencyStatus
 };
@@ -314,7 +314,7 @@ async fn setup_health_system() {
     // Clear dashboard history
     dashboard.clear_history().await;
 }
-```rust
+```
 
 ## Health API Endpoints
 
@@ -326,7 +326,7 @@ The health service automatically exposes API endpoints:
 
 Example response:
 
-```json
+```
 {
   "status": "UP",
   "timestamp": "2025-03-26T12:34:56.789Z",
@@ -349,7 +349,7 @@ Example response:
     }
   ]
 }
-```rust
+```
 
 ## Best Practices
 

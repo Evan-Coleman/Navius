@@ -75,7 +75,7 @@ Required dependencies:
 
 ## Project Structure
 
-```rust
+```
 authentication-example/
 ├── Cargo.toml                # Project dependencies
 ├── config/
@@ -130,7 +130,7 @@ auth:
 
 #### `src/models/user.rs`
 
-```rust
+```
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -184,11 +184,11 @@ fn validate_password(password: &str) -> Result<(), validator::ValidationError> {
     
     Ok(())
 }
-```rust
+```
 
 #### `src/models/auth.rs`
 
-```rust
+```
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -212,13 +212,13 @@ pub struct TokenResponse {
 pub struct RefreshRequest {
     pub refresh_token: String,
 }
-```rust
+```
 
 ### Auth Service
 
 #### `src/services/auth_service.rs`
 
-```rust
+```
 use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey};
 use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::{Utc, Duration};
@@ -385,13 +385,13 @@ impl AuthService {
         })
     }
 }
-```rust
+```
 
 ### Middleware
 
 #### `src/middleware/auth.rs`
 
-```rust
+```
 use std::sync::Arc;
 use axum::{
     http::{Request, StatusCode},
@@ -448,13 +448,13 @@ pub fn require_role(role: &'static str) -> impl FnOnce(CurrentUser) -> Result<Cu
         }
     }
 }
-```rust
+```
 
 ### Handlers
 
 #### `src/handlers/auth.rs`
 
-```rust
+```
 use axum::{
     extract::State,
     Json,
@@ -529,11 +529,11 @@ pub async fn refresh(
         "expires_in": token_response.expires_in,
     })))
 }
-```rust
+```
 
 #### `src/handlers/protected.rs`
 
-```rust
+```
 use axum::{
     extract::{State, Path},
     Json,
@@ -601,13 +601,13 @@ pub async fn admin_dashboard(
         }
     })))
 }
-```rust
+```
 
 ### Application Setup
 
 #### `src/main.rs`
 
-```rust
+```
 mod models;
 mod services;
 mod middleware;
@@ -681,19 +681,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(listener, app).await?;
     Ok(())
 }
-```rust
+```
 
 ## Testing the Authentication
 
 ### Running the Example
 
-```bash
+```
 cargo run
-```rust
+```
 
 ### Testing the Register Endpoint
 
-```bash
+```
 curl -X POST http://localhost:8080/auth/register \
   -H "Content-Type: application/json" \
   -d '{
@@ -701,10 +701,10 @@ curl -X POST http://localhost:8080/auth/register \
     "email": "test@example.com",
     "password": "Password1!"
   }'
-```rust
+```
 
 Sample response:
-```json
+```
 {
   "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
   "username": "testuser",
@@ -712,38 +712,38 @@ Sample response:
   "roles": ["USER"],
   "created_at": "2025-03-27T12:00:00Z"
 }
-```rust
+```
 
 ### Testing the Login Endpoint
 
-```bash
+```
 curl -X POST http://localhost:8080/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "test@example.com",
     "password": "Password1!"
   }'
-```rust
+```
 
 Sample response:
-```json
+```
 {
   "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "token_type": "Bearer",
   "expires_in": 3600
 }
-```rust
+```
 
 ### Testing a Protected Endpoint
 
-```bash
+```
 curl http://localhost:8080/api/profile \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-```rust
+```
 
 Sample response:
-```json
+```
 {
   "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
   "username": "testuser",
@@ -751,43 +751,43 @@ Sample response:
   "roles": ["USER"],
   "created_at": "2025-03-27T12:00:00Z"
 }
-```rust
+```
 
 ### Testing Token Refresh
 
-```bash
+```
 curl -X POST http://localhost:8080/auth/refresh \
   -H "Content-Type: application/json" \
   -d '{
     "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   }'
-```rust
+```
 
 Sample response:
-```json
+```
 {
   "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "token_type": "Bearer",
   "expires_in": 3600
 }
-```rust
+```
 
 ### Testing Role-Based Access
 
-```bash
+```
 curl http://localhost:8080/api/admin/dashboard \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-```rust
+```
 
 If the user doesn't have the required role:
-```json
+```
 {
   "status": 403,
   "code": "FORBIDDEN",
   "message": "Requires admin or moderator role"
 }
-```rust
+```
 
 ## Key Concepts
 
@@ -914,7 +914,7 @@ The full authentication flow in this example works as follows:
 
 This example uses JWT, but basic authentication (username/password with each request) is an alternative for simpler applications:
 
-```rust
+```
 async fn basic_auth_middleware<B>(
     TypedHeader(auth): TypedHeader<Authorization<Basic>>,
     request: Request<B>,
@@ -927,13 +927,13 @@ async fn basic_auth_middleware<B>(
         Err(AppError::unauthorized("Invalid credentials"))
     }
 }
-```rust
+```
 
 ### Cookie-Based Authentication
 
 For web applications, cookies can be more appropriate than bearer tokens:
 
-```rust
+```
 async fn login_with_cookies(
     State(auth_service): State<Arc<AuthService>>,
     Json(request): Json<LoginRequest>,
@@ -956,13 +956,13 @@ async fn login_with_cookies(
         Json(serde_json::json!({"status": "success"}))
     ))
 }
-```rust
+```
 
 ### Social Login Integration
 
 For OAuth 2.0 / OpenID Connect with providers like Google or GitHub:
 
-```rust
+```
 async fn google_auth_callback(
     State(auth_service): State<Arc<AuthService>>,
     Query(params): Query<GoogleAuthParams>,
@@ -987,7 +987,7 @@ async fn google_auth_callback(
     // Redirect to frontend with tokens
     Ok(Redirect::to(&format!("/auth/callback?token={}", tokens.access_token)))
 }
-```rust
+```
 
 ## Refresh Token Handling
 
@@ -995,7 +995,7 @@ async fn google_auth_callback(
 
 For enhanced security, implement token rotation where each refresh token can only be used once:
 
-```rust
+```
 pub async fn refresh_with_rotation(&self, refresh_token: &str) -> Result<TokenResponse, AppError> {
     // Decode token
     let claims = self.decode_token(refresh_token)?;
@@ -1016,13 +1016,13 @@ pub async fn refresh_with_rotation(&self, refresh_token: &str) -> Result<TokenRe
     
     Ok(tokens)
 }
-```rust
+```
 
 ### Handling Refresh Token Theft
 
 Implement detection for potential refresh token theft:
 
-```rust
+```
 pub async fn detect_token_reuse(&self, refresh_token: &str) -> Result<(), AppError> {
     let token_id = self.get_token_id(refresh_token)?;
     
@@ -1040,7 +1040,7 @@ pub async fn detect_token_reuse(&self, refresh_token: &str) -> Result<(), AppErr
     
     Ok(())
 }
-```rust
+```
 
 ## Integrating with External Auth Providers
 
@@ -1048,7 +1048,7 @@ pub async fn detect_token_reuse(&self, refresh_token: &str) -> Result<(), AppErr
 
 For integrating with Microsoft Entra ID (formerly Azure AD), Google, or other OIDC providers:
 
-```rust
+```
 pub async fn authenticate_with_oidc(&self, provider: &str, code: &str) -> Result<TokenResponse, AppError> {
     // Get provider configuration
     let config = match provider {
@@ -1092,7 +1092,7 @@ pub async fn authenticate_with_oidc(&self, provider: &str, code: &str) -> Result
 
 For implementing 2FA with TOTP (Time-based One-Time Password):
 
-```rust
+```
 pub async fn verify_totp(&self, user_id: &str, token: &str) -> Result<bool, AppError> {
     // Get user's TOTP secret
     let user = self.user_service.find_by_id(user_id).await?;

@@ -74,7 +74,7 @@ Required dependencies:
 
 ## Project Structure
 
-```rust
+```
 database-integration-example/
 ├── Cargo.toml                # Project dependencies
 ├── config/
@@ -115,7 +115,7 @@ The database service provides a centralized way to manage database connections a
 
 #### `src/services/database_service.rs`
 
-```rust
+```
 use std::sync::Arc;
 use async_trait::async_trait;
 use serde::{Serialize, Deserialize};
@@ -261,7 +261,7 @@ The repository pattern separates data access logic from business logic. Reposito
 
 #### `src/repositories/repository.rs`
 
-```rust
+```
 use async_trait::async_trait;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -443,7 +443,7 @@ Entities are the domain objects that represent the data stored in the database.
 
 #### `src/models/mod.rs`
 
-```rust
+```
 use async_trait::async_trait;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
@@ -466,11 +466,11 @@ pub trait Entity: Clone + std::fmt::Debug {
 
 pub mod user;
 pub mod product;
-```rust
+```
 
 #### `src/models/user.rs`
 
-```rust
+```
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -567,11 +567,11 @@ impl User {
         self.updated_at = Utc::now();
     }
 }
-```rust
+```
 
 #### `src/models/product.rs`
 
-```rust
+```
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -665,7 +665,7 @@ impl Product {
         Ok(())
     }
 }
-```rust
+```
 
 ## Testing With Databases
 
@@ -685,7 +685,7 @@ The service layer acts as an intermediary between your application logic and rep
 
 ### User Service Implementation
 
-```rust
+```
 // src/services/user_service.rs
 use crate::models::user::{User, UserRole};
 use crate::repositories::user_repository::UserRepository;
@@ -856,11 +856,11 @@ pub fn register_user_service(registry: &mut ServiceRegistry) {
     let user_service = UserServiceImpl::new(user_repository);
     registry.register::<dyn UserService>(Arc::new(user_service));
 }
-```rust
+```
 
 ### Product Service Implementation
 
-```rust
+```
 // src/services/product_service.rs
 use crate::models::product::{Product, ProductCategory};
 use crate::repositories::product_repository::ProductRepository;
@@ -1047,7 +1047,7 @@ pub fn register_product_service(registry: &mut ServiceRegistry) {
     let product_service = ProductServiceImpl::new(product_repository);
     registry.register::<dyn ProductService>(Arc::new(product_service));
 }
-```rust
+```
 
 ## Database Migrations
 
@@ -1055,7 +1055,7 @@ Migrations help you evolve your database schema over time. Let's implement a sim
 
 ### Migration Manager
 
-```rust
+```
 // src/utils/migrations.rs
 use crate::services::database::{DatabaseError, DatabaseService};
 use navius::config::Config;
@@ -1276,7 +1276,7 @@ pub fn setup_migrations(db_service: Arc<DatabaseService>) -> MigrationManager {
     
     manager
 }
-```rust
+```
 
 ## API Endpoints
 
@@ -1284,7 +1284,7 @@ Now let's implement the API endpoints to expose our database functionality.
 
 ### User API
 
-```rust
+```
 // src/api/user_api.rs
 use crate::models::user::{User, UserRole};
 use crate::services::user_service::{UserProfile, UserService, UserServiceError};
@@ -1540,5 +1540,5 @@ fn hash_password(password: &str) -> String {
     // This is a simplified example
     format!("hashed_{}", password)
 }
-```rust
+```
 ``` 

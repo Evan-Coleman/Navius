@@ -3,7 +3,7 @@ title: "Day 3 Summary: March 30, 2025"
 description: "Summary of accomplishments for Day 3 of the Documentation Reorganization Week 1 Action Plan"
 category: "Documentation Tools"
 tags: ["documentation", "progress", "summary"]
-last_updated: "March 30, 2025"
+last_updated: "March 31, 2025"
 version: "1.0"
 ---
 
@@ -40,6 +40,17 @@ This document summarizes the achievements and challenges of Day 3 of the Documen
    - Documented tool improvement needs for Week 2
    - Created a custom approach for fixing individual files
 
+5. **New Issue Identified**
+   - Discovered code blocks with incorrect language markers (markers at both beginning and end)
+   - Example: 
+     ```
+     ```rust
+     // code here
+     ```rust  <-- This is incorrect
+     ```
+   - This needs to be fixed as part of our documentation validation process
+   - Added to the Week 1 Action Plan as a new task
+
 ## Challenges Encountered
 
 1. **Directory Structure Mismatch**
@@ -55,6 +66,10 @@ This document summarizes the achievements and challenges of Day 3 of the Documen
 3. **Link Context Challenges**
    - Duplicate sections in some files creating confusion
    - Inconsistent linking patterns between files
+
+4. **Markdown Syntax Issues**
+   - Code blocks have incorrect language markers (at both beginning and end)
+   - This can break syntax highlighting and rendering in documentation platforms
 
 ## Adapted Approach
 
@@ -90,6 +105,10 @@ This document summarizes the achievements and challenges of Day 3 of the Documen
 3. **Tool Improvements**
    - Document requirements for improved link fixing tools
    - Schedule development for Week 2
+
+4. **Fix Code Block Language Markers**
+   - Create script to identify code blocks with double language markers
+   - Fix affected files to use correct markdown syntax
 
 ## Related Documents
 

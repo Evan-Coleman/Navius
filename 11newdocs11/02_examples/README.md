@@ -40,9 +40,9 @@ Each example can be run from its own directory. To run an example:
 
 For most examples, you can run them with:
 
-```bash
+```
 cargo run
-```rust
+```
 
 Some examples may require additional setup, such as a database connection or environment variables.
 

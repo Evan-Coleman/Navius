@@ -44,7 +44,7 @@ The database service consists of several key components:
 
 The database service is accessible through the application's service registry:
 
-```rust
+```
 use crate::core::services::ServiceRegistry;
 use crate::core::services::database_service::DatabaseService;
 
@@ -53,13 +53,13 @@ let db_service = service_registry.get::<DatabaseService>();
 
 // Use the database service
 let result = db_service.create_database().await?;
-```rust
+```
 
 ### Performing Basic Operations
 
 Once you have a database instance, you can perform operations:
 
-```rust
+```
 // Get a value
 let user_json = db.get("users", "user-123").await?;
 
@@ -71,13 +71,13 @@ let deleted = db.delete("users", "user-789").await?;
 
 // Query with a filter
 let active_users = db.query("users", "status='active'").await?;
-```rust
+```
 
 ## Implementing a Custom Provider
 
 You can implement your own database provider by implementing the `DatabaseProvider` trait:
 
-```rust
+```
 use crate::core::services::database_service::{DatabaseOperations, DatabaseProvider};
 use crate::core::services::error::ServiceError;
 use async_trait::async_trait;
@@ -110,13 +110,13 @@ impl DatabaseOperations for MyCustomDatabase {
     
     // Implement other required operations...
 }
-```rust
+```
 
 ## Registering a Provider
 
 Register your custom provider with the database service:
 
-```rust
+```
 use crate::core::services::database_service::DatabaseProviderRegistry;
 
 // Create a registry
@@ -127,13 +127,13 @@ registry.register("custom", MyCustomDatabaseProvider);
 
 // Create the database service with the registry
 let db_service = DatabaseService::new(registry);
-```rust
+```
 
 ## Using the In-Memory Database
 
 The in-memory database provider is useful for testing:
 
-```rust
+```
 use crate::core::services::memory_database::{InMemoryDatabaseProvider, InMemoryDatabase};
 
 #[tokio::test]
@@ -152,13 +152,13 @@ async fn test_database_operations() {
     let value = db.get("test", "key1").await.unwrap();
     assert_eq!(value, Some("value1".to_string()));
 }
-```rust
+```
 
 ## Configuration
 
 Configure the database service in your application configuration:
 
-```yaml
+```
 # In config/default.yaml
 database:
   provider: memory  # Could be postgres, mongodb, etc.
@@ -167,11 +167,11 @@ database:
   connection_timeout_ms: 5000
   retry_attempts: 3
   enable_logging: true
-```rust
+```
 
 Loading the configuration:
 
-```rust
+```
 use crate::core::config::AppConfig;
 use crate::core::services::database_service::DatabaseConfig;
 
@@ -184,13 +184,13 @@ let db_config = DatabaseConfig::default()
     .with_provider("postgres")
     .with_connection_string("postgres://user:pass@localhost/dbname")
     .with_max_connections(20);
-```rust
+```
 
 ## Complete Example
 
 Here's a complete example showing how to set up and use the database service:
 
-```rust
+```
 use crate::core::services::database_service::{
     DatabaseService, DatabaseConfig, DatabaseProviderRegistry
 };
@@ -237,7 +237,7 @@ async fn example_usage(service: &DatabaseService) -> Result<(), ServiceError> {
     
     Ok(())
 }
-```rust
+```
 
 ## Best Practices
 

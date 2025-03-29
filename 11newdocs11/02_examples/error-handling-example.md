@@ -72,7 +72,7 @@ Required dependencies:
 
 ## Project Structure
 
-```rust
+```
 error-handling-example/
 ├── Cargo.toml                # Project dependencies
 ├── config/
@@ -82,13 +82,13 @@ error-handling-example/
     ├── handlers.rs          # Example API handlers demonstrating various errors
     ├── models.rs            # Domain models with validation rules
     └── error.rs             # Centralized error handling system
-```rust
+```
 
 ## Implementation
 
 ### src/error.rs
 
-```rust
+```
 use navius::http::{Response, StatusCode};
 use navius::http::header;
 use serde::{Deserialize, Serialize};
@@ -293,11 +293,11 @@ impl ValidatorErrorExt for validator::ValidationErrors {
         AppError::validation(errors)
     }
 }
-```rust
+```
 
 ### src/models.rs
 
-```rust
+```
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -325,11 +325,11 @@ pub struct CreateUserRequest {
     #[validate(length(min = 8, max = 100))]
     pub password: String,
 }
-```rust
+```
 
 ### src/handlers.rs
 
-```rust
+```
 use navius::http::StatusCode;
 use navius::web::{Json, Path, State};
 use serde_json::json;
@@ -420,11 +420,11 @@ pub async fn external_service() -> Result<Json<serde_json::Value>, AppError> {
     
     Ok(Json(json!({ "success": true })))
 }
-```rust
+```
 
 ### src/main.rs
 
-```rust
+```
 mod error;
 mod handlers;
 mod models;
@@ -485,11 +485,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     Ok(())
 }
-```rust
+```
 
 ### Cargo.toml
 
-```toml
+```
 [package]
 name = "error-handling-example"
 version = "0.1.0"
@@ -505,19 +505,19 @@ validator = { version = "0.16", features = ["derive"] }
 log = "0.4"
 env_logger = "0.10"
 uuid = { version = "1.3", features = ["v4"] }
-```rust
+```
 
 ## Testing the Error Handling
 
 ### Running the Example
 
-```bash
+```
 cargo run
-```rust
+```
 
 ### Testing Validation Errors
 
-```bash
+```
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
   -d '{
@@ -525,10 +525,10 @@ curl -X POST http://localhost:8080/users \
     "name": "A",
     "password": "short"
   }'
-```rust
+```
 
 Response:
-```json
+```
 {
   "status": 400,
   "code": "VALIDATION_ERROR",
@@ -553,67 +553,67 @@ Response:
     ]
   }
 }
-```rust
+```
 
 ### Testing Not Found Errors
 
-```bash
+```
 curl http://localhost:8080/users/not-found
-```rust
+```
 
 Response:
-```json
+```
 {
   "status": 404,
   "code": "NOT_FOUND",
   "message": "User with ID not-found not found"
 }
-```rust
+```
 
 ### Testing Database Errors
 
-```bash
+```
 curl http://localhost:8080/users/db-error
-```rust
+```
 
 Response:
-```json
+```
 {
   "status": 500,
   "code": "DATABASE_ERROR",
   "message": "An internal server error occurred"
 }
-```rust
+```
 
 ### Testing Authorization Errors
 
-```bash
+```
 curl http://localhost:8080/admin
-```rust
+```
 
 Response:
-```json
+```
 {
   "status": 403,
   "code": "FORBIDDEN",
   "message": "Admin access required"
 }
-```rust
+```
 
 ### Testing External Service Errors
 
-```bash
+```
 curl http://localhost:8080/external
-```rust
+```
 
 Response:
-```json
+```
 {
   "status": 503,
   "code": "EXTERNAL_SERVICE_ERROR",
   "message": "Payment gateway is currently unavailable"
 }
-```rust
+```
 
 ## Key Concepts
 
@@ -701,7 +701,7 @@ Response:
 
 Input validation should happen as early as possible in request handling:
 
-```rust
+```
 // Schema validation using validator crate
 if let Err(validation_errors) = payload.validate() {
     return Err(validation_errors.to_app_error());
@@ -717,26 +717,26 @@ if !is_valid_business_rule(&payload) {
         }
     ]));
 }
-```rust
+```
 
 ### Resource Not Found
 
 When a requested resource doesn't exist:
 
-```rust
+```
 async fn get_resource(id: &str) -> Result<Resource, AppError> {
     match db.find_by_id(id).await {
         Some(resource) => Ok(resource),
         None => Err(AppError::not_found(format!("Resource with ID {} not found", id)))
     }
 }
-```rust
+```
 
 ### Authorization Checks
 
 When checking if a user has permission:
 
-```rust
+```
 fn check_permission(user: &User, resource: &Resource) -> Result<(), AppError> {
     // Check if user owns the resource
     if resource.owner_id != user.id {
@@ -750,13 +750,13 @@ fn check_permission(user: &User, resource: &Resource) -> Result<(), AppError> {
     
     Ok(())
 }
-```rust
+```
 
 ### External Service Integration
 
 When calling external services:
 
-```rust
+```
 async fn call_payment_gateway(payment: &Payment) -> Result<PaymentResponse, AppError> {
     match payment_client.process_payment(payment).await {
         Ok(response) => Ok(response),
@@ -772,23 +772,23 @@ async fn call_payment_gateway(payment: &Payment) -> Result<PaymentResponse, AppE
         }
     }
 }
-```rust
+```
 
 ## Error Response Structures
 
 ### Basic Error Response
 
-```json
+```
 {
   "status": 404,
   "code": "NOT_FOUND",
   "message": "User with ID 123 not found"
 }
-```rust
+```
 
 ### Validation Error Response
 
-```json
+```
 {
   "status": 400,
   "code": "VALIDATION_ERROR",
@@ -808,19 +808,19 @@ async fn call_payment_gateway(payment: &Payment) -> Result<PaymentResponse, AppE
     ]
   }
 }
-```rust
+```
 
 ### Server Error Response
 
 Note how implementation details are hidden:
 
-```json
+```
 {
   "status": 500,
   "code": "DATABASE_ERROR",
   "message": "An internal server error occurred"
 }
-```rust
+```
 
 ## Integrating with External Services
 
@@ -843,7 +843,7 @@ When integrating with external services, follow these patterns for error handlin
 
 Example integration:
 
-```rust
+```
 async fn call_with_retry<F, T, E>(
     operation: F,
     max_retries: usize,
@@ -870,7 +870,7 @@ where
         }
     }
 }
-```rust
+```
 
 ## Error Handling in Async Code
 
@@ -890,7 +890,7 @@ Async error handling has some unique considerations:
 
 Example with timeout:
 
-```rust
+```
 async fn with_timeout<T>(
     future: impl Future<Output = Result<T, AppError>>,
     duration: Duration,
@@ -900,7 +900,7 @@ async fn with_timeout<T>(
         Err(_) => Err(AppError::external_service("Operation timed out")),
     }
 }
-```rust
+```
 
 ## Security Considerations
 
@@ -939,7 +939,7 @@ async fn with_timeout<T>(
    - Consider more verbose errors in development
    - Use feature flags to control error detail level:
 
-```rust
+```
 #[cfg(debug_assertions)]
 fn format_error(err: &AppError) -> String {
     format!("Detailed error: {:?}", err)
@@ -949,7 +949,7 @@ fn format_error(err: &AppError) -> String {
 fn format_error(err: &AppError) -> String {
     format!("Error: {}", err)
 }
-```rust
+```
 
 ## Next Steps
 

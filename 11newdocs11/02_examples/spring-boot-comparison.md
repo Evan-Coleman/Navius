@@ -43,18 +43,18 @@ Navius was designed with Spring Boot developers in mind, providing a familiar pr
 
 ### Spring Boot (Java)
 
-```java
+```
 @SpringBootApplication
 public class DemoApplication {
     public static void main(String[] args) {
         SpringApplication.run(DemoApplication.class, args);
     }
 }
-```rust
+```
 
 ### Navius (Rust)
 
-```rust
+```
 fn main() {
     NaviusApp::new()
         .with_default_config()
@@ -62,7 +62,7 @@ fn main() {
         .with_swagger()
         .run();
 }
-```rust
+```
 
 ### Key Similarities
 
@@ -77,7 +77,7 @@ fn main() {
 
 Java Spring Boot follows a package-based organization where components are organized by feature or layer:
 
-```rust
+```
 com.example.demo/
 ├── DemoApplication.java
 ├── config/
@@ -90,13 +90,13 @@ com.example.demo/
 │   └── UserRepository.java
 └── model/
     └── User.java
-```rust
+```
 
 ### Navius (Rust)
 
 Navius uses a flat module structure with centralized declarations in lib.rs:
 
-```rust
+```
 // In lib.rs
 mod core {
     pub mod router {
@@ -129,7 +129,7 @@ src/
 └── app/
     └── api/
         └── examples.rs
-```rust
+```
 
 This approach eliminates the need for mod.rs files in each directory, reducing file clutter and making the module structure more immediately apparent in a single location.
 
@@ -144,7 +144,7 @@ This approach eliminates the need for mod.rs files in each directory, reducing f
 
 ### Spring Boot (Java)
 
-```java
+```
 @RestController
 public class SimpleHealthController {
     @GetMapping("/health")
@@ -154,11 +154,11 @@ public class SimpleHealthController {
         return ResponseEntity.ok(response);
     }
 }
-```rust
+```
 
 ### Navius (Rust)
 
-```rust
+```
 // In src/app/router.rs - User's custom router implementation
 use navius::core::core_router::{Router, get};
 use navius::core::core_response::IntoResponse;
@@ -182,11 +182,11 @@ fn main() {
         .with_routes(configure_routes)
         .run();
 }
-```rust
+```
 
 ### Extending the Health Endpoint in Navius
 
-```rust
+```
 // In src/app/health.rs - User's custom health implementation
 use navius::core::core_router::{Router, get};
 use navius::core::core_response::IntoResponse;
@@ -212,7 +212,7 @@ pub async fn custom_health_handler() -> impl IntoResponse {
 pub fn configure_routes(router: &mut Router) {
     router.route("/health", get(custom_health_handler));
 }
-```rust
+```
 
 ### Key Similarities
 
@@ -226,7 +226,7 @@ pub fn configure_routes(router: &mut Router) {
 
 ### Spring Boot (Java)
 
-```java
+```
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
@@ -253,11 +253,11 @@ public class UserController {
             .body(user);
     }
 }
-```rust
+```
 
 ### Navius (Rust)
 
-```rust
+```
 // In src/app/controllers/user_controller.rs
 use navius::core::core_macros::{api_controller, api_routes, request_mapping, get, post};
 use navius::core::core_error::AppError;
@@ -295,7 +295,7 @@ impl UserController {
         Ok((StatusCode::CREATED, Json(user)))
     }
 }
-```rust
+```
 
 ### Key Similarities
 
@@ -311,7 +311,7 @@ impl UserController {
 
 ### Spring Boot (Java)
 
-```java
+```
 @Service
 public class UserServiceImpl implements UserService {
     @Autowired
@@ -335,11 +335,11 @@ public class UserServiceImpl implements UserService {
         return userRepository.save(user);
     }
 }
-```rust
+```
 
 ### Navius (Rust)
 
-```rust
+```
 // In src/app/services/user_service.rs
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -386,7 +386,7 @@ impl UserService for UserServiceImpl {
         self.repository.save(user).await
     }
 }
-```rust
+```
 
 ### Key Similarities
 
@@ -400,7 +400,7 @@ impl UserService for UserServiceImpl {
 
 ### Spring Boot (Java)
 
-```java
+```
 // Component definition
 @Service
 public class EmailService {
@@ -442,11 +442,11 @@ public class NotificationService {
     }
     // ...
 }
-```rust
+```
 
 ### Navius (Rust)
 
-```rust
+```
 // Service registry setup
 use navius::core::core_registry::{ServiceRegistry, ServiceProvider};
 use std::sync::Arc;
@@ -493,7 +493,7 @@ fn configure_services(registry: &mut ServiceRegistry) {
     let notification_service = Arc::new(NotificationServiceImpl::new(email_service));
     registry.register::<dyn NotificationService>(notification_service);
 }
-```rust
+```
 
 ### Key Similarities
 
@@ -508,7 +508,7 @@ fn configure_services(registry: &mut ServiceRegistry) {
 
 ### Spring Boot (Java)
 
-```java
+```
 // application.properties or application.yml
 server.port=8080
 app.name=MyApplication
@@ -540,11 +540,11 @@ public class DatabaseConfig {
 // Using environment-specific configurations
 // application-dev.properties, application-prod.properties
 // Activated with: spring.profiles.active=dev
-```rust
+```
 
 ### Navius (Rust)
 
-```rust
+```
 // config/default.yaml
 server:
   port: 8080
@@ -593,7 +593,7 @@ fn main() {
         .with_config(config)
         .run();
 }
-```rust
+```
 
 ### Key Similarities
 
@@ -608,7 +608,7 @@ fn main() {
 
 ### Spring Boot (Java)
 
-```java
+```
 // Entity definition
 @Entity
 @Table(name = "users")
@@ -652,11 +652,11 @@ public class UserService {
         return repository.findByNameContaining(name);
     }
 }
-```rust
+```
 
 ### Navius (Rust)
 
-```rust
+```
 // Entity definition
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct User {
@@ -721,7 +721,7 @@ impl UserRepository for UserRepositoryImpl {
     
     // Other methods...
 }
-```rust
+```
 
 ### Key Similarities
 
@@ -736,7 +736,7 @@ impl UserRepository for UserRepositoryImpl {
 
 ### Spring Boot (Java)
 
-```java
+```
 // Service unit test
 @RunWith(MockitoJUnitRunner.class)
 public class UserServiceTest {
@@ -793,11 +793,11 @@ public class UserControllerTest {
             .andExpect(jsonPath("$.name").value("Test User"));
     }
 }
-```rust
+```
 
 ### Navius (Rust)
 
-```rust
+```
 // Service unit test
 #[cfg(test)]
 mod tests {
@@ -884,7 +884,7 @@ mod tests {
         assert_eq!(body.name, "Test User");
     }
 }
-```rust
+```
 
 ### Key Similarities
 
@@ -903,7 +903,7 @@ Both Spring Boot and Navius encourage the use of similar design patterns, making
 ### Factory Pattern
 
 **Spring Boot**:
-```java
+```
 @Component
 public class PaymentMethodFactory {
     @Autowired
@@ -916,10 +916,10 @@ public class PaymentMethodFactory {
                 .orElseThrow(() -> new IllegalArgumentException("No processor for type: " + type));
     }
 }
-```rust
+```
 
 **Navius**:
-```rust
+```
 pub struct PaymentMethodFactory {
     processors: HashMap<String, Arc<dyn PaymentProcessor>>,
 }
@@ -942,12 +942,12 @@ impl PaymentMethodFactory {
             .ok_or_else(|| AppError::not_found(&format!("No processor for type: {}", type_)))
     }
 }
-```rust
+```
 
 ### Observer Pattern
 
 **Spring Boot**:
-```java
+```
 // With Spring Events
 @Component
 public class OrderService {
@@ -971,10 +971,10 @@ public class EmailNotifier {
         // Send email notification
     }
 }
-```rust
+```
 
 **Navius**:
-```rust
+```
 // With Navius Event Bus
 pub struct OrderService {
     event_bus: Arc<EventBus>,
@@ -1013,7 +1013,7 @@ fn configure_services(registry: &mut ServiceRegistry) {
     let notifier = Arc::new(EmailNotifier::new());
     event_bus.subscribe::<OrderCreatedEvent, _>(notifier);
 }
-```rust
+```
 
 ## Migration Tips for Spring Boot Developers
 

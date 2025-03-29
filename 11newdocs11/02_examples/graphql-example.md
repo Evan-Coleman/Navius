@@ -69,7 +69,7 @@ Required dependencies:
 
 ## Project Structure
 
-```rust
+```
 graphql-example/
 ├── Cargo.toml
 ├── config/
@@ -89,13 +89,13 @@ graphql-example/
     │   ├── mod.rs
     │   └── book_repository.rs    # Book repository
     └── error.rs                  # Error handling
-```rust
+```
 
 ## Implementation
 
 ### Cargo.toml
 
-```toml
+```
 [package]
 name = "graphql-example"
 version = "0.1.0"
@@ -113,11 +113,11 @@ chrono = { version = "0.4", features = ["serde"] }
 async-trait = "0.1"
 thiserror = "1.0"
 log = "0.4"
-```rust
+```
 
 ### src/models/book.rs
 
-```rust
+```
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -161,11 +161,11 @@ impl From<BookInput> for Book {
         }
     }
 }
-```rust
+```
 
 ### src/repositories/book_repository.rs
 
-```rust
+```
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -298,11 +298,11 @@ impl BookRepository for InMemoryBookRepository {
         Ok(())
     }
 }
-```rust
+```
 
 ### src/error.rs
 
-```rust
+```
 use async_graphql::ErrorExtensions;
 use thiserror::Error;
 
@@ -361,11 +361,11 @@ impl ErrorExtensions for AppError {
         err
     }
 }
-```rust
+```
 
 ### src/graphql/types.rs
 
-```rust
+```
 use async_graphql::{Object, InputObject, SimpleObject, ID, Context};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -436,11 +436,11 @@ pub struct BookUpdateInputType {
     pub published_date: Option<DateTime<Utc>>,
     pub rating: Option<f32>,
 }
-```rust
+```
 
 ### src/graphql/query.rs
 
-```rust
+```
 use async_graphql::{Context, Object, Result, ID};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -492,11 +492,11 @@ impl QueryRoot {
         Ok(books.into_iter().map(BookType::from).collect())
     }
 }
-```rust
+```
 
 ### src/graphql/mutation.rs
 
-```rust
+```
 use async_graphql::{Context, Object, Result, ID};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -580,11 +580,11 @@ impl MutationRoot {
         Ok(true)
     }
 }
-```rust
+```
 
 ### src/graphql/schema.rs
 
-```rust
+```
 use async_graphql::{Schema, EmptySubscription};
 use std::sync::Arc;
 
@@ -601,22 +601,22 @@ pub fn create_schema(
         .data(book_repository)
         .finish()
 }
-```rust
+```
 
 ### src/graphql/mod.rs
 
-```rust
+```
 pub mod types;
 pub mod query;
 pub mod mutation;
 pub mod schema;
 
 pub use schema::{BookSchema, create_schema};
-```rust
+```
 
 ### src/main.rs
 
-```rust
+```
 mod error;
 mod models;
 mod repositories;
@@ -684,7 +684,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     Ok(())
 }
-```rust
+```
 
 ## GraphQL Schema
 
@@ -692,7 +692,7 @@ The example implements a GraphQL schema for managing books with the following op
 
 ### Queries
 
-```graphql
+```
 type Query {
   # Get all books
   books: [BookType!]!
@@ -706,11 +706,11 @@ type Query {
   # Get books by genre (partial match)
   booksByGenre(genre: String!): [BookType!]!
 }
-```rust
+```
 
 ### Mutations
 
-```graphql
+```
 type Mutation {
   # Create a new book
   createBook(input: BookInputType!): BookType!
@@ -721,11 +721,11 @@ type Mutation {
   # Delete a book
   deleteBook(id: ID!): Boolean!
 }
-```rust
+```
 
 ### Types
 
-```graphql
+```
 type BookType {
   id: ID!
   title: String!
@@ -755,15 +755,15 @@ input BookUpdateInputType {
   publishedDate: DateTime
   rating: Float
 }
-```rust
+```
 
 ## Running the Example
 
 After setting up the project with all the components shown above, you can run the application using:
 
-```bash
+```
 cargo run
-```rust
+```
 
 By default, the GraphQL server will be accessible at `http://localhost:8080/graphql`. You can also access the GraphQL Playground at `http://localhost:8080/graphql/playground` for an interactive interface to test your API.
 
@@ -771,7 +771,7 @@ By default, the GraphQL server will be accessible at `http://localhost:8080/grap
 
 The application loads configuration from `config/default.yaml`. You can customize settings like the server port:
 
-```yaml
+```
 server:
   port: 8080
   host: "127.0.0.1"
@@ -780,7 +780,7 @@ graphql:
   path: "/graphql"
   playground: true
   introspection: true
-```rust
+```
 
 ## Testing the API
 
@@ -792,7 +792,7 @@ graphql:
 
 **Query all books:**
 
-```graphql
+```
 query GetAllBooks {
   books {
     id
@@ -802,11 +802,11 @@ query GetAllBooks {
     rating
   }
 }
-```rust
+```
 
 **Query a specific book:**
 
-```graphql
+```
 query GetBookById {
   book(id: "paste-a-valid-uuid-here") {
     id
@@ -820,11 +820,11 @@ query GetBookById {
     updatedAt
   }
 }
-```rust
+```
 
 **Create a new book:**
 
-```graphql
+```
 mutation CreateBook {
   createBook(input: {
     title: "GraphQL in Action"
@@ -840,11 +840,11 @@ mutation CreateBook {
     rating
   }
 }
-```rust
+```
 
 **Update a book:**
 
-```graphql
+```
 mutation UpdateBook {
   updateBook(
     id: "paste-a-valid-uuid-here"
@@ -862,21 +862,21 @@ mutation UpdateBook {
     rating
   }
 }
-```rust
+```
 
 **Delete a book:**
 
-```graphql
+```
 mutation DeleteBook {
   deleteBook(id: "paste-a-valid-uuid-here")
 }
-```rust
+```
 
 ### Automated Testing
 
 You can also write automated tests for your GraphQL API. Here's an example of a test for the book queries:
 
-```rust
+```
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -919,7 +919,7 @@ mod tests {
         assert_eq!(books.len(), 2);
     }
 }
-```rust
+```
 
 ## Advanced Topics
 
@@ -929,7 +929,7 @@ To add authentication to your GraphQL API, you can:
 
 1. Create a custom context with the authenticated user:
 
-```rust
+```
 pub struct GraphQLContext {
     pub user_id: Option<Uuid>,
     pub book_repository: Arc<dyn BookRepository>,
@@ -949,11 +949,11 @@ impl From<&RequestContext> for GraphQLContext {
         }
     }
 }
-```rust
+```
 
 2. Update your resolvers to check for authentication:
 
-```rust
+```
 #[Object]
 impl QueryRoot {
     async fn books(&self, ctx: &Context<'_>) -> Result<Vec<Book>, Error> {
@@ -969,13 +969,13 @@ impl QueryRoot {
         Ok(books)
     }
 }
-```rust
+```
 
 ### Implementing Pagination
 
 For larger datasets, implement pagination with cursor-based or offset-based approaches:
 
-```rust
+```
 #[derive(InputObject)]
 struct PaginationInput {
     first: Option<i32>,
@@ -1039,13 +1039,13 @@ impl QueryRoot {
         })
     }
 }
-```rust
+```
 
 ### Real-time Updates with Subscriptions
 
 GraphQL subscriptions allow for real-time updates. Here's how to implement them:
 
-```rust
+```
 #[derive(Default)]
 pub struct SubscriptionRoot;
 
@@ -1069,7 +1069,7 @@ pub type BookSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
 let schema = BookSchema::build(QueryRoot, MutationRoot, SubscriptionRoot)
     .data(event_broker.clone())
     .finish();
-```rust
+```
 
 ## Troubleshooting
 
@@ -1106,11 +1106,11 @@ let schema = BookSchema::build(QueryRoot, MutationRoot, SubscriptionRoot)
 
 1. **Enable detailed error messages**:
 
-```rust
+```
 let schema = BookSchema::build(QueryRoot, MutationRoot, SubscriptionRoot)
     .extension(async_graphql::extensions::Logger)
     .finish();
-```rust
+```
 
 2. **Use introspection** in GraphQL Playground to examine your schema
 
@@ -1133,7 +1133,7 @@ let schema = BookSchema::build(QueryRoot, MutationRoot, SubscriptionRoot)
 
 4. **Provide descriptions** for types and fields using doc comments:
 
-```rust
+```
 /// Represents a book in the library
 #[derive(SimpleObject)]
 pub struct Book {
@@ -1141,13 +1141,13 @@ pub struct Book {
     pub id: Uuid,
     // Other fields...
 }
-```rust
+```
 
 ### Performance Optimization
 
 1. **Implement DataLoader for N+1 query problems**:
 
-```rust
+```
 pub struct BookLoader {
     repository: Arc<dyn BookRepository>,
 }
@@ -1172,25 +1172,25 @@ async fn author_books(&self, ctx: &Context<'_>, author_id: Uuid) -> Result<Vec<B
     let books = book_loader.load_many(book_ids).await?;
     Ok(books)
 }
-```rust
+```
 
 2. **Use field complexity analysis** to prevent DoS attacks:
 
-```rust
+```
 let schema = BookSchema::build(QueryRoot, MutationRoot, SubscriptionRoot)
     .limit_complexity(50)
     .finish();
-```rust
+```
 
 3. **Implement timeouts** for long-running queries:
 
-```rust
+```
 let schema = BookSchema::build(QueryRoot, MutationRoot, SubscriptionRoot)
     .limit_depth(10)
     .limit_complexity(50)
     .extension(async_graphql::extensions::Timeout::new(Duration::from_secs(5)))
     .finish();
-```rust
+```
 
 ### Error Handling
 
@@ -1200,7 +1200,7 @@ let schema = BookSchema::build(QueryRoot, MutationRoot, SubscriptionRoot)
 
 3. **Use custom error types** for different error categories:
 
-```rust
+```
 #[derive(SimpleObject)]
 struct ValidationError {
     field: String,
@@ -1228,7 +1228,7 @@ if input.title.is_empty() {
             e.set("validation_errors", validation_errors);
         }));
 }
-```rust
+```
 
 ## Conclusion
 

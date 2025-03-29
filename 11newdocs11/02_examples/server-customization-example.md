@@ -22,7 +22,7 @@ This document provides practical examples of how to use the Server Customization
 
 ## Basic Feature Configuration
 
-```rust
+```
 use navius::core::features::{FeatureRegistry, RuntimeFeatures};
 use navius::app::AppBuilder;
 
@@ -53,11 +53,11 @@ fn main() {
     // Start the server
     app.start().unwrap();
 }
-```rust
+```
 
 ## Loading Features from Configuration
 
-```rust
+```
 use navius::core::features::{FeatureRegistry, FeatureConfig};
 use navius::core::config::ConfigLoader;
 
@@ -85,11 +85,11 @@ fn load_features_from_config() -> FeatureRegistry {
     
     registry
 }
-```rust
+```
 
 ## Feature-Conditional Code Execution
 
-```rust
+```
 use navius::core::features::RuntimeFeatures;
 
 // Using feature check in functions
@@ -124,11 +124,11 @@ fn setup_services(app_state: &AppState) {
         app_state.register_cache_provider("redis", redis_provider);
     });
 }
-```rust
+```
 
 ## Feature Dependency Example
 
-```rust
+```
 use navius::core::features::{FeatureRegistry, FeatureInfo};
 
 fn setup_feature_dependencies() -> FeatureRegistry {
@@ -166,13 +166,13 @@ fn setup_feature_dependencies() -> FeatureRegistry {
     
     registry
 }
-```rust
+```
 
 ## Using the Feature CLI
 
 The Server Customization System includes a CLI tool for managing features. Here's how to use it:
 
-```bash
+```
 # List all available features
 features_cli list
 
@@ -193,13 +193,13 @@ features_cli save my-features.json
 
 # Load features from a configuration file
 features_cli load my-features.json
-```rust
+```
 
 ## Conditional Compilation with Cargo Features
 
 You can also use Cargo's feature flags for compile-time feature selection:
 
-```toml
+```
 # Cargo.toml
 [features]
 default = ["metrics", "caching", "security"]
@@ -209,11 +209,11 @@ tracing = []
 caching = []
 redis_caching = ["caching"]
 security = []
-```rust
+```
 
 Then in your code:
 
-```rust
+```
 // This code only compiles if the "metrics" feature is enabled
 #[cfg(feature = "metrics")]
 pub mod metrics {
@@ -239,11 +239,11 @@ pub fn setup_cache() {
         println!("Setting up Redis cache provider...");
     }
 }
-```rust
+```
 
 ## Feature Configuration File Example
 
-```yaml
+```
 # features.yaml
 enabled:
   - core
@@ -270,11 +270,11 @@ configuration:
   security:
     rate_limit_enabled: true
     rate_limit_requests_per_minute: 100
-```rust
+```
 
 ## Custom Feature Registration
 
-```rust
+```
 use navius::core::features::{FeatureRegistry, FeatureInfo, FeatureCategory};
 
 fn register_custom_features() -> FeatureRegistry {
@@ -311,13 +311,13 @@ fn register_custom_features() -> FeatureRegistry {
     
     registry
 }
-```rust
+```
 
 ## Feature Status Display
 
 The feature system includes utilities for displaying feature status:
 
-```rust
+```
 use navius::core::features::{FeatureRegistry, FeatureStatusPrinter};
 
 fn display_feature_status(registry: &FeatureRegistry) {
@@ -335,11 +335,11 @@ fn display_feature_status(registry: &FeatureRegistry) {
     // Print dependency tree
     printer.print_dependency_tree();
 }
-```rust
+```
 
 ## Feature Documentation Generation
 
-```rust
+```
 use navius::core::features::{FeatureRegistry, FeatureDocGenerator};
 use std::fs::File;
 
@@ -360,13 +360,13 @@ fn generate_feature_documentation(registry: &FeatureRegistry) {
     let mut example_file = File::create("feature-examples.yaml").unwrap();
     doc_generator.write_yaml_examples(&mut example_file, &examples).unwrap();
 }
-```rust
+```
 
 ## Feature Visualization
 
 The Server Customization System includes tools for visualizing feature dependencies:
 
-```rust
+```
 use navius::core::features::{FeatureRegistry, FeatureVisualizer};
 use std::fs::File;
 

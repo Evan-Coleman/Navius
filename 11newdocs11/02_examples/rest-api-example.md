@@ -54,7 +54,7 @@ Before starting this example, make sure you have:
 
 This example follows a structured approach to organizing your REST API project:
 
-```rust
+```
 rest-api-example/
 ├── Cargo.toml                  # Project dependencies
 ├── config/
@@ -85,7 +85,7 @@ rest-api-example/
 └── tests/
     ├── api_tests.rs            # API integration tests
     └── service_tests.rs        # Service unit tests
-```rust
+```
 
 ## Implementation
 
@@ -131,25 +131,25 @@ You can test the API using curl, Postman, or any HTTP client. Here are some exam
 
 ### List Products
 
-```bash
+```
 curl -X GET http://localhost:8080/products
-```rust
+```
 
 With filters:
 
-```bash
+```
 curl -X GET "http://localhost:8080/products?category=electronics&min_price=100&page=1&limit=5"
-```rust
+```
 
 ### Get Product by ID
 
-```bash
+```
 curl -X GET http://localhost:8080/products/123e4567-e89b-12d3-a456-426614174000
-```rust
+```
 
 ### Create Product
 
-```bash
+```
 curl -X POST http://localhost:8080/products \
   -H "Content-Type: application/json" \
   -d '{
@@ -160,24 +160,24 @@ curl -X POST http://localhost:8080/products \
     "stock": 50,
     "category": "electronics"
   }'
-```rust
+```
 
 ### Update Product
 
-```bash
+```
 curl -X PUT http://localhost:8080/products/123e4567-e89b-12d3-a456-426614174000 \
   -H "Content-Type: application/json" \
   -d '{
     "price": 179.99,
     "stock": 45
   }'
-```rust
+```
 
 ### Delete Product
 
-```bash
+```
 curl -X DELETE http://localhost:8080/products/123e4567-e89b-12d3-a456-426614174000
-```rust
+```
 
 ## API Documentation
 
@@ -247,18 +247,18 @@ When building REST APIs with Navius, consider the following best practices:
 
 Organize routes based on resources for clarity:
 
-```rust
+```
 Router::new()
     .nest("/products", products_routes())
     .nest("/orders", orders_routes())
     .nest("/customers", customers_routes())
-```rust
+```
 
 ### Response Envelope
 
 For more detailed responses, consider using a response envelope:
 
-```rust
+```
 #[derive(Serialize)]
 struct ApiResponse<T> {
     success: bool,
@@ -273,19 +273,19 @@ struct ResponseMetadata {
     page: usize,
     limit: usize,
 }
-```rust
+```
 
 ### Service Registration
 
 Make services available to the application:
 
-```rust
+```
 let app = Application::new()
     .register_extension(product_service)
     .register_extension(order_service)
     .register_routes(api_routes())
     .build()?;
-```rust
+```
 
 ## Troubleshooting
 
@@ -310,17 +310,17 @@ let app = Application::new()
 
 1. Use tracing to debug request flow:
 
-```rust
+```
 tracing::debug!("Processing product request: {:?}", product);
-```rust
+```
 
 2. Enable more detailed logs by setting log level to debug or trace in your configuration.
 
 3. Use middleware to log request/response information:
 
-```rust
+```
 app.middleware(LoggingMiddleware::new())
-```rust
+```
 
 ## Next Steps
 
@@ -338,7 +338,7 @@ For more examples, see the [GraphQL Example](graphql-example.md) or [Dependency 
 
 Now let's implement the service layer that contains our business logic:
 
-```rust
+```
 // src/services/task_service.rs
 use crate::models::task::{CreateTaskRequest, Task, TaskStatus, UpdateTaskRequest};
 use crate::repositories::task_repository::TaskRepository;
@@ -518,7 +518,7 @@ impl TaskService for TaskServiceImpl {
 
 Now, let's implement the authentication service:
 
-```rust
+```
 // src/services/auth_service.rs
 use crate::models::user::{LoginRequest, RegisterRequest, TokenResponse, User, UserRole};
 use crate::repositories::user_repository::UserRepository;
@@ -673,7 +673,7 @@ impl AuthService for AuthServiceImpl {
 
 Let's create a centralized error handling system:
 
-```rust
+```
 // src/utils/error_handler.rs
 use navius::http::{Response, StatusCode};
 use serde::{Deserialize, Serialize};
@@ -771,7 +771,7 @@ impl From<ApiError> for Response {
 
 Let's add middleware for JWT authentication:
 
-```rust
+```
 // src/utils/middleware.rs
 use crate::utils::error_handler::{ApiError, Result};
 use jsonwebtoken::{decode, DecodingKey, Validation};
@@ -841,7 +841,7 @@ impl Middleware for AuthMiddleware {
 
 Finally, let's put everything together in our main application:
 
-```rust
+```
 // src/main.rs
 mod api;
 mod models;
@@ -947,13 +947,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     Ok(())
 }
-```rust
+```
 
 ### Configuration
 
 Let's create our configuration file:
 
-```yaml
+```
 # config/default.yaml
 server:
   host: "127.0.0.1"
@@ -971,7 +971,7 @@ cors:
   allowed_origins: ["*"]
   allowed_methods: ["GET", "POST", "PUT", "DELETE"]
   max_age_secs: 86400
-```rust
+```
 
 ## Testing Your API
 
@@ -979,7 +979,7 @@ cors:
 
 Let's write some unit tests for our service layer:
 
-```rust
+```
 // tests/service_tests.rs
 #[cfg(test)]
 mod tests {
@@ -1044,13 +1044,13 @@ use std::sync::Arc;
         assert!(error.to_string().contains("not found"));
     }
 }
-```rust
+```
 
 ### Integration Testing
 
 We can also write integration tests for our API endpoints:
 
-```rust
+```
 // tests/api_tests.rs
 #[cfg(test)]
 mod tests {
@@ -1129,7 +1129,7 @@ use std::sync::Arc;
         assert!(!tasks.is_empty());
     }
 }
-```rust
+```
 
 ## API Documentation
 
@@ -1137,7 +1137,7 @@ use std::sync::Arc;
 
 To document your API, you can use Swagger/OpenAPI:
 
-```rust
+```
 // src/utils/swagger.rs
 use navius::router::Router;
 use navius::http::{Response, StatusCode};
@@ -1164,7 +1164,7 @@ pub fn add_swagger_routes(router: &mut Router) {
             .unwrap()
     });
 }
-```rust
+```
 
 ## Best Practices
 
@@ -1224,7 +1224,7 @@ When building REST APIs with Navius, follow these best practices:
 
 Implement caching to improve API performance:
 
-```rust
+```
 // src/utils/cache_middleware.rs
 use navius::http::{Body, Request, Response, StatusCode};
 use navius::router::Middleware;
@@ -1305,13 +1305,13 @@ impl Middleware for CacheMiddleware {
         res
     }
 }
-```rust
+```
 
 ### API Versioning
 
 Implement API versioning to support multiple API versions:
 
-```rust
+```
 // src/utils/versioning.rs
 use navius::router::{Router, RouteHandler};
 
@@ -1351,7 +1351,7 @@ impl VersionedRouter {
         main_router
     }
 }
-```rust
+```
 
 ## Troubleshooting
 

@@ -48,7 +48,7 @@ The cache service architecture consists of several key components:
 
 The cache service is accessible through the application's service registry:
 
-```rust
+```
 use crate::core::services::ServiceRegistry;
 use crate::core::services::cache_service::CacheService;
 
@@ -57,13 +57,13 @@ let cache_service = service_registry.get::<CacheService>();
 
 // Create a typed cache for a specific resource
 let user_cache = cache_service.create_cache::<UserDto>("users").await?;
-```rust
+```
 
 ### Performing Basic Cache Operations
 
 Once you have a cache instance, you can perform operations:
 
-```rust
+```
 use std::time::Duration;
 
 // Set a value with 5 minute TTL
@@ -79,13 +79,13 @@ user_cache.delete("user-123").await?;
 
 // Clear the entire cache
 user_cache.clear().await?;
-```rust
+```
 
 ## Implementing a Custom Cache Provider
 
 You can implement your own cache provider by implementing the `CacheProvider` trait:
 
-```rust
+```
 use crate::core::services::cache_provider::{CacheOperations, CacheProvider, CacheError};
 use crate::core::services::cache_service::CacheConfig;
 use async_trait::async_trait;
@@ -159,13 +159,13 @@ impl<T: Send + Sync + Clone + 'static> CacheOperations<T> for CustomCache<T> {
         }
     }
 }
-```rust
+```
 
 ## Registering a Provider
 
 Register your custom provider with the cache service:
 
-```rust
+```
 use crate::core::services::cache_provider::CacheProviderRegistry;
 use crate::core::services::cache_service::CacheService;
 
@@ -189,13 +189,13 @@ async fn setup_cache_service() -> CacheService {
     
     cache_service
 }
-```rust
+```
 
 ## Using the In-Memory Cache Provider
 
 The in-memory cache provider is useful for local caching and testing:
 
-```rust
+```
 use crate::core::services::memory_cache::MemoryCacheProvider;
 use crate::core::services::cache_service::CacheConfig;
 use std::time::Duration;
@@ -219,13 +219,13 @@ async fn test_memory_cache() {
     let value = cache.get("greeting").await;
     assert_eq!(value, Some("Hello, world!".to_string()));
 }
-```rust
+```
 
 ## Using the Redis Cache Provider
 
 The Redis cache provider is used for distributed caching:
 
-```rust
+```
 use crate::core::services::redis_cache::RedisCacheProvider;
 use crate::core::services::cache_service::CacheConfig;
 
@@ -242,13 +242,13 @@ async fn setup_redis_cache() {
     // Use the cache
     // ...
 }
-```rust
+```
 
 ## Two-Tier Cache Implementation
 
 The two-tier cache combines a fast in-memory cache with a slower persistent cache:
 
-```rust
+```
 use crate::core::services::cache_service::{TwoTierCache, CacheConfig};
 use crate::core::services::memory_cache::MemoryCacheProvider;
 use crate::core::services::redis_cache::RedisCacheProvider;
@@ -280,13 +280,13 @@ async fn setup_two_tier_cache() {
     // Use the cache - automatically manages both tiers
     two_tier_cache.get("user-123").await;
 }
-```rust
+```
 
 ## Configuration
 
 Configure the cache service in your application configuration:
 
-```yaml
+```
 # In config/default.yaml
 cache:
   default_provider: memory
@@ -307,11 +307,11 @@ cache:
     products:
       provider: redis
       ttl_seconds: 1800
-```rust
+```
 
 Loading the configuration:
 
-```rust
+```
 use crate::core::config::AppConfig;
 use crate::core::services::cache_service::CacheConfig;
 
@@ -325,13 +325,13 @@ let cache_config = CacheConfig::default()
     .with_name("users")
     .with_ttl(Duration::from_secs(60))
     .with_max_size(1000);
-```rust
+```
 
 ## Complete Example
 
 Here's a complete example showing how to set up and use the cache service:
 
-```rust
+```
 use crate::core::services::cache_service::{
     CacheService, CacheConfig, CacheOperations
 };
@@ -391,13 +391,13 @@ async fn cache_example(service: &CacheService) -> Result<(), CacheError> {
     
     Ok(())
 }
-```rust
+```
 
 ## Integration with Two-Tier Cache
 
 The generic cache providers can be used with the existing two-tier cache system:
 
-```rust
+```
 use crate::core::services::cache_service::{TwoTierCache, TwoTierCacheConfig};
 
 async fn two_tier_example(service: &CacheService) -> Result<(), CacheError> {
@@ -429,7 +429,7 @@ async fn two_tier_example(service: &CacheService) -> Result<(), CacheError> {
     
     Ok(())
 }
-```rust
+```
 
 ## Best Practices
 

@@ -8,7 +8,7 @@ This document explains how to use the generic logging interface in the Navius ap
 
 The `LoggingOperations` trait defines the core interface for all loggers:
 
-```rust
+```
 pub trait LoggingOperations: Send + Sync + 'static {
     // Log a message at a specific level
     fn log(&self, level: LogLevel, info: LogInfo) -> Result<(), LoggingError>;
@@ -36,13 +36,13 @@ pub trait LoggingOperations: Send + Sync + 'static {
     // Create a child logger with additional context
     fn child(&self, context: &str) -> Arc<dyn LoggingOperations>;
 }
-```rust
+```
 
 ### LoggingProvider
 
 The `LoggingProvider` trait allows different logging implementations to be created:
 
-```rust
+```
 pub trait LoggingProvider: Send + Sync + 'static {
     // Create a new logger instance
     async fn create_logger(&self, config: &LoggingConfig) -> Result<Arc<dyn LoggingOperations>, LoggingError>;
@@ -53,7 +53,7 @@ pub trait LoggingProvider: Send + Sync + 'static {
     // Check if this provider supports the given configuration
     fn supports(&self, config: &LoggingConfig) -> bool;
 }
-```rust
+```
 
 ## Using the Logging Service
 
@@ -61,7 +61,7 @@ pub trait LoggingProvider: Send + Sync + 'static {
 
 Initialize the logging service using the factory method:
 
-```rust
+```
 use navius::core::logger::{init, LoggingConfig};
 
 async fn setup_logging() -> Result<Arc<dyn LoggingOperations>, LoggingError> {
@@ -74,13 +74,13 @@ async fn setup_logging() -> Result<Arc<dyn LoggingOperations>, LoggingError> {
     // Return the logger instance
     Ok(logger)
 }
-```rust
+```
 
 ### Basic Logging
 
 Log messages at different levels:
 
-```rust
+```
 use navius::core::logger::{LogInfo, LogLevel};
 
 // Log an info message
@@ -99,13 +99,13 @@ logger.error(
         .with_request_id("req-123456")
         .with_user_id("user@example.com")
 ).unwrap();
-```rust
+```
 
 ### Structured Logging
 
 Create structured logs for consistent formatting:
 
-```rust
+```
 use navius::core::logger::{LogInfo, LogLevel, StructuredLog};
 use std::collections::HashMap;
 
@@ -130,13 +130,13 @@ let structured_log = StructuredLog::from((LogLevel::Info, log_info));
 
 // Log the structured record
 logger.log_structured(structured_log).unwrap();
-```rust
+```
 
 ### Advanced: Creating Child Loggers
 
 Child loggers inherit settings but add additional context:
 
-```rust
+```
 // Create a logger for a specific subsystem
 let auth_logger = logger.child("auth-service");
 
@@ -146,7 +146,7 @@ auth_logger.info(LogInfo::new("User login successful")).unwrap();
 // Create nested child loggers
 let oauth_logger = auth_logger.child("oauth");
 oauth_logger.debug(LogInfo::new("Token validation")).unwrap();
-```rust
+```
 
 ## Implementing a Custom Logger
 
@@ -156,7 +156,7 @@ To create a custom logger implementation:
 2. Create a provider that implements `LoggingProvider`
 3. Register your provider with the registry
 
-```rust
+```
 use navius::core::logger::{
     LoggingOperations, LoggingProvider, LoggingProviderRegistry,
     LogInfo, LogLevel, StructuredLog, LoggingConfig, LoggingError
@@ -207,7 +207,7 @@ async fn register_custom_provider() -> Result<Arc<dyn LoggingOperations>, Loggin
     
     registry.create_logger_from_config(&config).await
 }
-```rust
+```
 
 ## Built-in Logger Implementations
 
@@ -215,7 +215,7 @@ async fn register_custom_provider() -> Result<Arc<dyn LoggingOperations>, Loggin
 
 The default implementation is based on the `tracing` crate:
 
-```rust
+```
 // Create a tracing-based logger
 let config = LoggingConfig {
     logger_type: "tracing".to_string(),
@@ -225,13 +225,13 @@ let config = LoggingConfig {
 };
 
 let logger = init(&config).await.unwrap();
-```rust
+```
 
 ### Console Logger
 
 A colorized console logger is also provided:
 
-```rust
+```
 // Create a console logger with colors
 let config = LoggingConfig {
     logger_type: "console".to_string(),
@@ -241,13 +241,13 @@ let config = LoggingConfig {
 };
 
 let logger = init(&config).await.unwrap();
-```rust
+```
 
 ## Configuring Logging
 
 The `LoggingConfig` struct controls logger behavior:
 
-```rust
+```
 let config = LoggingConfig {
     // Logger implementation to use
     logger_type: "tracing".to_string(),
@@ -274,7 +274,7 @@ let config = LoggingConfig {
     
     ..Default::default()
 };
-```rust
+```
 
 ## Best Practices
 

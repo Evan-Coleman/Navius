@@ -71,7 +71,7 @@ Required dependencies:
 
 ## Project Structure
 
-```rust
+```
 custom-service-example/
 ├── Cargo.toml
 ├── config/
@@ -98,7 +98,7 @@ custom-service-example/
         └── services/
             ├── mod.rs
             └── service_registry.rs # DI container
-```rust
+```
 
 ## Implementation
 
@@ -108,7 +108,7 @@ A key part of Navius is the `ServiceRegistry`, which facilitates dependency inje
 
 #### `core/services/service_registry.rs`
 
-```rust
+```
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -163,13 +163,13 @@ impl ServiceRegistry {
         }
     }
 }
-```rust
+```
 
 ### User Model
 
 #### `app/models/user.rs`
 
-```rust
+```
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -185,13 +185,13 @@ impl fmt::Display for User {
         write!(f, "User {{ id: {}, name: {}, email: {} }}", self.id, self.name, self.email)
     }
 }
-```rust
+```
 
 ### User Service
 
 #### `app/services/user_service.rs`
 
-```rust
+```
 use crate::app::models::user::User;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -255,13 +255,13 @@ impl UserService {
         users.remove(id).is_some()
     }
 }
-```rust
+```
 
 ### Notification Service
 
 #### `app/services/notification_service.rs`
 
-```rust
+```
 use crate::app::models::user::User;
 use std::sync::Arc;
 
@@ -293,13 +293,13 @@ impl NotificationService {
         println!("Sending update notification to {}: Your profile was updated", user.email);
     }
 }
-```rust
+```
 
 ### API Handlers
 
 #### `app/api/user_handler.rs`
 
-```rust
+```
 use crate::app::models::user::User;
 use crate::app::services::user_service::UserService;
 use crate::app::services::notification_service::NotificationService;
@@ -378,13 +378,13 @@ pub async fn delete_user(
         Err(AppError::not_found(format!("User with ID {} not found", id)))
     }
 }
-```rust
+```
 
 ### Application Entry Point
 
 #### `main.rs`
 
-```rust
+```
 use std::net::SocketAddr;
 use std::sync::Arc;
 use axum::{Router, routing::{get, post, put, delete}};
@@ -444,20 +444,20 @@ async fn main() -> Result<(), AppError> {
     
     Ok(())
 }
-```rust
+```
 
 ## Configuration
 
 ### `config/default.yaml`
 
-```yaml
+```
 server:
   address: "127.0.0.1"
   port: 3000
 
 app_name: "Custom Service Example"
 notifications_enabled: true
-```rust
+```
 
 ## Running the Example
 
@@ -480,60 +480,60 @@ Test the endpoints using curl or any HTTP client:
 
 ### Get all users
 
-```bash
+```
 curl http://localhost:3000/users
-```rust
+```
 
 Sample response:
-```json
+```
 [
   {"id":"1","name":"Alice","email":"alice@example.com"},
   {"id":"2","name":"Bob","email":"bob@example.com"}
 ]
-```rust
+```
 
 ### Get a specific user
 
-```bash
+```
 curl http://localhost:3000/users/1
-```rust
+```
 
 Sample response:
-```json
+```
 {"id":"1","name":"Alice","email":"alice@example.com"}
-```rust
+```
 
 ### Create a new user
 
-```bash
+```
 curl -X POST http://localhost:3000/users \
   -H "Content-Type: application/json" \
   -d '{"id": "3", "name": "Charlie", "email": "charlie@example.com"}'
-```rust
+```
 
 Sample response:
-```json
+```
 {"id":"3","name":"Charlie","email":"charlie@example.com"}
-```rust
+```
 
 ### Update a user
 
-```bash
+```
 curl -X PUT http://localhost:3000/users/3 \
   -H "Content-Type: application/json" \
   -d '{"id": "3", "name": "Charlie Updated", "email": "charlie@example.com"}'
-```rust
+```
 
 Sample response:
-```json
+```
 {"id":"3","name":"Charlie Updated","email":"charlie@example.com"}
-```rust
+```
 
 ### Delete a user
 
-```bash
+```
 curl -X DELETE http://localhost:3000/users/3
-```rust
+```
 
 ## Key Concepts
 
@@ -611,7 +611,7 @@ curl -X DELETE http://localhost:3000/users/3
 
 For services that manage data, consider using the Repository pattern:
 
-```rust
+```
 pub trait UserRepository {
     fn find_by_id(&self, id: &str) -> Option<User>;
     fn find_all(&self) -> Vec<User>;
@@ -624,13 +624,13 @@ pub trait UserRepository {
 pub struct UserService {
     repository: Arc<dyn UserRepository>,
 }
-```rust
+```
 
 ### Factory Pattern
 
 For complex service creation:
 
-```rust
+```
 pub struct ServiceFactory {
     config: AppConfig,
 }
@@ -644,13 +644,13 @@ impl ServiceFactory {
         NotificationService::new(self.config.notifications_enabled)
     }
 }
-```rust
+```
 
 ### Decorator Pattern
 
 Add functionality to services without modifying them:
 
-```rust
+```
 pub struct LoggingNotificationService {
     inner: Arc<NotificationService>,
 }
@@ -661,13 +661,13 @@ impl LoggingNotificationService {
         self.inner.send_welcome_notification(user)
     }
 }
-```rust
+```
 
 ## Testing Services
 
 ### Unit Testing Example
 
-```rust
+```
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -708,11 +708,11 @@ mod tests {
         assert!(service.get_user("test").is_none());
     }
 }
-```rust
+```
 
 ### Testing Services with Mocks
 
-```rust
+```
 // Using mockall to create a mock NotificationService
 #[cfg(test)]
 mod tests {
@@ -740,7 +740,7 @@ mod tests {
         // (Implementation depends on how the services are integrated)
     }
 }
-```rust
+```
 
 ## Common Pitfalls
 
@@ -779,32 +779,32 @@ Different services may have different lifetimes:
 
 Register different implementations based on configuration:
 
-```rust
+```
 if config.use_mock_services {
     registry.register(MockUserService::new())?;
 } else {
     registry.register(RealUserService::new(db_connection))?;
 }
-```rust
+```
 
 ### Async Services
 
 For services that perform async operations:
 
-```rust
+```
 #[async_trait]
 pub trait AsyncUserService {
     async fn get_user(&self, id: &str) -> Result<User, AppError>;
     async fn create_user(&self, user: User) -> Result<User, AppError>;
     // ...
 }
-```rust
+```
 
 ### Service Middleware
 
 Intercept and modify service behavior:
 
-```rust
+```
 pub struct ServiceMiddleware<S> {
     inner: S,
     before: Box<dyn Fn() -> ()>,
@@ -814,7 +814,7 @@ pub struct ServiceMiddleware<S> {
 impl<S> ServiceMiddleware<S> {
     // Proxy methods to inner service with before/after hooks
 }
-```rust
+```
 
 ## Next Steps
 
