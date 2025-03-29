@@ -50,33 +50,136 @@ The CI/CD pipeline will build the documentation and deploy it to https://ecolema
 
 # Navius Documentation
 
-Welcome to the Navius documentation. This guide will help you understand and work with the Navius framework effectively.
+This repository contains the official documentation for the Navius framework, providing comprehensive guides, tutorials, references, and examples for developers building applications with Navius.
 
-## Overview
+## Documentation Structure
 
-Navius is a modern, secure, and performant web framework built with Rust and Axum. This documentation covers everything from getting started to advanced topics and best practices.
+The documentation is organized into clear sections to help you find what you need:
 
-## Key Features
+### [Getting Started](./01_getting_started/README.md)
+Everything you need to start using Navius, including installation, quickstart guide, and basic concepts.
 
-- **Security First**: Built-in security features and best practices
-- **High Performance**: Optimized for speed and efficiency
-- **Developer Experience**: Intuitive APIs and comprehensive documentation
-- **Cloud Native**: Designed for modern cloud environments
-- **Extensible**: Modular architecture for easy customization
-- **Two-Tier Caching**: Fast in-memory cache with persistent Redis fallback
-- **Server Customization**: Feature selection for optimized deployment
-- **Generic Repositories**: Type-safe repository pattern for domain entities
-- **Generic Logging Service**: Pluggable logging providers with structured logging
+- [Installation](./01_getting_started/installation.md)
+- [Quickstart Guide](./01_getting_started/quickstart.md)
+- [First Steps](./01_getting_started/first-steps.md)
+- [Hello World Tutorial](./01_getting_started/hello-world.md)
+- [Development Setup](./01_getting_started/development-setup.md)
+- [CLI Reference](./01_getting_started/cli-reference.md)
 
-## Getting Help
+### [Examples](./02_examples/README.md)
+Practical code examples demonstrating how to implement common features and solve typical challenges.
 
-- Join our [Community](03_contributing/code-of-conduct.md)
-- Report issues on [GitLab](https://gitlab.com/ecoleman2/navius/) (primary repository)
-- Check our mirror on [GitHub](https://github.com/Evan-Coleman/Navius)
+- Basic application examples
+- Integration examples
+- Advanced feature implementations
+- Sample projects
+
+### [Contributing](./03_contributing/README.md)
+Guidelines for contributing to Navius, including code standards, pull request process, and development workflow.
+
+- [Contribution Guidelines](./03_contributing/contributing.md)
+- [Code of Conduct](./03_contributing/code-of-conduct.md)
+- [Development Workflow](./03_contributing/development-workflow.md)
+- [Pull Request Process](./03_contributing/pull-request-process.md)
+
+### [Guides](./04_guides/README.md)
+Comprehensive guides for developing applications with Navius, organized by topic.
+
+- **Development**
+  - [IDE Setup](./04_guides/development/ide-setup.md)
+  - [Git Workflow](./04_guides/development/git-workflow.md)
+  - [Testing Guide](./04_guides/development/testing-guide.md)
+  - [Debugging Guide](./04_guides/development/debugging-guide.md)
+
+- **Features**
+  - [Authentication](./04_guides/features/authentication.md)
+  - [Routing](./04_guides/features/routing.md)
+  - [Configuration](./04_guides/features/configuration.md)
+  - [State Management](./04_guides/features/state-management.md)
+
+- **Security**
+  - [Authentication Implementation](./04_guides/security/authentication-implementation.md)
+  - [Authorization Guide](./04_guides/security/authorization-guide.md)
+  - [Data Protection](./04_guides/security/data-protection.md)
+  - [API Security](./04_guides/security/api-security.md)
+
+- **Performance**
+  - [Optimization](./04_guides/performance/optimization.md)
+  - [Caching](./04_guides/performance/caching.md)
+  - [Database Performance](./04_guides/performance/database-performance.md)
+
+### [Reference](./05_reference/README.md)
+Detailed technical reference documentation for Navius APIs, configuration options, and patterns.
+
+- **API Reference**
+  - [Authentication API](./05_reference/api/authentication-api.md)
+  - [Application API](./05_reference/api/application-api.md)
+  - [Database API](./05_reference/api/database-api.md)
+  - [Cache API](./05_reference/api/cache-api.md)
+  - [Configuration API](./05_reference/api/configuration-api.md)
+
+- **Configuration Reference**
+  - [Application Configuration](./05_reference/configuration/application-config.md)
+  - [Environment Variables](./05_reference/configuration/environment-variables.md)
+
+- **Patterns**
+  - [Repository Pattern](./05_reference/patterns/repository-pattern.md)
+  - [Service Layer](./05_reference/patterns/service-layer.md)
+
+## Documentation Highlights
+
+- **Comprehensive API Reference**: Detailed documentation for all Navius APIs with request/response examples, error handling, and integration patterns.
+- **Step-by-Step Guides**: Clear, actionable guides for implementing common features and best practices.
+- **Practical Examples**: Real-world code examples that demonstrate how to use Navius effectively.
+- **Development Best Practices**: Guidance on IDE setup, testing, debugging, and performance optimization.
+- **Security Implementation**: Detailed guides on implementing authentication, authorization, and data protection.
+
+## Using the Documentation
+
+### For New Users
+
+If you're new to Navius, start with:
+
+1. [Installation Guide](./01_getting_started/installation.md) to set up Navius
+2. [Quickstart Guide](./01_getting_started/quickstart.md) to create your first application
+3. [Hello World Tutorial](./01_getting_started/hello-world.md) for a step-by-step walkthrough
+
+### For Regular Developers
+
+If you're already using Navius:
+
+1. Explore the [Guides](./04_guides/README.md) for implementing specific features
+2. Refer to the [API Reference](./05_reference/README.md) for detailed technical information
+3. Check out [Examples](./02_examples/README.md) for code samples and patterns
+
+### For Contributors
+
+To contribute to Navius:
+
+1. Read the [Contribution Guidelines](./03_contributing/contributing.md)
+2. Follow the [Development Workflow](./03_contributing/development-workflow.md)
+3. Submit your changes following the [Pull Request Process](./03_contributing/pull-request-process.md)
+
+## Documentation Updates
+
+This documentation is continuously improved. Recent updates include:
+
+- Enhanced API reference documentation with comprehensive examples
+- New comprehensive security guides
+- Improved development setup and IDE configuration guidance
+- Expanded testing and debugging documentation
+
+## Support
+
+If you have questions about using Navius or need help with the documentation:
+
+- [GitHub Issues](https://github.com/navius/navius/issues) for bug reports and feature requests
+- [Discord Community](https://discord.gg/navius) for community support and discussions
+- [Stack Overflow](https://stackoverflow.com/questions/tagged/navius) using the 'navius' tag
 
 ## License
 
-Navius is licensed under the [Apache License 2.0](99_misc/LICENSE.md) ([view on GitLab](https://gitlab.com/ecoleman2/navius/-/blob/master/LICENSE))
+This documentation is licensed under the [MIT License](LICENSE).
 
 ## 📚 Documentation Sections
 
