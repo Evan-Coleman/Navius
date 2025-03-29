@@ -4,9 +4,11 @@
 
 use crate::core::features::{FeatureError, FeatureInfo, FeatureRegistry, FeatureRegistryExt};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use yaml_rust2::YamlLoader;
 
 /// Documentation template format
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -150,14 +152,33 @@ impl DocGenerator {
         // Extract template metadata from the markdown frontmatter
         let (frontmatter, content) = self.extract_frontmatter(&content)?;
 
-        // Parse frontmatter as YAML
-        let frontmatter: serde_yaml::Value = serde_yaml::from_str(&frontmatter)
+        // If no frontmatter or frontmatter is empty, create a simple template with no metadata
+        if frontmatter.trim().is_empty() {
+            let template_name = path.file_stem().unwrap().to_string_lossy().to_string();
+            let template = DocTemplate {
+                name: template_name.clone(),
+                content,
+                required_features: Vec::new(),
+                variables: HashMap::new(),
+            };
+
+            self.templates.insert(template_name, template);
+            return Ok(());
+        }
+
+        // Parse frontmatter as YAML and convert to JSON Value
+        let yaml_docs = YamlLoader::load_from_str(&frontmatter)
             .map_err(|e| FeatureError::DeserializationError(e.to_string()))?;
 
+        if yaml_docs.is_empty() {
+            return Ok(());
+        }
+
+        let frontmatter_yaml = &yaml_docs[0];
+
         // Extract required features
-        let required_features = if let Some(features) = frontmatter.get("features") {
-            let features_vec = features.as_sequence().unwrap_or(&Vec::new()).to_vec();
-            features_vec
+        let required_features = if let Some(features) = frontmatter_yaml["features"].as_vec() {
+            features
                 .iter()
                 .filter_map(|v| v.as_str().map(|s| s.to_string()))
                 .collect()
@@ -166,18 +187,14 @@ impl DocGenerator {
         };
 
         // Extract variables
-        let variables = if let Some(vars) = frontmatter.get("variables") {
-            let vars_map = vars
-                .as_mapping()
-                .unwrap_or(&serde_yaml::Mapping::new())
-                .clone();
-            vars_map
-                .iter()
-                .filter_map(|(k, v)| Some((k.as_str()?.to_string(), v.as_str()?.to_string())))
-                .collect()
-        } else {
-            HashMap::new()
-        };
+        let mut variables = HashMap::new();
+        if let Some(vars) = frontmatter_yaml["variables"].as_hash() {
+            for (k, v) in vars {
+                if let (Some(key), Some(value)) = (k.as_str(), v.as_str()) {
+                    variables.insert(key.to_string(), value.to_string());
+                }
+            }
+        }
 
         // Create template
         let template = DocTemplate {
@@ -338,8 +355,13 @@ The following metrics are always available:
     fn generate_index(&self) -> Result<(), FeatureError> {
         println!("Generating main documentation index...");
 
-        // Look for the README template
-        if let Some(template) = self.templates.get("README") {
+        // Look for the README template - try both with and without .md extension
+        let readme_template = self
+            .templates
+            .get("README")
+            .or_else(|| self.templates.get("README.md"));
+
+        if let Some(template) = readme_template {
             // Create feature list for the template
             let feature_list = self
                 .registry
@@ -363,7 +385,7 @@ The following metrics are always available:
             let content = self.render_template(&template.content, &context)?;
 
             // Write the index file
-            let output_path = self.config.output_dir.join("index.md");
+            let output_path = self.config.output_dir.join("README.md");
             fs::write(&output_path, content)
                 .map_err(|e| FeatureError::IoError(format!("Failed to write index file: {}", e)))?;
 

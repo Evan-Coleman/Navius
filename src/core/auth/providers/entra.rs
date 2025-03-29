@@ -11,6 +11,7 @@ use chrono::Utc;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode_header};
 use reqwest::Client;
 use serde::Deserialize;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use std::sync::{Arc, Mutex};
@@ -22,7 +23,7 @@ pub struct EntraProvider {
     config: AuthConfig,
     jwks_cache: Arc<RwLock<Option<JwksCacheEntry>>>,
     http_client: reqwest::Client,
-    entra_specific: HashMap<String, serde_yaml::Value>,
+    entra_specific: HashMap<String, Value>,
     refresh_limiter: RefreshLimiter,
     circuit_breaker: CircuitBreaker,
 }

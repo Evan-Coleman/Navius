@@ -25,6 +25,10 @@ examples = []
 test-utils = []
 experimental = []
 reliability = []
+# Features referenced in runtime.rs
+caching = []
+auth = []
+advanced_metrics = []
 # Observability providers
 prometheus = ["metrics-exporter-prometheus"]
 dynatrace = ["dep:opentelemetry-dynatrace"]
@@ -46,7 +50,7 @@ base64 = "0.22.1"
 reqwest = { version = "0.12.15", features = ["json"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-serde_yaml = "0.9.34+deprecated"
+yaml-rust2 = "0.10.1"  # Pure Rust YAML 1.2 implementation
 tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }
 tracing = { version = "0.1.41", features = ["log"] }
 tracing-subscriber = { version = "0.3.19", optional = true }

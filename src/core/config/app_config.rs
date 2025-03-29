@@ -2,6 +2,7 @@ use super::constants;
 use config::{Config, ConfigError, Environment, File};
 use dotenvy::dotenv;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env;
@@ -566,7 +567,7 @@ pub struct FeaturesConfig {
 
     /// Feature-specific configuration
     #[serde(default)]
-    pub config: HashMap<String, serde_yaml::Value>,
+    pub config: HashMap<String, Value>,
 }
 
 impl Default for FeaturesConfig {
@@ -717,10 +718,9 @@ pub fn load_config() -> Result<AppConfig, ConfigError> {
     if let Some(provider_config) = app_config.auth.providers.get_mut(&default_provider) {
         if let Ok(tenant_id) = env::var(constants::auth::env_vars::TENANT_ID) {
             if !tenant_id.is_empty() {
-                provider_config.provider_specific.insert(
-                    "tenant_id".to_string(),
-                    serde_yaml::Value::String(tenant_id),
-                );
+                provider_config
+                    .provider_specific
+                    .insert("tenant_id".to_string(), Value::String(tenant_id));
             }
         }
 
@@ -740,16 +740,15 @@ pub fn load_config() -> Result<AppConfig, ConfigError> {
             if !scope.is_empty() {
                 provider_config
                     .provider_specific
-                    .insert("scope".to_string(), serde_yaml::Value::String(scope));
+                    .insert("scope".to_string(), Value::String(scope));
             }
         }
 
         if let Ok(token_url) = env::var(constants::auth::env_vars::TOKEN_URL) {
             if !token_url.is_empty() {
-                provider_config.provider_specific.insert(
-                    "token_url".to_string(),
-                    serde_yaml::Value::String(token_url),
-                );
+                provider_config
+                    .provider_specific
+                    .insert("token_url".to_string(), Value::String(token_url));
             }
         }
     }
@@ -780,5 +779,5 @@ pub struct ProviderConfig {
     #[serde(default)]
     pub role_mappings: RoleMappings,
     #[serde(default)]
-    pub provider_specific: HashMap<String, serde_yaml::Value>,
+    pub provider_specific: HashMap<String, Value>,
 }

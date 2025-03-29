@@ -340,7 +340,7 @@ fn test_documentation_generation() {
     assert!(result.contains("Documentation generated successfully"));
 
     // Verify files were created
-    let index_file = output_dir.path().join("index.md");
+    let index_file = output_dir.path().join("README.md");
     assert!(
         index_file.exists(),
         "Index file was not created at {:?}",

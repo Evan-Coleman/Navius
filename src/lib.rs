@@ -255,3 +255,8 @@ pub use crate::core::services::health::HealthService as CoreHealthService;
 pub mod features {
     pub use crate::core::features::*;
 }
+
+// Re-export yaml-rust2 for easier use throughout the codebase
+pub mod yaml {
+    pub use serde_json::Value;
+}

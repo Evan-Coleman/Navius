@@ -317,7 +317,7 @@ pub struct ProviderConfig {
     #[serde(default)]
     pub role_mappings: HashMap<String, Vec<String>>,
     #[serde(default)]
-    pub provider_specific: HashMap<String, serde_yaml::Value>,
+    pub provider_specific: HashMap<String, Value>,
     // Additional fields specific to common::ProviderConfig
     #[serde(default = "default_refresh_rate")]
     pub refresh_rate_limit: RateLimitConfig,

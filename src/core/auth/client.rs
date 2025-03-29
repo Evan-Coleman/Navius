@@ -8,6 +8,7 @@ use oauth2::{
     basic::BasicClient,
 };
 use reqwest::Client;
+use serde_json::Value;
 use tracing::{debug, error, info};
 
 use crate::core::auth::interfaces::{TokenClient, TokenValidationResult};
@@ -318,7 +319,7 @@ mod tests {
         // Add tenant_id to provider specific config
         provider_config.provider_specific.insert(
             "tenant_id".to_string(),
-            serde_yaml::Value::String("config-tenant-placeholder".to_string()),
+            Value::String("config-tenant-placeholder".to_string()),
         );
 
         config.auth.default_provider = "entra".to_string();
