@@ -5,6 +5,7 @@
 members = [
     "crates/navius-core",
     "crates/navius-http",
+    "crates/navius-auth",
     # Add new crates here as they are created
 ]
 
@@ -78,7 +79,7 @@ toml = "0.8.20"
 mockito = "1.7.0"
 wiremock = "0.6.3"
 mock-it = "0.9.0"
-proptest = "1.5.0"
+proptest = "1.6.0"
 fake = { version = "4.2.0", features = ["derive", "chrono", "uuid"] }
 test-context = "0.4.1"
 assert_matches = "1.5.0"
@@ -122,6 +123,8 @@ categories = ["web-programming", "asynchronous"]
 navius-core = { path = "crates/navius-core", version = "0.1.0" }
 # HTTP crate
 navius-http = { path = "crates/navius-http", version = "0.1.0" }
+# Auth crate
+navius-auth = { path = "crates/navius-auth", version = "0.1.0" }
 
 # Add other crates as they are created
 
