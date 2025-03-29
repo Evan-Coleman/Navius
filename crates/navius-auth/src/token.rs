@@ -19,6 +19,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "jwt")]
 use std::collections::{HashMap, HashSet};
 #[cfg(feature = "jwt")]
+use std::sync::{Arc, Mutex};
+#[cfg(feature = "jwt")]
 use tracing::{debug, instrument};
 #[cfg(feature = "jwt")]
 use uuid::Uuid;
@@ -89,7 +91,7 @@ pub struct JWTProvider {
     /// Provider configuration.
     config: TokenProviderConfig,
     /// Token blacklist.
-    blacklist: HashMap<String, chrono::DateTime<Utc>>,
+    blacklist: Arc<Mutex<HashMap<String, chrono::DateTime<Utc>>>>,
 }
 
 #[cfg(feature = "jwt")]
@@ -99,7 +101,7 @@ impl JWTProvider {
         Self {
             name,
             config,
-            blacklist: HashMap::new(),
+            blacklist: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -218,16 +220,24 @@ impl JWTProvider {
 
     /// Check if a token is blacklisted.
     fn is_blacklisted(&self, token: &str) -> bool {
-        self.blacklist.contains_key(token)
+        let blacklist = self
+            .blacklist
+            .lock()
+            .expect("Failed to acquire lock on token blacklist");
+        blacklist.contains_key(token)
     }
 
     /// Add a token to the blacklist.
     fn blacklist_token(&mut self, token: &str, expiry: chrono::DateTime<Utc>) {
-        self.blacklist.insert(token.to_string(), expiry);
+        let mut blacklist = self
+            .blacklist
+            .lock()
+            .expect("Failed to acquire lock on token blacklist");
+        blacklist.insert(token.to_string(), expiry);
 
         // Clean up expired blacklist entries
         let now = Utc::now();
-        self.blacklist.retain(|_, exp| *exp > now);
+        blacklist.retain(|_, exp| *exp > now);
     }
 }
 
@@ -286,9 +296,18 @@ impl AuthProvider for JWTProvider {
             chrono::DateTime::<Utc>::from_timestamp(token_data.exp.unwrap_or_default() as i64, 0)
                 .unwrap_or_else(|| Utc::now() + Duration::hours(24));
 
-        // Create a clone for mutability (this would be more efficiently done with a proper thread-safe data structure)
-        let mut provider = self.clone();
-        provider.blacklist.insert(token.to_string(), expiry);
+        // Use interior mutability with a lock to update the blacklist
+        let blacklist = Arc::clone(&self.blacklist);
+        let mut blacklist = blacklist
+            .lock()
+            .expect("Failed to acquire lock on token blacklist");
+
+        // Insert token into blacklist with expiry time
+        blacklist.insert(token.to_string(), expiry);
+
+        // Clean up expired tokens from the blacklist
+        let now = Utc::now();
+        blacklist.retain(|_, exp| *exp > now);
 
         Ok(())
     }
