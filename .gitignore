@@ -61,3 +61,6 @@ config.*.yaml
 # mdBook output
 /docs/book/
 /public/
+
+# refs
+/ref_projects

@@ -1,30 +1,99 @@
 ---
-description: When working with files in the docs/roadmaps folder.
-globs: docs/roadmaps/**/*
+description: When working with files in the docs/roadmaps folder or root-level roadmap folders where in-progress roadmaps are stored
+globs: docs/roadmaps/**/*,*/roadmap/**/*,*/reports/**/*,*/README.md,*/progress.md
 alwaysApply: false
 ---
+# Roadmap Conventions and Guidelines
+
 ## When being asked to implement something in a roadmap follow these instructions. Also, always add the ##PROMPT_ENHANCER to requests.
 
+# Roadmap Folder Structure
+
+## Active Roadmap Structure
+- Active roadmaps exist at the project root while in progress (e.g., `/workspace_migration/`)
+- Once completed, roadmaps are moved to `/docs/98_roadmaps/completed/`
+- The standard structure for an active roadmap is:
+
+```
+roadmap_name/
+├── README.md                # Main entry point with folder structure diagram
+├── roadmap/                 # Contains the main roadmap documents
+│   ├── XX-roadmap-name.md   # Main roadmap file with overall progress
+│   ├── sub-process/         # Contains detailed sub-processes
+│   │   ├── sub-process-1.md # Specific sub-process tracking
+│   │   └── sub-process-2.md # Another sub-process tracking
+│   └── workspace-name-plan.md # Detailed plan documents
+├── reports/                 # Date-stamped progress reports
+│   └── progress_YYYY-MM-DD.md
+└── progress.md              # Current consolidated progress tracking
+```
+
+# Documentation Hierarchy
+
+1. **README.md (Entry Point)**
+   - Must include a diagram of the folder structure
+   - Should list all related files with brief descriptions
+   - Must link to the main roadmap file
+   - Should include current status overview
+
+2. **Main Roadmap File (e.g., `40-workspace-migration.md`)**
+   - Provides the overall roadmap and high-level progress
+   - Must be updated on completion of each major milestone
+   - Should reference sub-processes for detailed work
+   - Contains the complete timeline and dependencies
+
+3. **Sub-Process Files**
+   - Detail specific components of the larger roadmap
+   - Must link back to the main roadmap with specific instructions
+   - Must include mechanism to bubble up progress to the main roadmap
+   - Should be moved to `roadmap/sub-process/` folder for organization
+
+4. **Progress Tracking**
+   - `progress.md` contains the current consolidated progress
+   - Date-stamped reports in `/reports/` provide historical tracking
+   - Progress updates must be bubbled up to the main roadmap file
+
 # First Steps
- - Read the [template-for-updating.md](mdc:docs/roadmaps/template-for-updating.md) file to understand the format and steps to take in the process.
- - Let us know that you are adding enhancements from this rule file.
+- Read the [template-for-updating.md](mdc:docs/roadmaps/template-for-updating.md) file to understand the format and steps to take in the process.
+- Review the README.md of the roadmap to understand the overall structure
+- Identify which level of the roadmap hierarchy you're working with
 
 # Second Steps
- - If asked to work on a specific roadmap and specific step please work through the implementation slowly and carefully
- - After each logical stopping point when you would like to see if it is working please ask me to start the server, I will then start the server and tell you to procede.
- - Make sure to create tests for each step when it makes sense to.
-   - Follow the testing guidelines in the testing-guidance.mdc rule
-   - Create unit tests alongside implementation
-   - Update the testing roadmap in docs/testing-roadmap.md
+- If asked to work on a specific roadmap and specific step please work through the implementation slowly and carefully
+- After each logical stopping point when you would like to see if it is working please ask me to start the server, I will then start the server and tell you to procede.
+- Make sure to create tests for each step when it makes sense to.
+  - Follow the testing guidelines in the testing-guidance.mdc rule
+  - Create unit tests alongside implementation
+  - Update the testing roadmap in docs/testing-roadmap.md
+
+# Progress Updates
+- All sub-process files must bubble up progress to the next level in the hierarchy
+- When completing work on sub-processes, update:
+  1. The specific sub-process file
+  2. The `progress.md` file
+  3. The main roadmap file
+  4. Create a new dated progress report if significant progress is made
 
 # Final Steps
- - According to the [template-for-updating.md](mdc:docs/roadmaps/template-for-updating.md) file, please update the roadmap you are working on to correctly indicate (not started, started, finished, abandoned) and finally update the updated at time so we know when that particular feature was last worked on.
- - Check to see if any updates to the base project level readme, or anywhere else that might need updating.
- - Ensure all tests are passing with `cargo test`
- - Make sure the readme is up to date "docs/roadmaps/README.md"
- - Create extensive documenatation if new implementation was created. We want to keep our docs up to date.
-   - Keep /docs/README.md and docs/SUMMARY.md up to date and in sync as well.
+- According to the [template-for-updating.md](mdc:docs/roadmaps/template-for-updating.md) file, please update the roadmap you are working on to correctly indicate (not started, started, finished, abandoned) and finally update the updated at time so we know when that particular feature was last worked on.
+- Check to see if any updates to the base project level readme, or anywhere else that might need updating.
+- Ensure all tests are passing with `cargo test`
+- Make sure the readme is up to date "docs/roadmaps/README.md"
+- Create extensive documentation if new implementation was created. We want to keep our docs up to date.
+  - Keep /docs/README.md and docs/SUMMARY.md up to date and in sync as well.
 
+# Roadmap Integration
+- When integrating external ideas (like spring-rs), create a dedicated sub-process file
+- Document the research, findings, and implementation plan
+- Update the main roadmap to include the integration phase
+- Follow the bubble-up process for progress reporting
+
+# Roadmap Completion
+- When a roadmap is completed:
+  1. Ensure all documentation is finalized and up-to-date
+  2. Move the entire roadmap directory from the project root to `/docs/98_roadmaps/completed/`
+  3. Update any references in other documentation to point to the new location
+  4. Create a final summary report with key achievements and metrics
 
 ##PROMPT_ENHANCER
 - Focus only on what's truly necessary for a lightweight, effective implementation.
@@ -40,4 +109,4 @@ alwaysApply: false
     - Write unit tests concurrently with implementation code
     - Test both success and error paths
     - Follow the testing roadmap in docs/testing-roadmap.md
-    - Aim for 80% code coverage minimum
+    - Aim for 80% code coverage minimum 

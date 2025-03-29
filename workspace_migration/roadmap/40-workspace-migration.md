@@ -10,6 +10,8 @@ This roadmap outlines the plan for migrating the Navius project from a feature f
 - **Problem**: As the codebase grows, feature flags become harder to manage, and compilation time increases
 - **Initial Analysis**: Completed, determined that workspace approach will provide significant advantages
 - **Documentation**: Created detailed migration plan and examples
+- **Progress**: Phase 3 (75% complete) - Working on navius-db implementation
+- **Updated**: March 29, 2025
 
 ## Target State
 
@@ -22,19 +24,52 @@ This roadmap outlines the plan for migrating the Navius project from a feature f
 
 ## Implementation Plan
 
-### Phase 1: Setup Workspace Structure (1-2 weeks)
+### Phase 1: Setup Workspace Structure (COMPLETED)
 
-- [ ] Create workspace configuration in root Cargo.toml
-- [ ] Define shared dependencies
-- [ ] Create navius-core crate with essential functionality
-- [ ] Create navius-test-utils crate for testing infrastructure
-- [ ] Update build scripts and CI configuration for workspace
+- [x] Create workspace configuration in root Cargo.toml
+- [x] Define shared dependencies
+- [x] Create navius-core crate with essential functionality
+- [x] Create navius-test-utils crate for testing infrastructure
+- [x] Update build scripts and CI configuration for workspace
 
-### Phase 2: Module Extraction (2-4 weeks)
+### Phase 1.5: Architecture Research (PLANNED)
 
-- [ ] Extract navius-auth crate (Authentication)
-  - [ ] Analyze dependencies
-  - [ ] Move code
+- [ ] Analyze spring-rs plugin architecture
+  - [ ] Document key patterns for potential adoption
+  - [ ] Evaluate auto-configuration approach
+  - [ ] Study component extraction patterns
+- [ ] Prototype potential improvements to Navius architecture
+  - [ ] Test plugin-style registration for core services
+  - [ ] Evaluate procedural macros for configuration
+- [ ] Make architectural decisions for extraction phase
+
+*See the [spring-rs integration research](./sub-process/spring-rs-integration-research.md) document for detailed tracking.*
+
+### Phase 2: Core Module Extraction (COMPLETED)
+
+- [x] Extract navius-core crate
+  - [x] Analyze dependencies
+  - [x] Move code
+  - [x] Update references
+  - [x] Implement tests
+- [x] Extract navius-http crate
+  - [x] Analyze dependencies
+  - [x] Move code
+  - [x] Update references
+  - [x] Implement tests
+- [x] Extract navius-auth crate
+  - [x] Analyze dependencies
+  - [x] Move code
+  - [x] Update references
+  - [x] Implement tests
+
+*See the [implementation progress](./sub-process/implementation-progress.md) document for detailed tracking.*
+
+### Phase 3: Additional Module Extraction (IN PROGRESS)
+
+- [ ] Extract navius-db crate (Database functionality)
+  - [x] Analyze dependencies
+  - [x] Move code
   - [ ] Update references
   - [ ] Implement tests
 - [ ] Extract navius-metrics crate (Metrics)
@@ -47,18 +82,13 @@ This roadmap outlines the plan for migrating the Navius project from a feature f
   - [ ] Move code
   - [ ] Update references
   - [ ] Implement tests
-- [ ] Extract navius-database crate (Database functionality)
-  - [ ] Analyze dependencies
-  - [ ] Move code
-  - [ ] Update references
-  - [ ] Implement tests
 - [ ] Extract navius-cache crate (Caching functionality)
   - [ ] Analyze dependencies
   - [ ] Move code
   - [ ] Update references
   - [ ] Implement tests
 
-### Phase 3: Application Integration (1-2 weeks)
+### Phase 4: Application Integration (1-2 weeks)
 
 - [ ] Create navius-api crate (Main application)
   - [ ] Wire up modules with dependency injection
@@ -68,7 +98,7 @@ This roadmap outlines the plan for migrating the Navius project from a feature f
   - [ ] Document new approach
 - [ ] Update examples and documentation
 
-### Phase 4: Cleanup and Optimization (1 week)
+### Phase 5: Cleanup and Optimization (1 week)
 
 - [ ] Remove unused code
 - [ ] Optimize build process
@@ -97,19 +127,21 @@ This roadmap outlines the plan for migrating the Navius project from a feature f
 
 ## Related Documentation
 
-- [Workspace Migration Plan](../roadmaps/workspace-migration-plan.md)
-- [Workspace Migration Tutorial](../roadmaps/workspace-migration-tutorial.md)
-- [Workspace vs. Feature Flags Comparison](../roadmaps/workspace-vs-feature-flags.md)
+- [Implementation Progress](./sub-process/implementation-progress.md) - Detailed tracking of implementation tasks
+- [spring-rs Integration Research](./sub-process/spring-rs-integration-research.md) - Research on incorporating spring-rs patterns
+- [Workspace Migration Plan](./workspace-migration-plan.md) - Detailed migration approach
 
 ## Implementation Status
 
-- Overall Progress: 5%
-- Current Phase: Planning
-- Next Milestone: Complete Phase 1 - Setup Workspace Structure
-- Estimated Completion: June 2025
+- Overall Progress: 75%
+- Current Phase: Phase 3 - Additional Module Extraction
+- Next Milestone: Complete navius-db crate implementation
+- Estimated Completion: May 2025 (adjusted for spring-rs research phase)
 
 ## Updates
 
 | Date | Update | Updated By |
 |------|--------|------------|
-| March 29, 2025 | Created migration plan and supporting documentation | goblin | 
+| March 29, 2025 | Created migration plan and supporting documentation | goblin |
+| March 29, 2025 | Completed Phase 1 and Phase 2, working on Phase 3 | goblin |
+| March 29, 2025 | Added spring-rs integration research phase | goblin | 
