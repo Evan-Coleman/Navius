@@ -7,11 +7,11 @@ tags:
   - index
   - overview
 related:
-  - 01_getting_started/README.md
-  - 04_guides/README.md
-  - 05_reference/README.md
-  - 03_contributing/README.md
-  - 02_examples/README.md
+  - 01_getting_started/
+  - 04_guides/
+  - 05_reference/
+  - 03_contributing/
+  - 02_examples/
 last_updated: March 27, 2025
 version: 1.0
 ---
@@ -56,7 +56,7 @@ This repository contains the official documentation for the Navius framework, pr
 
 The documentation is organized into clear sections to help you find what you need:
 
-### [Getting Started](./01_getting_started/README.md)
+### [Getting Started](./01_getting_started/)
 Everything you need to start using Navius, including installation, quickstart guide, and basic concepts.
 
 - [Installation](./01_getting_started/installation.md)
@@ -66,7 +66,7 @@ Everything you need to start using Navius, including installation, quickstart gu
 - [Development Setup](./01_getting_started/development-setup.md)
 - [CLI Reference](./01_getting_started/cli-reference.md)
 
-### [Examples](./02_examples/README.md)
+### [Examples](./02_examples/)
 Practical code examples demonstrating how to implement common features and solve typical challenges.
 
 - Basic application examples
@@ -74,7 +74,7 @@ Practical code examples demonstrating how to implement common features and solve
 - Advanced feature implementations
 - Sample projects
 
-### [Contributing](./03_contributing/README.md)
+### [Contributing](./03_contributing/)
 Guidelines for contributing to Navius, including code standards, pull request process, and development workflow.
 
 - [Contribution Guidelines](./03_contributing/contributing.md)
@@ -82,7 +82,7 @@ Guidelines for contributing to Navius, including code standards, pull request pr
 - [Development Workflow](./03_contributing/development-workflow.md)
 - [Pull Request Process](./03_contributing/pull-request-process.md)
 
-### [Guides](./04_guides/README.md)
+### [Guides](./04_guides/)
 Comprehensive guides for developing applications with Navius, organized by topic.
 
 - **Development**
@@ -108,7 +108,7 @@ Comprehensive guides for developing applications with Navius, organized by topic
   - [Caching](./04_guides/performance/caching.md)
   - [Database Performance](./04_guides/performance/database-performance.md)
 
-### [Reference](./05_reference/README.md)
+### [Reference](./05_reference/)
 Detailed technical reference documentation for Navius APIs, configuration options, and patterns.
 
 - **API Reference**
@@ -148,9 +148,9 @@ If you're new to Navius, start with:
 
 If you're already using Navius:
 
-1. Explore the [Guides](./04_guides/README.md) for implementing specific features
-2. Refer to the [API Reference](./05_reference/README.md) for detailed technical information
-3. Check out [Examples](./02_examples/README.md) for code samples and patterns
+1. Explore the [Guides](./04_guides/README) for implementing specific features
+2. Refer to the [API Reference](./05_reference/) for detailed technical information
+3. Check out [Examples](./02_examples/) for code samples and patterns
 
 ### For Contributors
 
@@ -179,7 +179,7 @@ If you have questions about using Navius or need help with the documentation:
 
 ## License
 
-This documentation is licensed under the [MIT License](LICENSE).
+This documentation is licensed under the [MIT License](99_misc/LICENSE.md).
 
 ## 📚 Documentation Sections
 
@@ -193,7 +193,7 @@ Quick start guides to get up and running with Navius:
 ### 📚 Examples
 Practical code examples:
 
-- [Overview](02_examples/README.md) - Introduction to examples
+- [Overview](02_examples/) - Introduction to examples
 - [Spring Boot Comparison](02_examples/spring-boot-comparison.md) - Comparing with Spring Boot
 - [Two-Tier Cache Implementation](02_examples/two-tier-cache-example.md) - Implementing two-tier caching
 - [Server Customization System](02_examples/server-customization-example.md) - Using the feature system
@@ -206,7 +206,7 @@ Practical code examples:
 ### 🤝 Contributing
 Guidelines for contributors:
 
-- [Overview](03_contributing/README.md) - Introduction to contributing
+- [Overview](03_contributing/) - Introduction to contributing
 - [Contributing Guide](03_contributing/contribution-guide.md) - How to contribute
 - [Code of Conduct](03_contributing/code-of-conduct.md) - Community guidelines
 - [Development Process](03_contributing/development-process.md) - Development workflow
@@ -219,16 +219,16 @@ Guidelines for contributors:
 ### 🛠️ Guides
 Practical guides for using Navius:
 
-- [Overview](04_guides/README.md) - Introduction to Navius guides
+- [Overview](04_guides/) - Introduction to Navius guides
 
-- [Development](04_guides/development/README.md) - Development workflow and practices
+- [Development](04_guides/development/) - Development workflow and practices
   - [Development Workflow](04_guides/development/development-workflow.md) - Day-to-day development process
   - [Testing Guide](04_guides/development/testing-guide.md) - How to test Navius applications
   - [Debugging Guide](04_guides/development/debugging-guide.md) - Debugging your applications
   - [IDE Setup](04_guides/development/ide-setup.md) - Setting up your development environment
   - [Git Workflow](04_guides/development/git-workflow.md) - Version control practices
 
-- [Features](04_guides/features/README.md) - Implementing specific features
+- [Features](04_guides/features/) - Implementing specific features
   - [Authentication](04_guides/features/authentication.md) - Implementing authentication
   - [API Integration](04_guides/features/api-integration.md) - Integrating with external APIs
   - [PostgreSQL Integration](04_guides/features/postgresql-integration.md) - Working with PostgreSQL in features
@@ -236,7 +236,7 @@ Practical guides for using Navius:
   - [Server Customization CLI](04_guides/features/server-customization-cli.md) - Using the feature selection CLI
   - [WebSocket Support](04_guides/features/websocket-support.md) - Real-time communication
 
-- [Deployment](04_guides/deployment/README.md) - Deploying Navius applications
+- [Deployment](04_guides/deployment/) - Deploying Navius applications
   - [Production Deployment](04_guides/deployment/production-deployment.md) - Deploying to production
   - [Docker Deployment](04_guides/deployment/docker-deployment.md) - Working with Docker
   - [AWS Deployment](04_guides/deployment/aws-deployment.md) - Deploying to AWS
@@ -255,14 +255,14 @@ Practical guides for using Navius:
 ### 📖 Reference
 Technical reference documentation:
 
-- [Overview](05_reference/README.md) - Introduction to reference documentation
+- [Overview](05_reference/) - Introduction to reference documentation
 
-- [API](05_reference/api/README.md) - API documentation
+- [API](05_reference/api/) - API documentation
   - [API Resources](05_reference/api/api-resource.md) - Core API resources
   - [Authentication API](05_reference/api/authentication-api.md) - Authentication endpoints
   - [Database API](05_reference/api/database-api.md) - Database interaction APIs
 
-- [Architecture](05_reference/architecture/README.md) - Architecture patterns and principles
+- [Architecture](05_reference/architecture/) - Architecture patterns and principles
   - [Principles](05_reference/architecture/principles.md) - Architectural principles
   - [Project Structure](05_reference/architecture/project-structure.md) - Project structure overview
   - [Project Structure Recommendations](05_reference/architecture/project-structure-recommendations.md) - Recommended structure
@@ -275,13 +275,13 @@ Technical reference documentation:
   - [Service Architecture](05_reference/architecture/service-architecture.md) - Service architecture
   - [Spring Boot Migration](05_reference/architecture/spring-boot-migration.md) - Spring Boot migration
 
-- [Auth](05_reference/auth/README.md) - Authentication documentation
+- [Auth](05_reference/auth/) - Authentication documentation
   - [Error Handling](05_reference/auth/ERROR_HANDLING.md) - Auth error handling
   - [Auth Circuit Breaker](05_reference/auth/auth_circuit_breaker_operation.md) - Auth circuit breaker
   - [Auth Metrics](05_reference/auth/auth_metrics.md) - Auth metrics
   - [Auth Provider Implementation](05_reference/auth/auth_provider_implementation.md) - Auth provider implementation
 
-- [Configuration](05_reference/configuration/README.md) - Configuration options and settings
+- [Configuration](05_reference/configuration/) - Configuration options and settings
   - [Environment Variables](05_reference/configuration/environment-variables.md) - Environment configuration
   - [Application Config](05_reference/configuration/application-config.md) - Application settings
   - [Cache Config](05_reference/configuration/cache-config.md) - Cache system configuration
@@ -289,7 +289,7 @@ Technical reference documentation:
   - [Logging Config](05_reference/configuration/logging-config.md) - Logging configuration
   - [Security Config](05_reference/configuration/security-config.md) - Security settings
 
-- [Patterns](05_reference/patterns/README.md) - Common design patterns
+- [Patterns](05_reference/patterns/) - Common design patterns
   - [API Resource Pattern](05_reference/patterns/api-resource-pattern.md) - API design patterns
   - [Import Patterns](05_reference/patterns/import-patterns.md) - Module import patterns
   - [Caching Patterns](05_reference/patterns/caching-patterns.md) - Effective caching strategies
@@ -298,7 +298,7 @@ Technical reference documentation:
   - [Repository Pattern](05_reference/patterns/repository-pattern.md) - Entity repository pattern
   - [Logging Service Pattern](05_reference/patterns/logging-service-pattern.md) - Generic logging service implementations
 
-- [Standards](05_reference/standards/README.md) - Code and documentation standards
+- [Standards](05_reference/standards/) - Code and documentation standards
   - [Naming Conventions](05_reference/standards/naming-conventions.md) - Naming guidelines
   - [Code Style](05_reference/standards/code-style.md) - Code formatting standards
   - [Generated Code](05_reference/standards/generated-code-standards.md) - Generated code guidelines
@@ -308,7 +308,7 @@ Technical reference documentation:
   - [Error Handling Standards](05_reference/standards/error-handling-standards.md) - Error handling standards
   - [Error Handling](05_reference/standards/error-handling.md) - Error handling guide
 
-- [Generated](05_reference/generated/README.md) - Generated reference documentation
+- [Generated](05_reference/generated/) - Generated reference documentation
   - [API Index](05_reference/generated/api/index.md) - API index
   - [Configuration Index](05_reference/generated/config/index.md) - Configuration index
   - [Development Configuration](05_reference/generated/config/development.md) - Development configuration
@@ -319,7 +319,7 @@ Technical reference documentation:
 ### 🗺️ Roadmaps
 Project roadmaps and future plans:
 
-- [Overview](98_roadmaps/README.md) - Introduction to project roadmaps
+- [Overview](98_roadmaps/) - Introduction to project roadmaps
 - [Template for Updating](98_roadmaps/template-for-updating.md) - How to update roadmaps
 - [Dependency Injection](98_roadmaps/01-dependency-injection.md) - DI implementation roadmap
 - [Database Integration](98_roadmaps/02-database-integration.md) - Database features roadmap
