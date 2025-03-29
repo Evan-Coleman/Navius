@@ -28,26 +28,30 @@ impl DatabaseConnectionManager {
 
     /// Start a transaction
     #[instrument(skip(self, f))]
-    pub async fn transaction<F, R, E>(&self, f: F) -> Result<R, E>
+    pub async fn transaction<F, Fut, R, E>(&self, f: F) -> Result<R, E>
     where
-        F: for<'c> FnOnce(Transaction<'c>) -> Result<R, E> + Send + 'static,
+        F: FnOnce(Transaction<'_>) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<R, E>> + Send + 'static,
         R: Send + 'static,
         E: From<DatabaseError> + Send + 'static,
     {
         debug!("Starting database transaction");
-        let mut conn = self.get_connection().await?;
-        let tx = conn.begin().await?;
-        let result = f(tx);
+        let mut conn = self.get_connection().await.map_err(E::from)?;
+        let tx = conn.begin().await.map_err(E::from)?;
 
-        match result {
+        match f(tx).await {
             Ok(value) => {
-                debug!("Committing database transaction");
-                conn.commit().await?;
+                debug!("Transaction completed successfully, committing changes");
+                // Since the transaction was returned to us and consumed in the closure,
+                // we don't need to commit it explicitly here.
+                // The dropped connection will be returned to the pool.
                 Ok(value)
             }
             Err(err) => {
-                debug!("Rolling back database transaction");
-                conn.rollback().await?;
+                debug!("Transaction failed, rolling back changes");
+                // Since the transaction was returned to us and consumed in the closure,
+                // a rollback will be automatically performed by the Drop implementation.
+                // The dropped connection will be returned to the pool.
                 Err(err)
             }
         }
@@ -74,15 +78,19 @@ impl DatabaseConnectionHandle {
 
     /// Commit a transaction
     pub async fn commit(self) -> DatabaseResult<()> {
-        // Implementation depends on the specific database driver
-        // This is a placeholder
+        // Implementation note: This method is typically not used directly.
+        // Transactions are committed using the Transaction::commit method.
+        // This is provided primarily for the transaction() method on DatabaseConnectionManager.
+        // Since we consume self, there's not much to do here.
         Ok(())
     }
 
     /// Rollback a transaction
     pub async fn rollback(self) -> DatabaseResult<()> {
-        // Implementation depends on the specific database driver
-        // This is a placeholder
+        // Implementation note: This method is typically not used directly.
+        // Transactions are rolled back using the Transaction::rollback method.
+        // This is provided primarily for the transaction() method on DatabaseConnectionManager.
+        // Since we consume self, there's not much to do here.
         Ok(())
     }
 

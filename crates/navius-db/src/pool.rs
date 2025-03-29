@@ -112,6 +112,137 @@ impl PgPool {
     pub fn inner(&self) -> &sqlx::PgPool {
         &self.pool
     }
+
+    /// Create a new mock PgPool for testing
+    #[cfg(test)]
+    pub fn new_mock(options: PoolOptions) -> Self {
+        use crate::error::DatabaseResult;
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        struct MockConnection {
+            next_row_id: AtomicU64,
+        }
+
+        #[async_trait]
+        impl DatabaseConnection for MockConnection {
+            #[cfg(feature = "postgres")]
+            async fn execute(
+                &mut self,
+                _query: &str,
+                _params: &[&(dyn sqlx::Encode<'_, sqlx::Postgres> + Sync)],
+            ) -> DatabaseResult<u64> {
+                // Mock implementation always returns 1 affected row
+                Ok(1)
+            }
+
+            #[cfg(feature = "postgres")]
+            async fn query(
+                &mut self,
+                _query: &str,
+                _params: &[&(dyn sqlx::Encode<'_, sqlx::Postgres> + Sync)],
+            ) -> DatabaseResult<Box<dyn DatabaseRowSet>> {
+                // Mock row set that returns a single row
+                struct MockRowSet {
+                    has_returned: bool,
+                }
+
+                impl DatabaseRowSet for MockRowSet {
+                    fn next(&mut self) -> DatabaseResult<Option<PgRow>> {
+                        if self.has_returned {
+                            return Ok(None);
+                        }
+
+                        self.has_returned = true;
+
+                        // Create an empty PgRow for testing
+                        // This is just a placeholder since we can't easily create a real PgRow
+                        // in tests without a database connection
+                        Ok(None)
+                    }
+                }
+
+                Ok(Box::new(MockRowSet {
+                    has_returned: false,
+                }))
+            }
+
+            async fn begin(&mut self) -> DatabaseResult<Box<dyn DatabaseTransaction>> {
+                struct MockTransaction {
+                    conn: MockConnection,
+                }
+
+                #[async_trait]
+                impl DatabaseConnection for MockTransaction {
+                    #[cfg(feature = "postgres")]
+                    async fn execute(
+                        &mut self,
+                        query: &str,
+                        params: &[&(dyn sqlx::Encode<'_, sqlx::Postgres> + Sync)],
+                    ) -> DatabaseResult<u64> {
+                        self.conn.execute(query, params).await
+                    }
+
+                    #[cfg(feature = "postgres")]
+                    async fn query(
+                        &mut self,
+                        query: &str,
+                        params: &[&(dyn sqlx::Encode<'_, sqlx::Postgres> + Sync)],
+                    ) -> DatabaseResult<Box<dyn DatabaseRowSet>> {
+                        self.conn.query(query, params).await
+                    }
+
+                    async fn begin(&mut self) -> DatabaseResult<Box<dyn DatabaseTransaction>> {
+                        // Nested transactions not supported in mock
+                        Err(DatabaseError::TransactionError(
+                            "Nested transactions not supported in mock".to_string(),
+                        ))
+                    }
+                }
+
+                #[async_trait]
+                impl DatabaseTransaction for MockTransaction {
+                    async fn commit(self: Box<Self>) -> DatabaseResult<()> {
+                        // Mock successful commit
+                        Ok(())
+                    }
+
+                    async fn rollback(self: Box<Self>) -> DatabaseResult<()> {
+                        // Mock successful rollback
+                        Ok(())
+                    }
+                }
+
+                Ok(Box::new(MockTransaction {
+                    conn: MockConnection {
+                        next_row_id: AtomicU64::new(1),
+                    },
+                }))
+            }
+        }
+
+        struct MockPool {}
+
+        #[async_trait]
+        impl DatabasePool for MockPool {
+            async fn acquire(&self) -> DatabaseResult<Box<dyn DatabaseConnection>> {
+                Ok(Box::new(MockConnection {
+                    next_row_id: AtomicU64::new(1),
+                }))
+            }
+
+            async fn close(&self) -> DatabaseResult<()> {
+                Ok(())
+            }
+
+            async fn check_health(&self) -> DatabaseResult<()> {
+                Ok(())
+            }
+        }
+
+        Self {
+            pool: Arc::new(MockPool {}),
+        }
+    }
 }
 
 #[cfg(feature = "postgres")]

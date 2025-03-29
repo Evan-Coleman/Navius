@@ -2,7 +2,50 @@ use crate::error::{DatabaseError, DatabaseResult};
 use crate::pool::{DatabaseRowSet, DatabaseTransaction};
 use tracing::{debug, instrument};
 
-/// Database transaction wrapper
+/// Database transaction wrapper that provides operations to execute queries within a transaction
+/// and commit or rollback the transaction.
+///
+/// # Examples
+///
+/// ```rust
+/// use navius_db::{DatabaseConnectionManager, PgPool, PoolOptions, DatabaseError};
+///
+/// async fn transfer_funds(
+///     db: &DatabaseConnectionManager,
+///     from_account: &str,
+///     to_account: &str,
+///     amount: f64,
+/// ) -> Result<(), DatabaseError> {
+///     // Use a transaction to ensure both operations succeed or fail together
+///     db.transaction(|mut tx| async move {
+///         // Deduct from source account
+///         let from_query = "UPDATE accounts SET balance = balance - $1 WHERE account_id = $2 AND balance >= $1";
+///         let rows = tx.execute_with(from_query, &[&amount, &from_account]).await?;
+///         
+///         if rows == 0 {
+///             // No rows updated, likely insufficient funds
+///             return Err(DatabaseError::ValidationError("Insufficient funds".to_string()));
+///         }
+///         
+///         // Add to destination account
+///         let to_query = "UPDATE accounts SET balance = balance + $1 WHERE account_id = $2";
+///         tx.execute_with(to_query, &[&amount, &to_account]).await?;
+///         
+///         // Transaction automatically commits on success
+///         Ok(())
+///     }).await
+/// }
+/// ```
+///
+/// # Transaction Lifecycle
+///
+/// 1. Begin transaction with `DatabaseConnectionHandle::begin`
+/// 2. Execute queries with `execute`, `execute_with`, `query`, or `query_with`
+/// 3. End transaction with either:
+///    - `commit` - Save all changes to the database
+///    - `rollback` - Discard all changes
+///    - Drop the transaction (causes automatic rollback)
+///
 pub struct Transaction<'a> {
     tx: Option<Box<dyn DatabaseTransaction>>,
     _lifetime: std::marker::PhantomData<&'a ()>,

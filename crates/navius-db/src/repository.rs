@@ -70,9 +70,10 @@ impl<T: Entity> BaseRepository<T> {
     }
 
     /// Execute a function within a transaction
-    pub async fn transaction<F, R, E>(&self, f: F) -> Result<R, E>
+    pub async fn transaction<F, Fut, R, E>(&self, f: F) -> Result<R, E>
     where
-        F: for<'c> FnOnce(Transaction<'c>) -> Result<R, E> + Send + 'static,
+        F: FnOnce(Transaction<'_>) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<R, E>> + Send + 'static,
         R: Send + 'static,
         E: From<DatabaseError> + Send + 'static,
     {
