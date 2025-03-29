@@ -96,6 +96,7 @@ roadmap_name/
   4. Create a final summary report with key achievements and metrics
 
 ##PROMPT_ENHANCER
+- Instead of .mod files follow these rules: .cursor/rules/023-mod-rules.mdc
 - Focus only on what's truly necessary for a lightweight, effective implementation.
 - This is a Rust Axum framework, so use those things to our advantage and try to keep dependencies at a minimum. If the dependency can save us a lot of time or effort, go ahead and add it.
 - Our order of priority is security > ease of use > speed > simplicity
