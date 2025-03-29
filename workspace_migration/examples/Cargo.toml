@@ -1,0 +1,147 @@
+# Modified root Cargo.toml for workspace implementation
+# This file would replace the existing Cargo.toml at the project root
+
+[workspace]
+members = [
+    "crates/navius-core",
+    "crates/navius-api",
+    "crates/navius-auth",
+    "crates/navius-metrics",
+    "crates/navius-metrics-prometheus",
+    "crates/navius-metrics-dynatrace",
+    "crates/navius-database",
+    "crates/navius-database-postgres",
+    "crates/navius-cache",
+    "crates/navius-cache-redis",
+    "crates/navius-cli",
+    "crates/navius-test-utils"
+]
+
+resolver = "2" # Use the modern resolver for proper feature resolution
+
+# Shared dependencies - will be used by all crates in the workspace
+# This section inherits most dependencies from the original Cargo.toml
+[workspace.dependencies]
+# Core dependencies
+axum = { version = "0.8.3", features = ["macros"] }
+async-trait = "0.1.88"
+base64 = "0.22.1"
+reqwest = { version = "0.12.15", features = ["json"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+yaml-rust2 = "0.10.1"
+tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }
+tracing = { version = "0.1.41", features = ["log"] }
+tracing-subscriber = { version = "0.3.19" }
+tracing-appender = { version = "0.2.3" }
+
+# Configuration dependencies
+config = { version = "0.15.11", features = ["yaml"] }
+dotenvy = "0.15.7"
+thiserror = "2.0.12"
+
+# Time handling
+chrono = { version = "0.4.40", features = ["serde"] }
+
+# Middleware and error handling
+tower = { version = "0.5.2", features = ["full"] }
+tower-http = { version = "0.6.2", features = ["trace", "timeout", "catch-panic", "request-id", "cors"] }
+uuid = { version = "1.16.0", features = ["v4", "serde"] }
+tracing-futures = "0.2.5"
+
+# Validation
+validator = { version = "0.20.0", features = ["derive"] }
+
+# Web framework and related
+pin-project = "1.1.10"
+rand = "0.9.0"
+rand_chacha = "0.9.0"
+lazy_static = "1.5.0"
+bytes = "1.10.1"
+futures = "0.3.31"
+futures-util = { version = "0.3.31", features = ["std"] }
+
+# Common utilities
+governor = "0.10.0"
+nonzero_ext = "0.3.0"
+regex = "1.11.1"
+
+# CLI tools
+clap = "4.5.34"
+colored = "3.0.0"
+indicatif = "0.17.11"
+dialoguer = "0.11.0"
+toml = "0.8.20"
+
+# Development dependencies available to all workspace members
+[workspace.dev-dependencies]
+# HTTP Mocking
+mockito = "1.7.0"
+wiremock = "0.6.3"
+
+# Trait/Component Mocking
+mock-it = "0.9.0"
+
+# Property-based testing
+proptest = "1.6.0"
+
+# Test data generation
+fake = { version = "4.2.0", features = ["derive", "chrono", "uuid"] }
+
+# Test utilities
+test-context = "0.4.1"
+assert_matches = "1.5.0"
+once_cell = "1.21.3"
+mockall = "0.13.1"
+tempfile = "3.19.1"
+
+# Profiles shared across the workspace
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.release]
+opt-level = 3
+debug = false
+lto = "thin"
+codegen-units = 1
+strip = true
+
+[profile.test]
+opt-level = 0
+debug = true
+
+# This package section is for the root crate, which will be the main entrypoint
+[package]
+name = "navius"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+authors = ["Evan Coleman"]
+description = "An enterprise-grade web framework built with Rust, designed as a high-performance alternative to Spring Boot"
+license = "Apache-2.0"
+repository = "https://github.com/Evan-Coleman/Navius"
+readme = "README.md"
+keywords = ["api", "backend", "axum", "enterprise", "framework"]
+categories = ["web-programming", "asynchronous"]
+
+# Root package dependencies - minimal, mostly just for CLI and main application
+[dependencies]
+# Core crate that contains essential functionality
+navius-core = { path = "crates/navius-core", version = "0.1.0" }
+
+# Main API application
+navius-api = { path = "crates/navius-api", version = "0.1.0" }
+
+# CLI tools
+navius-cli = { path = "crates/navius-cli", version = "0.1.0" }
+
+# Building tools
+tokio = { workspace = true }
+clap = { workspace = true }
+colored = { workspace = true }
+
+# Build dependencies
+[build-dependencies]
+regex = { workspace = true }
+serde_json = { workspace = true } 

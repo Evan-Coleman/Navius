@@ -18,9 +18,9 @@
           <li>All information in this repository is subject to change</li>
           <li>Features and documentation may be incomplete</li>
           <li>Claims and statements should be considered provisional</li>
-          <li>Codebase cleanup in progress (see <a href="docs/roadmaps/17-codebase-cleanup.mdc">Cleanup Roadmap</a>)</li>
+          <li>Moving to a workspace-based structure (see <a href="workspace_migration/README.md">Workspace Migration</a>)</li>
         </ul>
-        <p><em>Last Updated: March 23, 2025</em></p>
+        <p><em>Last Updated: March 29, 2025</em></p>
       </td>
     </tr>
   </table>
@@ -45,7 +45,9 @@ For contributions, please:
 1. For bug reports and features, use the [GitLab issue tracker](https://gitlab.com/ecoleman2/navius/-/issues)
 2. Community contributions via GitHub PRs are welcome and will be reviewed
 
-> **Note**: We are currently undergoing a project restructuring to improve organization and developer experience. See the [Project Restructuring Roadmap](docs/roadmaps/project-restructuring.md) for details.
+> **Note**: We are currently undergoing a project restructuring to improve organization and developer experience:
+> - See the [Project Restructuring Roadmap](docs/roadmaps/project-restructuring.md) for details.
+> - Check the [Workspace Migration](workspace_migration/README.md) documentation for our transition from feature flags to a Rust workspace structure.
 
 ## 🚀 Why Navius?
 

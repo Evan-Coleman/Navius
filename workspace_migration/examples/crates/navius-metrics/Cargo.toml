@@ -1,0 +1,63 @@
+# Sample Cargo.toml for the navius-metrics crate
+# This demonstrates how to set up an individual crate in the workspace
+
+[package]
+name = "navius-metrics"
+version = "0.1.0"
+edition = "2024"
+description = "Metrics functionality for the Navius framework"
+license = "Apache-2.0"
+repository = "https://github.com/Evan-Coleman/Navius"
+readme = "README.md"
+
+# Dependencies section uses workspace inheritance to avoid repeating versions
+[dependencies]
+# Core dependencies from workspace
+tokio = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+
+# Internal dependencies
+navius-core = { path = "../navius-core", version = "0.1.0" }
+
+# Metrics-specific dependencies
+metrics = "0.24.1"
+opentelemetry = { version = "0.29.0", features = ["metrics"] }
+opentelemetry-semantic-conventions = "0.29.0"
+tracing-opentelemetry = "0.30.0"
+
+# Optional dependencies for the backend implementations
+# These are imported by the backend-specific crates
+metrics-exporter-prometheus = { version = "0.16.2", optional = true }
+opentelemetry-dynatrace = { version = "0.4.0", optional = true }
+opentelemetry-jaeger = { version = "0.22.0", optional = true }
+opentelemetry-otlp = { version = "0.29.0", optional = true }
+
+# Development dependencies
+[dev-dependencies]
+# Shared development dependencies from workspace
+mockito = { workspace = true }
+mock-it = { workspace = true }
+proptest = { workspace = true }
+fake = { workspace = true }
+test-context = { workspace = true }
+assert_matches = { workspace = true }
+mockall = { workspace = true }
+
+# Metrics-specific test dependencies
+navius-test-utils = { path = "../navius-test-utils", version = "0.1.0" }
+
+# Feature definition - much cleaner than before!
+[features]
+# Minimal features
+default = []
+
+# Backend-specific features - users should use the backend crates instead
+# These are mainly for internal use and testing
+prometheus = ["dep:metrics-exporter-prometheus"]
+dynatrace = ["dep:opentelemetry-dynatrace"]
+jaeger = ["dep:opentelemetry-jaeger"]
+otlp = ["dep:opentelemetry-otlp"] 

@@ -1,0 +1,44 @@
+# Cargo.toml for navius-core crate
+# This would be placed at crates/navius-core/Cargo.toml
+
+[package]
+name = "navius-core"
+version = "0.1.0"
+edition = "2024"
+description = "Core functionality for the Navius framework"
+license = "Apache-2.0"
+repository = "https://github.com/Evan-Coleman/Navius"
+readme = "README.md"
+
+# Dependencies section uses workspace inheritance
+[dependencies]
+# Core dependencies from workspace
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+
+# Configuration
+config = { workspace = true }
+dotenvy = { workspace = true }
+
+# Time handling
+chrono = { workspace = true }
+
+# Development dependencies
+[dev-dependencies]
+mockito = { workspace = true }
+proptest = { workspace = true }
+fake = { workspace = true }
+test-context = { workspace = true }
+assert_matches = { workspace = true }
+once_cell = { workspace = true }
+mockall = { workspace = true }
+
+# The core crate has minimal feature flags
+[features]
+default = []
+test-utils = [] # Enable test utilities when testing 
