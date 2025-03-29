@@ -1,0 +1,44 @@
+[package]
+name = "navius-http"
+version = "0.1.0"
+edition = "2024"
+description = "HTTP server and client functionality for the Navius framework"
+license = "Apache-2.0"
+repository = "https://github.com/Evan-Coleman/Navius"
+readme = "README.md"
+
+# Dependencies section uses workspace inheritance
+[dependencies]
+# Core dependencies from workspace
+navius-core = { path = "../navius-core", version = "0.1.0" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+
+# HTTP specific dependencies
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+reqwest = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true }
+futures-util = { workspace = true }
+
+# Development dependencies
+[dev-dependencies]
+mockito = "1.7.0"
+wiremock = "0.6.3"
+fake = { version = "4.2.0", features = ["derive", "chrono", "uuid"] }
+test-context = "0.4.1"
+assert_matches = "1.5.0"
+once_cell = "1.21.3"
+
+# Feature flags
+[features]
+default = ["server", "client"]
+server = []
+client = []
+test-utils = [] 

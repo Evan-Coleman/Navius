@@ -1,3 +1,107 @@
+# Navius workspace Cargo.toml
+# Converted from feature flags to workspace approach
+
+[workspace]
+members = [
+    "crates/navius-core",
+    # Add new crates here as they are created
+]
+
+resolver = "2" # Use the modern resolver for proper feature resolution
+
+# Shared dependencies section - these dependencies cannot be optional
+[workspace.dependencies]
+# Core dependencies
+axum = { version = "0.8.3", features = ["macros"] }
+async-trait = "0.1.88"
+base64 = "0.22.1"
+reqwest = { version = "0.12.15", features = ["json"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+yaml-rust2 = "0.10.1"
+tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }
+tracing = { version = "0.1.41", features = ["log"] }
+tracing-subscriber = "0.3.19"
+tracing-appender = "0.2.3"
+
+# Configuration dependencies
+config = { version = "0.15.11", features = ["yaml"] }
+dotenvy = "0.15.7"
+thiserror = "2.0.12"
+
+# Time handling
+chrono = { version = "0.4.40", features = ["serde"] }
+
+# Middleware and error handling
+tower = { version = "0.5.2", features = ["full"] }
+tower-http = { version = "0.6.2", features = ["trace", "timeout", "catch-panic", "request-id", "cors"] }
+uuid = { version = "1.16.0", features = ["v4", "serde"] }
+tracing-futures = "0.2.5"
+
+# Validation
+validator = { version = "0.20.0", features = ["derive"] }
+
+# Caching dependencies
+moka = { version = "0.12.10", features = ["future"] }
+bincode = "2.0.1"
+bincode_derive = "2.0.1"
+
+# Metrics dependencies
+metrics = "0.24.1"
+opentelemetry = { version = "0.29.0", features = ["metrics"] }
+opentelemetry-semantic-conventions = "0.29.0"
+tracing-opentelemetry = "0.30.0"
+
+# Web framework and related
+pin-project = "1.1.10"
+rand = "0.9.0"
+rand_chacha = "0.9.0"
+lazy_static = "1.5.0"
+bytes = "1.10.1"
+futures = "0.3.31"
+futures-util = { version = "0.3.31", features = ["std"] }
+
+# Common utilities
+governor = "0.10.0"
+nonzero_ext = "0.3.0"
+regex = "1.11.1"
+
+# CLI tools
+clap = "4.5.34"
+colored = "3.0.0"
+indicatif = "0.17.11"
+dialoguer = "0.11.0"
+toml = "0.8.20"
+
+# Also include common dev dependencies for convenience
+mockito = "1.7.0"
+wiremock = "0.6.3"
+mock-it = "0.9.0"
+proptest = "1.5.0"
+fake = { version = "4.2.0", features = ["derive", "chrono", "uuid"] }
+test-context = "0.4.1"
+assert_matches = "1.5.0"
+once_cell = "1.21.3"
+mockall = "0.13.1"
+tempfile = "3.19.1"
+
+# Profiles shared across the workspace
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.release]
+opt-level = 3
+debug = false
+lto = "thin"
+codegen-units = 1
+strip = true
+
+[profile.test]
+opt-level = 0
+debug = true
+
+# This package section is for the root crate
 [package]
 name = "navius"
 version = "0.1.0"
@@ -11,129 +115,23 @@ readme = "README.md"
 keywords = ["api", "backend", "axum", "enterprise", "framework"]
 categories = ["web-programming", "asynchronous"]
 
-# Feature flags
-[features]
-default = ["production", "tracing", "metrics", "logging", "database", "examples", "prometheus"]
-production = []
-development = []
-tracing = ["tracing-subscriber", "tracing-appender"]
-metrics = ["metrics-exporter-prometheus"]
-logging = ["tracing"]
-redis = []
-database = []
-examples = []
-test-utils = []
-experimental = []
-reliability = []
-# Features referenced in runtime.rs
-caching = []
-auth = ["dep:jsonwebtoken", "dep:oauth2", "dep:reqwest-middleware"]
-advanced_metrics = []
-# Observability providers
-prometheus = ["metrics-exporter-prometheus"]
-dynatrace = ["dep:opentelemetry-dynatrace"]
-opentelemetry-jaeger = ["dep:opentelemetry-jaeger"]
-otlp = ["dep:opentelemetry-otlp"]
-
-# For compatibility with older projects
-postgres = ["database"]
-sqlx-macros = []
-rusqlite = []  # Placeholder for future SQLite support
-
-# Suppress specific warnings
-[lints.rust]
-dead_code = "allow"
-unused_imports = "allow"
-
+# Root package dependencies - minimal, mostly just for workspace management
 [dependencies]
-axum = { version = "0.8.3", features = ["macros"] }
-async-trait = "0.1.88"
-base64 = "0.22.1"
-reqwest = { version = "0.12.15", features = ["json"] }
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.140"
-yaml-rust2 = "0.10.1"  # Pure Rust YAML 1.2 implementation
-tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }
-tracing = { version = "0.1.41", features = ["log"] }
-tracing-subscriber = { version = "0.3.19", optional = true }
-tracing-appender = { version = "0.2.3", optional = true }
-# Configuration dependencies
-config = { version = "0.15.11", features = ["yaml"] }
-dotenvy = "0.15.7"
-thiserror = "2.0.12"
-# Caching dependencies
-moka = { version = "0.12.10", features = ["future"] }
-bincode = "2.0.1"
-bincode_derive = "2.0.1"
-# Metrics dependencies
-metrics = "0.24.1"
-metrics-exporter-prometheus = { version = "0.16.2", features = ["http-listener"], optional = true }
-opentelemetry = { version = "0.29.0", features = ["metrics"] }
-opentelemetry-dynatrace = { version = "0.4.0", optional = true }
-opentelemetry-jaeger = { version = "0.22.0", optional = true }
-opentelemetry-otlp = { version = "0.29.0", features = ["http-proto", "metrics", "tracing"], optional = true }
-opentelemetry-semantic-conventions = "0.29.0"
-tracing-opentelemetry = "0.30.0"
-# Time handling
-chrono = { version = "0.4.40", features = ["serde"] }
-# Middleware and error handling
-tower = { version = "0.5.2", features = ["full"] }
-tower-http = { version = "0.6.2", features = ["trace", "timeout", "catch-panic", "request-id", "cors"] }
-uuid = { version = "1.16.0", features = ["v4", "serde"] }
-tracing-futures = "0.2.5"
-# Validation
-validator = { version = "0.20.0", features = ["derive"] }
+# Core crate
+navius-core = { path = "crates/navius-core", version = "0.1.0" }
 
-# Authentication
+# Add other crates as they are created
+
+# Optional dependencies that were moved from workspace.dependencies
 jsonwebtoken = { version = "9.3.1", optional = true }
 oauth2 = { version = "5.0.0", features = ["reqwest"], optional = true }
 reqwest-middleware = { version = "0.4.1", optional = true }
-futures = "0.3.31"
-futures-util = { version = "0.3.31", features = ["std"] }
+metrics-exporter-prometheus = { version = "0.16.2", features = ["http-listener"], optional = true }
+opentelemetry-dynatrace = { version = "0.4.0", optional = true }
+opentelemetry-jaeger = { version = "0.22.0", optional = true }
+opentelemetry-otlp = { version = "0.29.0", features = ["http-proto", "metrics", "tracing"], optional = true }
 
-# Web framework and related
-pin-project = "1.1.10"
-rand = "0.9.0"
-rand_chacha = "0.9.0"
-lazy_static = "1.5.0"
-bytes = "1.10.1"
-
-# Add these missing dependencies
-governor = "0.10.0"
-nonzero_ext = "0.3.0"
-
-# New dependency
-regex = "1.11.1"
-
-# Add these for the CLI tool
-clap = "4.5.34"       # Command line argument parsing
-colored = "3.0.0"     # Colored terminal output
-indicatif = "0.17.11"  # Progress bars and spinners
-dialoguer = "0.11.0"   # Interactive CLI dialogs
-toml = "0.8.20"       # TOML parsing for dependency analysis
-
-[dev-dependencies]
-# HTTP Mocking
-mockito = "1.7.0"
-wiremock = "0.6.3"
-
-# Trait/Component Mocking
-mock-it = "0.9.0"
-
-# Property-based testing
-proptest = "1.6.0"
-
-# Test data generation
-fake = { version = "4.2.0", features = ["derive", "chrono", "uuid"] }
-
-# Test utilities
-test-context = "0.4.1"
-assert_matches = "1.5.0"
-once_cell = "1.21.3"
-mockall = "0.13.1"
-tempfile = "3.19.1"
-
+# Build dependencies
 [build-dependencies]
-# Don't need full regex crate, just simple string manipulation
-regex = "1.11.1"
-serde_json = "1.0.140"
+regex = { workspace = true }
+serde_json = { workspace = true }
