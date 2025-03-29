@@ -9,15 +9,15 @@ version: "1.0"
 
 # Development Setup for Contributors
 
-This guide provides instructions for setting up a development environment specifically for contributing to the Navius project. If you're just using Navius in your own projects, refer to the [general development setup](../getting-started/development-setup.md) guide instead.
+This guide provides instructions for setting up a development environment specifically for contributing to the Navius project. If you're just using Navius in your own projects, refer to the [general development setup](./) guide instead.
 
 ## Prerequisites
 
 Before setting up your development environment for contributions, ensure you have:
 
-- Completed the [Installation Guide](../getting-started/installation.md)
-- Read the [Contribution Guide](contribution-guide.md)
-- Familiarized yourself with our [Code of Conduct](code-of-conduct.md)
+- Completed the [Installation Guide](./)
+- Read the [Contribution Guide](./)
+- Familiarized yourself with our [Code of Conduct](./)
 - Git installed and configured
 - A GitHub account
 
@@ -249,10 +249,10 @@ cargo audit
 
 ## Additional Resources
 
-- [Project Architecture](../architecture/README.md)
-- [Coding Standards](../reference/standards/code-style.md)
-- [Documentation Guidelines](documentation-guidelines.md)
-- [Testing Guidelines](testing-guidelines.md)
+- [Project Architecture](./)
+- [Coding Standards](./)
+- [Documentation Guidelines](./)
+- [Testing Guidelines](./)
 
 ## Getting Help
 

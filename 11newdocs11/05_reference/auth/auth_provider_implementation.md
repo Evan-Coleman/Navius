@@ -1,11 +1,12 @@
 ---
-title: "Authentication Provider Implementation Guide"
-description: "Technical reference for implementing custom authentication providers in Navius applications"
+title: ""
+description: "Reference documentation for Navius "
 category: "Reference"
-tags: ["authentication", "security", "implementation", "providers", "integration"]
-last_updated: "April 2, 2025"
+tags: ["documentation", "reference"]
+last_updated: "April 3, 2025"
 version: "1.0"
 ---
+
 
 ## Adding a New Provider
 

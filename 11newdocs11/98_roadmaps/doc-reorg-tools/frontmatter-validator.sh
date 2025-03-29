@@ -1,21 +1,24 @@
 #!/bin/bash
 # frontmatter-validator.sh
 # Script to validate frontmatter in markdown files
-# Created: March 31, 2025
+# Created: April 3, 2025
 
 set -e
 
 # Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(dirname "$0")"
 LOGS_DIR="${SCRIPT_DIR}/logs"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="${LOGS_DIR}/frontmatter_validation_${TIMESTAMP}.log"
 REQUIRED_FIELDS=("title" "description" "category" "tags" "last_updated")
 VERBOSE=false
-MISSING_COUNT=0
-INVALID_COUNT=0
-FIXED_COUNT=0
-TOTAL_FILES=0
+FIX_MODE=false
+PROCESSED_FILES=0
+VALID_FILES=0
+MISSING_FRONTMATTER=0
+INVALID_FRONTMATTER=0
+FIXED_FILES=0
+DUPLICATE_FRONTMATTER=0
 
 # Create logs directory if it doesn't exist
 mkdir -p "${LOGS_DIR}"
@@ -38,188 +41,276 @@ show_help() {
 
 # Log messages
 log() {
-  local message="$1"
-  local level="${2:-INFO}"
-  local timestamp=$(date +"%Y-%m-%d %H:%M:%S")
-  echo "[$timestamp] [$level] $message" >> "$LOG_FILE"
+  local level="$1"
+  local message="$2"
   
-  if [[ "$VERBOSE" == true || "$level" != "DEBUG" ]]; then
+  # Format timestamp
+  local timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+  
+  # Print to console if verbose mode is enabled or level is not DEBUG
+  if [[ "$VERBOSE" == "true" ]] || [[ "$level" != "DEBUG" ]]; then
     echo "[$level] $message"
   fi
+  
+  # Log to file
+  echo "[$timestamp] [$level] $message" >> "$LOG_FILE"
 }
 
-# Check if a file has frontmatter
-has_frontmatter() {
+# Check if a file has valid frontmatter
+check_frontmatter() {
   local file="$1"
   
-  # Check if file starts with --- (frontmatter delimiter)
-  if grep -q "^---" "$file"; then
-    # Check if it has a second --- delimiter
-    if grep -q "^---" "$file" | wc -l | grep -q "2"; then
-      return 0 # Has frontmatter
-    fi
-  fi
-  
-  return 1 # No frontmatter
-}
-
-# Validate frontmatter in a markdown file
-validate_frontmatter() {
-  local file="$1"
-  local missing_fields=()
-  local fix_mode="${2:-false}"
-  local has_issues=false
-  
-  TOTAL_FILES=$((TOTAL_FILES + 1))
-  
-  log "Validating frontmatter in $file" "DEBUG"
-  
-  # Check if file has frontmatter
-  if ! has_frontmatter "$file"; then
-    log "Missing frontmatter in $file" "WARNING"
-    MISSING_COUNT=$((MISSING_COUNT + 1))
-    has_issues=true
-    
-    if [[ "$fix_mode" == true ]]; then
-      add_frontmatter "$file"
-    fi
-    
+  # Check if file exists
+  if [[ ! -f "$file" ]]; then
+    log "ERROR" "File not found: $file"
     return 1
   fi
   
-  # Check for required fields
+  # Check if file has frontmatter (delimited by ---)
+  # We need to check if it has the opening AND closing ---
+  local frontmatter_count=$(grep -c "^---$" "$file" | head -2)
+  
+  if [[ "$frontmatter_count" -lt 2 ]]; then
+    log "WARNING" "Missing frontmatter in $file"
+    ((MISSING_FRONTMATTER++))
+    return 1
+  fi
+  
+  # Check if there are duplicate frontmatter blocks
+  if [[ "$frontmatter_count" -gt 2 ]]; then
+    log "WARNING" "Duplicate frontmatter detected in $file"
+    ((DUPLICATE_FRONTMATTER++))
+    return 2
+  fi
+  
+  # Extract frontmatter content
+  local frontmatter=$(sed -n '/^---$/,/^---$/p' "$file")
+  
+  # Check required fields
+  local invalid_fields=0
   for field in "${REQUIRED_FIELDS[@]}"; do
-    if ! grep -q "^$field:" "$file"; then
-      missing_fields+=("$field")
-      has_issues=true
+    if ! echo "$frontmatter" | grep -q "^$field:"; then
+      log "WARNING" "Missing '$field' in frontmatter of $file"
+      ((invalid_fields++))
     fi
   done
   
-  if [[ ${#missing_fields[@]} -gt 0 ]]; then
-    log "Missing required fields in $file: ${missing_fields[*]}" "WARNING"
-    INVALID_COUNT=$((INVALID_COUNT + 1))
-    
-    if [[ "$fix_mode" == true ]]; then
-      fix_missing_fields "$file" "${missing_fields[@]}"
-    fi
-    
-    return 1
+  if [[ "$invalid_fields" -gt 0 ]]; then
+    log "WARNING" "Invalid frontmatter in $file (missing $invalid_fields required fields)"
+    ((INVALID_FRONTMATTER++))
+    return 3
   fi
   
-  log "Frontmatter valid in $file" "DEBUG"
+  log "DEBUG" "Valid frontmatter in $file"
+  ((VALID_FILES++))
   return 0
 }
 
-# Add basic frontmatter to a file
+# Validate frontmatter in a file
+validate_frontmatter() {
+  local file="$1"
+  
+  log "DEBUG" "Validating frontmatter in $file"
+  
+  # Check if the file is a markdown file
+  if [[ "$file" != *.md ]]; then
+    log "DEBUG" "Skipping non-markdown file: $file"
+    return 0
+  fi
+  
+  # Check frontmatter status
+  check_frontmatter "$file"
+  local status=$?
+  
+  # If fix mode is enabled and frontmatter is missing or invalid, fix it
+  if [[ "$FIX_MODE" == "true" ]]; then
+    if [[ "$status" -eq 1 ]]; then
+      # Missing frontmatter
+      add_frontmatter "$file"
+    elif [[ "$status" -eq 2 ]]; then
+      # Duplicate frontmatter
+      fix_duplicate_frontmatter "$file"
+    elif [[ "$status" -eq 3 ]]; then
+      # Invalid frontmatter (missing fields)
+      fix_missing_fields "$file"
+    fi
+  fi
+  
+  ((PROCESSED_FILES++))
+}
+
+# Fix duplicate frontmatter in a file
+fix_duplicate_frontmatter() {
+  local file="$1"
+  log "INFO" "Fixing duplicate frontmatter in $file"
+  
+  # Create a temporary file
+  local temp_file=$(mktemp)
+  
+  # Using awk to remove the first frontmatter block
+  awk '
+  BEGIN { count = 0; printing = 1; }
+  /^---$/ {
+    count++;
+    if (count == 1) {
+      printing = 0;
+      next;
+    }
+    if (count == 2) {
+      printing = 1;
+    }
+    if (count >= 3) {
+      printing = 1;
+    }
+  }
+  { if (printing) print; }
+  ' "$file" > "$temp_file"
+  
+  # Replace the original file with the fixed content
+  mv "$temp_file" "$file"
+  
+  log "INFO" "Fixed duplicate frontmatter in $file"
+  ((FIXED_FILES++))
+}
+
+# Add frontmatter to a file
 add_frontmatter() {
   local file="$1"
-  local filename=$(basename "$file" .md)
-  local title=$(echo "$filename" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)} 1')
-  local current_date=$(date +"%B %d, %Y")
-  local file_content=$(cat "$file")
   
-  log "Adding frontmatter to $file" "INFO"
+  log "INFO" "Adding frontmatter to $file"
   
-  # Create frontmatter
-  cat > "$file" << EOF
+  # Get the base name of the file without path and extension
+  local file_name=$(basename "$file" .md)
+  
+  # Convert to title case
+  local title=$(echo "$file_name" | tr '-_' ' ' | awk '{for(i=1;i<=NF;i++){ $i=toupper(substr($i,1,1)) substr($i,2) }}1')
+  
+  # Create a temporary file
+  local temp_file=$(mktemp)
+  
+  # Add frontmatter template to the temporary file
+  cat > "$temp_file" << EOL
 ---
 title: "$title"
 description: ""
 category: "Documentation"
 tags: []
-last_updated: "$current_date"
+last_updated: "$(date +"%B %d, %Y")"
 version: "1.0"
 ---
 
-$file_content
-EOF
-
-  log "Added frontmatter template to $file" "INFO"
-  FIXED_COUNT=$((FIXED_COUNT + 1))
+EOL
+  
+  # Append the original content
+  cat "$file" >> "$temp_file"
+  
+  # Replace the original file with the fixed content
+  mv "$temp_file" "$file"
+  
+  log "INFO" "Added frontmatter template to $file"
+  ((FIXED_FILES++))
 }
 
 # Fix missing fields in frontmatter
 fix_missing_fields() {
   local file="$1"
-  shift
-  local missing_fields=("$@")
-  local current_date=$(date +"%B %d, %Y")
-  local filename=$(basename "$file" .md)
-  local title=$(echo "$filename" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)} 1')
-  local temp_file="${file}.temp"
   
-  log "Fixing missing fields in $file: ${missing_fields[*]}" "INFO"
+  log "INFO" "Fixing missing fields in frontmatter of $file"
   
-  # Read the file into a variable
-  local content=$(cat "$file")
+  # Extract frontmatter content
+  local frontmatter=$(sed -n '/^---$/,/^---$/p' "$file" | sed '1d;$d')
   
-  # Find where frontmatter ends
-  local frontmatter_end=$(grep -n "^---" "$file" | awk 'NR==2 {print $1}' | cut -d: -f1)
+  # Get file content excluding frontmatter
+  local content=$(sed '1,/^---$/d' "$file")
   
-  # Create temporary file
-  echo "$content" > "$temp_file"
+  # Create a temporary file
+  local temp_file=$(mktemp)
   
-  # Add missing fields
-  for field in "${missing_fields[@]}"; do
-    case "$field" in
-      "title")
-        sed -i "${frontmatter_end}i title: \"$title\"" "$temp_file"
-        ;;
-      "description")
-        sed -i "${frontmatter_end}i description: \"\"" "$temp_file"
-        ;;
-      "category")
-        sed -i "${frontmatter_end}i category: \"Documentation\"" "$temp_file"
-        ;;
-      "tags")
-        sed -i "${frontmatter_end}i tags: []" "$temp_file"
-        ;;
-      "last_updated")
-        sed -i "${frontmatter_end}i last_updated: \"$current_date\"" "$temp_file"
-        ;;
-      "version")
-        sed -i "${frontmatter_end}i version: \"1.0\"" "$temp_file"
-        ;;
-    esac
+  # Add fixed frontmatter
+  echo "---" > "$temp_file"
+  
+  # Add existing fields
+  for field in "title" "description" "category" "tags" "last_updated" "version"; do
+    if echo "$frontmatter" | grep -q "^$field:"; then
+      grep "^$field:" <<< "$frontmatter" >> "$temp_file"
+    else
+      # Add missing field with default value
+      case "$field" in
+        "title")
+          # Get title from file name
+          local file_name=$(basename "$file" .md)
+          local title=$(echo "$file_name" | tr '-_' ' ' | awk '{for(i=1;i<=NF;i++){ $i=toupper(substr($i,1,1)) substr($i,2) }}1')
+          echo "title: \"$title\"" >> "$temp_file"
+          ;;
+        "description")
+          echo "description: \"\"" >> "$temp_file"
+          ;;
+        "category")
+          echo "category: \"Documentation\"" >> "$temp_file"
+          ;;
+        "tags")
+          echo "tags: []" >> "$temp_file"
+          ;;
+        "last_updated")
+          echo "last_updated: \"$(date +"%B %d, %Y")\"" >> "$temp_file"
+          ;;
+        "version")
+          echo "version: \"1.0\"" >> "$temp_file"
+          ;;
+      esac
+    fi
   done
   
-  # Replace original file with the modified one
+  # Close frontmatter
+  echo "---" >> "$temp_file"
+  
+  # Add content
+  echo "$content" >> "$temp_file"
+  
+  # Replace the original file
   mv "$temp_file" "$file"
   
-  log "Fixed missing fields in $file" "INFO"
-  FIXED_COUNT=$((FIXED_COUNT + 1))
+  log "INFO" "Fixed missing fields in frontmatter of $file"
+  ((FIXED_FILES++))
 }
 
 # Process a directory
 process_directory() {
   local dir="$1"
-  local fix_mode="$2"
-  local file_count=0
-  local valid_count=0
   
-  log "Processing directory: $dir" "INFO"
+  log "INFO" "Processing directory: $dir"
   
   # Find all markdown files in the directory
-  while IFS= read -r -d '' file; do
-    file_count=$((file_count + 1))
-    validate_frontmatter "$file" "$fix_mode" && valid_count=$((valid_count + 1))
-  done < <(find "$dir" -type f -name "*.md" -print0)
+  local files=$(find "$dir" -type f -name "*.md" 2>/dev/null)
   
-  log "Processed $file_count markdown files in $dir" "INFO"
-  log "Valid frontmatter: $valid_count / $file_count" "INFO"
+  # Process each file
+  for file in $files; do
+    validate_frontmatter "$file"
+  done
+  
+  log "INFO" "Processed $PROCESSED_FILES markdown files in $dir"
+  log "INFO" "Valid frontmatter: $VALID_FILES / $PROCESSED_FILES"
 }
 
 # Generate summary report
 generate_summary() {
-  log "========== Frontmatter Validation Summary ==========" "INFO"
-  log "Total files processed: $TOTAL_FILES" "INFO"
-  log "Files with missing frontmatter: $MISSING_COUNT" "INFO"
-  log "Files with invalid frontmatter: $INVALID_COUNT" "INFO"
-  log "Files fixed: $FIXED_COUNT" "INFO"
-  log "Valid files: $((TOTAL_FILES - MISSING_COUNT - INVALID_COUNT + FIXED_COUNT))" "INFO"
-  log "Compliance rate: $(( (TOTAL_FILES - MISSING_COUNT - INVALID_COUNT + FIXED_COUNT) * 100 / TOTAL_FILES ))%" "INFO"
-  log "Log file: $LOG_FILE" "INFO"
-  log "=================================================" "INFO"
+  log "INFO" "========== Frontmatter Validation Summary =========="
+  log "INFO" "Total files processed: $PROCESSED_FILES"
+  log "INFO" "Files with missing frontmatter: $MISSING_FRONTMATTER"
+  log "INFO" "Files with invalid frontmatter: $INVALID_FRONTMATTER"
+  log "INFO" "Files with duplicate frontmatter: $DUPLICATE_FRONTMATTER"
+  log "INFO" "Files fixed: $FIXED_FILES"
+  log "INFO" "Valid files: $VALID_FILES"
+  
+  # Calculate compliance rate
+  local compliance=0
+  if [[ "$PROCESSED_FILES" -gt 0 ]]; then
+    compliance=$(( (VALID_FILES * 100) / PROCESSED_FILES ))
+  fi
+  
+  log "INFO" "Compliance rate: $compliance%"
+  log "INFO" "Log file: $LOG_FILE"
+  log "INFO" "================================================="
 }
 
 # Parse command line arguments
@@ -227,7 +318,6 @@ if [[ $# -eq 0 ]]; then
   show_help
 fi
 
-FIX_MODE=false
 TARGET_DIR=""
 TARGET_FILE=""
 
@@ -260,24 +350,24 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Start validation
-log "Starting frontmatter validation" "INFO"
+log "INFO" "Starting frontmatter validation"
 
 if [[ -n "$TARGET_DIR" ]]; then
   if [[ ! -d "$TARGET_DIR" ]]; then
-    log "Directory not found: $TARGET_DIR" "ERROR"
+    log "ERROR" "Directory not found: $TARGET_DIR"
     exit 1
   fi
   
-  process_directory "$TARGET_DIR" "$FIX_MODE"
+  process_directory "$TARGET_DIR"
 elif [[ -n "$TARGET_FILE" ]]; then
   if [[ ! -f "$TARGET_FILE" ]]; then
-    log "File not found: $TARGET_FILE" "ERROR"
+    log "ERROR" "File not found: $TARGET_FILE"
     exit 1
   fi
   
-  validate_frontmatter "$TARGET_FILE" "$FIX_MODE"
+  validate_frontmatter "$TARGET_FILE"
 else
-  log "No target specified. Use --dir or --file option." "ERROR"
+  log "ERROR" "No target specified. Use --dir or --file option."
   show_help
 fi
 

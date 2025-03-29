@@ -1,23 +1,12 @@
 ---
-title: "Naming Conventions"
-description: ""
-category: "Documentation"
-tags: []
-last_updated: "March 28, 2025"
+title: ""
+description: "Reference documentation for Navius "
+category: "Reference"
+tags: ["documentation", "reference"]
+last_updated: "April 3, 2025"
 version: "1.0"
 ---
 
----
-title: "Naming Conventions"
-description: "Documentation about Naming Conventions"
-category: reference
-tags:
-  - api
-  - integration
-  - postgres
-last_updated: March 27, 2025
-version: 1.0
----
 # Naming Conventions
 
 This document outlines the naming conventions used in the Navius project after the project restructuring.

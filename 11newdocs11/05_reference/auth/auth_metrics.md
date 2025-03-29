@@ -1,11 +1,12 @@
 ---
-title: "Authentication Metrics"
-description: "Comprehensive guide to authentication metrics, monitoring, and dashboards in Navius applications"
+title: ""
+description: "Reference documentation for Navius "
 category: "Reference"
-tags: ["authentication", "metrics", "monitoring", "observability", "security"]
-last_updated: "April 2, 2025"
+tags: ["documentation", "reference"]
+last_updated: "April 3, 2025"
 version: "1.0"
 ---
+
 
 # Authentication Metrics
 

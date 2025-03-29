@@ -1,14 +1,5 @@
 ---
 title: "Development Process"
-description: ""
-category: "Documentation"
-tags: []
-last_updated: "March 28, 2025"
-version: "1.0"
----
-
----
-title: "Development Process"
 description: "A guide to the development workflow and processes for contributing to Navius"
 category: contributing
 tags:
@@ -80,7 +71,7 @@ This document outlines the development process for contributing to the Navius fr
    - Branch names should follow the pattern: `feature/feature-name` or `bugfix/issue-description`
 
 3. **Implement Changes**
-   - Follow the [code style guidelines](../reference/standards/code-style.md)
+   - Follow the [code style guidelines](./)
    - Implement tests for your changes
    - Update documentation as necessary
 

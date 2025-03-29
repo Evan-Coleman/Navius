@@ -1,13 +1,4 @@
 ---
-title: "Api Resource Guide"
-description: ""
-category: "Documentation"
-tags: []
-last_updated: "March 28, 2025"
-version: "1.0"
----
-
----
 title: "Navius API Resource Abstraction"
 description: "Documentation about Navius API Resource Abstraction"
 category: reference

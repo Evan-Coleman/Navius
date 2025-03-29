@@ -1,13 +1,4 @@
 ---
-title: "Cache Api"
-description: ""
-category: "Documentation"
-tags: []
-last_updated: "March 28, 2025"
-version: "1.0"
----
-
----
 title: "Cache API Reference"
 description: "API documentation for Navius caching service and operations"
 category: api
@@ -24,6 +15,7 @@ related:
 last_updated: March 31, 2025
 version: 1.0
 ---
+
 
 # Cache API Reference
 

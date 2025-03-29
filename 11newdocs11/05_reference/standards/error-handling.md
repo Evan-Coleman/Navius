@@ -1,13 +1,4 @@
 ---
-title: "Error Handling"
-description: ""
-category: "Documentation"
-tags: []
-last_updated: "March 28, 2025"
-version: "1.0"
----
-
----
 title: Navius Error Handling Reference
 description: Standard error handling patterns and practices for Navius applications
 category: reference

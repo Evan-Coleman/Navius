@@ -1,9 +1,9 @@
 ---
-title: "Error Handling Standards"
-description: ""
-category: "Documentation"
-tags: []
-last_updated: "March 28, 2025"
+title: ""
+description: "Reference documentation for Navius "
+category: "Reference"
+tags: ["documentation", "reference"]
+last_updated: "April 3, 2025"
 version: "1.0"
 ---
 

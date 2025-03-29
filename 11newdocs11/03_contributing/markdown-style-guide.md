@@ -3,7 +3,7 @@ title: "Markdown Style Guide"
 description: "Guidelines for consistent markdown formatting in Navius documentation"
 category: "Contributing"
 tags: ["documentation", "markdown", "style", "guidelines", "formatting"]
-last_updated: "April 2, 2025"
+last_updated: "April 3, 2025"
 version: "1.0"
 ---
 
@@ -85,7 +85,7 @@ This guide outlines the standards and best practices for writing markdown docume
 - For external links, include the full URL with protocol
 
 ```markdown
-[Descriptive link text](URL)
+[Descriptive link text](./)
 
 [Reference-style link][reference]
 
@@ -245,6 +245,6 @@ Standard document structure:
 
 ## Related Documents
 
-- [Documentation Standards](../05_reference/standards/documentation-standards.md)
-- [Contributing Guidelines](contributing-guidelines.md)
-- [Code Style Guide](code-style-guide.md) 
+- [Documentation Standards](./)
+- [Contributing Guidelines](./)
+- [Code Style Guide](./) 

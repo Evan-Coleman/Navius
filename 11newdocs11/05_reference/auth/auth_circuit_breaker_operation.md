@@ -1,11 +1,12 @@
 ---
-title: "Authentication Circuit Breaker Operation"
-description: "Reference guide for implementing and configuring circuit breakers in Navius authentication systems"
+title: ""
+description: "Reference documentation for Navius "
 category: "Reference"
-tags: ["authentication", "security", "reliability", "circuit-breaker", "resilience"]
-last_updated: "April 2, 2025"
+tags: ["documentation", "reference"]
+last_updated: "April 3, 2025"
 version: "1.0"
 ---
+
 
 ## Circuit Breaker Configuration
 

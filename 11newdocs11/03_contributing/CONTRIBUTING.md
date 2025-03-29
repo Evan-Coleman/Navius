@@ -1,13 +1,4 @@
 ---
-title: "CONTRIBUTING"
-description: ""
-category: "Documentation"
-tags: []
-last_updated: "March 28, 2025"
-version: "1.0"
----
-
----
 title: "Contributing to Navius"
 description: "# Clone the repository"
 category: contributing
@@ -161,7 +152,7 @@ Navius has a comprehensive test suite. To run all tests:
 cargo test
 ```
 
-See the [Testing Guide](docs/testing_guide.md) for more information on testing.
+See the [Testing Guide](./) for more information on testing.
 
 ## Code Style
 
@@ -174,35 +165,3 @@ cargo fmt
 # Check for issues
 cargo clippy
 ```
-
-## Documentation
-
-When adding or modifying features, please update the documentation accordingly:
-
-- Add or update doc comments in the code
-- Update relevant markdown files in the `docs/` directory
-- Consider adding examples to demonstrate usage
-
-## Releasing
-
-Releases are managed by the core team. We follow semantic versioning (MAJOR.MINOR.PATCH).
-
-## Getting Help
-
-If you need help with contributing, please:
-
-- Check the [Developer Guide](docs/DEVELOPMENT.md)
-- Join our [Discord community](https://discord.gg/navius)
-- Open a GitHub issue with your question
-
-## Acknowledgments
-
-Thank you to all the contributors who have helped make Navius better!
-
-## License
-
-By contributing to Navius, you agree that your contributions will be licensed under the project's [Apache License 2.0](LICENSE). 
-
-## Related Documents
-- [Contributing Guide](CONTRIBUTING.md) - How to contribute to the project
-- [Development Setup](../01_getting_started/development-setup.md) - Setting up your development environment

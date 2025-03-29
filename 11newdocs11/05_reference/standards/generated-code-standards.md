@@ -1,22 +1,12 @@
 ---
-title: "Generated Code Standards"
-description: ""
-category: "Documentation"
-tags: []
-last_updated: "March 28, 2025"
+title: ""
+description: "Reference documentation for Navius "
+category: "Reference"
+tags: ["documentation", "reference"]
+last_updated: "April 3, 2025"
 version: "1.0"
 ---
 
----
-title: "Generated Code Management"
-description: "# Add a new API client"
-category: reference
-tags:
-  - api
-  - documentation
-last_updated: March 27, 2025
-version: 1.0
----
 # Generated Code Management
 
 This document outlines the guidelines and processes for managing generated code in the Navius project.

@@ -1,14 +1,5 @@
 ---
 title: "Contributing Guidelines"
-description: ""
-category: "Documentation"
-tags: []
-last_updated: "March 28, 2025"
-version: "1.0"
----
-
----
-title: "Contributing Guidelines"
 description: "Guidelines for contributing to the Navius project"
 category: "Contributing"
 tags: ["contributing", "guidelines", "development", "documentation", "pull-requests"]
@@ -34,13 +25,13 @@ Thank you for your interest in contributing to the Navius project! This document
 
 ## Code of Conduct
 
-The Navius project adheres to a Code of Conduct that all contributors are expected to follow. Please read [the full text](code-of-conduct.md) to understand what actions will and will not be tolerated.
+The Navius project adheres to a Code of Conduct that all contributors are expected to follow. Please read [the full text](./) to understand what actions will and will not be tolerated.
 
 ## Getting Started
 
 1. **Fork the repository** to your GitHub account
 2. **Clone your fork** to your local machine
-3. **Set up the development environment** following instructions in [development-setup.md](development-setup.md)
+3. **Set up the development environment** following instructions in [development-setup.md](./)
 4. **Create a new branch** for your changes
 
 ```bash
@@ -71,7 +62,7 @@ All pull requests require at least one approval from a project maintainer before
 
 The Navius project follows strict coding standards to maintain consistency and quality:
 
-- **Follow the Rust Style Guide** as outlined in [code-style-guide.md](code-style-guide.md)
+- **Follow the Rust Style Guide** as outlined in [code-style-guide.md](./)
 - **Document all public APIs** with rustdoc comments
 - **Write clear commit messages** following conventional commits
 - **Maintain backward compatibility** where possible
@@ -80,7 +71,7 @@ The Navius project follows strict coding standards to maintain consistency and q
 
 Documentation is a critical part of the Navius project:
 
-- **Follow the Markdown Style Guide** in [markdown-style-guide.md](markdown-style-guide.md)
+- **Follow the Markdown Style Guide** in [markdown-style-guide.md](./)
 - **Update documentation** when you change functionality
 - **Include code examples** for API documentation
 - **Use correct frontmatter** for all documentation files
@@ -142,7 +133,7 @@ When reporting issues:
 
 ## Related Documents
 
-- [Code Style Guide](code-style-guide.md)
-- [Markdown Style Guide](markdown-style-guide.md)
-- [Development Setup](development-setup.md)
-- [Architecture Overview](../05_reference/architecture/overview.md) 
+- [Code Style Guide](./)
+- [Markdown Style Guide](./)
+- [Development Setup](./)
+- [Architecture Overview](./) 

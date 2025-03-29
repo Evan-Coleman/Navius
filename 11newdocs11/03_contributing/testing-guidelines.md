@@ -1,29 +1,12 @@
 ---
-title: "Testing Guidelines"
-description: ""
-category: "Documentation"
-tags: []
-last_updated: "March 28, 2025"
+title: ""
+description: "Reference documentation for Navius "
+category: "Reference"
+tags: ["documentation", "reference"]
+last_updated: "April 3, 2025"
 version: "1.0"
 ---
 
----
-title: "Testing Guidelines"
-description: "Guidelines for testing Navius components, with special focus on complex features"
-category: contributing
-tags:
-  - testing
-  - guidelines
-  - quality
-  - unit-tests
-  - integration-tests
-related:
-  - contributing/development-process.md
-  - guides/development/testing-guide.md
-  - reference/patterns/testing-patterns.md
-last_updated: March 27, 2025
-version: 1.0
----
 
 # Testing Guidelines
 

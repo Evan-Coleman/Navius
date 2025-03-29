@@ -1,20 +1,12 @@
 ---
-title: "Navius Security Guide"
-description: "Documentation about Navius Security Guide"
-category: reference
-tags:
-  - api
-  - architecture
-  - authentication
-  - aws
-  - database
-  - development
-  - integration
-  - security
-  - testing
-last_updated: April 2, 2025
-version: 1.0
+title: ""
+description: "Reference documentation for Navius "
+category: "Reference"
+tags: ["documentation", "reference"]
+last_updated: "April 3, 2025"
+version: "1.0"
 ---
+
 # Navius Security Guide
 
 Navius takes security seriously, implementing numerous safeguards at different levels of the stack. This document outlines the security features built into the framework and best practices for secure application development.

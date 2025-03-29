@@ -1,13 +1,4 @@
 ---
-title: "Onboarding"
-description: ""
-category: "Documentation"
-tags: []
-last_updated: "March 28, 2025"
-version: "1.0"
----
-
----
 title: "Developer Onboarding Guide"
 description: "# Find files in the auth component"
 category: contributing
@@ -89,7 +80,7 @@ cargo test
 
 ## Project Structure
 
-Navius follows a modular architecture with a clean separation of concerns. See the [Project Navigation Guide](../guides/project-navigation.md) for a detailed explanation of the codebase structure.
+Navius follows a modular architecture with a clean separation of concerns. See the [Project Navigation Guide](./) for a detailed explanation of the codebase structure.
 
 Key directories:
 
@@ -193,7 +184,7 @@ Navius follows clean architecture principles:
    - SQLx for database access
    - Redis for caching
 
-See the [Module Dependencies Diagram](../architecture/module-dependencies.md) for a visual representation of the architecture.
+See the [Module Dependencies Diagram](./) for a visual representation of the architecture.
 
 ## Code Examples
 
@@ -421,11 +412,11 @@ All features should be documented. The project uses the following documentation 
 
 If you need help with the codebase:
 
-1. Consult the [Project Navigation Guide](../guides/project-navigation.md)
+1. Consult the [Project Navigation Guide](./)
 2. Use the navigation scripts to explore the codebase
 3. Read the documentation in the `docs/` directory
 4. Reach out to the team on the project's communication channels
 
 ## Related Documents
-- [Contributing Guide](CONTRIBUTING.md) - How to contribute to the project
-- [Development Setup](../01_getting_started/development-setup.md) - Setting up your development environment
+- [Contributing Guide](./) - How to contribute to the project
+- [Development Setup](./) - Setting up your development environment

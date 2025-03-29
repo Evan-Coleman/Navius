@@ -1,13 +1,4 @@
 ---
-title: "README"
-description: ""
-category: "Documentation"
-tags: []
-last_updated: "March 28, 2025"
-version: "1.0"
----
-
----
 title: "Contributing Guidelines"
 description: "Documentation about Contributing Guidelines"
 category: contributing
@@ -22,9 +13,9 @@ This directory contains guidelines and information for contributors to the Naviu
 
 ## Contents
 
-- [Contributing Guide](CONTRIBUTING.md) - Main guide for project contributions
-- [Testing Implementation Template](test-implementation-template.md) - Template for implementing tests
-- [Testing Prompt](testing-prompt.md) - Guidance for creating effective tests
+- [Contributing Guide](./) - Main guide for project contributions
+- [Testing Implementation Template](./) - Template for implementing tests
+- [Testing Prompt](./) - Guidance for creating effective tests
 
 ## Purpose
 

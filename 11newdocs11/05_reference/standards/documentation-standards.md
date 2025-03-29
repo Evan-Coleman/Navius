@@ -1,13 +1,4 @@
 ---
-title: "Documentation Standards"
-description: ""
-category: "Documentation"
-tags: []
-last_updated: "March 28, 2025"
-version: "1.0"
----
-
----
 title: Documentation Standards
 description: Standards and guidelines for creating and maintaining Navius documentation
 category: reference

@@ -1,14 +1,5 @@
 ---
 title: "Testing Prompt"
-description: ""
-category: "Documentation"
-tags: []
-last_updated: "March 28, 2025"
-version: "1.0"
----
-
----
-title: "Testing Prompt"
 description: "Documentation about Testing Prompt"
 category: contributing
 tags:
@@ -144,5 +135,5 @@ BEFORE STARTING READ THIS WEBSITE FOR REFERENCE: https://doc.rust-lang.org/book/
 Please implement this testing plan step by step, starting with the priority modules and updating the testing roadmap as you progress. Remember to use existing code patterns and test examples as a reference. Also, limit editing of this prompt and the testing-roadmap.md file to only update progress (unless you have a really good reason to. In which case ask me about it).
 
 ## Related Documents
-- [Contributing Guide](CONTRIBUTING.md) - How to contribute to the project
-- [Development Setup](../01_getting_started/development-setup.md) - Setting up your development environment
+- [Contributing Guide](./) - How to contribute to the project
+- [Development Setup](./) - Setting up your development environment
