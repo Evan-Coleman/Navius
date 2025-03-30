@@ -11,6 +11,8 @@ pub mod config;
 pub mod invalidation;
 /// Redis cache lua scripting
 pub mod lua;
+/// Redis cache metrics
+pub mod metrics;
 /// Redis cache operations
 pub mod operations;
 /// Redis cache pipelining
@@ -20,6 +22,10 @@ pub mod pipeline;
 pub use config::RedisCacheConfig;
 pub use invalidation::RedisInvalidator;
 pub use lua::{RedisLuaManager, RedisLuaScripting, initialize_common_scripts};
+pub use metrics::{
+    TimedOperation, record_connection_acquisition, record_connection_health,
+    record_connection_pool_stats,
+};
 pub use operations::RedisCache;
 pub use pipeline::{Pipeline, RedisPipeline};
 
