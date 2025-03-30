@@ -73,7 +73,14 @@ We are migrating the Navius project from a feature flag-based organization to a 
 - ✅ Phase 2: Create Core Modules
   - ✅ navius-core
   - ✅ navius-http
-  - ✅ navius-auth
+Let's continue with the next implementation steps in workspace_migration/roadmap/40-workspace-migration.md  
+  
+Using instructions from both  
+workspace_migration/README.md  
+and  
+.cursor/rules/020-roadmaps.mdc  
+Keep in mind that today is "March 29, 2025"  
+Also, if you need spring-rs reference it is located at ref_project/spring-rs  - ✅ navius-auth (authentication and authorization interfaces)
 - 🔄 Phase 3: Create Additional Crates (In Progress)
   - 🔄 navius-db (75% complete)
     - ✅ Database interfaces and abstractions
@@ -94,9 +101,17 @@ We are migrating the Navius project from a feature flag-based organization to a 
     - ⬜️ Migration support
     - ⬜️ Repository implementation
     - ⬜️ Comprehensive tests
+  - 🔄 navius-auth-entra (planned for June 1, 2025)
+    - ⬜️ Microsoft Entra implementation of auth interfaces
+    - ⬜️ OAuth integration
+    - ⬜️ JWT support
   - ⬜️ navius-cache (planned for April 15, 2025)
-    - ⬜️ Cache interfaces and operations
-    - ⬜️ Redis implementation
+    - ⬜️ Cache interfaces and abstractions
+    - ⬜️ Key-value operations
+    - ⬜️ Collection operations
+  - ⬜️ navius-cache-redis (planned for April 30, 2025)
+    - ⬜️ Redis implementation of cache interfaces
+    - ⬜️ Redis-specific optimizations
     - ⬜️ Serialization support
 
 ## Implementation Timeline
@@ -104,7 +119,7 @@ We are migrating the Navius project from a feature flag-based organization to a 
 | Timeline | Work Focus | Key Deliverables |
 |----------|------------|------------------|
 | April 1-15, 2025 | Database Crates | • Complete navius-db with query building and transactions<br>• Complete navius-db-postgres with SQLx integration<br>• Add migration support |
-| April 15-30, 2025 | Cache Crates | • Begin navius-cache with provider pattern<br>• Begin navius-cache-redis implementation<br>• Implement key-value and collection operations |
+| April 15-30, 2025 | Cache Crates | • Begin navius-cache with core interfaces<br>• Begin navius-cache-redis implementation<br>• Implement key-value and collection operations |
 | May 1-15, 2025 | Plugin System | • Begin navius-plugin<br>• Implement component registry<br>• Create plugin lifecycle hooks |
 | May 15-30, 2025 | Event System | • Begin navius-event<br>• Implement event handling<br>• Create publish/subscribe mechanisms |
 

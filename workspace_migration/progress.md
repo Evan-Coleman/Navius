@@ -54,7 +54,7 @@ This progress file serves as:
 |-------|--------|-------|
 | navius-core | ✅ 100% | Core functionality, configuration, errors |
 | navius-http | ✅ 100% | HTTP server, routing, middleware |
-| navius-auth | ✅ 100% | Authentication and authorization |
+| navius-auth | ✅ 100% | Authentication and authorization interfaces |
 
 ## In Progress Tasks
 
@@ -97,6 +97,7 @@ This progress file serves as:
   - ✅ Created navius-db-postgres as a reference implementation
   - ✅ Documented provider implementation approach in DATABASE_PROVIDER_GUIDE.md
   - ✅ Created architectural decision record (ADR) for the database provider pattern
+  - ✅ Updated roadmap to ensure provider pattern consistency across all crates
 
 **Key Progress**:
 - Successfully refactored database functionality to use a provider pattern
@@ -104,6 +105,7 @@ This progress file serves as:
 - Began implementation of the PostgreSQL provider using SQLx
 - Established patterns for future provider implementations (MySQL, SQLite, etc.)
 - Created detailed documentation and guides for the provider pattern
+- Ensured consistent application of provider pattern across all crates
 
 ## Upcoming Tasks
 
@@ -122,21 +124,35 @@ This progress file serves as:
 
 2. Cache Implementation (April 15-30, 2025)
    - Begin implementing navius-cache crate
-     - Apply provider pattern for cache backends
+     - Apply provider pattern for cache abstractions
      - Create core cache interfaces for key-value operations
-     - Implement serialization support with serde
-     - Design collection operations (lists, sets, maps)
-     - Add TTL and expiration management
+     - Design collection operation interfaces
+     - Define serialization interfaces
+     - Add TTL and expiration management interfaces
    - Begin implementing navius-cache-redis crate
      - Create Redis provider implementation
-     - Implement connection pooling
+     - Implement Redis connection pooling and management
      - Add Redis-specific optimizations
+     - Implement serialization and deserialization
 
-3. Integration and Documentation
-   - Apply lessons from provider pattern implementation to cache design
-   - Document integration patterns between database and cache components
-   - Create examples showing combined usage of components
-   - Update architectural diagrams with provider pattern structure
+3. Authentication Implementation (June 1-15, 2025)
+   - Begin implementing navius-auth-entra crate
+     - Create Microsoft Entra implementation of auth interfaces
+     - Implement OAuth and JWT handling
+     - Add user identity management
+
+## Upcoming Crates
+
+| Crate | Status | Target Date |
+|-------|--------|-------------|
+| navius-auth-entra | ⬜️ 0% | June 1, 2025 |
+| navius-cache | ⬜️ 0% | April 15, 2025 |
+| navius-cache-redis | ⬜️ 0% | April 30, 2025 |
+| navius-plugin | ⬜️ 0% | May 1, 2025 |
+| navius-event | ⬜️ 0% | May 15, 2025 |
+| navius-job | ⬜️ 0% | June 1, 2025 |
+| navius-template | ⬜️ 0% | June 15, 2025 |
+| navius-cli | ⬜️ 0% | July 1, 2025 |
 
 ## Key Accomplishments
 
@@ -193,22 +209,31 @@ None at this time.
 
 ## Notes
 
-The adoption of the provider pattern for database implementations is a significant architectural improvement. By separating interfaces (navius-db) from implementations (navius-db-postgres), we've created a more flexible, maintainable system. This approach:
+The adoption of the provider pattern for infrastructure components is a significant architectural improvement. By separating interfaces from implementations (e.g., navius-db from navius-db-postgres, navius-cache from navius-cache-redis, navius-auth from navius-auth-entra), we've created a more flexible, maintainable system. This approach:
 
 1. Provides clear separation of concerns
-2. Enables support for multiple database backends
-3. Reduces dependencies for applications not using specific backends
+2. Enables support for multiple implementations of core services
+3. Reduces dependencies for applications not using specific implementations
 4. Improves testability with mock implementations
 5. Creates a consistent pattern for future providers
 
-Based on this success, we plan to apply the same pattern to other components like caching (Redis, Memcached), template engines, and other areas where multiple implementations make sense.
+Based on this success, we're applying the same pattern to all infrastructure components:
+- Database access (navius-db / navius-db-postgres)
+- Authentication (navius-auth / navius-auth-entra)
+- Caching (navius-cache / navius-cache-redis)
+- Event handling (navius-event / future implementation crates)
+- Job processing (navius-job / future implementation crates)
+- Template rendering (navius-template / future implementation crates)
 
-The detailed implementation guide in DATABASE_PROVIDER_GUIDE.md will ensure consistent implementation of future providers.
+The detailed implementation guide in DATABASE_PROVIDER_GUIDE.md will serve as a template for implementing providers across all these systems.
 
 ## Recent Updates
 
 | Date | Description |
 |------|-------------|
+| March 29, 2025 | Updated roadmap to ensure provider pattern consistency across all crates |
+| March 29, 2025 | Added plans for navius-auth-entra implementation of auth interfaces |
+| March 29, 2025 | Separated navius-cache interfaces from navius-cache-redis implementation |
 | March 29, 2025 | Added detailed next steps for database crate completion |
 | March 29, 2025 | Updated implementation progress with more granular task tracking |
 | March 29, 2025 | Created detailed timeline for April-May implementations |

@@ -51,18 +51,18 @@ This document provides detailed tracking of implementation tasks for each crate 
 
 ### navius-auth (✅ 100%)
 
-- ✅ Authentication
-  - ✅ Basic authentication
-  - ✅ Token-based authentication
-  - ✅ OAuth integration
-- ✅ Authorization
-  - ✅ Role-based access control
-  - ✅ Permission checks
-  - ✅ Policy enforcement
-- ✅ Identity Management
+- ✅ Authentication interfaces
+  - ✅ Authentication provider interface
+  - ✅ Authentication manager interface
+  - ✅ User identity interfaces
+- ✅ Authorization interfaces
+  - ✅ Role-based access control interfaces
+  - ✅ Permission interfaces
+  - ✅ Policy enforcement interfaces
+- ✅ Identity management interfaces
   - ✅ User identity representation
-  - ✅ Claims processing
-  - ✅ Identity propagation
+  - ✅ Claims interfaces
+  - ✅ Identity provider abstractions
 - ✅ Tests
   - ✅ Unit tests
   - ✅ Integration tests
@@ -228,6 +228,25 @@ This document provides detailed tracking of implementation tasks for each crate 
 
 ## Upcoming Crates
 
+### navius-auth-entra (⬜️ 0%)
+
+- ⬜️ Core implementation
+  - ⬜️ EntraAuthProvider implementation
+  - ⬜️ OAuth integration
+  - ⬜️ JWT handling
+- ⬜️ Configuration
+  - ⬜️ Entra-specific configuration
+  - ⬜️ Application registration
+  - ⬜️ Tenant configuration
+- ⬜️ User identity management
+  - ⬜️ User profile mapping
+  - ⬜️ Role and group mapping
+  - ⬜️ Claims transformation
+- ⬜️ Tests
+  - ⬜️ Unit tests
+  - ⬜️ Integration tests
+  - ⬜️ Security tests
+
 ### navius-cache (⬜️ 0%)
 
 - ⬜️ Cache interfaces
@@ -242,14 +261,33 @@ This document provides detailed tracking of implementation tasks for each crate 
   - ⬜️ Get/Set operations
   - ⬜️ Invalidation
   - ⬜️ Batch operations
-- ⬜️ Redis implementation
-  - ⬜️ Redis connection management
-  - ⬜️ Redis commands
-  - ⬜️ Serialization/deserialization
 - ⬜️ Metrics and telemetry
   - ⬜️ Hit/miss tracking
   - ⬜️ Timing metrics
   - ⬜️ Cache size metrics
+- ⬜️ Tests
+  - ⬜️ Unit tests
+  - ⬜️ Integration tests
+  - ⬜️ Performance tests
+
+### navius-cache-redis (⬜️ 0%)
+
+- ⬜️ Core implementation
+  - ⬜️ RedisCacheProvider implementation
+  - ⬜️ Redis connection management
+  - ⬜️ Redis command execution
+- ⬜️ Redis operations
+  - ⬜️ Redis key-value operations
+  - ⬜️ Redis collection operations
+  - ⬜️ Redis pub/sub operations
+- ⬜️ Redis-specific optimizations
+  - ⬜️ Pipelining
+  - ⬜️ Lua scripting
+  - ⬜️ Batch operations
+- ⬜️ Serialization
+  - ⬜️ JSON serialization
+  - ⬜️ Binary serialization
+  - ⬜️ Custom serializers
 - ⬜️ Tests
   - ⬜️ Unit tests
   - ⬜️ Integration tests

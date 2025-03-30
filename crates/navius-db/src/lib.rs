@@ -32,6 +32,11 @@ pub trait DatabaseProvider: Send + Sync + 'static {
 
     /// Get the provider version
     fn version(&self) -> &'static str;
+
+    /// Check if this provider supports database migrations
+    fn supports_migrations(&self) -> bool {
+        false // Default implementation returns false
+    }
 }
 
 /// Database module to be used in applications
