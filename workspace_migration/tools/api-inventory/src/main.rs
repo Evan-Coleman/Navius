@@ -169,6 +169,7 @@ fn find_crates(args: &Args) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> 
                 workspace_root.join(crate_name),
                 workspace_root.join("crates").join(crate_name),
                 workspace_root
+                    .join("workspace_migration")
                     .join("examples")
                     .join("crates")
                     .join(crate_name),
@@ -191,28 +192,23 @@ fn find_crates(args: &Args) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> 
         Vec::new()
     };
 
-    // Look for crates in potential locations
+    // Look for crates in known subdirectories
     let search_paths = [
-        workspace_root.to_path_buf(),
+        workspace_root
+            .join("workspace_migration")
+            .join("examples")
+            .join("crates"),
         workspace_root.join("crates"),
-        workspace_root.join("examples").join("crates"),
     ];
 
-    for search_path in search_paths {
-        if !search_path.exists() {
-            continue;
-        }
-
-        for entry in fs::read_dir(search_path)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            // Check if this is a crate
-            if path.is_dir() && path.join("Cargo.toml").exists() {
-                let crate_name = path.file_name().unwrap().to_string_lossy();
-                if !excluded.contains(&crate_name.to_string()) {
-                    if crate_name.starts_with("navius-") || path.join("src").join("lib.rs").exists()
-                    {
+    for search_path in &search_paths {
+        if search_path.exists() {
+            for entry in fs::read_dir(search_path)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_dir() && path.join("Cargo.toml").exists() {
+                    let crate_name = path.file_name().unwrap().to_string_lossy().to_string();
+                    if !excluded.contains(&crate_name) {
                         crates.push(path);
                     }
                 }
@@ -220,6 +216,7 @@ fn find_crates(args: &Args) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> 
         }
     }
 
+    println!("Found crates: {:?}", crates);
     Ok(crates)
 }
 
@@ -353,7 +350,7 @@ fn extract_api_items(
     // For this example, we'll use a simplistic approach
 
     let mut items = Vec::new();
-    let mut line_number = 0;
+    let mut line_number: usize = 0;
 
     for line in content.lines() {
         line_number += 1;
@@ -670,17 +667,239 @@ fn write_crate_markdown(
     file: &mut File,
 ) -> Result<(), Box<dyn std::error::Error>> {
     writeln!(file, "# {} API Inventory", crate_info.name)?;
-    // ... (detailed implementation for crate report)
+    writeln!(file)?;
+    writeln!(file, "**Version:** {}  ", crate_info.version)?;
+    writeln!(
+        file,
+        "**Documentation Coverage:** {:.0}%  ",
+        crate_info.doc_coverage
+    )?;
+    writeln!(
+        file,
+        "**Status:** {}",
+        match crate_info.status {
+            CrateStatus::Good => "✅ Good",
+            CrateStatus::Warning => "⚠️ Warning",
+            CrateStatus::Critical => "❌ Critical",
+        }
+    )?;
+    writeln!(file)?;
+
+    writeln!(file, "## Dependencies")?;
+    writeln!(file)?;
+
+    if crate_info.dependencies.is_empty() {
+        writeln!(file, "No dependencies.")?;
+    } else {
+        writeln!(file, "- {}", crate_info.dependencies.join("\n- "))?;
+    }
+    writeln!(file)?;
+
+    // Group items by type
+    let mut structs = Vec::new();
+    let mut enums = Vec::new();
+    let mut traits = Vec::new();
+    let mut functions = Vec::new();
+    let mut others = Vec::new();
+
+    for item in &crate_info.public_items {
+        match item.item_type {
+            ApiItemType::Struct => structs.push(item),
+            ApiItemType::Enum => enums.push(item),
+            ApiItemType::Trait => traits.push(item),
+            ApiItemType::Function => functions.push(item),
+            _ => others.push(item),
+        }
+    }
+
+    // Write each type section
+    if !structs.is_empty() {
+        writeln!(file, "## Public Structs")?;
+        writeln!(file)?;
+        write_items_table(file, &structs)?;
+    }
+
+    if !enums.is_empty() {
+        writeln!(file, "## Public Enums")?;
+        writeln!(file)?;
+        write_items_table(file, &enums)?;
+    }
+
+    if !traits.is_empty() {
+        writeln!(file, "## Public Traits")?;
+        writeln!(file)?;
+        write_items_table(file, &traits)?;
+    }
+
+    if !functions.is_empty() {
+        writeln!(file, "## Public Functions")?;
+        writeln!(file)?;
+        write_items_table(file, &functions)?;
+    }
+
+    if !others.is_empty() {
+        writeln!(file, "## Other Public Items")?;
+        writeln!(file)?;
+        write_items_table(file, &others)?;
+    }
+
     Ok(())
 }
 
-/// Write documentation gaps Markdown report
+/// Write items in a table format
+fn write_items_table(
+    file: &mut File,
+    items: &[&ApiItem],
+) -> Result<(), Box<dyn std::error::Error>> {
+    writeln!(file, "| Name | File | Line | Documentation |")?;
+    writeln!(file, "|------|------|------|---------------|")?;
+
+    for item in items {
+        let doc_status = match item.doc_status {
+            DocStatus::Complete => "✅ Complete",
+            DocStatus::Partial => "⚠️ Partial",
+            DocStatus::Missing => "❌ Missing",
+        };
+
+        let file_path = item
+            .file_path
+            .file_name()
+            .map(|f| f.to_string_lossy().to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+
+        writeln!(
+            file,
+            "| {} | {} | {} | {} |",
+            item.name, file_path, item.line_number, doc_status
+        )?;
+    }
+
+    writeln!(file)?;
+    Ok(())
+}
+
+/// Write documentation gaps report
 fn write_gaps_markdown(
     inventory: &ApiInventory,
     file: &mut File,
 ) -> Result<(), Box<dyn std::error::Error>> {
     writeln!(file, "# Documentation Gaps")?;
-    // ... (detailed implementation for gaps report)
+    writeln!(file)?;
+
+    let mut missing_docs = Vec::new();
+    let mut partial_docs = Vec::new();
+
+    // Collect all items with missing or partial documentation
+    for crate_info in &inventory.crates {
+        for item in &crate_info.public_items {
+            match item.doc_status {
+                DocStatus::Missing => missing_docs.push((crate_info, item)),
+                DocStatus::Partial => partial_docs.push((crate_info, item)),
+                _ => {}
+            }
+        }
+    }
+
+    // Write items with missing documentation
+    if !missing_docs.is_empty() {
+        writeln!(
+            file,
+            "## Missing Documentation ({} items)",
+            missing_docs.len()
+        )?;
+        writeln!(file)?;
+        writeln!(file, "| Crate | Item | Type | File | Line |")?;
+        writeln!(file, "|-------|------|------|------|------|")?;
+
+        for (crate_info, item) in &missing_docs {
+            let item_type = match item.item_type {
+                ApiItemType::Struct => "Struct",
+                ApiItemType::Enum => "Enum",
+                ApiItemType::Trait => "Trait",
+                ApiItemType::Function => "Function",
+                ApiItemType::Macro => "Macro",
+                ApiItemType::Constant => "Constant",
+                ApiItemType::TypeAlias => "Type Alias",
+            };
+
+            let file_path = item
+                .file_path
+                .file_name()
+                .map(|f| f.to_string_lossy().to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+
+            writeln!(
+                file,
+                "| {} | {} | {} | {} | {} |",
+                crate_info.name, item.name, item_type, file_path, item.line_number
+            )?;
+        }
+        writeln!(file)?;
+    } else {
+        writeln!(file, "## Missing Documentation")?;
+        writeln!(file)?;
+        writeln!(
+            file,
+            "No items with missing documentation were found. Great job! 🎉"
+        )?;
+        writeln!(file)?;
+    }
+
+    // Write items with partial documentation
+    if !partial_docs.is_empty() {
+        writeln!(
+            file,
+            "## Partial Documentation ({} items)",
+            partial_docs.len()
+        )?;
+        writeln!(file)?;
+
+        if partial_docs.len() > 100 {
+            writeln!(
+                file,
+                "Showing the first 100 of {} items with partial documentation.",
+                partial_docs.len()
+            )?;
+            partial_docs = partial_docs.into_iter().take(100).collect();
+        }
+
+        writeln!(file, "| Crate | Item | Type | File | Line |")?;
+        writeln!(file, "|-------|------|------|------|------|")?;
+
+        for (crate_info, item) in &partial_docs {
+            let item_type = match item.item_type {
+                ApiItemType::Struct => "Struct",
+                ApiItemType::Enum => "Enum",
+                ApiItemType::Trait => "Trait",
+                ApiItemType::Function => "Function",
+                ApiItemType::Macro => "Macro",
+                ApiItemType::Constant => "Constant",
+                ApiItemType::TypeAlias => "Type Alias",
+            };
+
+            let file_path = item
+                .file_path
+                .file_name()
+                .map(|f| f.to_string_lossy().to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+
+            writeln!(
+                file,
+                "| {} | {} | {} | {} | {} |",
+                crate_info.name, item.name, item_type, file_path, item.line_number
+            )?;
+        }
+        writeln!(file)?;
+    } else {
+        writeln!(file, "## Partial Documentation")?;
+        writeln!(file)?;
+        writeln!(
+            file,
+            "No items with partial documentation were found. Great job! 🎉"
+        )?;
+        writeln!(file)?;
+    }
+
     Ok(())
 }
 
@@ -694,4 +913,40 @@ fn generate_json_report(
     let mut json_file = File::create(json_path)?;
     writeln!(json_file, "{}", json_string)?;
     Ok(())
+}
+
+/// Extracts sections of code around API items for examples
+fn extract_code_sample(file_path: &Path, line: usize) -> Option<String> {
+    if !file_path.exists() {
+        return None;
+    }
+
+    match fs::read_to_string(file_path) {
+        Ok(contents) => {
+            let lines: Vec<&str> = contents.lines().collect();
+            let line_number: usize = line.saturating_sub(1); // 0-based indexing
+
+            // Calculate boundaries to show context
+            let start = line_number.saturating_sub(5);
+            let end = std::cmp::min(line_number + 5, lines.len());
+
+            // Generate the code sample with line numbers
+            let mut sample = String::new();
+            sample.push_str(&format!("```rust\n"));
+
+            for (i, line) in lines[start..end].iter().enumerate() {
+                let current_line = start + i + 1;
+                let prefix = if current_line == line_number + 1 {
+                    "➤ "
+                } else {
+                    "  "
+                };
+                sample.push_str(&format!("{}{}: {}\n", prefix, current_line, line));
+            }
+
+            sample.push_str("```");
+            Some(sample)
+        }
+        Err(_) => None,
+    }
 }

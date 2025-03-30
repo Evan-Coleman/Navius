@@ -16,6 +16,8 @@ members = [
     "workspace_migration/examples/crates/navius-metrics",
     "workspace_migration/examples/crates/navius-metrics-prometheus",
     "workspace_migration/examples/crates/navius-job",
+    "workspace_migration/examples/crates/navius-test-utils",
+    "workspace_migration/tools/api-inventory",
     # Add new crates here as they are created
 ]
 

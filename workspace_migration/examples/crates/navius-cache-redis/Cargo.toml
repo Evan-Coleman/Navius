@@ -59,12 +59,4 @@ path = "examples/metrics.rs"
 
 [[example]]
 name = "metrics_example"
-path = "examples/metrics_example.rs"
-
-[[bench]]
-name = "redis_operations"
-harness = false
-
-[[bench]]
-name = "redis_benchmark"
-harness = false 
+path = "examples/metrics_example.rs" 

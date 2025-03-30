@@ -1,0 +1,122 @@
+# Documentation Gaps
+
+## Missing Documentation (9 items)
+
+| Crate | Item | Type | File | Line |
+|-------|------|------|------|------|
+| navius-test | TempDirectory | Struct | fixture.rs | 273 |
+| navius-test | new(path: | Function | fixture.rs | 278 |
+| plugin_capabilities | extern | Function | loader.rs | 256 |
+| navius-auth | ErrorResponse | Struct | error.rs | 67 |
+| navius-db | DatabaseConnectionManager | Struct | pool.rs | 689 |
+| navius-db | new(pool: | Function | pool.rs | 694 |
+| navius-db | fn | Function | pool.rs | 700 |
+| navius-db | fn | Function | pool.rs | 731 |
+| navius-db | fn | Function | pool.rs | 774 |
+
+## Partial Documentation (1214 items)
+
+Showing the first 100 of 1214 items with partial documentation.
+| Crate | Item | Type | File | Line |
+|-------|------|------|------|------|
+| navius-core | new(time: | Function | types.rs | 30 |
+| navius-core | inner(&self) | Function | types.rs | 35 |
+| navius-core | elapsed(&self) | Function | types.rs | 40 |
+| navius-core | Version | Struct | types.rs | 74 |
+| navius-core | HttpMethod | Enum | types.rs | 112 |
+| navius-core | init() | Function | mod.rs | 16 |
+| navius-core | init_application() | Function | mod.rs | 21 |
+| navius-core | init_application_with_config( | Function | mod.rs | 26 |
+| navius-core | LifecyclePhase | Enum | component.rs | 19 |
+| navius-core | AsyncLifecycle: | Trait | component.rs | 46 |
+| navius-core | ComponentScope | Enum | component.rs | 65 |
+| navius-core | ComponentRef<T>(Arc<T>); | Struct | component.rs | 80 |
+| navius-core | new(component: | Function | component.rs | 84 |
+| navius-core | into_raw(self) | Function | component.rs | 89 |
+| navius-core | DynComponentRef(Arc<dyn | Struct | component.rs | 110 |
+| navius-core | new<T: | Function | component.rs | 114 |
+| navius-core | downcast<T: | Function | component.rs | 119 |
+| navius-core | execute_type_id(&self) | Function | component.rs | 124 |
+| navius-core | execute_lifecycle(&self, | Function | component.rs | 130 |
+| navius-core | fn | Function | component.rs | 142 |
+| navius-core | ComponentFactory: | Trait | component.rs | 160 |
+| navius-core | AsyncComponentFactory: | Trait | component.rs | 180 |
+| navius-core | TypedComponentFactory<T: | Struct | component.rs | 199 |
+| navius-core | new(factory: | Function | component.rs | 206 |
+| navius-core | ComponentRegistry | Struct | component.rs | 233 |
+| navius-core | new() | Function | component.rs | 240 |
+| navius-core | register<T: | Function | component.rs | 248 |
+| navius-core | register_factory<F>(&mut | Function | component.rs | 260 |
+| navius-core | register_with_factory<T, | Function | component.rs | 266 |
+| navius-core | get<T: | Function | component.rs | 276 |
+| navius-core | try_get<T: | Function | component.rs | 291 |
+| navius-core | fn | Function | component.rs | 303 |
+| navius-core | has<T: | Function | component.rs | 318 |
+| navius-core | component_types(&self) | Function | component.rs | 324 |
+| navius-core | shutdown(&mut | Function | component.rs | 341 |
+| navius-core | fn | Function | component.rs | 358 |
+| navius-core | Environment | Enum | application.rs | 15 |
+| navius-core | from_name(name: | Function | application.rs | 38 |
+| navius-core | ApplicationBuilder | Struct | application.rs | 56 |
+| navius-core | with_config(config: | Function | application.rs | 76 |
+| navius-core | with_environment(mut | Function | application.rs | 85 |
+| navius-core | registry(&mut | Function | application.rs | 91 |
+| navius-core | config(&self) | Function | application.rs | 96 |
+| navius-core | environment(&self) | Function | application.rs | 101 |
+| navius-core | add_component<T: | Function | application.rs | 106 |
+| navius-core | add_factory<T, | Function | application.rs | 112 |
+| navius-core | add_singleton<T, | Function | application.rs | 122 |
+| navius-core | add_prototype<T, | Function | application.rs | 133 |
+| navius-core | get<T: | Function | application.rs | 144 |
+| navius-core | fn | Function | application.rs | 149 |
+| navius-core | has<T: | Function | application.rs | 154 |
+| navius-core | build(self) | Function | application.rs | 159 |
+| navius-core | Application | Struct | application.rs | 175 |
+| navius-core | registry(&self) | Function | application.rs | 191 |
+| navius-core | config(&self) | Function | application.rs | 196 |
+| navius-core | environment(&self) | Function | application.rs | 201 |
+| navius-core | get<T: | Function | application.rs | 206 |
+| navius-core | fn | Function | application.rs | 217 |
+| navius-core | has<T: | Function | application.rs | 228 |
+| navius-core | register_component<T: | Function | application.rs | 237 |
+| navius-core | initialize(&self) | Function | application.rs | 250 |
+| navius-core | shutdown(&self) | Function | application.rs | 267 |
+| navius-core | fn | Function | application.rs | 284 |
+| navius-core | random_id(prefix: | Function | util.rs | 12 |
+| navius-core | current_time_millis() | Function | util.rs | 23 |
+| navius-core | measure_time<F, | Function | util.rs | 31 |
+| navius-core | parse_duration(duration_str: | Function | util.rs | 43 |
+| navius-core | encode_query(params: | Function | util.rs | 85 |
+| navius-core | parse_query(query: | Function | util.rs | 101 |
+| navius-core | merge_maps<K, | Function | util.rs | 121 |
+| navius-core | ConfigError | Enum | errors.rs | 25 |
+| navius-core | key_not_found(key: | Function | errors.rs | 214 |
+| navius-core | type_error(expected: | Function | errors.rs | 221 |
+| navius-core | load_error(source: | Function | errors.rs | 229 |
+| navius-core | parse_error(source: | Function | errors.rs | 237 |
+| navius-core | source_error(source: | Function | errors.rs | 245 |
+| navius-core | env_error(var: | Function | errors.rs | 253 |
+| navius-core | ConfigValue | Enum | config_value.rs | 29 |
+| navius-core | is_integer(&self) | Function | config_value.rs | 53 |
+| navius-core | is_float(&self) | Function | config_value.rs | 58 |
+| navius-core | is_boolean(&self) | Function | config_value.rs | 63 |
+| navius-core | is_array(&self) | Function | config_value.rs | 68 |
+| navius-core | is_object(&self) | Function | config_value.rs | 73 |
+| navius-core | is_null(&self) | Function | config_value.rs | 78 |
+| navius-core | as_string(&self) | Function | config_value.rs | 83 |
+| navius-core | as_integer(&self) | Function | config_value.rs | 94 |
+| navius-core | as_float(&self) | Function | config_value.rs | 119 |
+| navius-core | as_boolean(&self) | Function | config_value.rs | 135 |
+| navius-core | as_array(&self) | Function | config_value.rs | 169 |
+| navius-core | as_object(&self) | Function | config_value.rs | 180 |
+| navius-core | type_name(&self) | Function | config_value.rs | 191 |
+| navius-core | ConfigValues | Struct | config_value.rs | 269 |
+| navius-core | new() | Function | config_value.rs | 275 |
+| navius-core | get(&self, | Function | config_value.rs | 282 |
+| navius-core | set<K: | Function | config_value.rs | 316 |
+| navius-core | has(&self, | Function | config_value.rs | 321 |
+| navius-core | keys(&self) | Function | config_value.rs | 326 |
+| navius-core | entries(&self) | Function | config_value.rs | 331 |
+| navius-core | merge(&mut | Function | config_value.rs | 336 |
+| navius-core | subset(&self, | Function | config_value.rs | 344 |
+
