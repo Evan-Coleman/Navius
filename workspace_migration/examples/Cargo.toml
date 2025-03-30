@@ -4,17 +4,7 @@
 [workspace]
 members = [
     "crates/navius-core",
-    "crates/navius-api",
-    "crates/navius-auth",
-    "crates/navius-metrics",
-    "crates/navius-metrics-prometheus",
-    "crates/navius-metrics-dynatrace",
-    "crates/navius-database",
-    "crates/navius-database-postgres",
-    "crates/navius-cache",
-    "crates/navius-cache-redis",
-    "crates/navius-cli",
-    "crates/navius-test-utils"
+    "crates/navius-di"
 ]
 
 resolver = "2" # Use the modern resolver for proper feature resolution
@@ -130,18 +120,15 @@ categories = ["web-programming", "asynchronous"]
 # Core crate that contains essential functionality
 navius-core = { path = "crates/navius-core", version = "0.1.0" }
 
-# Main API application
-navius-api = { path = "crates/navius-api", version = "0.1.0" }
-
-# CLI tools
-navius-cli = { path = "crates/navius-cli", version = "0.1.0" }
+# Dependency injection
+navius-di = { path = "crates/navius-di", version = "0.1.0" }
 
 # Building tools
-tokio = { workspace = true }
-clap = { workspace = true }
-colored = { workspace = true }
+tokio = { version = "1.44.1" }
+clap = { version = "4.5.34" }
+colored = { version = "3.0.0" }
 
 # Build dependencies
 [build-dependencies]
-regex = { workspace = true }
-serde_json = { workspace = true } 
+regex = { version = "1.11.1" }
+serde_json = { version = "1.0.140" } 

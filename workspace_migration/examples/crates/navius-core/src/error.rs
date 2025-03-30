@@ -48,11 +48,16 @@ pub enum Error {
     Conflict(String),
 
     /// An error that is specific to a Navius module.
-    #[error("Module error: {0}")]
+    #[error("Module error: {name} - {message}")]
     Module { name: String, message: String },
 }
 
 impl Error {
+    /// Create a new general error (for backwards compatibility).
+    pub fn new<T: fmt::Display + ?Sized>(msg: &T) -> Self {
+        Self::Internal(msg.to_string())
+    }
+
     /// Create a new configuration error.
     pub fn configuration<T: fmt::Display>(msg: T) -> Self {
         Self::Configuration(msg.to_string())

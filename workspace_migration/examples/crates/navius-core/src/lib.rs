@@ -25,7 +25,7 @@ pub use di::ApplicationBuilder;
 
 // Re-export dependency injection traits and types for convenience
 pub use di::{
-    Environment,
+    application::Environment,
     component::{
         AsyncLifecycle, ComponentRef, ComponentRegistry, ComponentScope, Lifecycle, LifecyclePhase,
     },
@@ -70,6 +70,52 @@ pub fn init_application() -> ApplicationBuilder {
 /// This function creates a new application with the component registry and environment.
 pub fn init_application_with_environment(env: Environment) -> ApplicationBuilder {
     ApplicationBuilder::new().with_environment(env)
+}
+
+// Add this block if the plugin module doesn't exist
+pub mod plugin {
+    use std::collections::HashMap;
+    use std::sync::{Arc, RwLock};
+
+    /// A registry for managing plugins
+    pub struct PluginRegistry {
+        plugins: RwLock<HashMap<String, Arc<dyn std::any::Any + Send + Sync>>>,
+    }
+
+    impl PluginRegistry {
+        /// Create a new plugin registry
+        pub fn new() -> Self {
+            Self {
+                plugins: RwLock::new(HashMap::new()),
+            }
+        }
+
+        /// Register a plugin
+        pub fn register<T: 'static + Send + Sync>(&self, name: &str, plugin: T) {
+            let mut plugins = self.plugins.write().unwrap();
+            plugins.insert(name.to_string(), Arc::new(plugin));
+        }
+
+        /// Get a plugin instance by name and type
+        pub fn get<T: 'static + Send + Sync>(&self, name: &str) -> Option<Arc<T>> {
+            let plugins = self.plugins.read().unwrap();
+            plugins
+                .get(name)
+                .and_then(|plugin| plugin.clone().downcast::<T>().ok())
+        }
+
+        /// Check if a plugin exists
+        pub fn contains(&self, name: &str) -> bool {
+            let plugins = self.plugins.read().unwrap();
+            plugins.contains_key(name)
+        }
+
+        /// Get all plugin names
+        pub fn names(&self) -> Vec<String> {
+            let plugins = self.plugins.read().unwrap();
+            plugins.keys().cloned().collect()
+        }
+    }
 }
 
 #[cfg(test)]

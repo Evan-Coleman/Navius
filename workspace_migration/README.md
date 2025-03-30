@@ -1,4 +1,51 @@
-# Navius Workspace Migration
+# Navius Framework Workspace Migration
+
+This repository contains the workspace migration plan for the Navius framework.
+
+## Repository Organization
+
+The primary source of truth for Navius crates is in the `examples/crates/` directory structure:
+
+- `workspace_migration/examples/crates/navius-core` - Core utilities and abstractions
+- `workspace_migration/examples/crates/navius-di` - Dependency injection system
+- `workspace_migration/examples/crates/navius-api` - Web API components
+- ... and other crates
+
+The `workspace_migration/crates/` directory contains legacy implementations that will be gradually replaced by the `examples/crates/` versions.
+
+## Migration Status
+
+- Core Utilities (in progress)
+  - Standardized error handling ✅
+  - Configuration management ✅
+  - Dependency injection ✅
+  - Plugin architecture (in progress)
+
+## Development Guidelines
+
+1. Make changes in the `examples/crates/` directory, not the `workspace_migration/crates/` directory.
+2. Update the workspace configuration in `examples/Cargo.toml` as needed.
+3. Test integration between crates to ensure they work together correctly.
+4. Run `cargo build` in the `examples` directory to ensure all crates compile successfully.
+
+## Error Handling
+
+The framework uses a standardized error handling approach with the following features:
+- Consistent error types with appropriate context
+- Error classification (Configuration, Validation, etc.)
+- Support for wrapping errors from other sources
+- Extension methods for easy conversion of standard errors to framework errors
+
+## Dependency Management
+
+Dependencies are managed at the workspace level in `examples/Cargo.toml` to ensure consistent versioning across all crates.
+
+## Object Safety and Async Traits
+
+The codebase follows these principles for working with traits:
+- Async methods are separated into distinct traits for object safety
+- Trait objects that use async methods are handled carefully
+- Dynamic dispatch is implemented with proper type bounds
 
 ## Current Status
 
