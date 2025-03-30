@@ -1,143 +1,121 @@
 # Navius Test Framework
 
-The Navius Test Framework provides utilities, fixtures, and patterns for testing interactions between different crates in the Navius workspace. This is a critical component for ensuring that the interfaces between crates function as expected and that integration scenarios are thoroughly tested.
+A comprehensive testing framework for the Navius ecosystem, providing tools for cross-crate testing, mocking, and error testing.
+
+## Components
+
+The framework consists of the following core components:
+
+### Test Fixture
+
+The `TestFixture` provides a way to set up and tear down test resources and dependencies. It manages the lifecycle of test components and ensures proper cleanup.
+
+```rust
+let fixture = TestFixture::new();
+fixture.register_component(my_component);
+fixture.register_resource(my_resource);
+```
+
+### Mock Registry
+
+The `MockRegistry` allows registering and retrieving mock implementations of interfaces, setting expectations, and verifying calls.
+
+```rust
+let registry = MockRegistry::new();
+registry.register::<dyn MyInterface, MockImplementation>(mock_impl);
+registry.expect::<dyn MyInterface>("method_name").times(1);
+```
+
+### Test Harness
+
+The `TestHarness` combines fixture and mock functionality to run tests with dependencies and mocks properly set up.
+
+```rust
+let harness = TestHarness::new();
+harness.run_test(|| {
+    // Test code here
+    Ok(())
+});
+```
+
+### Error Testing Framework
+
+The `ErrorTesting` module provides tools for testing error handling, propagation, and recovery in your code.
+
+```rust
+// Create an error injection point
+let mut injection = ErrorInjection::new("database_query")
+    .inject()
+    .with_message("Connection timeout");
+
+// Use the injection to conditionally inject errors
+let result = injection.check(|| database.query("SELECT * FROM users"));
+
+// Track error propagation
+let mut tracker = ErrorPropagationTracker::new();
+tracker.add_component("UserService");
+
+// Verify error handling
+let verifier = ErrorVerifier::new()
+    .expect_message("not found")
+    .expect_component("UserService");
+```
 
 ## Features
 
-- **Test Fixture Framework** - Standardized test setup and teardown
-- **Mock Implementation Registry** - Registry for mock implementations of core interfaces
-- **Integration Test Utilities** - Utilities designed specifically for integration testing
-- **Error Testing Framework** - Specialized utilities for testing error scenarios
+- **Component registration and retrieval**: Register test components and retrieve them by type
+- **Resource management**: Register resources that need cleanup after tests
+- **Mock expectations**: Set expectations on mock method calls and verify them
+- **Synchronous and asynchronous tests**: Run both sync and async tests with the test harness
+- **Error injection**: Simulate errors at specific points in your code
+- **Error propagation tracking**: Track how errors propagate through your system
+- **Error verification**: Verify that errors are handled correctly
 
-## Getting Started
-
-### Basic Usage
-
-```rust
-use navius_test::prelude::*;
-
-#[test]
-fn test_component_interaction() {
-    // Create a test fixture
-    let fixture = TestFixture::new()
-        .with_component(mock_database())
-        .with_component(mock_cache())
-        .build();
-    
-    // Get components from the fixture
-    let db = fixture.get::<MockDatabase>().unwrap();
-    let cache = fixture.get::<MockCache>().unwrap();
-    
-    // Test interaction between components
-    // ...
-}
-```
-
-### Using the Test Harness
-
-The test harness provides a more comprehensive testing environment:
+## Usage
 
 ```rust
-use navius_test::prelude::*;
+use navius_test::{TestHarness, assert_ok};
 
 #[test]
-fn test_with_harness() -> TestResult<()> {
-    // Create a test harness
-    let mut harness = TestHarnessBuilder::new()
-        .with_runtime()
-        .build()?;
+fn test_my_feature() {
+    let harness = TestHarness::new();
     
-    // Run a test with the harness
-    harness.run(|fixture, mock_registry| {
-        // Register mocks
-        let mock_db = MockDatabase::new();
-        mock_registry.register::<dyn DatabaseProvider, MockDatabase>(mock_db.clone())?;
-        
-        // Register components
-        let repository = UserRepository::new(mock_db);
-        fixture.register(repository)?;
-        
-        // Test component behavior
-        let repo = fixture.get::<UserRepository<MockDatabase>>()?;
-        let user = repo.get_user("1")?;
-        
-        assert_eq!(user.name, "Test User");
+    harness.run_test(|| {
+        // Set up test fixture and mocks
+        let result = my_function();
+        assert_ok!(result);
         
         Ok(())
-    })?;
-    
-    Ok(())
+    });
 }
 ```
 
-### Async Testing
+See the `examples` directory for more detailed usage examples:
 
-The framework also supports async tests:
+- `basic_usage.rs`: Basic usage of the test fixture and harness
+- `mock_example.rs`: Example of using the mock registry
+- `error_testing.rs`: Example of using the error testing framework
 
-```rust
-#[tokio::test]
-async fn test_async_component() -> TestResult<()> {
-    let mut harness = TestHarnessBuilder::new()
-        .with_runtime()
-        .build()?;
-    
-    harness.run_async(|fixture, mock_registry| {
-        Box::pin(async move {
-            // Test async behavior
-            // ...
-            Ok(())
-        })
-    })?;
-    
-    Ok(())
-}
+## Error Testing Macros
+
+The framework provides several macros for error testing:
+
+- `assert_ok!(expr)`: Assert that a result is Ok and return the unwrapped value
+- `assert_err!(expr)`: Assert that a result is Err and return the unwrapped error
+- `assert_err_variant!(expr, pattern)`: Assert that a result is Err and matches a specific pattern
+- `assert_injected_error!(expr, message)`: Assert that an error was injected with a specific message
+- `verify_error_path!(tracker, components...)`: Verify that an error passed through specific components
+- `verify_error_context!(tracker, key, value)`: Verify that an error has specific context information
+
+## Installation
+
+Add the following to your `Cargo.toml`:
+
+```toml
+[dependencies]
+navius-test = { path = "../navius-test" }
 ```
-
-## Core Components
-
-### TestFixture
-
-The `TestFixture` manages test resources and components:
-
-- Register components for testing
-- Retrieve components by type
-- Manage test-specific resources like temporary directories
-- Automatic cleanup on test completion
-
-### MockRegistry
-
-The `MockRegistry` manages mock implementations of interfaces:
-
-- Register mock implementations for interfaces
-- Retrieve mock implementations by interface type
-- Clear mocks between tests
-
-### TestHarness
-
-The `TestHarness` provides a complete test environment:
-
-- Combines fixture and mock registry
-- Supports both sync and async tests
-- Manages Tokio runtime for async tests
-- Handles test setup and teardown
-
-## Examples
-
-See the `examples` directory for more comprehensive examples of using the test framework:
-
-- `basic_test.rs` - Basic usage of the test framework
-- `async_test.rs` - Testing async components
-- `error_propagation_test.rs` - Testing error handling across components
-- `multi_crate_test.rs` - Testing interactions between components in different crates
-
-## Best Practices
-
-1. **Isolate Tests** - Each test should create its own fixture or harness
-2. **Clean Up Resources** - Ensure tear_down() is called when manually managing fixtures
-3. **Use Type-Safe Access** - Access components by their concrete types
-4. **Test Error Paths** - Test both success and error paths
-5. **Mock External Services** - Use mocks for external dependencies
 
 ## License
 
-MIT OR Apache-2.0 
+This project is licensed under the same terms as the Navius project. 
