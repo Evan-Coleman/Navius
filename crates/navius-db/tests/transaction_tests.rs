@@ -1,5 +1,6 @@
-use navius_db::{DatabaseConnectionManager, DatabaseError, PgPool, PoolOptions, Transaction};
+use navius_db::{DatabaseConnectionManager, DatabaseError, DatabaseResult, PgPool, PoolOptions};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio::test;
 
 // Helper function to create a test database pool
@@ -11,6 +12,24 @@ async fn create_test_pool() -> PgPool {
     // You would typically use an env var or test config here
     // For tests, we're using a mock implementation
     PgPool::new_mock(options)
+}
+
+// Helper to create a test database connection
+async fn create_test_db() -> Arc<DatabaseConnectionManager> {
+    let pool_options = PoolOptions::new()
+        .max_connections(5)
+        .min_connections(1)
+        .connect_timeout(std::time::Duration::from_secs(5));
+
+    // Use a test database URL - in a real test this would be a separate test database
+    let url = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/test_db".to_string());
+
+    let pool = PgPool::connect_with_options(&url, pool_options)
+        .await
+        .expect("Failed to connect to database");
+
+    Arc::new(DatabaseConnectionManager::new(pool))
 }
 
 #[test]
@@ -195,4 +214,248 @@ async fn test_nested_transactions() {
 
     // Verify transaction was successful
     assert!(result.is_ok());
+}
+
+// This is a mock test that doesn't require an actual database connection
+// It demonstrates the API usage rather than actual functionality
+#[tokio::test]
+async fn test_savepoint_usage_mock() -> DatabaseResult<()> {
+    // This counter simulates rows affected by each operation
+    let counter = Arc::new(Mutex::new(0));
+
+    // Create a closure that uses the savepoint API
+    let result = async {
+        let counter_clone = Arc::clone(&counter);
+
+        // Simulate a transaction with savepoints
+        let simulate_transaction = |mut tx: navius_db::Transaction<'_>| async move {
+            // First operation
+            *counter_clone.lock().await += 1;
+            println!("Executed first operation");
+
+            // Create a savepoint
+            tx.savepoint("point1").await?;
+            println!("Created savepoint 'point1'");
+
+            // Second operation - might fail
+            let should_fail = false; // toggle this to simulate failure
+            if should_fail {
+                return Err(DatabaseError::ValidationError(
+                    "Simulated failure".to_string(),
+                ));
+            }
+
+            *counter_clone.lock().await += 1;
+            println!("Executed second operation");
+
+            // Create another savepoint
+            tx.savepoint("point2").await?;
+            println!("Created savepoint 'point2'");
+
+            // Third operation in a nested transaction
+            tx.nested(|| async {
+                *counter_clone.lock().await += 1;
+                println!("Executed third operation in nested transaction");
+                Ok(())
+            })
+            .await?;
+
+            // Release the second savepoint
+            tx.release_savepoint("point2").await?;
+            println!("Released savepoint 'point2'");
+
+            // Fourth operation with retry logic
+            tx.with_retry(3, || async {
+                *counter_clone.lock().await += 1;
+                println!("Executed fourth operation with retry");
+                Ok(())
+            })
+            .await?;
+
+            // Commit the transaction
+            tx.commit().await?;
+            println!("Committed transaction");
+
+            Ok(())
+        };
+
+        // Since we don't have a real database, we're just using the API
+        // to verify the code compiles and the pattern works
+        Ok(())
+    }
+    .await;
+
+    // In a real test with a database, we would assert on database state
+    // Here we're just checking that our counter was incremented correctly
+    let final_count = *counter.lock().await;
+    assert_eq!(final_count, 4, "Expected 4 operations, got {}", final_count);
+
+    result
+}
+
+// This test should only run when we have a real database connection
+// Use DATABASE_URL environment variable to point to a test database
+#[tokio::test]
+#[ignore] // Skip by default, run with `cargo test -- --ignored`
+async fn test_transaction_with_savepoints() -> DatabaseResult<()> {
+    // Create test database with tables
+    let db = create_test_db().await;
+
+    // Set up test table
+    db.connection()
+        .await?
+        .execute(
+            "DROP TABLE IF EXISTS test_savepoints;
+         CREATE TABLE test_savepoints (
+            id SERIAL PRIMARY KEY,
+            value TEXT NOT NULL
+         );",
+            &[],
+        )
+        .await?;
+
+    // Test transaction with savepoints
+    db.transaction(|mut tx| async move {
+        // Insert initial record
+        tx.execute("INSERT INTO test_savepoints (value) VALUES ('initial')")
+            .await?;
+
+        // Create a savepoint
+        tx.savepoint("point1").await?;
+
+        // Insert another record
+        tx.execute("INSERT INTO test_savepoints (value) VALUES ('after_savepoint1')")
+            .await?;
+
+        // Create nested savepoint
+        tx.nested(|| async {
+            // Insert within nested transaction
+            tx.execute("INSERT INTO test_savepoints (value) VALUES ('in_nested_tx')")
+                .await?;
+
+            // This would only be rolled back if we return an error
+            Ok(())
+        })
+        .await?;
+
+        // Check that all records exist
+        let rows = tx
+            .query("SELECT value FROM test_savepoints ORDER BY id")
+            .await?;
+        let count = rows.len();
+        assert_eq!(count, 3, "Expected 3 rows, got {}", count);
+
+        // Rollback to the first savepoint
+        tx.rollback_to_savepoint("point1").await?;
+
+        // Check that only the first record exists
+        let rows = tx
+            .query("SELECT value FROM test_savepoints ORDER BY id")
+            .await?;
+        let count = rows.len();
+        assert_eq!(count, 1, "Expected 1 row after rollback, got {}", count);
+
+        // Add a new record after rollback
+        tx.execute("INSERT INTO test_savepoints (value) VALUES ('after_rollback')")
+            .await?;
+
+        // Try the retry functionality
+        let mut attempts = 0;
+        tx.with_retry(3, || async {
+            attempts += 1;
+
+            // Simulate success on second attempt
+            if attempts == 1 {
+                return Err(DatabaseError::TransactionError(
+                    "Simulated transient error".to_string(),
+                ));
+            }
+
+            tx.execute("INSERT INTO test_savepoints (value) VALUES ('after_retry')")
+                .await?;
+
+            Ok(())
+        })
+        .await?;
+
+        // Commit the transaction
+        tx.commit().await?;
+
+        Ok(())
+    })
+    .await?;
+
+    // Verify final state
+    let conn = db.connection().await?;
+    let rows = conn
+        .query("SELECT value FROM test_savepoints ORDER BY id", &[])
+        .await?;
+    let count = rows.len();
+    assert_eq!(count, 3, "Expected 3 rows in final state, got {}", count);
+
+    // Clean up
+    conn.execute("DROP TABLE test_savepoints", &[]).await?;
+
+    Ok(())
+}
+
+// Test that savepoint names are properly validated
+#[tokio::test]
+async fn test_savepoint_name_validation() {
+    // Create test database
+    let db = create_test_db().await;
+
+    // Test invalid savepoint names
+    let result = db
+        .transaction(|mut tx| async move {
+            // Valid name should succeed
+            tx.savepoint("valid_name_123").await?;
+
+            // Invalid names should fail
+            let invalid_names = [
+                "invalid-name",  // Dash
+                "invalid;name",  // Semicolon
+                "invalid name",  // Space
+                "invalid'name",  // Quote
+                "DROP TABLE;--", // SQL Injection attempt
+            ];
+
+            for name in invalid_names {
+                let result = tx.savepoint(name).await;
+                assert!(
+                    result.is_err(),
+                    "Savepoint with invalid name '{}' should fail",
+                    name
+                );
+
+                // Verify the error type
+                match result {
+                    Err(DatabaseError::SavepointError(_)) => {
+                        // Expected error
+                    }
+                    Err(e) => {
+                        // Wrong error type
+                        panic!("Expected SavepointError, got {:?}", e);
+                    }
+                    Ok(_) => {
+                        // Should not succeed
+                        panic!(
+                            "Expected error for savepoint name '{}', but it succeeded",
+                            name
+                        );
+                    }
+                }
+            }
+
+            // The transaction succeeds, but we'll roll it back for cleanliness
+            tx.rollback().await?;
+
+            Ok(())
+        })
+        .await;
+
+    // Transaction should complete successfully
+    assert!(result.is_ok(), "Transaction failed: {:?}", result);
+
+    Ok(())
 }

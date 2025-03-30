@@ -116,25 +116,118 @@ async fn repository_example<R: Repository<User>>(repo: &R) -> DatabaseResult<()>
 
 ### Transaction Management
 
-Use transactions to ensure data consistency:
+The `navius-db` crate provides robust transaction management capabilities, including:
+
+- Standard transactions with commit/rollback
+- Savepoints for partial rollback within transactions
+- Nested transactions using savepoints
+- Automatic retry logic for transient errors
+
+### Basic Transaction Usage
 
 ```rust
-use navius_db::{DatabaseConnectionManager, DatabaseResult};
-
-async fn with_transaction(db: &dyn DatabaseConnectionManager) -> DatabaseResult<()> {
-    db.transaction(|mut tx| async move {
-        // Perform multiple operations in a transaction
-        tx.execute("INSERT INTO logs (message) VALUES ($1)", &["Transaction started"]).await?;
-        
-        // Do more operations...
-        
-        tx.execute("INSERT INTO logs (message) VALUES ($1)", &["Transaction completed"]).await?;
-        
-        // Transaction commits when the closure completes successfully
-        Ok(())
-    }).await
-}
+// Execute a transaction
+let result = db.transaction(|mut tx| async move {
+    // Execute queries within the transaction
+    tx.execute("INSERT INTO users (name) VALUES ('Alice')").await?;
+    tx.execute("INSERT INTO logs (message) VALUES ('User created')").await?;
+    
+    // Commit happens automatically when the closure completes successfully
+    // Rollback happens automatically if an error is returned or the transaction is dropped
+    Ok(())
+}).await;
 ```
+
+### Savepoints
+
+Savepoints allow you to create checkpoints within a transaction that you can later roll back to if needed.
+
+```rust
+db.transaction(|mut tx| async move {
+    // First part of transaction
+    tx.execute("INSERT INTO logs (message) VALUES ('Starting operation')").await?;
+    
+    // Create a savepoint
+    tx.savepoint("before_risky_part").await?;
+    
+    // Try operation that might fail
+    let result = tx.execute("UPDATE accounts SET status = 'PROCESSING' WHERE id = 123").await;
+    
+    if result.is_err() {
+        // Roll back to savepoint if the operation failed
+        tx.rollback_to_savepoint("before_risky_part").await?;
+        
+        // Try an alternative approach
+        tx.execute("INSERT INTO logs (message) VALUES ('Trying alternative approach')").await?;
+        // ...
+    } else {
+        // Operation succeeded, release the savepoint
+        tx.release_savepoint("before_risky_part").await?;
+    }
+    
+    Ok(())
+}).await
+```
+
+### Nested Transactions
+
+You can use nested transactions to create transaction-like semantics within a transaction:
+
+```rust
+db.transaction(|mut tx| async move {
+    // Main transaction operations
+    tx.execute("INSERT INTO logs (message) VALUES ('Starting parent operation')").await?;
+    
+    // Begin a nested transaction
+    tx.nested(|| async {
+        // Operations in nested transaction
+        tx.execute("INSERT INTO logs (message) VALUES ('Starting nested operation')").await?;
+        
+        // This will only be rolled back if the nested transaction fails
+        let result = tx.execute("UPDATE accounts SET status = 'PROCESSING' WHERE id = 123").await;
+        
+        if let Err(e) = result {
+            // Return the error, which will rollback the nested transaction
+            return Err(e);
+        }
+        
+        Ok(())
+    }).await?;
+    
+    // Continue with parent transaction, even if nested transaction failed
+    tx.execute("INSERT INTO logs (message) VALUES ('Parent operation continuing')").await?;
+    
+    Ok(())
+}).await
+```
+
+### Retry Logic
+
+You can use automatic retry logic for operations that might fail due to transient errors:
+
+```rust
+db.transaction(|mut tx| async move {
+    // Use retry logic for operations that might fail transiently
+    tx.with_retry(3, || async {
+        // This will be retried up to 3 times if it fails
+        tx.execute("UPDATE accounts SET balance = balance - 100 WHERE id = 123 AND balance >= 100").await
+    }).await?;
+    
+    Ok(())
+}).await
+```
+
+## Error Handling
+
+Errors are propagated through the transaction API and will cause automatic rollback if not handled. The `DatabaseError` enum provides detailed error information, including:
+
+- Connection errors
+- Transaction errors
+- Query errors
+- Migration errors
+- Validation errors
+
+The library also distinguishes between transient errors (which can be retried) and permanent errors.
 
 ## Implementing a New Provider
 

@@ -88,6 +88,23 @@ Navius includes everything you need to build enterprise applications:
 | **Observability** | Metrics, health checks, and structured logging |
 | **Testing** | Comprehensive testing framework with mocking support |
 
+## Core Components
+
+### navius-core
+Core utilities and common abstractions used throughout the framework.
+
+### navius-db
+Database abstraction layer with a provider-based architecture.
+- **navius-db-postgres**: PostgreSQL implementation.
+
+### navius-cache
+Cache abstraction layer with flexible provider options.
+- **navius-cache-redis**: Redis implementation.
+
+### navius-messaging
+Messaging abstraction layer for pub/sub and async communication.
+- Future implementations will include RabbitMQ and Kafka.
+
 ## 🏃‍♂️ Quick Start
 
 ```bash

@@ -337,14 +337,143 @@ impl PgRow {
     }
 }
 
-/// Database transaction trait
+/// Transaction abstraction for database operations
 #[async_trait]
-pub trait DatabaseTransaction: DatabaseConnection {
+pub trait DatabaseTransaction: Send + Sync {
+    /// Execute a query in the transaction with parameters
+    async fn execute<'a>(
+        &mut self,
+        query: &str,
+        params: &[&'a (dyn sqlx::Encode<'a, sqlx::Postgres> + Sync)],
+    ) -> DatabaseResult<u64>;
+
+    /// Query the database within a transaction with parameters
+    async fn query<'a>(
+        &mut self,
+        query: &str,
+        params: &[&'a (dyn sqlx::Encode<'a, sqlx::Postgres> + Sync)],
+    ) -> DatabaseResult<Box<dyn DatabaseRowSet>>;
+
     /// Commit the transaction
     async fn commit(self: Box<Self>) -> DatabaseResult<()>;
 
     /// Rollback the transaction
     async fn rollback(self: Box<Self>) -> DatabaseResult<()>;
+
+    /// Create a savepoint within the transaction
+    ///
+    /// Savepoints allow for partial rollback within a transaction.
+    /// The savepoint name must be a valid identifier (alphanumeric and underscores only).
+    async fn savepoint(&mut self, name: &str) -> DatabaseResult<()>;
+
+    /// Rollback to a previously created savepoint
+    ///
+    /// This rolls back all changes made after the savepoint was created.
+    /// The savepoint remains valid and can be used again.
+    async fn rollback_to_savepoint(&mut self, name: &str) -> DatabaseResult<()>;
+
+    /// Release a savepoint
+    ///
+    /// This releases a previously created savepoint. After a savepoint is released,
+    /// you can no longer roll back to it.
+    async fn release_savepoint(&mut self, name: &str) -> DatabaseResult<()>;
+}
+
+/// PostgreSQL transaction implementation
+pub struct PgTransaction {
+    tx: sqlx::Transaction<'static, sqlx::Postgres>,
+}
+
+impl PgTransaction {
+    /// Create a new PostgreSQL transaction
+    pub(crate) fn new(tx: sqlx::Transaction<'static, sqlx::Postgres>) -> Self {
+        Self { tx }
+    }
+
+    /// Validate a savepoint name to prevent SQL injection
+    fn validate_savepoint_name(&self, name: &str) -> DatabaseResult<()> {
+        if !name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            return Err(DatabaseError::savepoint_error(format!(
+                "Invalid savepoint name: {}. Only alphanumeric characters and underscores are allowed.",
+                name
+            )));
+        }
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl DatabaseTransaction for PgTransaction {
+    async fn execute<'a>(
+        &mut self,
+        query: &str,
+        params: &[&'a (dyn sqlx::Encode<'a, sqlx::Postgres> + Sync)],
+    ) -> DatabaseResult<u64> {
+        let result = sqlx::query_with(
+            query,
+            sqlx::postgres::PgArguments::from_iter(params.iter().copied()),
+        )
+        .execute(&mut self.tx)
+        .await
+        .map_err(|e| DatabaseError::query_error(format!("Query execution error: {}", e)))?;
+
+        Ok(result.rows_affected())
+    }
+
+    async fn query<'a>(
+        &mut self,
+        query: &str,
+        params: &[&'a (dyn sqlx::Encode<'a, sqlx::Postgres> + Sync)],
+    ) -> DatabaseResult<Box<dyn DatabaseRowSet>> {
+        let result = sqlx::query_with(
+            query,
+            sqlx::postgres::PgArguments::from_iter(params.iter().copied()),
+        )
+        .fetch_all(&mut self.tx)
+        .await
+        .map_err(|e| DatabaseError::query_error(format!("Query execution error: {}", e)))?;
+
+        Ok(Box::new(PgRowSet::new(result)))
+    }
+
+    async fn commit(self: Box<Self>) -> DatabaseResult<()> {
+        self.tx.commit().await.map_err(|e| {
+            DatabaseError::transaction_error(format!("Failed to commit transaction: {}", e))
+        })
+    }
+
+    async fn rollback(self: Box<Self>) -> DatabaseResult<()> {
+        self.tx.rollback().await.map_err(|e| {
+            DatabaseError::transaction_error(format!("Failed to rollback transaction: {}", e))
+        })
+    }
+
+    async fn savepoint(&mut self, name: &str) -> DatabaseResult<()> {
+        self.validate_savepoint_name(name)?;
+
+        let query = format!("SAVEPOINT {}", name);
+        self.execute(&query, &[]).await.map(|_| ()).map_err(|e| {
+            DatabaseError::savepoint_error(format!("Failed to create savepoint: {}", e))
+        })
+    }
+
+    async fn rollback_to_savepoint(&mut self, name: &str) -> DatabaseResult<()> {
+        self.validate_savepoint_name(name)?;
+
+        let query = format!("ROLLBACK TO SAVEPOINT {}", name);
+        self.execute(&query, &[]).await.map(|_| ()).map_err(|e| {
+            DatabaseError::savepoint_error(format!("Failed to rollback to savepoint: {}", e))
+        })
+    }
+
+    async fn release_savepoint(&mut self, name: &str) -> DatabaseResult<()> {
+        self.validate_savepoint_name(name)?;
+
+        let query = format!("RELEASE SAVEPOINT {}", name);
+        self.execute(&query, &[]).await.map(|_| ()).map_err(|e| {
+            DatabaseError::savepoint_error(format!("Failed to release savepoint: {}", e))
+        })
+    }
 }
 
 #[cfg(feature = "postgres")]
@@ -479,15 +608,80 @@ impl DatabaseConnection for PgConnection {
 #[cfg(feature = "postgres")]
 #[async_trait]
 impl DatabaseTransaction for PgTransaction {
+    async fn execute<'a>(
+        &mut self,
+        query: &str,
+        params: &[&'a (dyn sqlx::Encode<'a, sqlx::Postgres> + Sync)],
+    ) -> DatabaseResult<u64> {
+        let result = sqlx::query_with(
+            query,
+            sqlx::postgres::PgArguments::from_iter(params.iter().copied()),
+        )
+        .execute(&mut self.tx)
+        .await
+        .map_err(|e| DatabaseError::query_error(format!("Query execution error: {}", e)))?;
+
+        Ok(result.rows_affected())
+    }
+
+    async fn query<'a>(
+        &mut self,
+        query: &str,
+        params: &[&'a (dyn sqlx::Encode<'a, sqlx::Postgres> + Sync)],
+    ) -> DatabaseResult<Box<dyn DatabaseRowSet>> {
+        let result = sqlx::query_with(
+            query,
+            sqlx::postgres::PgArguments::from_iter(params.iter().copied()),
+        )
+        .fetch_all(&mut self.tx)
+        .await
+        .map_err(|e| DatabaseError::query_error(format!("Query execution error: {}", e)))?;
+
+        Ok(Box::new(PgRowSet::new(result)))
+    }
+
     async fn commit(self: Box<Self>) -> DatabaseResult<()> {
         self.tx.commit().await.map_err(|e| {
-            DatabaseError::TransactionError(format!("Transaction commit failed: {}", e))
+            DatabaseError::transaction_error(format!("Failed to commit transaction: {}", e))
         })
     }
 
     async fn rollback(self: Box<Self>) -> DatabaseResult<()> {
         self.tx.rollback().await.map_err(|e| {
-            DatabaseError::TransactionError(format!("Transaction rollback failed: {}", e))
+            DatabaseError::transaction_error(format!("Failed to rollback transaction: {}", e))
         })
     }
+
+    async fn savepoint(&mut self, name: &str) -> DatabaseResult<()> {
+        self.validate_savepoint_name(name)?;
+
+        let query = format!("SAVEPOINT {}", name);
+        self.execute(&query, &[]).await.map(|_| ()).map_err(|e| {
+            DatabaseError::savepoint_error(format!("Failed to create savepoint: {}", e))
+        })
+    }
+
+    async fn rollback_to_savepoint(&mut self, name: &str) -> DatabaseResult<()> {
+        self.validate_savepoint_name(name)?;
+
+        let query = format!("ROLLBACK TO SAVEPOINT {}", name);
+        self.execute(&query, &[]).await.map(|_| ()).map_err(|e| {
+            DatabaseError::savepoint_error(format!("Failed to rollback to savepoint: {}", e))
+        })
+    }
+
+    async fn release_savepoint(&mut self, name: &str) -> DatabaseResult<()> {
+        self.validate_savepoint_name(name)?;
+
+        let query = format!("RELEASE SAVEPOINT {}", name);
+        self.execute(&query, &[]).await.map(|_| ()).map_err(|e| {
+            DatabaseError::savepoint_error(format!("Failed to release savepoint: {}", e))
+        })
+    }
+}
+
+/// Validates a savepoint name to prevent SQL injection
+/// Savepoint names should only contain alphanumeric characters and underscores
+fn is_valid_savepoint_name(name: &str) -> bool {
+    !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_')
 }

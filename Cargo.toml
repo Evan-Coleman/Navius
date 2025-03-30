@@ -9,6 +9,8 @@ members = [
     "crates/navius-db",
     "crates/navius-db-postgres",
     "crates/navius-cache",
+    "crates/navius-cache-redis",
+    "crates/navius-messaging",
     "crates/navius-plugin",
     "crates/navius-event",
     # Add new crates here as they are created
@@ -136,10 +138,14 @@ navius-db = { path = "crates/navius-db", version = "0.1.0" }
 navius-db-postgres = { path = "crates/navius-db-postgres", version = "0.1.0" }
 # Cache crate
 navius-cache = { path = "crates/navius-cache", version = "0.1.0" }
+# Cache Redis implementation
+navius-cache-redis = { path = "crates/navius-cache-redis", version = "0.1.0" }
 # Plugin crate
 navius-plugin = { path = "crates/navius-plugin", version = "0.1.0" }
 # Event crate
 navius-event = { path = "crates/navius-event", version = "0.1.0" }
+# Messaging crate
+navius-messaging = { path = "crates/navius-messaging", version = "0.1.0" }
 
 # Add other crates as they are created
 

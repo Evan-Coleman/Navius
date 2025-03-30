@@ -55,6 +55,22 @@ pub enum DatabaseError {
         context: String,
         source: Box<DatabaseError>,
     },
+
+    /// Parameter binding error
+    #[error("Parameter binding error: {0}")]
+    ParameterError(String),
+
+    /// Row access error
+    #[error("Row access error: {0}")]
+    RowAccessError(String),
+
+    /// SQLx errors
+    #[error(transparent)]
+    SQLXError(#[from] sqlx::Error),
+
+    /// IO errors
+    #[error(transparent)]
+    IOError(#[from] std::io::Error),
 }
 
 /// Error context information to enrich error messages
@@ -136,6 +152,10 @@ impl DatabaseError {
             Self::ValidationError(_) => "DB_VALIDATION_ERROR",
             Self::UnexpectedStateError(_) => "DB_UNEXPECTED_STATE",
             Self::WithContext { source, .. } => source.error_code(),
+            Self::ParameterError(_) => "DB_PARAMETER_ERROR",
+            Self::RowAccessError(_) => "DB_ROW_ACCESS_ERROR",
+            Self::SQLXError(_) => "DB_SQLX_ERROR",
+            Self::IOError(_) => "DB_IO_ERROR",
         }
     }
 
@@ -147,6 +167,10 @@ impl DatabaseError {
             Self::ConfigurationError(_) => 500,
             Self::ConnectionError(_) => 503,
             Self::WithContext { source, .. } => source.status_code(),
+            Self::ParameterError(_) => 500,
+            Self::RowAccessError(_) => 500,
+            Self::SQLXError(_) => 500,
+            Self::IOError(_) => 500,
             _ => 500,
         }
     }
@@ -156,6 +180,73 @@ impl DatabaseError {
         match self {
             Self::WithContext { source, .. } => source.unwrap_context(),
             _ => self,
+        }
+    }
+
+    /// Create a new connection error
+    pub fn connection_error<S: Into<String>>(message: S) -> Self {
+        DatabaseError::ConnectionError(message.into())
+    }
+
+    /// Create a new transaction error
+    pub fn transaction_error<S: Into<String>>(message: S) -> Self {
+        DatabaseError::TransactionError(message.into())
+    }
+
+    /// Create a new query error
+    pub fn query_error<S: Into<String>>(message: S) -> Self {
+        DatabaseError::QueryError(message.into())
+    }
+
+    /// Create a new parameter error
+    pub fn parameter_error<S: Into<String>>(message: S) -> Self {
+        DatabaseError::ParameterError(message.into())
+    }
+
+    /// Create a new row access error
+    pub fn row_access_error<S: Into<String>>(message: S) -> Self {
+        DatabaseError::RowAccessError(message.into())
+    }
+
+    /// Create a new pool error
+    pub fn pool_error<S: Into<String>>(message: S) -> Self {
+        DatabaseError::PoolError(message.into())
+    }
+
+    /// Create a new configuration error
+    pub fn configuration_error<S: Into<String>>(message: S) -> Self {
+        DatabaseError::ConfigurationError(message.into())
+    }
+
+    /// Create a new migration error
+    pub fn migration_error<S: Into<String>>(message: S) -> Self {
+        DatabaseError::MigrationError(message.into())
+    }
+
+    /// Check if the error is transient
+    pub fn is_transient(&self) -> bool {
+        match self {
+            Self::SQLXError(e) => match e {
+                sqlx::Error::Database(db_err) => {
+                    // PostgreSQL error codes for transient errors:
+                    // - 40001: serialization_failure
+                    // - 40P01: deadlock_detected
+                    // - 55P03: lock_not_available
+                    // - 57P03: cannot_connect_now
+                    // - 57P04: query_canceled
+                    if let Some(code) = db_err.code() {
+                        return match code.as_ref() {
+                            "40001" | "40P01" | "55P03" | "57P03" | "57P04" => true,
+                            _ => false,
+                        };
+                    }
+                    false
+                }
+                sqlx::Error::Io(_) | sqlx::Error::PoolTimedOut => true,
+                _ => false,
+            },
+            Self::ConnectionError(_) => true,
+            _ => false,
         }
     }
 }
@@ -181,75 +272,18 @@ impl From<DatabaseError> for AppError {
                 let app_error: AppError = (*source).into();
                 app_error.with_context(context)
             }
-            _ => AppError::internal(err.to_string()),
-        }
-    }
-}
-
-// Implement conversion from SQLx errors to DatabaseError
-#[cfg(feature = "postgres")]
-impl From<sqlx::Error> for DatabaseError {
-    fn from(err: sqlx::Error) -> Self {
-        match err {
-            sqlx::Error::RowNotFound => {
-                DatabaseError::NotFoundError("Record not found".to_string())
-            }
-            sqlx::Error::Database(db_err) => {
-                // Postgres-specific error handling
-                if let Some(code) = db_err.code() {
-                    match code.as_ref() {
-                        // Common Postgres error codes
-                        "23505" => DatabaseError::ValidationError(format!(
-                            "Duplicate key violation: {}",
-                            db_err
-                        )),
-                        "23503" => DatabaseError::ValidationError(format!(
-                            "Foreign key violation: {}",
-                            db_err
-                        )),
-                        "23502" => DatabaseError::ValidationError(format!(
-                            "Not null violation: {}",
-                            db_err
-                        )),
-                        "22P02" => DatabaseError::ValidationError(format!(
-                            "Invalid input syntax: {}",
-                            db_err
-                        )),
-                        // Transaction and savepoint errors
-                        "25P02" => DatabaseError::TransactionError(
-                            "Transaction is aborted due to previous error".to_string(),
-                        ),
-                        "25001" => DatabaseError::TransactionError(
-                            "Cannot execute operation in a read-only transaction".to_string(),
-                        ),
-                        "3B001" => DatabaseError::SavepointError(
-                            "Invalid savepoint specification".to_string(),
-                        ),
-                        _ => DatabaseError::QueryError(format!("Database error: {}", db_err)),
-                    }
+            DatabaseError::ParameterError(msg) => AppError::validation(msg),
+            DatabaseError::RowAccessError(msg) => AppError::validation(msg),
+            DatabaseError::SQLXError(e) => {
+                let msg = e.to_string();
+                if e.is_transient() {
+                    AppError::transient(msg)
                 } else {
-                    DatabaseError::QueryError(format!("Database error: {}", db_err))
+                    AppError::internal(msg)
                 }
             }
-            sqlx::Error::Io(io_err) => {
-                DatabaseError::ConnectionError(format!("IO error: {}", io_err))
-            }
-            sqlx::Error::Tls(tls_err) => {
-                DatabaseError::ConnectionError(format!("TLS error: {}", tls_err))
-            }
-            sqlx::Error::Protocol(msg) => {
-                DatabaseError::QueryError(format!("Protocol error: {}", msg))
-            }
-            sqlx::Error::PoolTimedOut => {
-                DatabaseError::PoolError("Connection pool timeout".to_string())
-            }
-            sqlx::Error::PoolClosed => {
-                DatabaseError::PoolError("Connection pool closed".to_string())
-            }
-            sqlx::Error::WorkerCrashed => {
-                DatabaseError::PoolError("Database worker crashed".to_string())
-            }
-            _ => DatabaseError::UnexpectedStateError(format!("Unexpected database error: {}", err)),
+            DatabaseError::IOError(e) => AppError::internal(e.to_string()),
+            _ => AppError::internal(err.to_string()),
         }
     }
 }
