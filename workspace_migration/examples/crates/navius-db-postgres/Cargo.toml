@@ -23,6 +23,10 @@ anyhow = "1.0.97"
 tokio-test = "0.4.4"
 tempfile = "3.19.1"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+criterion = { version = "0.5.1", features = ["html_reports", "async_tokio"] }
+
+[lib]
+bench = false
 
 [[example]]
 name = "migration_example"
@@ -30,4 +34,8 @@ path = "examples/migration_example.rs"
 
 [[example]]
 name = "provider_example"
-path = "examples/provider_example.rs" 
+path = "examples/provider_example.rs"
+
+[[bench]]
+name = "provider_benchmark"
+harness = false 
