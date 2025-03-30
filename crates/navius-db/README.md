@@ -160,6 +160,8 @@ impl DatabaseProvider for MyDatabaseProvider {
 }
 ```
 
+For detailed guidelines on implementing a database provider, see the [Database Provider Implementation Guide](./DATABASE_PROVIDER_GUIDE.md).
+
 ## License
 
 This project is licensed under the Apache License 2.0 - see the LICENSE file for details. 

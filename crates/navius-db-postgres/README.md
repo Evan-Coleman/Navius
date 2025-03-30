@@ -1,20 +1,19 @@
 # Navius DB PostgreSQL
 
-PostgreSQL implementation for the Navius database framework. This crate provides PostgreSQL connectivity using SQLx and implements the interfaces defined in the core navius-db crate.
+PostgreSQL implementation of the Navius DB interfaces. This crate provides a complete implementation of the database abstraction layer for PostgreSQL databases using SQLx.
 
 ## Features
 
-- Complete PostgreSQL implementation for navius-db interfaces
-- Connection pooling with configurable parameters
+- Complete implementation of the `navius-db` interface traits
+- PostgreSQL-specific optimizations and features
+- SQLx integration with connection pooling
 - Transaction management
-- Repository pattern implementation
-- Query building
-- Typed result handling
 - Migration support
+- Repository pattern implementation
 
-## Usage
+## Installation
 
-Add both navius-db and navius-db-postgres to your dependencies:
+Add navius-db-postgres to your dependencies:
 
 ```toml
 [dependencies]
@@ -22,64 +21,49 @@ navius-db = "0.1.0"
 navius-db-postgres = "0.1.0"
 ```
 
-### Basic Setup
+## Configuration
+
+Configure a PostgreSQL database connection:
 
 ```rust
-use navius_db::{DatabaseConfig, DatabaseResult};
-use navius_db_postgres::{PgPool, PgConnectionManager, PgPoolOptions};
+use navius_db_postgres::PgDatabaseConfig;
 
-async fn setup_database() -> DatabaseResult<PgConnectionManager> {
-    // Create database configuration
-    let config = DatabaseConfig::new("postgres://user:password@localhost:5432/mydb".to_string());
+fn create_config() -> PgDatabaseConfig {
+    let mut config = PgDatabaseConfig::new("postgres://user:password@localhost:5432/mydb".to_string());
     
-    // Create PostgreSQL pool
-    let pool = PgPool::new(&config).await?;
+    // Configure PostgreSQL-specific options
+    config.ssl_mode = Some("prefer".to_string());
+    config.application_name = Some("my-application".to_string());
     
-    // Create connection manager
-    let manager = PgConnectionManager::new(pool);
+    // Configure common options
+    config.core.max_connections = 20;
+    config.core.min_connections = 5;
+    config.core.run_migrations = true;
+    config.core.migrations_path = "migrations".to_string();
     
-    Ok(manager)
+    config
 }
 ```
 
-### Using Transactions
+## Usage
+
+### Creating a Database Provider
 
 ```rust
-use navius_db::DatabaseResult;
-use navius_db_postgres::PgConnectionManager;
+use navius_db::{DatabaseProvider, DatabaseConnectionManager};
+use navius_db_postgres::{PgProvider, PgDatabaseConfig};
 
-async fn transfer_funds(
-    db: &PgConnectionManager,
-    from_account: &str,
-    to_account: &str,
-    amount: f64,
-) -> DatabaseResult<()> {
-    // Use a transaction to ensure both operations succeed or fail together
-    db.transaction(|mut tx| async move {
-        // Deduct from source account
-        let from_query = "UPDATE accounts SET balance = balance - $1 WHERE account_id = $2 AND balance >= $1";
-        let rows = tx.execute_with(from_query, &[&amount, &from_account]).await?;
-        
-        if rows == 0 {
-            // No rows updated, likely insufficient funds
-            return Err(navius_db::DatabaseError::ValidationError("Insufficient funds".to_string()));
-        }
-        
-        // Add to destination account
-        let to_query = "UPDATE accounts SET balance = balance + $1 WHERE account_id = $2";
-        tx.execute_with(to_query, &[&amount, &to_account]).await?;
-        
-        // Transaction automatically commits on success
-        Ok(())
-    }).await
+async fn create_provider() -> PgProvider {
+    let config = PgDatabaseConfig::new("postgres://user:password@localhost:5432/mydb".to_string());
+    PgProvider::new(config).await.expect("Failed to create PostgreSQL provider")
 }
 ```
 
-### Using Repository Pattern
+### Working with Repositories
 
 ```rust
-use navius_db::{Entity, Repository, DatabaseResult};
-use navius_db_postgres::{PgConnectionManager, PgRepository};
+use navius_db::{Entity, Repository};
+use navius_db_postgres::{PgProvider, PgRepository};
 use uuid::Uuid;
 use serde::{Serialize, Deserialize};
 
@@ -104,9 +88,9 @@ impl Entity for User {
     }
 }
 
-async fn user_example(db: &PgConnectionManager) -> DatabaseResult<()> {
-    // Create repository for User entity
-    let repo = PgRepository::<User>::new(db.clone());
+async fn repository_example(provider: &PgProvider) -> Result<(), Box<dyn std::error::Error>> {
+    // Create a repository for users
+    let repo = PgRepository::<User>::new(provider);
     
     // Create a new user
     let mut user = User {
@@ -130,6 +114,93 @@ async fn user_example(db: &PgConnectionManager) -> DatabaseResult<()> {
     Ok(())
 }
 ```
+
+### Using Transactions
+
+```rust
+use navius_db::DatabaseConnectionManager;
+use navius_db_postgres::PgProvider;
+
+async fn transaction_example(provider: &PgProvider) -> Result<(), Box<dyn std::error::Error>> {
+    provider.transaction(|mut tx| async move {
+        // Execute multiple operations in a transaction
+        tx.execute_raw("INSERT INTO logs (message) VALUES ($1)", &["Transaction started"]).await?;
+        
+        // Do more operations...
+        
+        tx.execute_raw("INSERT INTO logs (message) VALUES ($1)", &["Transaction completed"]).await?;
+        
+        // Transaction commits when the closure completes successfully
+        Ok(())
+    }).await?;
+    
+    Ok(())
+}
+```
+
+### Running Migrations
+
+```rust
+use navius_db_postgres::{PgProvider, PgDatabaseConfig};
+
+async fn run_migrations(provider: &PgProvider) -> Result<(), Box<dyn std::error::Error>> {
+    // Run migrations from the specified path
+    provider.run_migrations("./migrations").await?;
+    println!("Migrations completed successfully");
+    
+    Ok(())
+}
+```
+
+## Implementing Custom Repositories
+
+You can extend the base `PgRepository` to add custom query methods:
+
+```rust
+use navius_db::{Repository, DatabaseResult};
+use navius_db_postgres::{PgProvider, PgRepository};
+
+struct UserRepository<'a> {
+    base: PgRepository<'a, User>,
+}
+
+impl<'a> UserRepository<'a> {
+    pub fn new(provider: &'a PgProvider) -> Self {
+        Self {
+            base: PgRepository::new(provider),
+        }
+    }
+    
+    // Implement all base Repository methods by delegating to base
+    
+    // Add custom methods
+    pub async fn find_by_username(&self, username: &str) -> DatabaseResult<Option<User>> {
+        // Implementation using the provider's query capabilities
+        let query = self.base.provider().query_builder()
+            .select_from(User::table_name())
+            .where_equal("username", username)
+            .build();
+            
+        self.base.provider().query_one::<User>(query).await
+    }
+}
+```
+
+## Platform Support
+
+This crate supports PostgreSQL 11+ and requires SQLx with the postgres feature.
+
+## Current Status
+
+The navius-db-postgres crate is currently in development (25% complete). The following features are in progress:
+
+- Core interface implementations (50% complete)
+- SQLx integration (50% complete)
+- Repository implementation (0% complete)
+- Migration support (0% complete)
+- Tests (5% complete)
+
+See the [implementation progress](../../workspace_migration/roadmap/sub-process/implementation-progress.md) for more details.
 
 ## License
 

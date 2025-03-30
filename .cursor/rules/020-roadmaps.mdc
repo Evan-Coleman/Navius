@@ -23,10 +23,57 @@ roadmap_name/
 │   │   ├── sub-process-1.md # Specific sub-process tracking
 │   │   └── sub-process-2.md # Another sub-process tracking
 │   └── workspace-name-plan.md # Detailed plan documents
+├── docs/                    # Documentation files like ADRs
+│   └── architectural-decisions/
+│       └── NNN-decision-name.md # Architectural Decision Records
 ├── reports/                 # Date-stamped progress reports
 │   └── progress_YYYY-MM-DD.md
 └── progress.md              # Current consolidated progress tracking
 ```
+
+# Documentation Hierarchy and Information Flow
+
+Documentation in roadmaps follows a clear hierarchy with information flowing upward:
+
+1. **Task-Level Details** → **Progress Summaries** → **Main Roadmap** → **README**
+
+This ensures that:
+- Detailed implementation information is in sub-process documents
+- Key progress points are bubbled up to progress.md
+- Major milestones are reflected in the main roadmap
+- High-level status is visible in the README
+
+## Documentation Update Flow
+
+1. **When completing a task:**
+   - Update the appropriate sub-process document first
+   - Bubble up status to progress.md
+   - For major milestones, update the main roadmap
+   - If particularly significant, create a dated progress report
+
+2. **When starting new work:**
+   - Reference the main roadmap for overall context
+   - Check progress.md for current status
+   - Look at relevant sub-process documents for details
+
+3. **When creating new documents:**
+   - Always link back to parent documents
+   - Update parent documents to reference new documents
+   - Follow standard naming conventions
+   - Add to the folder structure diagram in README.md
+
+# Preventing Document Proliferation
+
+To prevent excessive document creation:
+
+1. **Consolidate related information** within existing document structures
+2. **Do not create overlapping documents** with duplicate information
+3. **Link, don't duplicate** - reference existing documents instead of copying content
+4. **Use clear document purposes**:
+   - README.md - Entry point and overview
+   - XX-roadmap-name.md - Complete roadmap with milestones
+   - progress.md - Current consolidated progress
+   - implementation-progress.md - Detailed task tracking
 
 # Documentation Hierarchy
 
@@ -81,6 +128,28 @@ roadmap_name/
 - Make sure the readme is up to date "docs/roadmaps/README.md"
 - Create extensive documentation if new implementation was created. We want to keep our docs up to date.
   - Keep /docs/README.md and docs/SUMMARY.md up to date and in sync as well.
+
+# Regular Maintenance Tasks
+
+To maintain clean and useful documentation:
+
+1. **DAILY Document Cleanup**
+   - Identify and consolidate duplicative documents
+   - Archive outdated information
+   - Update links between documents
+   - Ensure README folder structure reflects reality
+
+2. **When Adding New Crates or Major Features**
+   - Update the folder structure diagram in README.md
+   - Add to the timeline in the main roadmap
+   - Create appropriate sub-process tracking documents
+   - Ensure all documents link properly to each other
+
+3. **Updating Status With Dates**
+   - Always include update dates at the bottom of documents
+   - Update the "Current Status" section in README.md
+   - Update the "Progress" percentage in all relevant documents
+   - Use system dates (current date) for all updates, not future dates
 
 # Roadmap Integration
 - When integrating external ideas (like spring-rs), create a dedicated sub-process file
