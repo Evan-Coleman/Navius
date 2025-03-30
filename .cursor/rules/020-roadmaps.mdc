@@ -51,7 +51,7 @@ roadmap_name/
 4. **Progress Tracking**
    - `progress.md` contains the current consolidated progress
    - Date-stamped reports in `/reports/` provide historical tracking
-   - Progress updates must be bubbled up to the main roadmap file
+   - Progress updates must be bubbled up to the main roadmap file within the current roadmap folder, and then to the main roadmap readme at docs/98_roadmaps/README.md, and then finally to the main project readme at /README.md
 
 # First Steps
 - Read the [template-for-updating.md](mdc:docs/roadmaps/template-for-updating.md) file to understand the format and steps to take in the process.

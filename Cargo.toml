@@ -9,6 +9,7 @@ members = [
     "crates/navius-db",
     "crates/navius-cache",
     "crates/navius-plugin",
+    "crates/navius-event",
     # Add new crates here as they are created
 ]
 
@@ -134,6 +135,8 @@ navius-db = { path = "crates/navius-db", version = "0.1.0" }
 navius-cache = { path = "crates/navius-cache", version = "0.1.0" }
 # Plugin crate
 navius-plugin = { path = "crates/navius-plugin", version = "0.1.0" }
+# Event crate
+navius-event = { path = "crates/navius-event", version = "0.1.0" }
 
 # Add other crates as they are created
 
