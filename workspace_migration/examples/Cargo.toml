@@ -5,7 +5,7 @@
 members = [
     "crates/navius-core",
     "crates/navius-di"
-]
+, "navius-error-demo"]
 
 resolver = "2" # Use the modern resolver for proper feature resolution
 

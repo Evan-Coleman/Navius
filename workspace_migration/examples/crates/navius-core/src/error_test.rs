@@ -2,7 +2,6 @@
 // These tests go beyond the unit tests in error.rs to test integration scenarios
 
 use crate::error::{Error, ErrorCode, Result, ResultExt};
-use std::fs;
 use std::io;
 use std::path::Path;
 
@@ -33,7 +32,8 @@ fn perform_complex_operation(input: &str) -> Result<String> {
 
     // Second step: try to read from a file (will fail)
     let file_path = Path::new("/non/existent/file.txt");
-    let file_content = mock_file_operation(file_path).not_found(format!(
+    // We don't need to capture the file_content as it will error out
+    let _file_content = mock_file_operation(file_path).not_found(format!(
         "Could not find configuration file at {}",
         file_path.display()
     ))?;
@@ -81,7 +81,6 @@ fn create_detailed_error() -> Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     #[test]
     fn test_error_propagation() {
@@ -138,13 +137,17 @@ mod tests {
         let io_error = io::Error::new(io::ErrorKind::PermissionDenied, "Permission denied");
 
         // Convert to different error types
-        let validation_error: Result<()> =
-            Err(io_error.clone()).validation("Invalid file permissions");
+        let validation_error: Result<()> = Err(io_error).validation("Invalid file permissions");
 
-        let auth_error: Result<()> =
-            Err(io_error.clone()).with_context(ErrorCode::Authorization, || "Unauthorized access");
+        let auth_error: Result<()> = Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Permission denied",
+        ))
+        .with_context(ErrorCode::Authorization, || "Unauthorized access");
 
-        let not_found_error: Result<()> = Err(io_error).not_found("Resource not found");
+        let not_found_error: Result<()> =
+            Err(io::Error::new(io::ErrorKind::NotFound, "File not found"))
+                .not_found("Resource not found");
 
         // Check error codes
         assert_eq!(validation_error.unwrap_err().code, ErrorCode::Validation);

@@ -38,42 +38,46 @@ where
     (result, duration)
 }
 
-/// Parse a string into a duration
-///
-/// Supports formats like:
-/// - "1s" (1 second)
-/// - "500ms" (500 milliseconds)
-/// - "5m" (5 minutes)
-/// - "2h" (2 hours)
-pub fn parse_duration(s: &str) -> Result<Duration> {
-    let s = s.trim();
-
-    if s.is_empty() {
-        return Err(Error::new("Empty duration string"));
+/// Parse a duration string into milliseconds
+/// Format: 1s, 100ms, 5m, 1h
+pub fn parse_duration(duration_str: &str) -> Result<u64> {
+    if duration_str.is_empty() {
+        return Err(Error::validation("Empty duration string"));
     }
 
-    let (value_str, unit) = if s.ends_with("ms") {
-        (&s[..s.len() - 2], "ms")
-    } else if s.ends_with('s') {
-        (&s[..s.len() - 1], "s")
-    } else if s.ends_with('m') {
-        (&s[..s.len() - 1], "m")
-    } else if s.ends_with('h') {
-        (&s[..s.len() - 1], "h")
+    let duration_str = duration_str.trim();
+
+    // Extract the unit and value
+    let (value_str, unit) = if duration_str.ends_with("ms") {
+        (&duration_str[0..duration_str.len() - 2], "ms")
+    } else if duration_str.ends_with('s') {
+        (&duration_str[0..duration_str.len() - 1], "s")
+    } else if duration_str.ends_with('m') {
+        (&duration_str[0..duration_str.len() - 1], "m")
+    } else if duration_str.ends_with('h') {
+        (&duration_str[0..duration_str.len() - 1], "h")
     } else {
-        (s, "ms") // Default to milliseconds
+        return Err(Error::validation(&format!(
+            "Unknown duration unit in: {}",
+            duration_str
+        )));
     };
 
-    let value: u64 = value_str
-        .parse()
-        .map_err(|_| Error::new(&format!("Invalid duration value: {}", value_str)))?;
+    // Parse the value
+    let value = value_str
+        .parse::<u64>()
+        .map_err(|_| Error::validation(&format!("Invalid duration value: {}", value_str)))?;
 
+    // Convert to milliseconds
     match unit {
-        "ms" => Ok(Duration::from_millis(value)),
-        "s" => Ok(Duration::from_secs(value)),
-        "m" => Ok(Duration::from_secs(value * 60)),
-        "h" => Ok(Duration::from_secs(value * 3600)),
-        _ => Err(Error::new(&format!("Unknown duration unit: {}", unit))),
+        "ms" => Ok(value),
+        "s" => Ok(value * 1000),
+        "m" => Ok(value * 1000 * 60),
+        "h" => Ok(value * 1000 * 60 * 60),
+        _ => Err(Error::validation(&format!(
+            "Unknown duration unit: {}",
+            unit
+        ))),
     }
 }
 
@@ -151,10 +155,10 @@ mod tests {
 
     #[test]
     fn test_parse_duration() {
-        assert_eq!(parse_duration("100ms").unwrap(), Duration::from_millis(100));
-        assert_eq!(parse_duration("5s").unwrap(), Duration::from_secs(5));
-        assert_eq!(parse_duration("2m").unwrap(), Duration::from_secs(120));
-        assert_eq!(parse_duration("1h").unwrap(), Duration::from_secs(3600));
+        assert_eq!(parse_duration("100ms").unwrap(), 100);
+        assert_eq!(parse_duration("5s").unwrap(), 5000);
+        assert_eq!(parse_duration("2m").unwrap(), 120000);
+        assert_eq!(parse_duration("1h").unwrap(), 3600000);
 
         assert!(parse_duration("invalid").is_err());
     }

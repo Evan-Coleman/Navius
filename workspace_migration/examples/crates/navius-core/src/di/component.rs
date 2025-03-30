@@ -272,71 +272,43 @@ impl ComponentRegistry {
         self.register_factory::<TypedComponentFactory<T, F>>(Box::new(typed_factory));
     }
 
-    /// Get a component by type
-    pub fn get<T: Any + Send + Sync>(&mut self) -> Result<ComponentRef<T>> {
+    /// Get a component by type. Returns an error if the component is not registered.
+    pub fn get<T: Send + Sync + 'static>(&self) -> Result<ComponentRef<T>> {
         let type_id = TypeId::of::<T>();
-
-        // Check if we have a cached instance for singletons
         if let Some(component) = self.components.get(&type_id) {
-            if let Some(typed_ref) = component.clone().downcast::<T>() {
-                return Ok(typed_ref);
+            if let Some(typed_component) = component.downcast_ref::<ComponentRef<T>>() {
+                return Ok(typed_component.clone());
             }
         }
 
-        // Check if we have a factory
-        if let Some(factory) = self.factories.get(&type_id) {
-            let dyn_ref = factory.create();
-
-            // Initialize the component
-            factory.initialize(&dyn_ref)?;
-
-            // For singletons, cache the instance
-            if factory.scope() == ComponentScope::Singleton {
-                self.components.insert(type_id, dyn_ref.clone());
-            }
-
-            if let Some(typed_ref) = dyn_ref.downcast::<T>() {
-                return Ok(typed_ref);
-            }
-        }
-
-        Err(Error::new(&format!(
+        Err(Error::component(&format!(
             "Component not found: {}",
             std::any::type_name::<T>()
         )))
     }
 
-    /// Get a component by type with async initialization
-    pub async fn get_async<T: Any + Send + Sync>(&mut self) -> Result<ComponentRef<T>> {
+    /// Try to get a component by type. Returns None if the component is not registered.
+    pub fn try_get<T: Send + Sync + 'static>(&self) -> Result<Option<ComponentRef<T>>> {
         let type_id = TypeId::of::<T>();
-
-        // Check if we have a cached instance for singletons
         if let Some(component) = self.components.get(&type_id) {
-            if let Some(typed_ref) = component.clone().downcast::<T>() {
-                return Ok(typed_ref);
+            if let Some(typed_component) = component.downcast_ref::<ComponentRef<T>>() {
+                return Ok(Some(typed_component.clone()));
             }
         }
 
-        // Check if we have a factory
-        if let Some(factory) = self.factories.get(&type_id) {
-            let dyn_ref = factory.create();
+        Ok(None)
+    }
 
-            // Initialize the component asynchronously
-            dyn_ref
-                .execute_async_lifecycle(LifecyclePhase::Initialize)
-                .await?;
-
-            // For singletons, cache the instance
-            if factory.scope() == ComponentScope::Singleton {
-                self.components.insert(type_id, dyn_ref.clone());
-            }
-
-            if let Some(typed_ref) = dyn_ref.downcast::<T>() {
-                return Ok(typed_ref);
+    /// Get a component by type with async initialization
+    pub async fn get_async<T: 'static + Send + Sync>(&self) -> Result<ComponentRef<T>> {
+        let type_id = TypeId::of::<T>();
+        if let Some(component) = self.components.get(&type_id) {
+            if let Some(typed_component) = component.downcast_ref::<ComponentRef<T>>() {
+                return Ok(typed_component.clone());
             }
         }
 
-        Err(Error::new(&format!(
+        Err(Error::component(&format!(
             "Component not found: {}",
             std::any::type_name::<T>()
         )))

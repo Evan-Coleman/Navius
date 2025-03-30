@@ -1,0 +1,10 @@
+[package]
+name = "navius-error-demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = { version = "1.0.140" }
+thiserror = { version = "2.0.12" }
+uuid = { version = "1.16.0", features = ["v4", "serde"] }

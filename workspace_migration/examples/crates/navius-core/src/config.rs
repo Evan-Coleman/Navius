@@ -4,13 +4,16 @@
 
 use std::collections::HashMap;
 use std::fmt;
+use std::path::Path;
 use std::str::FromStr;
 
 use crate::error::{Error, Result};
+use serde::de::DeserializeOwned;
 
 /// Configuration for the Navius framework
 #[derive(Debug, Clone)]
 pub struct Config {
+    /// Values loaded from configuration files
     values: HashMap<String, String>,
 }
 
@@ -22,25 +25,46 @@ impl Config {
         }
     }
 
+    /// Create a default configuration
+    pub fn default() -> Self {
+        Self::new()
+    }
+
+    /// Load configuration from a file
+    pub fn from_file(_path: &Path) -> Result<Self> {
+        // This is a simplified implementation
+        Ok(Self::new())
+    }
+
+    /// Get a configuration value by key with type conversion
+    pub fn get<T: DeserializeOwned>(&self, key: &str) -> Result<T> {
+        let value = self.values.get(key).ok_or_else(|| {
+            Error::configuration(&format!("Configuration key not found: {}", key))
+        })?;
+
+        // For simple implementation, we'll just parse the string
+        // This would normally use serde to deserialize
+        match serde_json::from_str::<T>(value) {
+            Ok(value) => Ok(value),
+            Err(e) => Err(Error::configuration(&format!(
+                "Failed to parse configuration value: {}",
+                e
+            ))),
+        }
+    }
+
     /// Set a configuration value
-    pub fn set<K: Into<String>, V: ToString>(&mut self, key: K, value: V) -> Result<()> {
-        self.values.insert(key.into(), value.to_string());
+    pub fn set<T: serde::Serialize>(&mut self, key: &str, value: T) -> Result<()> {
+        let value_str = serde_json::to_string(&value)
+            .map_err(|e| Error::configuration(&format!("Failed to serialize value: {}", e)))?;
+
+        self.values.insert(key.to_string(), value_str);
         Ok(())
     }
 
-    /// Get a configuration value
-    pub fn get<T: FromStr>(&self, key: &str) -> Result<T>
-    where
-        T::Err: fmt::Display,
-    {
-        let value = self
-            .values
-            .get(key)
-            .ok_or_else(|| Error::new(&format!("Configuration key not found: {}", key)))?;
-
-        value
-            .parse::<T>()
-            .map_err(|e| Error::new(&format!("Failed to parse configuration value: {}", e)))
+    /// Check if the configuration is empty
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
     }
 
     /// Check if a configuration key exists

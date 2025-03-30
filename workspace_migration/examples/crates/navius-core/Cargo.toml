@@ -13,17 +13,18 @@ repository = "https://github.com/navius/navius"
 [dependencies]
 # Core dependencies
 serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.140"
-serde_yaml = "0.9.34+deprecated"
-tokio = { version = "1.44.1", features = ["rt", "macros", "sync", "time"] }
+serde_json = { version = "1.0.140" }
+serde_yaml = { version = "0.9.34+deprecated" }
+tokio = { version = "1.44.1", features = ["full"] }
 tracing = "0.1.41"
 uuid = { version = "1.16.0", features = ["v4", "serde"] }
 async-trait = "0.1.88"
-thiserror = "2.0.12"
-
+thiserror = { version = "2.0.12" }
+# Added regex dependency
+regex = { version = "1.11.1" } 
 # Configuration
-config = { version = "0.15.11", features = ["yaml"] }
-dotenvy = "0.15.7"
+config = { version = "0.15.11" }
+dotenvy = { version = "0.15.7" }
 
 # Time handling
 chrono = { version = "0.4.40", features = ["serde"] }
@@ -42,4 +43,5 @@ tokio = { version = "1.44.1", features = ["rt", "macros", "sync", "time", "rt-mu
 # The core crate has minimal feature flags
 [features]
 default = []
-test-utils = [] # Enable test utilities when testing 
+test-utils = [] # Enable test utilities when testing
+

@@ -205,7 +205,7 @@ impl Application {
     /// Get a component from the registry
     pub fn get<T: Any + Send + Sync>(&self) -> Result<ComponentRef<T>> {
         let mut registry = self.registry.lock().map_err(|e| {
-            Error::new(&format!(
+            Error::internal(&format!(
                 "Failed to acquire lock on component registry: {}",
                 e
             ))
@@ -216,7 +216,7 @@ impl Application {
     /// Get a component from the registry with async initialization
     pub async fn get_async<T: Any + Send + Sync>(&self) -> Result<ComponentRef<T>> {
         let mut registry = self.registry.lock().map_err(|e| {
-            Error::new(&format!(
+            Error::internal(&format!(
                 "Failed to acquire lock on component registry: {}",
                 e
             ))
@@ -233,28 +233,68 @@ impl Application {
         }
     }
 
-    /// Shutdown the application and destroy all components
-    pub fn shutdown(&self) -> Result<()> {
+    /// Register a component with the application
+    pub fn register_component<T: 'static + Send + Sync>(&self, component: T) -> Result<()> {
         let mut registry = self.registry.lock().map_err(|e| {
-            Error::new(&format!(
+            Error::internal(&format!(
+                "Failed to acquire lock on component registry: {}",
+                e
+            ))
+        })?;
+
+        registry.register(component);
+        Ok(())
+    }
+
+    /// Initialize the application and start the lifecycles of all registered components
+    pub fn initialize(&self) -> Result<()> {
+        let registry = self.registry.lock().map_err(|e| {
+            Error::internal(&format!(
+                "Failed to acquire lock on component registry: {}",
+                e
+            ))
+        })?;
+
+        // Initialize all components in the registry
+        for component in registry.values() {
+            component.initialize()?;
+        }
+
+        Ok(())
+    }
+
+    /// Shut down all registered components in the application
+    pub fn shutdown(&self) -> Result<()> {
+        let registry = self.registry.lock().map_err(|e| {
+            Error::internal(&format!(
                 "Failed to acquire lock on component registry during shutdown: {}",
                 e
             ))
         })?;
 
-        registry.shutdown()
+        // Shut down all components in reverse initialization order
+        for component in registry.values().rev() {
+            component.shutdown()?;
+        }
+
+        Ok(())
     }
 
-    /// Shutdown the application asynchronously and destroy all components
+    /// Shut down all registered components asynchronously
     pub async fn shutdown_async(&self) -> Result<()> {
-        let mut registry = self.registry.lock().map_err(|e| {
-            Error::new(&format!(
+        let registry = self.registry.lock().map_err(|e| {
+            Error::internal(&format!(
                 "Failed to acquire lock on component registry during async shutdown: {}",
                 e
             ))
         })?;
 
-        registry.shutdown_async().await
+        // Shut down all components asynchronously in reverse initialization order
+        for component in registry.values().rev() {
+            component.shutdown_async().await?;
+        }
+
+        Ok(())
     }
 }
 

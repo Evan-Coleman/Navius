@@ -5,6 +5,8 @@
 //! context preservation, and user-friendly error messages.
 
 use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use std::error::Error as StdError;
 use std::fmt;
 use thiserror::Error;
 
@@ -69,22 +71,22 @@ impl ErrorCode {
     /// Returns a default message for this error code.
     pub fn default_message(&self) -> &'static str {
         match self {
-            Self::Configuration => "A configuration error occurred",
-            Self::Validation => "Validation failed for the provided input",
+            Self::Configuration => "Configuration error",
+            Self::Validation => "Validation error",
             Self::Authentication => "Authentication failed",
-            Self::Authorization => "You don't have permission to perform this action",
-            Self::NotFound => "The requested resource was not found",
-            Self::Conflict => "A conflict occurred with the current state",
-            Self::Internal => "An internal server error occurred",
-            Self::External => "An error occurred while communicating with an external service",
-            Self::Timeout => "The operation timed out",
-            Self::Database => "A database error occurred",
-            Self::Cache => "A cache error occurred",
-            Self::Plugin => "A plugin error occurred",
-            Self::Component => "A component error occurred",
-            Self::Serialization => "A serialization error occurred",
-            Self::Io => "An I/O error occurred",
-            Self::Unknown => "An unknown error occurred",
+            Self::Authorization => "Not authorized",
+            Self::NotFound => "Resource not found",
+            Self::Conflict => "Resource conflict",
+            Self::Internal => "Internal server error",
+            Self::External => "External service error",
+            Self::Timeout => "Operation timed out",
+            Self::Database => "Database error",
+            Self::Cache => "Cache error",
+            Self::Plugin => "Plugin error",
+            Self::Component => "Component error",
+            Self::Serialization => "Serialization error",
+            Self::Io => "I/O error",
+            Self::Unknown => "Unknown error",
         }
     }
 }
@@ -97,9 +99,9 @@ pub struct Error {
     /// A user-friendly error message
     pub message: String,
     /// Optional source error that caused this error
-    pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    pub source: Option<Box<dyn StdError + Send + Sync>>,
     /// Optional additional details about the error
-    pub details: Option<serde_json::Value>,
+    pub details: Option<Value>,
     /// Optional request ID for tracing
     pub request_id: Option<String>,
 }
@@ -117,21 +119,16 @@ impl Error {
     }
 
     /// Create a new error with the given code and source error.
-    pub fn with_source<E>(code: ErrorCode, source: E) -> Self
+    pub fn with_source<E>(mut self, source: E) -> Self
     where
-        E: std::error::Error + Send + Sync + 'static,
+        E: StdError + Send + Sync + 'static,
     {
-        Self {
-            code,
-            message: code.default_message().to_string(),
-            source: Some(Box::new(source)),
-            details: None,
-            request_id: None,
-        }
+        self.source = Some(Box::new(source));
+        self
     }
 
     /// Add details to this error.
-    pub fn with_details(mut self, details: serde_json::Value) -> Self {
+    pub fn with_details(mut self, details: Value) -> Self {
         self.details = Some(details);
         self
     }
@@ -208,21 +205,24 @@ impl Error {
     }
 
     /// Convert this error to a JSON response.
-    pub fn to_json(&self) -> serde_json::Value {
-        let mut error = serde_json::json!({
-            "code": self.code,
-            "message": self.message,
+    pub fn to_json(&self) -> Value {
+        let mut error = json!({
+            "error": {
+                "code": format!("{:?}", self.code).to_lowercase(),
+                "message": self.message,
+                "status": self.code.status_code(),
+            }
         });
 
         if let Some(details) = &self.details {
-            error["details"] = details.clone();
+            error["error"]["details"] = details.clone();
         }
 
         if let Some(request_id) = &self.request_id {
-            error["request_id"] = serde_json::Value::String(request_id.clone());
+            error["error"]["request_id"] = json!(request_id);
         }
 
-        serde_json::json!({ "error": error })
+        error
     }
 
     /// Returns true if this error matches the given code.
@@ -276,11 +276,11 @@ impl std::fmt::Display for Error {
     }
 }
 
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl StdError for Error {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
         self.source
             .as_ref()
-            .map(|e| e.as_ref() as &(dyn std::error::Error + 'static))
+            .map(|e| e.as_ref() as &(dyn StdError + 'static))
     }
 }
 
@@ -288,79 +288,72 @@ impl std::error::Error for Error {
 
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Self {
-        Self::with_source(ErrorCode::Io, err)
+        Self::new(ErrorCode::Io, format!("I/O error: {}", err)).with_source(err)
     }
 }
 
 impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Self {
-        Self::with_source(ErrorCode::Serialization, err)
+        Self::new(
+            ErrorCode::Serialization,
+            format!("JSON serialization error: {}", err),
+        )
+        .with_source(err)
     }
 }
 
 /// Extension trait for Result that provides useful utility methods.
 pub trait ResultExt<T, E> {
     /// Add context to the error and convert it to a Navius Error.
-    fn with_context<C, F>(self, code: ErrorCode, f: F) -> Result<T>
+    fn with_context<F>(self, code: ErrorCode, message_fn: F) -> Result<T>
     where
-        C: Into<String>,
-        F: FnOnce() -> C;
+        F: FnOnce() -> String;
 
     /// Convert any error to a configuration error.
-    fn configuration<C: Into<String>>(self, context: C) -> Result<T>;
+    fn configuration<S: Into<String>>(self, message: S) -> Result<T>;
 
     /// Convert any error to a validation error.
-    fn validation<C: Into<String>>(self, context: C) -> Result<T>;
+    fn validation<S: Into<String>>(self, message: S) -> Result<T>;
 
     /// Convert any error to a not found error.
-    fn not_found<C: Into<String>>(self, context: C) -> Result<T>;
+    fn not_found<S: Into<String>>(self, message: S) -> Result<T>;
 
     /// Convert any error to an internal error.
-    fn internal<C: Into<String>>(self, context: C) -> Result<T>;
+    fn internal<S: Into<String>>(self, message: S) -> Result<T>;
 
     /// Convert any error to an external error.
-    fn external<C: Into<String>>(self, context: C) -> Result<T>;
+    fn external<S: Into<String>>(self, message: S) -> Result<T>;
 }
 
 impl<T, E> ResultExt<T, E> for std::result::Result<T, E>
 where
-    E: std::fmt::Display + 'static + std::error::Error + Send + Sync,
+    E: StdError + Send + Sync + 'static,
 {
-    fn with_context<C, F>(self, code: ErrorCode, f: F) -> Result<T>
+    fn with_context<F>(self, code: ErrorCode, message_fn: F) -> Result<T>
     where
-        C: Into<String>,
-        F: FnOnce() -> C,
+        F: FnOnce() -> String,
     {
-        self.map_err(|err| {
-            let ctx = f().into();
-            Error {
-                code,
-                message: ctx,
-                source: Some(Box::new(err)),
-                details: None,
-                request_id: None,
-            }
-        })
+        self.map_err(|e| Error::new(code, message_fn()).with_source(e))
     }
 
-    fn configuration<C: Into<String>>(self, context: C) -> Result<T> {
-        self.with_context(ErrorCode::Configuration, || context)
+    fn configuration<S: Into<String>>(self, message: S) -> Result<T> {
+        self.map_err(|e| Error::configuration(message).with_source(e))
     }
 
-    fn validation<C: Into<String>>(self, context: C) -> Result<T> {
-        self.with_context(ErrorCode::Validation, || context)
+    fn validation<S: Into<String>>(self, message: S) -> Result<T> {
+        self.map_err(|e| Error::validation(message).with_source(e))
     }
 
-    fn not_found<C: Into<String>>(self, context: C) -> Result<T> {
-        self.with_context(ErrorCode::NotFound, || context)
+    fn not_found<S: Into<String>>(self, message: S) -> Result<T> {
+        self.map_err(|e| Error::not_found(message).with_source(e))
     }
 
-    fn internal<C: Into<String>>(self, context: C) -> Result<T> {
-        self.with_context(ErrorCode::Internal, || context)
+    fn internal<S: Into<String>>(self, message: S) -> Result<T> {
+        self.map_err(|e| Error::internal(message).with_source(e))
     }
 
-    fn external<C: Into<String>>(self, context: C) -> Result<T> {
-        self.with_context(ErrorCode::External, || context)
+    fn external<S: Into<String>>(self, message: S) -> Result<T> {
+        self.map_err(|e| Error::external(message).with_source(e))
     }
 }
 
@@ -382,15 +375,15 @@ mod tests {
     #[test]
     fn test_error_with_source() {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "File not found");
-        let err = Error::with_source(ErrorCode::Io, io_err);
-        assert_eq!(err.code, ErrorCode::Io);
-        assert_eq!(err.message, "An I/O error occurred");
+        let err = Error::validation("Invalid file").with_source(io_err);
+        assert_eq!(err.code, ErrorCode::Validation);
+        assert_eq!(err.message, "Invalid file");
         assert!(err.source.is_some());
     }
 
     #[test]
     fn test_error_with_details() {
-        let details = serde_json::json!({
+        let details = json!({
             "field": "username",
             "reason": "too short"
         });
@@ -411,7 +404,7 @@ mod tests {
     #[test]
     fn test_error_to_json() {
         let err = Error::not_found("User not found")
-            .with_details(serde_json::json!({"user_id": "123"}))
+            .with_details(json!({"user_id": "123"}))
             .with_request_id("req-456");
 
         let json = err.to_json();
