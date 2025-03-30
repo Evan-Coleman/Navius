@@ -14,6 +14,58 @@ use std::{
 
 use crate::error::{Error, Result};
 
+/// Lifecycle phase of a component
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LifecyclePhase {
+    /// Component is being initialized
+    Initialize,
+    /// Component is being destroyed
+    Destroy,
+}
+
+/// Trait for components with lifecycle hooks
+pub trait Lifecycle: Send + Sync {
+    /// Called when the component is initialized
+    fn on_initialize(&self) -> Result<()> {
+        Ok(())
+    }
+
+    /// Called when the component is destroyed
+    fn on_destroy(&self) -> Result<()> {
+        Ok(())
+    }
+
+    /// Execute a lifecycle phase
+    fn execute_phase(&self, phase: LifecyclePhase) -> Result<()> {
+        match phase {
+            LifecyclePhase::Initialize => self.on_initialize(),
+            LifecyclePhase::Destroy => self.on_destroy(),
+        }
+    }
+}
+
+/// Trait for components with async lifecycle hooks
+#[async_trait::async_trait]
+pub trait AsyncLifecycle: Send + Sync {
+    /// Called when the component is initialized asynchronously
+    async fn on_initialize_async(&self) -> Result<()> {
+        Ok(())
+    }
+
+    /// Called when the component is destroyed asynchronously
+    async fn on_destroy_async(&self) -> Result<()> {
+        Ok(())
+    }
+
+    /// Execute a lifecycle phase asynchronously
+    async fn execute_phase_async(&self, phase: LifecyclePhase) -> Result<()> {
+        match phase {
+            LifecyclePhase::Initialize => self.on_initialize_async().await,
+            LifecyclePhase::Destroy => self.on_destroy_async().await,
+        }
+    }
+}
+
 /// Scope of a component in the registry
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ComponentScope {
@@ -71,7 +123,23 @@ impl DynComponentRef {
 
     /// Downcast the dynamic reference to a specific type
     pub fn downcast<T: Any + Send + Sync>(self) -> Option<ComponentRef<T>> {
-        self.0.downcast::<T>().ok().map(ComponentRef::new)
+        self.0.downcast::<T>().ok().map(|arc| ComponentRef(arc))
+    }
+
+    /// Execute lifecycle hooks if the component implements Lifecycle
+    pub fn execute_lifecycle(&self, phase: LifecyclePhase) -> Result<()> {
+        if let Some(lifecycle) = self.0.downcast_ref::<dyn Lifecycle>() {
+            lifecycle.execute_phase(phase)?;
+        }
+        Ok(())
+    }
+
+    /// Execute async lifecycle hooks if the component implements AsyncLifecycle
+    pub async fn execute_async_lifecycle(&self, phase: LifecyclePhase) -> Result<()> {
+        if let Some(lifecycle) = self.0.downcast_ref::<dyn AsyncLifecycle>() {
+            lifecycle.execute_phase_async(phase).await?;
+        }
+        Ok(())
     }
 }
 
@@ -93,6 +161,26 @@ pub trait ComponentFactory: Send + Sync {
     fn type_name(&self) -> &str;
     /// Get the scope of the component
     fn scope(&self) -> ComponentScope;
+    /// Execute initialization lifecycle hook
+    fn initialize(&self, component: &DynComponentRef) -> Result<()> {
+        component.execute_lifecycle(LifecyclePhase::Initialize)
+    }
+    /// Execute destruction lifecycle hook
+    fn destroy(&self, component: &DynComponentRef) -> Result<()> {
+        component.execute_lifecycle(LifecyclePhase::Destroy)
+    }
+    /// Execute async initialization lifecycle hook
+    async fn initialize_async(&self, component: &DynComponentRef) -> Result<()> {
+        component
+            .execute_async_lifecycle(LifecyclePhase::Initialize)
+            .await
+    }
+    /// Execute async destruction lifecycle hook
+    async fn destroy_async(&self, component: &DynComponentRef) -> Result<()> {
+        component
+            .execute_async_lifecycle(LifecyclePhase::Destroy)
+            .await
+    }
 }
 
 /// Factory for creating instances of a specific component type
@@ -145,10 +233,15 @@ impl ComponentRegistry {
     }
 
     /// Register a component instance
-    pub fn register<T: Any + Send + Sync>(&mut self, component: T) {
+    pub fn register<T: Any + Send + Sync>(&mut self, component: T) -> Result<()> {
         let type_id = TypeId::of::<T>();
         let component_ref = DynComponentRef::new(component);
+
+        // Initialize lifecycle if component supports it
+        component_ref.execute_lifecycle(LifecyclePhase::Initialize)?;
+
         self.components.insert(type_id, component_ref);
+        Ok(())
     }
 
     /// Register a component factory
@@ -182,6 +275,43 @@ impl ComponentRegistry {
         if let Some(factory) = self.factories.get(&type_id) {
             let dyn_ref = factory.create();
 
+            // Initialize the component
+            factory.initialize(&dyn_ref)?;
+
+            // For singletons, cache the instance
+            if factory.scope() == ComponentScope::Singleton {
+                self.components.insert(type_id, dyn_ref.clone());
+            }
+
+            if let Some(typed_ref) = dyn_ref.downcast::<T>() {
+                return Ok(typed_ref);
+            }
+        }
+
+        Err(Error::new(&format!(
+            "Component not found: {}",
+            std::any::type_name::<T>()
+        )))
+    }
+
+    /// Get a component by type with async initialization
+    pub async fn get_async<T: Any + Send + Sync>(&mut self) -> Result<ComponentRef<T>> {
+        let type_id = TypeId::of::<T>();
+
+        // Check if we have a cached instance for singletons
+        if let Some(component) = self.components.get(&type_id) {
+            if let Some(typed_ref) = component.clone().downcast::<T>() {
+                return Ok(typed_ref);
+            }
+        }
+
+        // Check if we have a factory
+        if let Some(factory) = self.factories.get(&type_id) {
+            let dyn_ref = factory.create();
+
+            // Initialize the component asynchronously
+            factory.initialize_async(&dyn_ref).await?;
+
             // For singletons, cache the instance
             if factory.scope() == ComponentScope::Singleton {
                 self.components.insert(type_id, dyn_ref.clone());
@@ -212,7 +342,50 @@ impl ComponentRegistry {
             types.push(factory.type_name());
         }
 
+        for component in self.components.keys() {
+            if !self.factories.contains_key(component) {
+                types.push(std::any::type_name_of_val(&component));
+            }
+        }
+
         types
+    }
+
+    /// Shutdown the registry and destroy all components
+    pub fn shutdown(&mut self) -> Result<()> {
+        // Execute destroy lifecycle for all components
+        for component in self.components.values() {
+            if let Err(e) = component.execute_lifecycle(LifecyclePhase::Destroy) {
+                eprintln!("Error destroying component: {}", e);
+                // Continue with other components even if one fails
+            }
+        }
+
+        // Clear the registry
+        self.components.clear();
+        self.factories.clear();
+
+        Ok(())
+    }
+
+    /// Shutdown the registry asynchronously and destroy all components
+    pub async fn shutdown_async(&mut self) -> Result<()> {
+        // Execute async destroy lifecycle for all components
+        for component in self.components.values() {
+            if let Err(e) = component
+                .execute_async_lifecycle(LifecyclePhase::Destroy)
+                .await
+            {
+                eprintln!("Error destroying component asynchronously: {}", e);
+                // Continue with other components even if one fails
+            }
+        }
+
+        // Clear the registry
+        self.components.clear();
+        self.factories.clear();
+
+        Ok(())
     }
 }
 
@@ -232,7 +405,7 @@ mod tests {
             value: "test".to_string(),
         };
 
-        registry.register(component);
+        registry.register(component).unwrap();
 
         let retrieved = registry.get::<TestComponent>().unwrap();
         assert_eq!(retrieved.value, "test");
@@ -295,9 +468,11 @@ mod tests {
     #[test]
     fn has_component() {
         let mut registry = ComponentRegistry::new();
-        registry.register(TestComponent {
-            value: "test".to_string(),
-        });
+        registry
+            .register(TestComponent {
+                value: "test".to_string(),
+            })
+            .unwrap();
 
         assert!(registry.has::<TestComponent>());
         assert!(!registry.has::<String>());

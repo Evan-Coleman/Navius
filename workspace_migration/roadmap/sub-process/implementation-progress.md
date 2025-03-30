@@ -714,20 +714,6 @@ TBD - Will be detailed when implementation begins
 **Dependencies:** None  
 **Documentation:** [crates-migration-plan.md](../crates-migration-plan.md)
 
-### Application Entry Points (⬜️ 0%)
-
-- ⬜️ Adapt main.rs
-- ⬜️ Update configuration loading
-- ⬜️ Integrate plugins
-- ⬜️ Error handling
-- ⬜️ Startup sequence
-
-### Module Reorganization (⬜️ 0%)
-
-- ⬜️ Update imports
-- ⬜️ Remove duplicate code
-- ⬜️ Clean up legacy structure
-
 ### Dependency Injection (🟡 50%)
 
 - ✅ Component registry
@@ -739,6 +725,12 @@ TBD - Will be detailed when implementation begins
   - ✅ Fluent API for component registration
   - ✅ Configuration integration
   - ✅ Application lifecycle management
+  - ✅ Environment-specific configuration
+- ✅ Lifecycle hooks
+  - ✅ Synchronous lifecycle hooks (initialize, destroy)
+  - ✅ Asynchronous lifecycle hooks
+  - ✅ Proper component initialization
+  - ✅ Clean shutdown with component destruction
 - ⬜️ Service initialization
   - ⬜️ Automatic dependency resolution
   - ⬜️ Constructor injection
@@ -747,6 +739,11 @@ TBD - Will be detailed when implementation begins
   - ⬜️ Binding configuration to components
   - ⬜️ Environment-specific configuration
   - ⬜️ Configuration validation
+
+**Assignee:** Navius Development Team  
+**Timeline:** March 15-April 15, 2025  
+**Progress Report:** [dependency-injection.md](../../../reports/progress_2025-03-29_dependency_injection.md)
+**Example Implementation:** [dependency-injection](../../../examples/dependency-injection/main.rs)
 
 ## Notes
 

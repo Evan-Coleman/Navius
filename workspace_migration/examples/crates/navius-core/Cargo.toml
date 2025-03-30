@@ -5,18 +5,20 @@
 name = "navius-core"
 version = "0.1.0"
 edition = "2024"
-description = "Core functionality for the Navius framework"
+description = "Core utilities and abstractions for the Navius framework"
 license = "Apache-2.0"
+repository = "https://github.com/navius/navius"
 
 # Dependencies section uses workspace inheritance
 [dependencies]
 # Core dependencies from workspace
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-tokio = { version = "1.44.1", features = ["full"] }
+serde_yaml = "0.9.34+deprecated"
+tokio = { version = "1.44.1", features = ["rt", "macros", "sync", "time"] }
 tracing = "0.1.41"
 uuid = { workspace = true }
-async-trait = { workspace = true }
+async-trait = "0.1.88"
 thiserror = "2.0.12"
 
 # Configuration
@@ -35,6 +37,7 @@ test-context = { workspace = true }
 assert_matches = { workspace = true }
 once_cell = { workspace = true }
 mockall = { workspace = true }
+tokio = { version = "1.44.1", features = ["rt", "macros", "sync", "time", "rt-multi-thread"] }
 
 # The core crate has minimal feature flags
 [features]

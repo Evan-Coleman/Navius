@@ -1,9 +1,15 @@
-//! Core functionality for the Navius framework.
+//! # Navius Core
 //!
-//! This crate provides essential types, utilities, and functionality used by all other Navius crates.
-//! It includes error handling, configuration management, common constants, and utility functions.
+//! This crate provides core functionality and abstractions for the Navius framework.
+//!
+//! Core features:
+//! - Configuration management with YAML support
+//! - Error handling with custom error types
+//! - Dependency injection via component registry
+//! - Common utilities for working with dates, strings, and IDs
+//! - Type definitions and constants used throughout the framework
 
-// Modules
+// Export core modules
 pub mod config;
 pub mod constants;
 pub mod di;
@@ -11,46 +17,59 @@ pub mod error;
 pub mod types;
 pub mod util;
 
-// Re-exports
+// Re-export common types
+pub use config::Config;
+pub use constants::*;
+pub use di::Application;
+pub use di::ApplicationBuilder;
+
+// Re-export dependency injection traits and types for convenience
+pub use di::{
+    Environment,
+    component::{
+        AsyncLifecycle, ComponentRef, ComponentRegistry, ComponentScope, Lifecycle, LifecyclePhase,
+    },
+};
+
+// Export error types
 pub use error::{Error, Result};
 
-/// Navius version information
-pub struct Version;
+// Version information
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const NAME: &str = env!("CARGO_PKG_NAME");
 
-impl Version {
-    /// Get the current version of Navius
-    pub fn current() -> &'static str {
-        env!("CARGO_PKG_VERSION")
-    }
-
-    /// Get the semver-compatible version string
-    pub fn semver() -> String {
-        format!("v{}", Self::current())
-    }
+/// Get the version information of the core library
+pub fn version() -> String {
+    format!("{} v{}", NAME, VERSION)
 }
 
-/// Initialize core functionality
-pub fn init() -> Result<()> {
-    tracing::info!("Initializing Navius Core v{}", Version::current());
-
-    // Initialize the dependency injection system
-    let _registry = di::init();
-
-    Ok(())
+/// Initialize the core library
+///
+/// This function initializes the core functionality.
+pub fn init() -> Result<Config> {
+    let config = Config::default();
+    Ok(config)
 }
 
-/// Initialize with custom configuration
-pub fn init_with_config(config: config::Config) -> Result<()> {
-    tracing::info!(
-        "Initializing Navius Core v{} with custom config",
-        Version::current()
-    );
-    tracing::debug!("Configuration: {:?}", config);
+/// Initialize the core library with a custom configuration
+///
+/// This function initializes the core functionality with a custom configuration.
+pub fn init_with_config(config: Config) -> Result<Config> {
+    Ok(config)
+}
 
-    // Initialize the dependency injection system
-    let _registry = di::init();
+/// Initialize a new application with dependency injection
+///
+/// This function creates a new application with the component registry.
+pub fn init_application() -> ApplicationBuilder {
+    ApplicationBuilder::new()
+}
 
-    Ok(())
+/// Initialize a new application with environment-specific configuration
+///
+/// This function creates a new application with the component registry and environment.
+pub fn init_application_with_environment(env: Environment) -> ApplicationBuilder {
+    ApplicationBuilder::new().with_environment(env)
 }
 
 #[cfg(test)]
@@ -58,14 +77,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_version() {
-        assert!(!Version::current().is_empty());
-        assert!(Version::semver().starts_with('v'));
+    fn test_init() {
+        let config = init().unwrap();
+        assert!(config.is_empty());
     }
 
     #[test]
-    fn test_init() {
-        let result = init();
-        assert!(result.is_ok());
+    fn test_version() {
+        assert!(!version().is_empty());
+    }
+
+    #[test]
+    fn test_init_application() {
+        let app = init_application().build();
+        assert_eq!(app.environment(), Environment::Development);
+    }
+
+    #[test]
+    fn test_init_application_with_environment() {
+        let app = init_application_with_environment(Environment::Production).build();
+        assert_eq!(app.environment(), Environment::Production);
     }
 }

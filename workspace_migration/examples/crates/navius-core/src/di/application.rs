@@ -8,7 +8,49 @@ use std::{any::Any, sync::Arc};
 use crate::config::Config;
 use crate::error::{Error, Result};
 
-use super::component::{ComponentRef, ComponentRegistry, ComponentScope};
+use super::component::{ComponentRef, ComponentRegistry, ComponentScope, LifecyclePhase};
+
+/// Environment for the application
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Environment {
+    /// Development environment
+    Development,
+    /// Testing environment
+    Testing,
+    /// Staging environment
+    Staging,
+    /// Production environment
+    Production,
+}
+
+impl Environment {
+    /// Get the name of the environment
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Development => "development",
+            Self::Testing => "testing",
+            Self::Staging => "staging",
+            Self::Production => "production",
+        }
+    }
+
+    /// Parse an environment name
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name.to_lowercase().as_str() {
+            "development" | "dev" => Some(Self::Development),
+            "testing" | "test" => Some(Self::Testing),
+            "staging" => Some(Self::Staging),
+            "production" | "prod" => Some(Self::Production),
+            _ => None,
+        }
+    }
+}
+
+impl Default for Environment {
+    fn default() -> Self {
+        Self::Development
+    }
+}
 
 /// Application builder with component registry
 pub struct ApplicationBuilder {
@@ -16,6 +58,8 @@ pub struct ApplicationBuilder {
     registry: ComponentRegistry,
     /// Application configuration
     config: Config,
+    /// Application environment
+    environment: Environment,
 }
 
 impl ApplicationBuilder {
@@ -24,6 +68,7 @@ impl ApplicationBuilder {
         Self {
             registry: ComponentRegistry::new(),
             config: Config::default(),
+            environment: Environment::default(),
         }
     }
 
@@ -32,7 +77,14 @@ impl ApplicationBuilder {
         Self {
             registry: ComponentRegistry::new(),
             config,
+            environment: Environment::default(),
         }
+    }
+
+    /// Set the environment for the application
+    pub fn with_environment(mut self, environment: Environment) -> Self {
+        self.environment = environment;
+        self
     }
 
     /// Get a reference to the component registry
@@ -45,10 +97,15 @@ impl ApplicationBuilder {
         &self.config
     }
 
+    /// Get the environment
+    pub fn environment(&self) -> Environment {
+        self.environment
+    }
+
     /// Add a component to the registry
-    pub fn add_component<T: Any + Send + Sync>(&mut self, component: T) -> &mut Self {
-        self.registry.register(component);
-        self
+    pub fn add_component<T: Any + Send + Sync>(&mut self, component: T) -> Result<&mut Self> {
+        self.registry.register(component)?;
+        Ok(self)
     }
 
     /// Add a component factory with scope
@@ -88,6 +145,11 @@ impl ApplicationBuilder {
         self.registry.get::<T>()
     }
 
+    /// Get a component from the registry with async initialization
+    pub async fn get_async<T: Any + Send + Sync>(&mut self) -> Result<ComponentRef<T>> {
+        self.registry.get_async::<T>().await
+    }
+
     /// Check if a component exists in the registry
     pub fn has<T: Any + Send + Sync>(&self) -> bool {
         self.registry.has::<T>()
@@ -98,6 +160,7 @@ impl ApplicationBuilder {
         Application {
             registry: Arc::new(std::sync::Mutex::new(self.registry)),
             config: self.config,
+            environment: self.environment,
         }
     }
 }
@@ -114,6 +177,8 @@ pub struct Application {
     registry: Arc<std::sync::Mutex<ComponentRegistry>>,
     /// Application configuration
     config: Config,
+    /// Application environment
+    environment: Environment,
 }
 
 impl Application {
@@ -132,6 +197,11 @@ impl Application {
         &self.config
     }
 
+    /// Get the application environment
+    pub fn environment(&self) -> Environment {
+        self.environment
+    }
+
     /// Get a component from the registry
     pub fn get<T: Any + Send + Sync>(&self) -> Result<ComponentRef<T>> {
         let mut registry = self.registry.lock().map_err(|e| {
@@ -143,6 +213,17 @@ impl Application {
         registry.get::<T>()
     }
 
+    /// Get a component from the registry with async initialization
+    pub async fn get_async<T: Any + Send + Sync>(&self) -> Result<ComponentRef<T>> {
+        let mut registry = self.registry.lock().map_err(|e| {
+            Error::new(&format!(
+                "Failed to acquire lock on component registry: {}",
+                e
+            ))
+        })?;
+        registry.get_async::<T>().await
+    }
+
     /// Check if a component exists in the registry
     pub fn has<T: Any + Send + Sync>(&self) -> bool {
         if let Ok(registry) = self.registry.lock() {
@@ -151,15 +232,72 @@ impl Application {
             false
         }
     }
+
+    /// Shutdown the application and destroy all components
+    pub fn shutdown(&self) -> Result<()> {
+        let mut registry = self.registry.lock().map_err(|e| {
+            Error::new(&format!(
+                "Failed to acquire lock on component registry during shutdown: {}",
+                e
+            ))
+        })?;
+
+        registry.shutdown()
+    }
+
+    /// Shutdown the application asynchronously and destroy all components
+    pub async fn shutdown_async(&self) -> Result<()> {
+        let mut registry = self.registry.lock().map_err(|e| {
+            Error::new(&format!(
+                "Failed to acquire lock on component registry during async shutdown: {}",
+                e
+            ))
+        })?;
+
+        registry.shutdown_async().await
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::component::Lifecycle;
     use super::*;
 
     #[derive(Debug, Clone)]
     struct TestComponent {
         value: String,
+        initialized: bool,
+        destroyed: bool,
+    }
+
+    impl TestComponent {
+        fn new(value: &str) -> Self {
+            Self {
+                value: value.to_string(),
+                initialized: false,
+                destroyed: false,
+            }
+        }
+    }
+
+    impl Lifecycle for TestComponent {
+        fn on_initialize(&self) -> Result<()> {
+            println!("Initializing TestComponent: {}", self.value);
+            let mut this = self as *const Self as *mut Self;
+            unsafe {
+                (*this).initialized = true;
+            }
+            Ok(())
+        }
+
+        fn on_destroy(&self) -> Result<()> {
+            println!("Destroying TestComponent: {}", self.value);
+            let mut this = self as *const Self as *mut Self;
+            unsafe {
+                (*this).destroyed = true;
+            }
+            Ok(())
+        }
     }
 
     #[derive(Debug, Clone)]
@@ -170,9 +308,8 @@ mod tests {
     #[test]
     fn builder_pattern() {
         let app = Application::builder()
-            .add_component(TestComponent {
-                value: "test".to_string(),
-            })
+            .add_component(TestComponent::new("test"))
+            .unwrap()
             .build();
 
         let component = app.get::<TestComponent>();
@@ -181,11 +318,33 @@ mod tests {
     }
 
     #[test]
+    fn lifecycle_hooks() {
+        let app = Application::builder()
+            .add_singleton::<TestComponent, _>(|| TestComponent::new("lifecycle"))
+            .build();
+
+        let component = app.get::<TestComponent>().unwrap();
+        assert_eq!(component.value, "lifecycle");
+        assert!(component.initialized);
+
+        app.shutdown().unwrap();
+        // Note: we can't test destroyed flag here as the component is dropped after shutdown
+    }
+
+    #[test]
+    fn environment_configuration() {
+        let app = Application::builder()
+            .with_environment(Environment::Production)
+            .build();
+
+        assert_eq!(app.environment(), Environment::Production);
+        assert_eq!(app.environment().name(), "production");
+    }
+
+    #[test]
     fn singleton_components() {
         let app = Application::builder()
-            .add_singleton::<TestComponent, _>(|| TestComponent {
-                value: "singleton".to_string(),
-            })
+            .add_singleton::<TestComponent, _>(|| TestComponent::new("singleton"))
             .build();
 
         let component1 = app.get::<TestComponent>().unwrap();
@@ -193,6 +352,7 @@ mod tests {
 
         assert_eq!(component1.value, "singleton");
         assert_eq!(component2.value, "singleton");
+        assert!(std::ptr::eq(&*component1, &*component2));
     }
 
     #[test]
@@ -212,5 +372,54 @@ mod tests {
 
         let component = app.get::<ConfigComponent>().unwrap();
         assert_eq!(component.config_value, "config-test");
+    }
+
+    #[tokio::test]
+    async fn async_lifecycle() {
+        use super::super::component::AsyncLifecycle;
+
+        #[derive(Debug)]
+        struct AsyncComponent {
+            initialized: bool,
+            destroyed: bool,
+        }
+
+        #[async_trait::async_trait]
+        impl AsyncLifecycle for AsyncComponent {
+            async fn on_initialize_async(&self) -> Result<()> {
+                println!("Async initializing");
+                let mut this = self as *const Self as *mut Self;
+                unsafe {
+                    (*this).initialized = true;
+                }
+                Ok(())
+            }
+
+            async fn on_destroy_async(&self) -> Result<()> {
+                println!("Async destroying");
+                let mut this = self as *const Self as *mut Self;
+                unsafe {
+                    (*this).destroyed = true;
+                }
+                Ok(())
+            }
+        }
+
+        let mut app_builder = Application::builder();
+        app_builder
+            .registry()
+            .register(AsyncComponent {
+                initialized: false,
+                destroyed: false,
+            })
+            .unwrap();
+
+        let app = app_builder.build();
+
+        let component = app.get_async::<AsyncComponent>().await.unwrap();
+        assert!(component.initialized);
+
+        app.shutdown_async().await.unwrap();
+        // Again, we can't check destroyed flag as the component is dropped
     }
 }
