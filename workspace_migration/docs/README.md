@@ -17,6 +17,7 @@ docs/
 ## Recent Updates
 
 ### March 29, 2025
+- Added Design Evaluation for navius-job crate
 - Added Design Evaluation for navius-di crate
 - Added Design Evaluation for navius-plugin crate
 - Added Design Evaluation for navius-event crate
@@ -54,7 +55,8 @@ docs/
 - [Provider Pattern Implementation Guide](./guides/provider-pattern-implementation-guide.md) - Guidelines for implementing the provider pattern
 
 ### Reports
-- **Design Evaluations (10/15 completed, 67%):**
+- **Design Evaluations (11/15 completed, 73%):**
+  - [navius-job](../reports/design-evaluation-navius-job.md)
   - [navius-di](../reports/design-evaluation-navius-di.md)
   - [navius-plugin](../reports/design-evaluation-navius-plugin.md)
   - [navius-event](../reports/design-evaluation-navius-event.md)
