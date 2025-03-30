@@ -1,0 +1,42 @@
+[package]
+name = "navius-messaging"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+description = "Messaging abstractions and interfaces for the Navius framework"
+repository = "https://github.com/navius/navius"
+readme = "README.md"
+
+[dependencies]
+async-trait = "0.1.88"
+chrono = { version = "0.4.40", features = ["serde"] }
+futures = "0.3.31"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+thiserror = "2.0.12"
+tokio = { version = "1.44.1", features = ["full"] }
+tokio-stream = "0.1.17"
+tracing = "0.1.41"
+uuid = { version = "1.16.0", features = ["v4", "serde"] }
+metrics = "0.24.1"
+
+# Navius dependencies
+navius-core = { path = "../navius-core" }
+navius-event = { path = "../navius-event" }
+navius-plugin = { path = "../navius-plugin" }
+
+[dev-dependencies]
+tokio-test = "0.4.4"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+
+[[example]]
+name = "basic_messaging"
+path = "examples/basic_messaging.rs"
+
+[[example]]
+name = "pub_sub_pattern"
+path = "examples/pub_sub_pattern.rs"
+
+[[example]]
+name = "request_reply"
+path = "examples/request_reply.rs" 
