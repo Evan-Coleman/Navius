@@ -1,0 +1,43 @@
+[package]
+name = "plugin-system"
+version = "0.1.0"
+edition = "2024"
+description = "Plugin System Integration Example for Navius"
+authors = ["Navius Team"]
+repository = "https://github.com/Evan-Coleman/Navius"
+license = "Apache-2.0"
+
+[dependencies]
+# Navius core crates
+navius-core = { path = "../../../crates/navius-core" }
+navius-http = { path = "../../../crates/navius-http" }
+navius-plugin = { path = "../../../crates/navius-plugin" }
+navius-di = { path = "../../../crates/navius-di" }
+navius-db = { path = "../../../crates/navius-db", optional = true }
+navius-db-postgres = { path = "../../../crates/navius-db-postgres", optional = true }
+navius-cache = { path = "../../../crates/navius-cache", optional = true }
+navius-cache-redis = { path = "../../../crates/navius-cache-redis", optional = true }
+
+# External dependencies
+async-trait = "0.1.88"
+tokio = { version = "1.44.1", features = ["full"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
+chrono = { version = "0.4.40", features = ["serde"] }
+uuid = { version = "1.16.0", features = ["v4", "serde"] }
+thiserror = "2.0.12"
+axum = "0.8.3"
+config = "0.15.11"
+dotenv = "0.15.0"
+
+[features]
+default = ["postgres", "redis"]
+postgres = ["navius-db", "navius-db-postgres"]
+redis = ["navius-cache", "navius-cache-redis"]
+
+[dev-dependencies]
+tokio-test = "0.4.4"
+mockall = "0.13.1"
+assert_matches = "1.5.0" 
