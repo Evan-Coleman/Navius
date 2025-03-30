@@ -80,12 +80,24 @@ pub mod error;
 // Expose the registry module
 pub mod registry;
 
-// Expose the application module (will be implemented later)
-// pub mod application;
+// Expose the application module
+pub mod application;
+
+// Expose the configuration module
+pub mod config;
+
+// Expose the macros module
+pub mod macros;
 
 // Re-export common types for convenience
+pub use application::{Application, ApplicationBuilder, ApplicationPlugin, ConfigProvider};
+pub use config::{ConfigBinding, ConfigPrefix, ConfigRef, ConfigRegistry, Configurable};
 pub use error::{Error, Result};
+pub use macros::Component;
 pub use registry::{
     AsyncLifecycle, ComponentFactory, ComponentRef, ComponentRegistry, ComponentScope,
     DynComponentRef, Lifecycle, LifecyclePhase, TypedComponentFactory,
 };
+
+// Re-export macros
+pub use crate::{autowire, bean, component, config, inject, module};

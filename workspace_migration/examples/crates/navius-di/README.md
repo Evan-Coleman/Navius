@@ -1,23 +1,26 @@
 # Navius Dependency Injection
 
-A lightweight dependency injection system for Navius applications, inspired by the spring-rs framework.
+A lightweight dependency injection system for Navius applications, based on the research of spring-rs.
 
 ## Features
 
-- **Component Registry**: Type-safe dependency resolution
-- **Multiple Scopes**: Singleton, Prototype, Request, and Session scopes
-- **Lifecycle Hooks**: Both synchronous and asynchronous lifecycle management
-- **Qualifiers**: Support for disambiguating components of the same type
-- **Factory Support**: Factory-based component creation
-- **Autowiring**: Automatic dependency resolution
-- **Comprehensive Error Handling**: Clear error messages for common DI issues
+- **Component Registry**: Type-safe dependency resolution with comprehensive lifecycle management
+- **Scoped Components**: Support for singleton, prototype, request, and session scopes
+- **Lifecycle Hooks**: Synchronous and asynchronous lifecycle hooks for components
+- **Qualifier Support**: Component disambiguation using qualifiers
+- **Factory-Based Components**: Support for factory functions to create components
+- **Application Framework**: Comprehensive application bootstrapping with configuration and plugin support
+- **Configuration Binding**: Prefix-based configuration binding with automatic type conversion
+- **Plugin System**: Extensible plugin system for application components
 
 ## Usage
 
-```rust
-use navius_di::{ComponentRegistry, ComponentScope, Result};
+### Basic Component Registration
 
-// Define your components
+```rust
+use navius_di::{ComponentRegistry, Result};
+
+// Define a component
 struct DatabaseService {
     connection_string: String,
 }
@@ -26,138 +29,124 @@ impl DatabaseService {
     fn new(connection_string: String) -> Self {
         Self { connection_string }
     }
-
-    fn query(&self, sql: &str) -> String {
-        format!("Executing '{}' on connection {}", sql, self.connection_string)
-    }
 }
 
-struct UserService {
-    db: DatabaseService,
-}
-
-impl UserService {
-    fn new(db: DatabaseService) -> Self {
-        Self { db }
-    }
-
-    fn get_user(&self, id: &str) -> String {
-        self.db.query(&format!("SELECT * FROM users WHERE id = '{}'", id))
-    }
-}
-
+// Register and use the component
 fn main() -> Result<()> {
-    // Create a component registry
     let registry = ComponentRegistry::new();
-
-    // Register a database service as a singleton
-    registry.register_with_factory(
-        || DatabaseService::new("jdbc:postgresql://localhost:5432/mydb".to_string()),
-        ComponentScope::Singleton,
-    );
-
-    // Register a user service that depends on the database service
-    registry.register_with_factory(
-        || {
-            let db = registry.get::<DatabaseService>().unwrap();
-            UserService::new((*db).clone())
-        },
-        ComponentScope::Prototype,
-    );
-
-    // Get the user service and use it
-    let user_service = registry.get::<UserService>()?;
-    let user = user_service.get_user("user-1");
-    println!("User: {}", user);
-
+    
+    // Register the component
+    registry.register(DatabaseService::new("jdbc:postgresql://localhost:5432/mydb".to_string()))?;
+    
+    // Get the component
+    let db_service = registry.get::<DatabaseService>()?;
+    println!("Database connection: {}", db_service.connection_string);
+    
     Ok(())
 }
 ```
 
-## Component Scopes
-
-- **Singleton**: Components are instantiated once and shared across the application
-- **Prototype**: Components are instantiated each time they are requested
-- **Request**: Components are instantiated for each request (useful in web applications)
-- **Session**: Components are instantiated for each session (useful in web applications)
-
-## Lifecycle Hooks
-
-Components can implement lifecycle hooks to be notified when they are created, initialized, or destroyed:
+### Component Lifecycle
 
 ```rust
-use navius_di::{Lifecycle, LifecyclePhase, Result};
+use navius_di::{ComponentRegistry, Lifecycle, Result};
 
+struct DatabaseService {
+    connection_string: String,
+}
+
+// Implement lifecycle hooks
 impl Lifecycle for DatabaseService {
-    fn on_create(&self) -> Result<()> {
-        println!("DatabaseService created");
-        Ok(())
-    }
-
     fn on_initialize(&self) -> Result<()> {
-        println!("DatabaseService initialized");
+        println!("Initializing database connection to {}", self.connection_string);
+        // Connect to the database
         Ok(())
     }
-
+    
     fn on_destroy(&self) -> Result<()> {
-        println!("DatabaseService destroyed");
+        println!("Closing database connection to {}", self.connection_string);
+        // Close the connection
         Ok(())
     }
 }
 ```
 
-Async lifecycle hooks are also supported:
+### Factory Registration
 
 ```rust
-use navius_di::{AsyncLifecycle, LifecyclePhase, Result};
+use navius_di::{ComponentRegistry, ComponentScope, Result};
 
-#[async_trait::async_trait]
-impl AsyncLifecycle for DatabaseService {
-    async fn on_create_async(&self) -> Result<()> {
-        println!("DatabaseService created asynchronously");
-        Ok(())
-    }
-
-    async fn on_initialize_async(&self) -> Result<()> {
-        println!("DatabaseService initialized asynchronously");
-        Ok(())
-    }
-
-    async fn on_destroy_async(&self) -> Result<()> {
-        println!("DatabaseService destroyed asynchronously");
-        Ok(())
-    }
+// Register with a factory function
+fn main() -> Result<()> {
+    let registry = ComponentRegistry::new();
+    
+    // Register a singleton component with a factory
+    registry.register_with_factory(
+        || DatabaseService::new("jdbc:postgresql://localhost:5432/mydb".to_string()),
+        ComponentScope::Singleton,
+    );
+    
+    // Get the component
+    let db_service = registry.get::<DatabaseService>()?;
+    
+    Ok(())
 }
 ```
 
-## Qualifiers
-
-Qualifiers can be used to disambiguate components of the same type:
+### Application Builder
 
 ```rust
-// Register multiple database services with different qualifiers
-registry.register_with_qualifier(
-    DatabaseService::new("jdbc:postgresql://localhost:5432/users".to_string()),
-    "users-db",
-)?;
+use navius_di::{Application, Result};
+use serde::Deserialize;
 
-registry.register_with_qualifier(
-    DatabaseService::new("jdbc:postgresql://localhost:5432/products".to_string()),
-    "products-db",
-)?;
+// Define a configuration structure
+#[derive(Debug, Clone, Deserialize)]
+struct AppConfig {
+    name: String,
+    version: String,
+}
 
-// Get a specific database service by qualifier
-let users_db = registry.get_by_qualifier::<DatabaseService>("users-db")?;
-let products_db = registry.get_by_qualifier::<DatabaseService>("products-db")?;
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Create and configure an application
+    let app = Application::builder()
+        // Set configuration values
+        .with_config("app.name", "My Application".to_string())
+        .with_config("app.version", "1.0.0".to_string())
+        
+        // Register components
+        .with_factory(
+            || DatabaseService::new("jdbc:postgresql://localhost:5432/mydb".to_string()),
+            ComponentScope::Singleton,
+        )
+        
+        // Build the application
+        .build()
+        .await?;
+    
+    // Get configuration
+    let config = app.config::<AppConfig>("app")?;
+    println!("Application: {} v{}", config.name, config.version);
+    
+    // Get components
+    let db_service = app.get::<DatabaseService>()?;
+    
+    // Shutdown the application
+    app.shutdown().unwrap();
+    
+    Ok(())
+}
 ```
 
-## Examples
+## Installation
 
-For more complete examples, see the [examples directory](./examples/).
+Add this to your `Cargo.toml`:
+
+```toml
+[dependencies]
+navius-di = { path = "../navius-di" }
+```
 
 ## License
 
-This project is licensed under either of
-
-- Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT) 
+Licensed under the Apache License, Version 2.0. 
