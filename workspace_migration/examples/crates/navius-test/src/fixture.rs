@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::marker::PhantomData;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use tempfile::TempDir;
 
 /// Internal state of the test fixture
@@ -54,212 +54,178 @@ pub trait Resource {
     fn description(&self) -> String;
 }
 
-/// A test fixture for setting up and tearing down test resources
-#[derive(Clone)]
+/// A test fixture that provides dependencies for tests
+#[derive(Debug)]
 pub struct TestFixture {
-    /// The internal state of the fixture
-    state: Arc<Mutex<FixtureState>>,
+    /// A registry of components for the fixture
+    components: RwLock<HashMap<TypeId, Box<dyn Any + Send + Sync>>>,
+
+    /// Resources that need cleanup when the fixture is dropped
+    resources: Mutex<Vec<Box<dyn Resource>>>,
 }
 
 impl TestFixture {
-    /// Create a new test fixture with default configuration
-    pub fn new() -> TestFixtureBuilder {
-        TestFixtureBuilder::new()
+    /// Create a new test fixture
+    pub fn new() -> Self {
+        Self {
+            components: RwLock::new(HashMap::new()),
+            resources: Mutex::new(Vec::new()),
+        }
     }
 
     /// Register a component with the fixture
-    pub fn register<T: Any + Send + Sync>(&self, component: T) -> TestResult<&Self> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|e| TestError::setup_error(format!("Failed to lock fixture state: {}", e)))?;
+    pub fn register<T: Any + Send + Sync>(&self, component: T) -> TestResult<()> {
+        let mut components = self.components.write().map_err(|_| {
+            TestError::FixtureError("Failed to acquire write lock on components".to_string())
+        })?;
 
         let type_id = TypeId::of::<T>();
-        state.components.insert(type_id, Box::new(component));
+        components.insert(type_id, Box::new(component));
 
-        if state.config.verbose_logging {
-            println!(
-                "Registered component of type: {}",
-                std::any::type_name::<T>()
-            );
-        }
-
-        Ok(self)
-    }
-
-    /// Register a resource that needs cleanup
-    pub fn register_resource<R: Resource + Send + Sync + 'static>(
-        &self,
-        resource: R,
-    ) -> TestResult<&Self> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|e| TestError::setup_error(format!("Failed to lock fixture state: {}", e)))?;
-
-        if state.config.verbose_logging {
-            println!("Registered resource: {}", resource.description());
-        }
-
-        state.resources.push(Box::new(resource));
-
-        Ok(self)
+        Ok(())
     }
 
     /// Get a component from the fixture
-    pub fn get<T: Any + Send + Sync + Clone>(&self) -> TestResult<T> {
-        let state = self
-            .state
-            .lock()
-            .map_err(|e| TestError::setup_error(format!("Failed to lock fixture state: {}", e)))?;
+    pub fn get<T: Any + Send + Sync>(&self) -> TestResult<&T> {
+        let components = self.components.read().map_err(|_| {
+            TestError::FixtureError("Failed to acquire read lock on components".to_string())
+        })?;
 
         let type_id = TypeId::of::<T>();
-        let component = state
-            .components
-            .get(&type_id)
-            .ok_or_else(|| TestError::missing_component(std::any::type_name::<T>()))?;
+        let component = components.get(&type_id).ok_or_else(|| {
+            TestError::FixtureError(format!("Component of type {:?} not found", type_id))
+        })?;
 
-        component
-            .downcast_ref::<T>()
-            .ok_or_else(|| {
-                TestError::setup_error(format!(
-                    "Component type mismatch for {}",
-                    std::any::type_name::<T>()
-                ))
-            })
-            .map(|c| c.clone())
+        component.downcast_ref::<T>().ok_or_else(|| {
+            TestError::FixtureError(format!(
+                "Component for type ID {:?} is not of the expected type",
+                type_id
+            ))
+        })
     }
 
-    /// Get a component by trait object
-    pub fn get_as<T: ?Sized + Any>(&self) -> TestResult<Box<T>>
-    where
-        T: Any,
-    {
-        let state = self
-            .state
-            .lock()
-            .map_err(|e| TestError::setup_error(format!("Failed to lock fixture state: {}", e)))?;
-
-        // Look for a component that implements the trait
-        for (_, component) in state.components.iter() {
-            if let Some(trait_obj) = component.downcast_ref::<Box<T>>() {
-                return Ok(trait_obj.clone());
-            }
-        }
-
-        Err(TestError::missing_component(std::any::type_name::<T>()))
-    }
-
-    /// Check if the fixture has a component of the given type
-    pub fn has<T: Any + Send + Sync>(&self) -> bool {
-        if let Ok(state) = self.state.lock() {
-            let type_id = TypeId::of::<T>();
-            state.components.contains_key(&type_id)
-        } else {
-            false
-        }
+    /// Add a resource that needs cleanup
+    pub fn add_resource<R: Resource>(&self, resource: R) {
+        let mut resources = self.resources.lock().unwrap();
+        resources.push(Box::new(resource));
     }
 
     /// Clean up all resources
     pub fn cleanup(&self) -> TestResult<()> {
-        let mut state = self.state.lock().map_err(|e| {
-            TestError::teardown_error(format!("Failed to lock fixture state: {}", e))
+        let mut resources = self.resources.lock().map_err(|_| {
+            TestError::TeardownError("Failed to acquire lock on resources".to_string())
         })?;
 
         let mut errors = Vec::new();
 
-        for resource in state.resources.drain(..) {
+        for resource in resources.iter_mut() {
             if let Err(e) = resource.cleanup() {
-                errors.push(format!(
-                    "Failed to clean up resource {}: {}",
-                    resource.description(),
-                    e
-                ));
+                errors.push(e);
             }
         }
 
         if errors.is_empty() {
             Ok(())
         } else {
-            Err(TestError::teardown_error(format!(
-                "Failed to clean up resources: {}",
-                errors.join(", ")
+            Err(TestError::TeardownError(format!(
+                "Failed to clean up resources: {:?}",
+                errors
             )))
         }
     }
+}
 
-    /// Get the configuration
-    pub fn config(&self) -> TestResult<FixtureConfig> {
-        let state = self
-            .state
-            .lock()
-            .map_err(|e| TestError::setup_error(format!("Failed to lock fixture state: {}", e)))?;
-
-        Ok(state.config.clone())
+impl Default for TestFixture {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 impl Drop for TestFixture {
     fn drop(&mut self) {
-        // Only attempt cleanup if we're the last reference
-        if Arc::strong_count(&self.state) == 1 {
-            if let Ok(state) = self.state.lock() {
-                if state.config.auto_cleanup {
-                    let _ = self.cleanup(); // Ignore errors during drop
-                }
-            }
-        }
+        let _ = self.cleanup();
     }
 }
 
-/// Builder for creating test fixtures
+/// A test context for running tests
+#[derive(Debug)]
+pub struct TestContext {
+    /// The test fixture
+    fixture: Arc<TestFixture>,
+
+    /// The name of the test
+    name: String,
+
+    /// Whether the test is running
+    running: bool,
+}
+
+impl TestContext {
+    /// Create a new test context
+    pub fn new<S: Into<String>>(name: S) -> Self {
+        Self {
+            fixture: Arc::new(TestFixture::new()),
+            name: name.into(),
+            running: false,
+        }
+    }
+
+    /// Get the name of the test
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Get the test fixture
+    pub fn fixture(&self) -> &Arc<TestFixture> {
+        &self.fixture
+    }
+
+    /// Mark the test as running
+    pub fn start(&mut self) {
+        self.running = true;
+    }
+
+    /// Mark the test as not running
+    pub fn stop(&mut self) {
+        self.running = false;
+    }
+
+    /// Check if the test is running
+    pub fn is_running(&self) -> bool {
+        self.running
+    }
+}
+
+/// A builder for creating test fixtures
+#[derive(Debug)]
 pub struct TestFixtureBuilder {
-    config: FixtureConfig,
+    /// The fixture being built
+    fixture: TestFixture,
 }
 
 impl TestFixtureBuilder {
     /// Create a new test fixture builder
     pub fn new() -> Self {
         Self {
-            config: FixtureConfig::default(),
-        }
-    }
-
-    /// Set whether to automatically clean up resources
-    pub fn with_auto_cleanup(mut self, auto_cleanup: bool) -> Self {
-        self.config.auto_cleanup = auto_cleanup;
-        self
-    }
-
-    /// Set whether to log fixture operations
-    pub fn with_verbose_logging(mut self, verbose_logging: bool) -> Self {
-        self.config.verbose_logging = verbose_logging;
-        self
-    }
-
-    /// Build the test fixture
-    pub fn build(self) -> TestFixture {
-        TestFixture {
-            state: Arc::new(Mutex::new(FixtureState::new(self.config))),
+            fixture: TestFixture::new(),
         }
     }
 
     /// Add a component to the fixture
-    pub fn with_component<T: Any + Send + Sync>(self, component: T) -> Self {
-        let mut fixture = self.build();
-        let _ = fixture.register(component);
-        TestFixtureBuilder {
-            config: self.config,
-        }
+    pub fn with_component<T: Any + Send + Sync>(self, component: T) -> TestResult<Self> {
+        self.fixture.register(component)?;
+        Ok(self)
     }
 
     /// Add a resource to the fixture
-    pub fn with_resource<R: Resource + Send + Sync + 'static>(self, resource: R) -> Self {
-        let mut fixture = self.build();
-        let _ = fixture.register_resource(resource);
-        TestFixtureBuilder {
-            config: self.config,
-        }
+    pub fn with_resource<R: Resource>(self, resource: R) -> Self {
+        self.fixture.add_resource(resource);
+        self
+    }
+
+    /// Build the fixture
+    pub fn build(self) -> TestFixture {
+        self.fixture
     }
 }
 
@@ -269,28 +235,83 @@ impl Default for TestFixtureBuilder {
     }
 }
 
-// Example implementation of a resource
-pub struct TempDirectory {
+/// A file resource that needs to be cleaned up
+#[derive(Debug)]
+pub struct FileResource {
+    /// The path to the file
     path: String,
+
+    /// Whether to delete the file on cleanup
+    delete_on_cleanup: bool,
 }
 
-impl TempDirectory {
-    pub fn new(path: &str) -> Self {
+impl FileResource {
+    /// Create a new file resource
+    pub fn new<S: Into<String>>(path: S, delete_on_cleanup: bool) -> Self {
         Self {
-            path: path.to_string(),
+            path: path.into(),
+            delete_on_cleanup,
         }
     }
+
+    /// Get the path to the file
+    pub fn path(&self) -> &str {
+        &self.path
+    }
 }
 
-impl Resource for TempDirectory {
-    fn cleanup(&self) -> TestResult<()> {
-        // In a real implementation, this would delete the directory
-        println!("Cleaning up temp directory: {}", self.path);
+impl Resource for FileResource {
+    fn cleanup(&mut self) -> TestResult<()> {
+        if self.delete_on_cleanup {
+            if let Err(e) = std::fs::remove_file(&self.path) {
+                return Err(TestError::TeardownError(format!(
+                    "Failed to remove file {}: {}",
+                    self.path, e
+                )));
+            }
+        }
+
         Ok(())
     }
+}
 
-    fn description(&self) -> String {
-        format!("TempDirectory({})", self.path)
+/// A directory resource that needs to be cleaned up
+#[derive(Debug)]
+pub struct DirectoryResource {
+    /// The path to the directory
+    path: String,
+
+    /// Whether to delete the directory on cleanup
+    delete_on_cleanup: bool,
+}
+
+impl DirectoryResource {
+    /// Create a new directory resource
+    pub fn new<S: Into<String>>(path: S, delete_on_cleanup: bool) -> Self {
+        Self {
+            path: path.into(),
+            delete_on_cleanup,
+        }
+    }
+
+    /// Get the path to the directory
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+}
+
+impl Resource for DirectoryResource {
+    fn cleanup(&mut self) -> TestResult<()> {
+        if self.delete_on_cleanup {
+            if let Err(e) = std::fs::remove_dir_all(&self.path) {
+                return Err(TestError::TeardownError(format!(
+                    "Failed to remove directory {}: {}",
+                    self.path, e
+                )));
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -300,60 +321,88 @@ mod tests {
 
     #[test]
     fn test_fixture_register_and_get() {
-        // Create a fixture
-        let fixture = TestFixture::new().build();
+        let fixture = TestFixture::new();
 
         // Register a component
-        fixture.register(String::from("test")).unwrap();
+        fixture.register(42i32).unwrap();
 
         // Get the component
-        let value: String = fixture.get().unwrap();
+        let value = fixture.get::<i32>().unwrap();
+        assert_eq!(*value, 42);
 
-        // Verify
-        assert_eq!(value, "test");
+        // Register another component
+        fixture.register("hello".to_string()).unwrap();
+
+        // Get the string component
+        let string = fixture.get::<String>().unwrap();
+        assert_eq!(string, "hello");
     }
 
     #[test]
-    fn test_fixture_has_component() {
-        // Create a fixture
-        let fixture = TestFixture::new().build();
+    fn test_fixture_get_missing_component() {
+        let fixture = TestFixture::new();
 
-        // Initially doesn't have the component
-        assert!(!fixture.has::<i32>());
-
-        // Register a component
-        fixture.register(42).unwrap();
-
-        // Now it has the component
-        assert!(fixture.has::<i32>());
-    }
-
-    #[test]
-    fn test_fixture_register_resource() {
-        // Create a fixture
-        let fixture = TestFixture::new().build();
-
-        // Register a resource
-        fixture
-            .register_resource(TempDirectory::new("/tmp/test"))
-            .unwrap();
-
-        // Cleanup should succeed
-        fixture.cleanup().unwrap();
+        // Try to get a component that doesn't exist
+        let result = fixture.get::<i32>();
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_fixture_builder() {
-        // Create a fixture with a component
-        let fixture = TestFixture::new()
-            .with_verbose_logging(true)
-            .with_component(42)
+        let fixture = TestFixtureBuilder::new()
+            .with_component(42i32)
+            .unwrap()
+            .with_component("hello".to_string())
+            .unwrap()
             .build();
 
-        // Verify we have the component
-        assert!(fixture.has::<i32>());
+        // Get the components
+        let value = fixture.get::<i32>().unwrap();
+        assert_eq!(*value, 42);
 
-        // Verify configuration
-        assert!(fixture.config().unwrap().verbose_logging);
+        let string = fixture.get::<String>().unwrap();
+        assert_eq!(string, "hello");
+    }
+
+    #[test]
+    fn test_file_resource() {
+        let temp_file = std::env::temp_dir().join("test_file.txt");
+        let path = temp_file.to_string_lossy().to_string();
+
+        // Create the file
+        std::fs::write(&path, b"test").unwrap();
+
+        // Create a file resource
+        let mut resource = FileResource::new(&path, true);
+
+        // Check that the file exists
+        assert!(std::fs::metadata(&path).is_ok());
+
+        // Clean up the resource
+        resource.cleanup().unwrap();
+
+        // Check that the file was deleted
+        assert!(std::fs::metadata(&path).is_err());
+    }
+
+    #[test]
+    fn test_directory_resource() {
+        let temp_dir = std::env::temp_dir().join("test_dir");
+        let path = temp_dir.to_string_lossy().to_string();
+
+        // Create the directory
+        std::fs::create_dir_all(&path).unwrap();
+
+        // Create a directory resource
+        let mut resource = DirectoryResource::new(&path, true);
+
+        // Check that the directory exists
+        assert!(std::fs::metadata(&path).is_ok());
+
+        // Clean up the resource
+        resource.cleanup().unwrap();
+
+        // Check that the directory was deleted
+        assert!(std::fs::metadata(&path).is_err());
     }
 }

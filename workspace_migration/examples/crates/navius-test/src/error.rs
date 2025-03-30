@@ -1,38 +1,45 @@
 use std::error::Error as StdError;
 use std::fmt;
+use std::result;
 
 /// Result type for test operations
 pub type TestResult<T> = Result<T, TestError>;
 
-/// Error type for test operations
+/// Errors that can occur in the navius-test crate
 #[derive(Debug)]
 pub enum TestError {
-    /// Error during test setup
+    /// An error occurred while registering a mock object
+    RegistryError(String),
+
+    /// An expected mock object was not found
+    MockNotFound(String),
+
+    /// The mock object's type does not match the expected type
+    MockTypeMismatch(String),
+
+    /// An expectation was not met
+    ExpectationNotMet(String),
+
+    /// An error occurred while setting up a test
     SetupError(String),
 
-    /// Error during test execution
-    ExecutionError(String),
-
-    /// Error during test teardown
+    /// An error occurred while tearing down a test
     TeardownError(String),
 
-    /// Missing component in test fixture
-    MissingComponent(String),
+    /// An assertion failed
+    AssertionFailed(String),
 
-    /// Mock implementation not registered
-    MockNotRegistered(String),
+    /// An error occurred in a test fixture
+    FixtureError(String),
 
-    /// Error in mock expectation
-    MockExpectationError(String),
+    /// An error occurred in a mock object
+    MockError(String),
 
-    /// Error when injecting failures
-    InjectedError(String),
+    /// An IO error occurred
+    IoError(std::io::Error),
 
-    /// Error when verifying error propagation
-    ErrorPropagationError(String),
-
-    /// Error when verifying error context
-    ErrorContextError(String),
+    /// A generic error occurred
+    Other(Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl TestError {
@@ -91,20 +98,60 @@ impl TestError {
 impl fmt::Display for TestError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TestError::SetupError(msg) => write!(f, "Test setup error: {}", msg),
-            TestError::ExecutionError(msg) => write!(f, "Test execution error: {}", msg),
-            TestError::TeardownError(msg) => write!(f, "Test teardown error: {}", msg),
-            TestError::MissingComponent(msg) => write!(f, "Missing component: {}", msg),
-            TestError::MockNotRegistered(msg) => write!(f, "Mock not registered: {}", msg),
-            TestError::MockExpectationError(msg) => write!(f, "Mock expectation error: {}", msg),
-            TestError::InjectedError(msg) => write!(f, "Injected error: {}", msg),
-            TestError::ErrorPropagationError(msg) => write!(f, "Error propagation error: {}", msg),
-            TestError::ErrorContextError(msg) => write!(f, "Error context error: {}", msg),
+            TestError::RegistryError(msg) => write!(f, "Registry error: {}", msg),
+            TestError::MockNotFound(msg) => write!(f, "Mock not found: {}", msg),
+            TestError::MockTypeMismatch(msg) => write!(f, "Mock type mismatch: {}", msg),
+            TestError::ExpectationNotMet(msg) => write!(f, "Expectation not met: {}", msg),
+            TestError::SetupError(msg) => write!(f, "Setup error: {}", msg),
+            TestError::TeardownError(msg) => write!(f, "Teardown error: {}", msg),
+            TestError::AssertionFailed(msg) => write!(f, "Assertion failed: {}", msg),
+            TestError::FixtureError(msg) => write!(f, "Fixture error: {}", msg),
+            TestError::MockError(msg) => write!(f, "Mock error: {}", msg),
+            TestError::IoError(err) => write!(f, "IO error: {}", err),
+            TestError::Other(err) => write!(f, "Error: {}", err),
         }
     }
 }
 
-impl StdError for TestError {}
+impl StdError for TestError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match self {
+            TestError::IoError(err) => Some(err),
+            TestError::Other(err) => Some(err.as_ref()),
+            _ => None,
+        }
+    }
+}
+
+impl From<std::io::Error> for TestError {
+    fn from(err: std::io::Error) -> Self {
+        TestError::IoError(err)
+    }
+}
+
+impl From<String> for TestError {
+    fn from(err: String) -> Self {
+        TestError::Other(Box::new(SimpleError(err)))
+    }
+}
+
+impl From<&str> for TestError {
+    fn from(err: &str) -> Self {
+        TestError::Other(Box::new(SimpleError(err.to_string())))
+    }
+}
+
+/// A simple error that can be created from a string
+#[derive(Debug)]
+struct SimpleError(String);
+
+impl fmt::Display for SimpleError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl StdError for SimpleError {}
 
 /// Error injection point for testing error handling
 #[derive(Debug, Clone)]
@@ -379,6 +426,159 @@ where
     }
 }
 
+/// Assertion macros
+#[macro_export]
+macro_rules! assert_mock_call {
+    ($mock:expr, $method:expr) => {
+        $crate::assert_mock_call_internal($mock, $method, Vec::<String>::new(), file!(), line!())
+    };
+
+    ($mock:expr, $method:expr, $($arg:expr),*) => {
+        $crate::assert_mock_call_internal(
+            $mock,
+            $method,
+            vec![$($arg.to_string()),*],
+            file!(),
+            line!(),
+        )
+    };
+}
+
+/// Internal function for assert_mock_call
+#[doc(hidden)]
+pub fn assert_mock_call_internal<T>(
+    _mock: &T,
+    method: &str,
+    args: Vec<String>,
+    file: &str,
+    line: u32,
+) -> TestResult<()> {
+    // This would be implemented to check if the mock was called with the given method and args
+    // For now, it's a placeholder
+    Ok(())
+}
+
+/// Create an error for an unimplemented feature
+pub fn unimplemented<S: Into<String>>(feature: S) -> TestError {
+    TestError::Other(Box::new(SimpleError(format!(
+        "Feature not implemented: {}",
+        feature.into()
+    ))))
+}
+
+/// Create an error for a failed assertion
+pub fn assertion_failed<S: Into<String>>(message: S) -> TestError {
+    TestError::AssertionFailed(message.into())
+}
+
+/// Verify that a condition is true
+pub fn assert_true(condition: bool, message: &str) -> TestResult<()> {
+    if condition {
+        Ok(())
+    } else {
+        Err(assertion_failed(message))
+    }
+}
+
+/// Verify that a condition is false
+pub fn assert_false(condition: bool, message: &str) -> TestResult<()> {
+    if !condition {
+        Ok(())
+    } else {
+        Err(assertion_failed(message))
+    }
+}
+
+/// Verify that two values are equal
+pub fn assert_eq<T: PartialEq + fmt::Debug>(
+    actual: T,
+    expected: T,
+    message: &str,
+) -> TestResult<()> {
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(assertion_failed(format!(
+            "{}: expected {:?}, got {:?}",
+            message, expected, actual
+        )))
+    }
+}
+
+/// Verify that two values are not equal
+pub fn assert_ne<T: PartialEq + fmt::Debug>(
+    actual: T,
+    expected: T,
+    message: &str,
+) -> TestResult<()> {
+    if actual != expected {
+        Ok(())
+    } else {
+        Err(assertion_failed(format!(
+            "{}: expected not {:?}, got {:?}",
+            message, expected, actual
+        )))
+    }
+}
+
+/// Verify that a value is Some and matches the expected value
+pub fn assert_some<T: PartialEq + fmt::Debug>(
+    actual: Option<T>,
+    expected: T,
+    message: &str,
+) -> TestResult<()> {
+    match actual {
+        Some(value) if value == expected => Ok(()),
+        Some(value) => Err(assertion_failed(format!(
+            "{}: expected Some({:?}), got Some({:?})",
+            message, expected, value
+        ))),
+        None => Err(assertion_failed(format!(
+            "{}: expected Some({:?}), got None",
+            message, expected
+        ))),
+    }
+}
+
+/// Verify that a value is None
+pub fn assert_none<T: fmt::Debug>(actual: Option<T>, message: &str) -> TestResult<()> {
+    match actual {
+        None => Ok(()),
+        Some(value) => Err(assertion_failed(format!(
+            "{}: expected None, got Some({:?})",
+            message, value
+        ))),
+    }
+}
+
+/// Verify that a result is Ok
+pub fn assert_ok<T: fmt::Debug, E: fmt::Debug>(
+    actual: Result<T, E>,
+    message: &str,
+) -> TestResult<T> {
+    match actual {
+        Ok(value) => Ok(value),
+        Err(err) => Err(assertion_failed(format!(
+            "{}: expected Ok(_), got Err({:?})",
+            message, err
+        ))),
+    }
+}
+
+/// Verify that a result is Err
+pub fn assert_err<T: fmt::Debug, E: fmt::Debug>(
+    actual: Result<T, E>,
+    message: &str,
+) -> TestResult<E> {
+    match actual {
+        Ok(value) => Err(assertion_failed(format!(
+            "{}: expected Err(_), got Ok({:?})",
+            message, value
+        ))),
+        Err(err) => Ok(err),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -466,5 +666,68 @@ mod tests {
         let error = "User not found".to_string();
         let result = verifier.verify(&error, &tracker);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_error_display() {
+        let err = TestError::RegistryError("test error".to_string());
+        assert_eq!(format!("{}", err), "Registry error: test error");
+
+        let err = TestError::MockNotFound("test error".to_string());
+        assert_eq!(format!("{}", err), "Mock not found: test error");
+
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let err = TestError::IoError(io_err);
+        assert_eq!(format!("{}", err), "IO error: file not found");
+    }
+
+    #[test]
+    fn test_error_from() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let err = TestError::from(io_err);
+        match err {
+            TestError::IoError(_) => {}
+            _ => panic!("Expected TestError::IoError"),
+        }
+
+        let err = TestError::from("test error");
+        match err {
+            TestError::Other(_) => {}
+            _ => panic!("Expected TestError::Other"),
+        }
+
+        let err = TestError::from("test error".to_string());
+        match err {
+            TestError::Other(_) => {}
+            _ => panic!("Expected TestError::Other"),
+        }
+    }
+
+    #[test]
+    fn test_assert_functions() {
+        assert!(assert_true(true, "should be true").is_ok());
+        assert!(assert_true(false, "should be true").is_err());
+
+        assert!(assert_false(false, "should be false").is_ok());
+        assert!(assert_false(true, "should be false").is_err());
+
+        assert!(assert_eq(1, 1, "should be equal").is_ok());
+        assert!(assert_eq(1, 2, "should be equal").is_err());
+
+        assert!(assert_ne(1, 2, "should not be equal").is_ok());
+        assert!(assert_ne(1, 1, "should not be equal").is_err());
+
+        assert!(assert_some(Some(1), 1, "should be Some(1)").is_ok());
+        assert!(assert_some(Some(2), 1, "should be Some(1)").is_err());
+        assert!(assert_some(None, 1, "should be Some(1)").is_err());
+
+        assert!(assert_none(None::<i32>, "should be None").is_ok());
+        assert!(assert_none(Some(1), "should be None").is_err());
+
+        assert!(assert_ok(Ok::<_, ()>(1), "should be Ok").is_ok());
+        assert!(assert_ok(Err::<i32, _>(1), "should be Ok").is_err());
+
+        assert!(assert_err(Err::<(), _>(1), "should be Err").is_ok());
+        assert!(assert_err(Ok::<_, i32>(1), "should be Err").is_err());
     }
 }

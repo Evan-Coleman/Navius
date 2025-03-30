@@ -1,410 +1,231 @@
-# Workspace Migration Implementation Plan
-
-**Current Status:** Phase 4 - Integration and API Stabilization (90% Complete)  
-**Last Updated:** March 30, 2025
-
-## Progress Update: March 30, 2025
-
-### Project Status
-
-- **Project Phase:** 4 - Integration and API Stabilization
-- **Completion:** 90% Complete
-- **Current Focus:** Design Evaluation Phase of API Review Process Complete, Moving to Implementation Phase, Enhanced Error Handling System, Cross-Crate Testing Infrastructure Planning
-
-### Completed Tasks
-
-- ✅ Initial project setup and workspace configuration
-- ✅ Implementation of core interfaces and traits
-- ✅ Implementation of navius-http crate
-- ✅ Implementation of navius-auth crate
-- ✅ Implementation of navius-db crate with entity traits
-- ✅ Implementation of error handling system
-- ✅ Implementation of navius-cache crate (core functionality)
-- ✅ Implementation of connection pooling
-- ✅ Implementation of serialization interfaces
-- ✅ Implementation of cache invalidation strategies
-- ✅ Implementation of Redis pipelining support
-- ✅ Implementation of Redis Lua scripting for atomic operations
-- ✅ Implementation of advanced connection pooling for Redis
-- ✅ Error propagation enhancements
-- ✅ Database performance optimizations
-- ✅ Cache metrics and telemetry
-- ✅ Integration testing for cache providers
-- ✅ Component Registry Implementation
-- ✅ Dependency Injection System Implementation
-- ✅ Application Framework
-- ✅ Basic Integration Example
-- ✅ Database + Cache Integration Example
-- ✅ Event System Integration Example
-- ✅ Plugin System Integration Example with Dynamic Plugin Loading
-- ✅ Comprehensive Error Handling System with HTTP status mapping
-- ✅ API Review Guidelines and API Inventory Tool creation
-- ✅ API Inventory compilation completed
-- ✅ Design Evaluation of navius-metrics and navius-test-utils crates
-- ✅ Design Evaluation of navius-core crate
-- ✅ Design Evaluation of navius-http crate
-- ✅ Design Evaluation of navius-db crate
-- ✅ Design Evaluation of navius-cache crate
-- ✅ Design Evaluation of navius-auth crate
-- ✅ Provider Pattern Implementation Guide based on database and cache evaluations
-- ✅ Design Evaluation of navius-event crate
-- ✅ Design Evaluation of navius-plugin crate
-- ✅ Design Evaluation of navius-di crate
-- ✅ Design Evaluation of navius-job crate
-- ✅ Design Evaluation of navius-template crate
-- ✅ Design Evaluation of navius-cli crate
-- ✅ Design Evaluation of navius-messaging-broker crate
-- ✅ Design Evaluation of navius-messaging-kafka crate
-
-### Next Tasks (Target Dates)
-1. **High Priority** (Next 30 days)
-   - Continue API Review Process (In Progress - Started March 29, 2025)
-   - Complete Design Evaluation Phase (100% Complete - Evaluations of all 15 crates completed)
-   - Begin API Implementation Phase (April 1, 2025)
-   - Implement Cross-Crate Testing Infrastructure (April 12, 2025) - Planning phase initiated
-   - Create Full Stack Integration Example (May 10, 2025)
-
-2. **Medium Priority** (Next 60 days)
-   - Complete API Implementation Phase (May 5, 2025)
-   - Complete API Verification Phase (May 19, 2025)
-   - Complete API stabilization (June 10, 2025)
-   - Finalize documentation (June 15, 2025)
-   - Prepare for first alpha release (June 30, 2025)
-
-## Architecture Updates
-
-### Current Implementation Status by Crate
-| Crate | Status | Description |
-|-------|--------|-------------|
-| navius-core | ✅ 100% | Core functionality, configuration, errors |
-| navius-http | ✅ 100% | HTTP server, routing, middleware |
-| navius-auth | ✅ 100% | Authentication and authorization interfaces |
-| navius-auth-entra | ⬜️ 0% | Microsoft Entra implementation of auth interfaces |
-| navius-db | ✅ 100% | Database interfaces and abstractions |
-| navius-db-postgres | ✅ 100% | PostgreSQL implementation of database interfaces |
-| navius-cache | ✅ 100% | Caching interfaces and abstractions |
-| navius-cache-redis | ✅ 100% | Redis implementation of cache interfaces |
-| navius-plugin | ✅ 100% | Plugin system and component registry |
-| navius-di | ✅ 100% | Dependency injection system |
-| navius-event | ✅ 100% | Event handling and notification interfaces |
-| navius-job | ✅ 95% | Background job processing interfaces |
-| navius-template | ✅ Design Evaluation Complete | Template rendering interfaces |
-| navius-cli | ✅ Design Evaluation Complete | Command line tools |
-| navius-messaging-broker | ✅ Design Evaluation Complete | Messaging broker interfaces |
-| navius-messaging-kafka | ✅ Design Evaluation Complete | Kafka implementation of messaging interfaces |
-
-### Architectural Decisions
-1. The `navius-cache` crate now implements a comprehensive serialization system that supports multiple formats, including JSON and binary serialization.
-2. The `navius-cache-redis` crate has been enhanced with pipelining support for batch operations, resulting in significant performance improvements.
-3. Redis Lua scripting support has been added for atomic operations, providing improved consistency and performance for complex cache operations.
-4. All crates support async/await patterns and are built with Tokio runtime compatibility.
-5. The `navius-cache-redis` crate now features an advanced connection pooling system with auto-scaling, health checks, and circuit breaker patterns for improved reliability under load.
-6. The error handling system has been standardized across all crates with consistent error types, HTTP status mapping, and comprehensive context tracking.
-7. The `navius-di` crate provides a comprehensive dependency injection system inspired by spring-rs, with component lifecycle management, configuration binding, and application bootstrapping.
-8. The design evaluation of `navius-core` has revealed a well-structured dependency injection system with room for documentation and usability improvements.
-9. The design evaluation of `navius-http` has shown a well-implemented builder pattern approach with clean separation between client and server components.
-10. The design evaluation of `navius-db` has highlighted a strong provider pattern implementation with comprehensive transaction support and entity repository abstractions.
-11. The design evaluation of `navius-cache` has confirmed a well-designed caching abstraction layer with flexible invalidation strategies and strong metrics integration.
-12. The design evaluation of `navius-auth` has verified the authentication framework's provider-based architecture, with strong separation of concerns between authentication and authorization components.
-13. The Provider Pattern Implementation Guide has been created based on findings from the database and cache evaluations, providing a reference for consistent implementation across the framework.
-14. The design evaluation of `navius-event` has demonstrated a well-implemented event system with type-safe APIs, flexible filtering, and backpressure management that integrates well with other framework components.
-15. The design evaluation of `navius-plugin` has highlighted a well-designed plugin system with a capability-based architecture that enables clean extension points while maintaining type safety.
-16. The design evaluation of `navius-di` has confirmed a robust dependency injection system that balances flexibility and type safety, with strong lifecycle management and application bootstrapping capabilities.
-17. The design evaluation of `navius-job` has shown a well-designed, type-safe background job processing system with flexible scheduling options, prioritization, and retry handling, along with integration with the event system for observability.
-18. The design evaluation of `navius-template` has confirmed a flexible and efficient template rendering system with pluggable architecture, unified interface, and support for multiple template engines.
-19. The design evaluation of `navius-cli` has outlined a comprehensive command-line interface with a plugin-based architecture, modern command structure, and deep integration with Navius components to enhance developer experience.
-20. The design evaluation of `navius-messaging-broker` has identified a well-structured messaging abstraction with support for various messaging patterns, broker-agnostic interfaces, and strong integration with other Navius components.
-21. The design evaluation of `navius-messaging-kafka` has outlined a comprehensive Kafka implementation of the messaging broker interfaces, with support for Kafka-specific features like partitioning, consumer groups, and integration with the Kafka ecosystem.
-
-## Risks and Mitigations
-
-| Risk | Impact | Likelihood | Mitigation |
-|------|--------|------------|------------|
-| API stability compromises | High | Medium | Versioned interfaces, thorough compatibility testing |
-| Complexity increases | Medium | Medium | Comprehensive documentation, simplified APIs |
-| Build time impact | Medium | Low | Conditional compilation, workspace optimization |
-| Functional regression | High | Low | Comprehensive test suite, CI/CD validation |
-| Incomplete feature extraction | Medium | Medium | Modular approach, MVP definition |
-| Implementation inconsistencies | Medium | Low | Code reviews, automated linting, architectural guidelines |
-| API Review uncovers significant issues | High | Medium | Early preparation with guidelines and tools, phased approach to review |
-
-- **Risk**: Performance overhead of serialization for complex objects
-  - **Mitigation**: Implemented binary serialization options and smart caching strategies to reduce overhead
-
-- **Risk**: Redis connection management under high load
-  - **Mitigation**: Enhanced connection pooling and added circuit breaker patterns
-  
-- **Risk**: Inconsistent APIs across crates
-  - **Mitigation**: Created API Review Guidelines and API Inventory Tool to systematically review all APIs
-
-- **Risk**: Documentation inconsistency identified in design evaluations
-  - **Mitigation**: Developing standardized documentation templates and style guide
-
-- **Risk**: Builder pattern naming inconsistencies
-  - **Mitigation**: Added standardization guidelines for builder pattern implementations in documentation standards draft
-
-- **Risk**: Feature flag organization inconsistencies
-  - **Mitigation**: Developing guidelines for feature flag usage, particularly for provider-specific code
-
-- **Risk**: Provider pattern implementation inconsistencies
-  - **Mitigation**: Created Provider Pattern Implementation Guide with standardized approach
-  
-- **Risk**: Event broker backend limitations
-  - **Mitigation**: Planning additional event broker implementations for distributed scenarios
-
-- **Risk**: Plugin isolation concerns
-  - **Mitigation**: Investigating enhanced isolation mechanisms for plugins with critical functionality
-
-- **Risk**: Component resolution performance in dependency injection
-  - **Mitigation**: Planning performance optimizations for deeply nested dependency graphs
-
-- **Risk**: Job persistence and distributed execution
-  - **Mitigation**: Planning implementations for Redis and SQL-based job providers with distributed locking
-  
-- **Risk**: Template rendering performance for complex templates
-  - **Mitigation**: Enhanced caching mechanism and template compilation optimizations
-  
-- **Risk**: CLI maintainability with growing command set
-  - **Mitigation**: Plugin-based architecture for modular command organization
-  
-- **Risk**: Messaging abstraction overhead
-  - **Mitigation**: Performance optimization strategies and benchmarking for different messaging patterns
-  
-- **Risk**: Kafka integration complexity
-  - **Mitigation**: Comprehensive error mapping and extensive testing with different Kafka versions
-
-## Performance Benchmarks
-
-| Metric | Before Migration | Current | Improvement |
-|--------|------------------|---------|-------------|
-| Full build time | 3m 45s | 2m 10s | 43% ↓ |
-| Incremental build | 45s | 20s | 56% ↓ |
-| Binary size (full) | 15.2MB | 12.8MB | 16% ↓ |
-| Binary size (minimal config) | 15.2MB | 8.5MB | 44% ↓ |
-| Startup time | 1.2s | 0.9s | 25% ↓ |
-| Memory usage | 85MB | 70MB | 18% ↓ |
-| Database query latency (p95) | 38ms | 25ms | 34% ↓ |
-
-Initial benchmarks show:
-- Database operations: Avg 5ms per query (40% improvement)
-- Cache operations: Avg 1.2ms per get/set (65% improvement)
-- Connection pool under high load: 99.9% availability (up from 97%)
-- Connection acquisition time (p95): 5ms (down from 25ms)
-- Component registry initialization: Avg 0.8ms (baseline measurement)
-- DI container resolution: Avg 0.2ms per component (baseline measurement)
-- HTTP server request handling: Avg 2.5ms per request (baseline measurement)
-- HTTP client request processing: Avg 3.2ms per request (baseline measurement)
-- Event publishing latency: Avg 0.5ms per event (baseline measurement)
-- Event subscription throughput: Up to 100,000 events/second on a single node (baseline measurement)
-- Plugin loading time: Avg 3.5ms per plugin (baseline measurement)
-- Plugin capability resolution: Avg 0.1ms per capability (baseline measurement)
-- Job scheduling throughput: Up to 10,000 jobs/second on a single node (baseline measurement)
-- Job execution latency: Avg 1.2ms per job (baseline measurement)
-- Template rendering time: Avg 0.8ms for simple templates (baseline measurement)
-- Template compilation time: Avg 3.2ms per template (baseline measurement)
-- CLI command execution: Avg 1.5ms per command (baseline measurement)
-- Message publishing latency: Avg 0.8ms per message (baseline measurement for in-memory broker)
-- Message consumption throughput: Up to 50,000 messages/second on a single node (baseline measurement for in-memory broker)
-
-These metrics validate our approach of separating interfaces from implementations and enable optimized deployments based on specific needs.
-
-## Redis pipelining shows a 5-10x improvement for batch operations compared to individual commands
-## Lua scripting provides up to 3x performance improvement for atomic operations compared to multiple separate operations
-## Serialization benchmarks show comparable performance to direct Redis libraries
-## Advanced connection pooling demonstrates 99.9% availability under heavy load scenarios
-## HTTP middleware composition shows minimal overhead (0.1ms per middleware layer)
-## Event filtering reduces CPU load by up to 70% compared to client-side filtering
-## Plugin capability resolution has minimal overhead compared to direct function calls
-## DI component resolution shows excellent performance for simple dependency graphs (0.2ms avg)
-## Job execution with prioritization shows predictable latency for high-priority jobs
-## Template rendering with caching shows comparable performance to direct template library usage
-## CLI command execution shows minimal overhead compared to direct function calls
-## Messaging abstraction imposes minimal overhead compared to direct broker interaction
-
-## Documentation Updates
-
-| Documentation | Target Date | Description |
-|---------------|-------------|-------------|
-| API Review Guidelines | March 29, 2025 | ✅ Guidelines and process for API review |
-| API Inventory | April 7, 2025 | ✅ Catalog of all public APIs with usage and documentation status |
-| Design Evaluation Framework | March 29, 2025 | ✅ Framework for evaluating crate design consistency |
-| Provider Pattern Implementation Guide | March 29, 2025 | ✅ Guidelines for implementing the provider pattern based on DB and Cache evaluations |
-| Database Provider Guide | April 10, 2025 | Implementation examples, diagrams, testing guidelines |
-| Cache Provider Guide | April 25, 2025 | Interface documentation, implementation patterns, examples |
-| Error Handling Guidelines | April 15, 2025 | Comprehensive error handling approach across providers |
-| Component System Documentation | May 20, 2025 | Component registry and dependency injection approach |
-| Integration Patterns Documentation | June 15, 2025 | Patterns for integrating multiple providers |
-| Documentation Standards Draft | April 5, 2025 | Draft standards for documentation consistency |
-| HTTP Client/Server Usage Examples | April 8, 2025 | Comprehensive examples for HTTP client and server usage |
-| Event System Usage Guide | April 18, 2025 | Guidelines for implementing event-driven patterns |
-| Plugin Development Guide | April 20, 2025 | Guidelines for developing and integrating plugins |
-| Dependency Injection Guide | April 22, 2025 | Guidelines for using the DI system effectively |
-| Job Processing Guide | April 25, 2025 | Guidelines for implementing job scheduling and processing patterns |
-| Template Rendering Guide | April 28, 2025 | Guidelines for using the template rendering system effectively |
-| CLI Development Guide | April 30, 2025 | Guidelines for extending the CLI with custom commands |
-| Messaging Patterns Guide | May 5, 2025 | Guidelines for implementing different messaging patterns |
-| Kafka Integration Guide | May 10, 2025 | Guidelines for integrating with Kafka using the messaging broker |
-
-## Updated API documentation with examples for all new features
-## Added performance tuning guide for Redis operations
-## Updated integration guides for new Redis features
-## Added connection pooling tuning guide
-## Created comprehensive API Review process documentation
-## Created Design Evaluation reports for all 15 crates
-## Created Provider Pattern Implementation Guide
-
-## Next Steps
-1. Begin API Implementation Phase based on Design Evaluation findings
-2. Develop Microsoft Entra authentication provider implementation based on auth evaluation findings
-3. Begin development of Cross-Crate Testing Infrastructure
-4. Create prototype for improved error handling without breaking changes
-5. Draft feature flag organization guidelines
-6. Plan implementation of additional event broker backends
-7. Investigate enhanced isolation mechanisms for plugins
-8. Implement performance optimizations for DI component resolution in deep dependency graphs
-9. Begin implementation of Redis-based and SQL-based job providers
-10. Begin planning for Full Stack Integration Example
-
-## Recent Updates
-
-### New Progress Reports
-
-1. **Design Evaluation Progress (March 30, 2025)**: Completed evaluations of navius-messaging-broker and navius-messaging-kafka crates, providing comprehensive architectures for the messaging infrastructure with Kafka implementation details
-2. **Design Evaluation Progress (March 29, 2025)**: Completed evaluation of navius-cli crate with insights on plugin-based architecture, modern command structure, and integration with Navius components
-3. **Design Evaluation Progress (March 29, 2025)**: Completed evaluation of navius-template crate with insights on pluggable architecture, unified interface, and integration with multiple template engines
-4. **Design Evaluation Progress (March 29, 2025)**: Completed evaluation of navius-job crate with insights on job scheduling, execution, and integration with the event system
-5. **Design Evaluation Progress (March 29, 2025)**: Completed evaluation of navius-di crate with insights on lifecycle management and application bootstrapping
-6. **Design Evaluation Progress (March 29, 2025)**: Completed evaluation of navius-plugin crate with insights on capability-based plugin architecture
-7. **Design Evaluation Progress (March 29, 2025)**: Completed evaluation of navius-event crate with insights on event-driven architecture patterns
-8. **Provider Pattern Implementation Guide (March 29, 2025)**: Created comprehensive guide for implementing the provider pattern consistently across Navius crates
-9. **Design Evaluation Progress (March 29, 2025)**: Completed evaluation of navius-auth crate with insights on authentication provider implementation
-10. **Design Evaluation Progress (March 29, 2025)**: Completed evaluation of navius-cache crate with insights on invalidation strategies and metrics integration
-11. **Design Evaluation Progress (March 29, 2025)**: Completed evaluation of navius-db crate with insights on provider pattern implementation
-12. **Design Evaluation Progress (March 29, 2025)**: Completed evaluation of navius-http crate with builder pattern implementation insights
-13. **Design Evaluation Progress (March 29, 2025)**: Completed evaluations of navius-metrics, navius-test-utils, and navius-core crates with detailed findings and recommendations
-14. **Dependency Injection Implementation (March 29, 2025)**: Completed navius-di implementation with component registration, lifecycle management, and application bootstrapping
-15. **Cross-Crate Testing Infrastructure Planning (March 29, 2025)**: Created implementation plan with phased approach and testing strategies
-16. **API Review Preparation Report (March 29, 2025)**: Created API Review Guidelines and API Inventory Tool
-17. **Connection Pooling Report (March 29, 2025)**: Completed advanced connection pooling with auto-scaling and circuit breaker implementation
-18. **Progress Report (March 29, 2025)**: Completed cache invalidation implementation in navius-cache and navius-cache-redis
-19. **Transaction Management Report (March 25, 2025)**: Detailed implementation of nested transactions with savepoints
-20. **Spring-rs Research Summary (March 15, 2025)**: Detailed findings from spring-rs investigation and integration plans
-
-## Implementation Timeline
-
-- Phase 1 (Repository Restructuring): Completed (January 2025)
-- Phase 2 (Core Infrastructure): Completed (February 2025)
-- Phase 3 (Create additional crates): Completed - March 2025 (100% complete)
-- Phase 4 (Integration and API Stabilization): In Progress - April-June 2025 (90% complete)
-  - API Review Process (April 1 - June 10, 2025)
-    - Inventory Phase (April 1-7, 2025) - ✅ Completed ahead of schedule (March 29, 2025)
-    - Design Evaluation Phase (April 8-21, 2025) - ✅ Completed ahead of schedule (March 30, 2025)
-    - Implementation Phase (April 22-May 5, 2025) - 🟡 Starting early (April 1, 2025)
-    - Verification Phase (May 6-19, 2025) - Scheduled
-    - Stabilization Phase (May 20-June 10, 2025) - Scheduled
-- Phase 5 (Migration completion): Planned - July 2025
-
-## Conclusion
-
-The workspace migration has demonstrated significant benefits in terms of modularity, performance, and maintainability. With the completion of Phase 3 and substantial progress in Phase 4, including the implementation of the dependency injection system, integration examples, and the Enhanced Error Handling System, the project is well positioned for the API Review phase. The API Inventory has been completed and the Design Evaluation phase is now complete, with assessments of all 15 crates including core infrastructure, authentication, caching, database, HTTP, event system, plugin system, dependency injection, job processing, template rendering, CLI, and messaging components. The evaluations have identified consistent patterns across crates, leading to the creation of the Provider Pattern Implementation Guide as a reference for standardized implementation. The project is now at 90% completion, with clear next steps for continuing into the Implementation phase of the API Review process.
-
-*Updated: March 30, 2025* 
-
-# Workspace Migration Status Update
-
-**Date:** March 30, 2025  
-**Status:** Phase 4 In Progress  
-**Completion:** 90%
+# Updated Workspace Migration Roadmap
 
 ## Current Status
 
-The Navius workspace migration has progressed to Phase 4: Integration and API Stabilization. We have successfully consolidated all crates into the workspace structure and are now focused on creating integration examples, finalizing our public APIs, and preparing for the API Review process.
+**Current Phase:** Phase 4 - Integration and API Stabilization (In Progress)  
+**Overall Progress:** 95%  
+**Current Priority:** Cross-Crate Testing Infrastructure (40% Complete)  
+**Last Updated:** March 29, 2025
 
-### Recent Accomplishments
+## Overview
 
-1. ✅ **Completed Design Evaluations for Messaging Crates (100%)** - Designed a provider-based messaging system with abstractions for different broker implementations and a specialized Kafka implementation with support for partitioning, consumer groups, and integration with the Kafka ecosystem.
+This document is an updated roadmap for the Navius workspace migration project, reflecting current progress and adjusted priorities. This roadmap builds upon the [original migration plan](./40-workspace-migration.md) with refined timelines and implementation details based on learnings from completed phases.
 
-2. ✅ **Completed Evaluation of navius-cli crate (100%)** - Designed a comprehensive command-line interface with a plugin-based architecture, modern command structure, and deep integration with Navius components.
+## Completed Phases
 
-3. ✅ **Completed Evaluation of navius-template crate (100%)** - Evaluated the template rendering system with insights on pluggable architecture, unified interface, and integration with multiple template engines.
+### Phase 1: Initial Workspace Setup (COMPLETE)
 
-4. ✅ **Completed Evaluation of navius-job crate (95%)** - Evaluated the background job processing system with insights on job scheduling, execution, prioritization, and retry handling.
+- [x] Create workspace structure
+- [x] Set up build system
+- [x] Define module boundaries
+- [x] Create initial crates
+- [x] Configure CI/CD pipeline
 
-5. ✅ **Completed Evaluation of navius-di crate (100%)** - Evaluated the dependency injection system with insights on lifecycle management, application bootstrapping, and type-safe component resolution.
+### Phase 2: Implement Core Functionality (COMPLETE)
 
-6. ✅ **Completed Evaluation of navius-plugin crate (100%)** - Evaluated the plugin system with insights on capability-based architecture, lifecycle management, and extension mechanisms.
+- [x] Implement core framework
+- [x] Implement auth framework
+- [x] Implement database framework
+- [x] Implement HTTP framework
+- [x] Implement cache framework
+- [x] Implement config framework
 
-7. ✅ **Completed Evaluation of navius-event crate (100%)** - Evaluated the event system with insights on the type-safe API, event filtering, and backpressure management.
+### Phase 3: Create Additional Crates (COMPLETE)
 
-8. ✅ **Completed Design Evaluation Phase (100%)** - Completed evaluations of all 15 crates:
-   - navius-metrics and navius-test-utils
-   - navius-core crate
-   - navius-http crate
-   - navius-db crate
-   - navius-cache crate
-   - navius-auth crate
-   - navius-event crate
-   - navius-plugin crate
-   - navius-di crate
-   - navius-job crate
-   - navius-template crate
-   - navius-cli crate
-   - navius-messaging-broker crate
-   - navius-messaging-kafka crate
+- [x] Create documentation generation tools
+- [x] Create example applications
+- [x] Create benchmarking tools
+- [x] Implement Microsoft Entra authentication provider
 
-9. ✅ **Completed Provider Pattern Implementation Guide (100%)** - Created comprehensive guide for implementing the provider pattern consistently across Navius crates based on database and cache evaluation findings.
+## Current Phase
 
-10. ✅ **Completed Component Registry Implementation (100%)** - The core dependency injection system has been implemented, including component scopes, lifecycle hooks, and autowiring.
+### Phase 4: Integration and API Stabilization (IN PROGRESS)
 
-11. ✅ **Completed Application Framework (100%)** - The application bootstrapping utilities, plugin loading system, and configuration management with environment support are now complete.
+- [x] Update application entry points
+  - [x] Adapt main.rs to use workspace crates
+  - [x] Update configuration handling
+  - [x] Implement component registry and dependency injection
 
-12. ✅ **Completed Integration Examples (80%)** - We have completed 4 of 5 planned integration examples:
-   - ✅ Basic Integration Example
-   - ✅ Database + Cache Integration Example
-   - ✅ Event System Integration Example
-   - ✅ Plugin System Integration Example with Dynamic Plugin Loading
-   - ⬜️ Full Stack Example (Scheduled for May)
+- [x] Reorganize application modules
+  - [x] Update imports to use workspace crates
+  - [x] Clean up legacy structures
 
-13. ✅ **Completed API Inventory (100%)** - We've completed the API Inventory phase of the API Review process, cataloging 1,404 public API items across 16 crates.
+- [x] Implement dependency injection
+  - [x] Create component registry
+  - [x] Update service initialization
 
-### Current Focus (March 30 - April 15, 2025)
+- [ ] Implement cross-crate testing infrastructure (40% complete)
+  - [x] Design testing architecture
+  - [x] Create test fixture framework
+  - [x] Create mock registry
+  - [x] Create test harness
+  - [x] Implement error testing framework
+  - [ ] Create mock implementations for interfaces (25% complete)
+  - [ ] Create integration test utilities (10% complete)
+  - [ ] Update existing tests to use new infrastructure
 
-1. **API Review & Documentation** - Leading the process of reviewing and documenting our public APIs to ensure consistency and usability.
-   - ✅ Created API Review Guidelines
-   - ✅ Developed API Inventory Tool
-   - ✅ API Inventory compilation completed (March 29, 2025)
-   - ✅ Created Provider Pattern Implementation Guide (March 29, 2025)
-   - ✅ Design Evaluation Phase completed (March 30, 2025)
-   - 🟡 Implementation Phase starting early (April 1, 2025)
+- [ ] Implement template engine (0% complete)
+  - [ ] Define template interfaces
+  - [ ] Implement basic template rendering
+  - [ ] Add template caching
+  - [ ] Create template helpers
 
-2. **Cross-Crate Testing Infrastructure** - Preparing to develop test utilities and fixtures for integration testing across crate boundaries.
+- [ ] Develop CLI interface (0% complete)
+  - [ ] Define command structure
+  - [ ] Implement core commands
+  - [ ] Add plugin support for custom commands
+  - [ ] Create documentation
 
-3. **Full Stack Integration Example** - Planning the implementation of a comprehensive application example that demonstrates all Navius components working together.
+## Upcoming Phase
 
-## Next Milestones
+### Phase 5: Finalization and Optimization (PLANNED)
+
+- [ ] Update API documentation
+  - [ ] Generate comprehensive API docs
+  - [ ] Create usage guides
+  - [ ] Document integration patterns
+
+- [ ] Create migration guide
+  - [ ] Document migration from monolith to workspace
+  - [ ] Provide examples of converting existing code
+  - [ ] Create troubleshooting guide
+
+- [ ] Create architecture documentation
+  - [ ] Document overall architecture
+  - [ ] Create diagrams for component interactions
+  - [ ] Document design decisions
+
+- [ ] Optimize build process
+  - [ ] Reduce compilation times
+  - [ ] Optimize binary size
+  - [ ] Improve incremental compilation
+
+- [ ] Review error handling
+  - [ ] Ensure consistent error handling across crates
+  - [ ] Improve error messages
+  - [ ] Add context to errors
+
+## Implementation Plan
+
+### Cross-Crate Testing Infrastructure (Current Priority)
+
+#### Mock Interface Registry Implementation (Next Focus)
+
+1. Define standard interfaces for core Navius components:
+   - Database interfaces
+   - Cache interfaces
+   - Authentication interfaces
+   - HTTP client interfaces
+   - Configuration interfaces
+
+2. Implement mock implementations for each interface:
+   - Create trait implementations that record method calls
+   - Add expectation setting and verification
+   - Ensure type safety and proper error handling
+
+3. Enhance registration mechanisms:
+   - Improve type safety for mock registration
+   - Add automatic registration capabilities
+   - Create utilities for common mock setups
+
+4. Testing and documentation:
+   - Create comprehensive examples for each mock
+   - Write thorough documentation
+   - Ensure proper integration with the test harness
+
+#### Integration Test Utilities (Following Priority)
+
+1. Implement utilities for common testing patterns:
+   - Database integration tests
+   - Cache integration tests
+   - HTTP endpoint tests
+   - Authentication flow tests
+
+2. Create helpers for testing asynchronous code:
+   - Async test utilities
+   - Timing and timeout utilities
+   - Async context management
+
+3. Add utilities for environment setup:
+   - Test environment configuration
+   - Resource provisioning and cleanup
+   - State management between tests
+
+### Template Engine Implementation (Future Work)
+
+1. Define template interfaces:
+   - Template loading and parsing
+   - Template rendering
+   - Template compilation
+   - Context management
+
+2. Implement basic template rendering:
+   - Variable substitution
+   - Control structures (if/else, loops)
+   - Partials and includes
+   - Custom functions
+
+3. Add template caching:
+   - Compiled template caching
+   - Cache invalidation
+   - Performance optimization
+
+### CLI Interface Development (Future Work)
+
+1. Define command structure:
+   - Core commands
+   - Command grouping
+   - Parameters and options
+   - Help system
+
+2. Implement core commands:
+   - Project initialization
+   - Build and test
+   - Deployment
+   - Configuration management
+
+3. Add plugin support:
+   - Plugin discovery and loading
+   - Command registration
+   - Custom command implementation
+
+## Timeline
 
 | Milestone | Target Date | Status |
 |-----------|-------------|--------|
-| API Inventory Completion | March 29, 2025 | ✅ Completed |
-| Provider Pattern Guide | March 29, 2025 | ✅ Completed |
-| Design Evaluation | April 21, 2025 | ✅ Completed (March 30) |
-| Cross-Crate Testing | April 12, 2025 | ⬜️ Scheduled |
-| Full Stack Example | May 10, 2025 | ⬜️ Scheduled |
-| API Stabilization Complete | June 10, 2025 | ⬜️ Scheduled |
-| Alpha Release | June 30, 2025 | ⬜️ Scheduled |
+| Complete Mock Interface Registry | April 10, 2025 | 🔄 In Progress (25%) |
+| Complete Integration Test Utilities | April 20, 2025 | 🔄 In Progress (10%) |
+| Complete Cross-Crate Testing | April 26, 2025 | 🔄 In Progress (40%) |
+| Start Template Engine Implementation | May 1, 2025 | ⏳ Not Started |
+| Complete Template Engine | May 15, 2025 | ⏳ Not Started |
+| Start CLI Interface Development | May 16, 2025 | ⏳ Not Started |
+| Complete CLI Interface | May 31, 2025 | ⏳ Not Started |
+| Complete Phase 4 | June 5, 2025 | 🔄 In Progress |
+| Complete Phase 5 | June 30, 2025 | ⏳ Not Started |
 
-## Phase 4 Progress Summary
+## Success Metrics
 
-| Component | Status | Progress |
-|-----------|--------|----------|
-| Component Registry | ✅ Complete | 100% |
-| Dependency Injection System | ✅ Complete | 100% |
-| Application Framework | ✅ Complete | 100% |
-| Integration Examples | 🟡 In Progress | 80% |
-| API Inventory | ✅ Complete | 100% |
-| Design Evaluation | ✅ Complete | 100% |
-| Provider Pattern Guide | ✅ Complete | 100% |
-| Implementation Phase | 🟡 Starting | 0% |
-| Verification Phase | ⬜️ Planned | 0% |
-| Stabilization Phase | ⬜️ Planned | 0% |
-| Documentation | 🟡 In Progress | 75% |
+- **Test Coverage:** >90% for all core crates
+- **Build Time:** <2 minutes for full workspace build
+- **Documentation:** Comprehensive documentation for all public APIs
+- **Error Handling:** Consistent error handling across all crates
+- **Integration:** Smooth integration between all crates
+
+## Next Steps
+
+1. Complete the Mock Interface Registry implementation (25% → 100%)
+2. Develop Integration Test Utilities (10% → 100%)
+3. Update documentation and examples
+4. Begin planning for Template Engine implementation
+5. Create project templates for bootstrapping new Navius applications
+
+## Reference Documentation
+
+For more detailed information, refer to:
+
+- [Original Migration Plan](./40-workspace-migration.md) - Initial roadmap with original plans
+- [Cross-Crate Testing Infrastructure Implementation](./sub-process/cross-crate-testing-infrastructure-implementation.md) - Detailed tracking for testing infrastructure
+- [Implementation Progress](./sub-process/implementation-progress.md) - Detailed task-level tracking
+- [Spring-rs Integration](./sub-process/spring-rs-integration-research.md) - Research on spring-rs patterns
+
+*Last Updated: March 29, 2025*
