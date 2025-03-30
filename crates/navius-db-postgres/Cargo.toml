@@ -21,6 +21,13 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 thiserror = { workspace = true }
+futures = { workspace = true }
 
 # PostgreSQL-specific dependencies
-sqlx = { workspace = true, features = ["postgres", "uuid", "chrono", "json", "macros"] } 
+sqlx = { workspace = true, features = ["postgres", "uuid", "chrono", "json", "macros", "runtime-tokio-rustls"] }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+mockall = { workspace = true }
+tempfile = { workspace = true }
+reqwest = { workspace = true } 
