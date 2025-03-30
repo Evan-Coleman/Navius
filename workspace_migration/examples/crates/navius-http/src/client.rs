@@ -364,9 +364,11 @@ impl RequestBuilder {
 mod tests {
     use super::*;
     use mockito::{Matcher, mock};
+    use navius_test::error::{TestResult, assert_eq, assert_true};
+    use std::collections::HashMap;
 
     #[tokio::test]
-    async fn test_client_get() {
+    async fn test_client_get() -> TestResult<()> {
         let url = mockito::server_url();
         let _m = mock("GET", "/test")
             .with_status(200)
@@ -375,14 +377,23 @@ mod tests {
             .create();
 
         let client = HttpClient::new().with_base_url(&url);
-        let response = client.get("/test").send().await.unwrap();
+        let response = client.get("/test").send().await?;
 
-        assert!(response.status().is_success());
-        assert_eq!(response.status().as_u16(), 200);
+        assert_true(
+            response.status().is_success(),
+            "Response status should be successful",
+        )?;
+        assert_eq(
+            response.status().as_u16(),
+            200,
+            "Response status code should be 200",
+        )?;
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_client_json() {
+    async fn test_client_json() -> TestResult<()> {
         let url = mockito::server_url();
         let _m = mock("GET", "/test-json")
             .with_status(200)
@@ -391,13 +402,19 @@ mod tests {
             .create();
 
         let client = HttpClient::new().with_base_url(&url);
-        let response: HashMap<String, String> = client.get("/test-json").get_json().await.unwrap();
+        let response: HashMap<String, String> = client.get("/test-json").get_json().await?;
 
-        assert_eq!(response.get("key").unwrap(), "value");
+        assert_eq(
+            response.get("key").unwrap(),
+            "value",
+            "Response should contain the expected JSON data",
+        )?;
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_client_post() {
+    async fn test_client_post() -> TestResult<()> {
         let url = mockito::server_url();
         let _m = mock("POST", "/test-post")
             .with_status(201)
@@ -411,9 +428,14 @@ mod tests {
             .post("/test-post")
             .json(&serde_json::json!({"name": "test"}))
             .send()
-            .await
-            .unwrap();
+            .await?;
 
-        assert_eq!(response.status().as_u16(), 201);
+        assert_eq(
+            response.status().as_u16(),
+            201,
+            "Response status code should be 201 (Created)",
+        )?;
+
+        Ok(())
     }
 }
