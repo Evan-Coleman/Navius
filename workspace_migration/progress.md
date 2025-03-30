@@ -19,7 +19,7 @@ This progress file serves as:
 ## Current Status
 
 - **Phase**: 3 - Create additional crates
-- **Overall Progress**: 70% complete
+- **Overall Progress**: 75% complete
 - **Current Focus**: Completing core crate implementations with provider-based approach
 - **Next Milestone**: Complete integration testing for navius-db-postgres and cache implementation
 - **Updated**: March 29, 2025
@@ -101,7 +101,7 @@ This progress file serves as:
     - ✅ Composite serializer for multiple formats
   - 🔄 Adding metrics and telemetry
   - 🔄 Adding comprehensive tests
-- 🔄 Creating navius-cache-redis crate (45% complete)
+- 🔄 Creating navius-cache-redis crate (50% complete)
   - ✅ Core implementation
     - ✅ Redis connection handling
     - ✅ Configuration
@@ -172,16 +172,18 @@ This progress file serves as:
 
 ## Upcoming Crates
 
-| Crate | Status | Target Date |
-|-------|--------|-------------|
-| navius-auth-entra | ⬜️ 0% | June 1, 2025 |
-| navius-cache | 🔄 60% | April 15, 2025 |
-| navius-cache-redis | 🔄 40% | April 30, 2025 |
-| navius-plugin | ⬜️ 0% | May 1, 2025 |
-| navius-event | ⬜️ 0% | May 15, 2025 |
-| navius-job | ⬜️ 0% | June 1, 2025 |
-| navius-template | ⬜️ 0% | June 15, 2025 |
-| navius-cli | ⬜️ 0% | July 1, 2025 |
+| Crate | Status | Target Date | Description |
+|-------|--------|-------------|-------------|
+| navius-auth-entra | ⬜️ 0% | June 1, 2025 | Authentication implementation |
+| navius-cache | 🔄 65% | April 15, 2025 | Cache abstraction layer |
+| navius-cache-redis | 🔄 50% | April 20, 2025 | Redis implementation for the cache layer |
+| navius-plugin | ⬜️ 0% | May 1, 2025 | Plugin system implementation |
+| navius-event | ⬜️ 0% | May 15, 2025 | Event system implementation |
+| navius-job | ⬜️ 0% | June 1, 2025 | Job processing implementation |
+| navius-template | ⬜️ 0% | June 15, 2025 | Template rendering implementation |
+| navius-cli | ⬜️ 0% | July 1, 2025 | Command-line interface implementation |
+| navius-messaging | 0% | May 1, 2025 | Message broker abstraction layer |
+| navius-messaging-rabbitmq | 0% | May 15, 2025 | RabbitMQ implementation |
 
 ## Key Accomplishments
 
@@ -276,7 +278,9 @@ The detailed implementation guide in DATABASE_PROVIDER_GUIDE.md will serve as a 
 - **Updated documentation**
   - Created progress report for cache invalidation implementation
   - Updated implementation progress tracking with completion percentages
-  - Updated overall project progress to 70%
+  - Updated overall project progress to 75%
+- **Implemented Redis pipelining functionality**
+  - ✅ Added Redis pipelining functionality for batch operations in navius-cache-redis crate
 
 ### March 25, 2025
 

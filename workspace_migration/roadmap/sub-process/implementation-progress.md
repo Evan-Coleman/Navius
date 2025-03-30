@@ -297,6 +297,35 @@ This document provides detailed tracking of implementation tasks for each crate 
     - 🔄 Integration tests
     - ⬜️ Performance benchmarks
 
+## Redis-Specific Optimizations
+
+Status: 70% Complete
+
+### Overview
+
+* ✅ **Pipelining Support**: Implemented efficient pipelining for batched operations, which significantly reduces network roundtrips and improves throughput for bulk operations.
+
+* 🟡 **Lua Scripting**: Added preliminary support for Redis Lua scripts for atomic operations, with focus on complex invalidation and atomic operations.
+
+* 🟡 **Connection Pooling Enhancements**: Added connection pooling with advanced connection management.
+
+### Pipelining Implementation
+
+* ✅ Implemented `RedisPipeline` trait with batch operations support
+* ✅ Created builder pattern for convenient pipeline construction
+* ✅ Added support for the following batch operations:
+  * ✅ `set_many` - Setting multiple key-value pairs in one operation
+  * ✅ `get_many` - Retrieving multiple values in one operation
+  * ✅ `delete_many` - Deleting multiple keys in one operation
+  * ✅ Custom pipeline execution with arbitrary commands
+* ✅ Added performance comparison examples showing significant throughput improvements
+
+### Next Steps
+
+* 🟠 Complete Lua scripting implementation for atomic operations
+* 🟠 Implement more advanced connection pooling with auto-scaling capabilities
+* 🟠 Add metrics and telemetry for pipelined operations
+
 ## Next Implementation Steps (Cache Crates)
 
 1. Complete invalidation functionality in navius-cache

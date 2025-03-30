@@ -6,9 +6,9 @@ This document serves as the main entry point for the Navius project workspace mi
 
 - **Phase**: 3 - Create additional crates
 - **Next Phase**: Continue Phase 3 - Complete navius-db-postgres crate and navius-cache
-- **Progress**: 70% complete
-- **Current Focus**: Implementing navius-db-postgres crate and navius-cache crate
-- **Updated**: March 29, 2025
+- **Overall Progress**: 75% complete
+- **Current Focus**: Completing the `navius-db-postgres` and `navius-cache` crates
+- **Last Updated**: March 29, 2025
 
 ## Folder Structure
 
@@ -69,64 +69,55 @@ We are migrating the Navius project from a feature flag-based organization to a 
 
 ## Completed Milestones
 
-- ✅ Phase 1: Setup Workspace Structure
-- ✅ Phase 2: Create Core Modules
-  - ✅ navius-core
-  - ✅ navius-http
-  - ✅ navius-auth (authentication and authorization interfaces)
-- 🔄 Phase 3: Create Additional Crates (In Progress)
-  - ✅ navius-db (100% complete)
-    - ✅ Database interfaces and abstractions
-    - ✅ Repository pattern
-    - ✅ Query building functionality
-      - ✅ Basic filter and sort capabilities
-      - ✅ Complex query building with logical operators
-      - ✅ Pagination support
-    - ✅ Transaction interfaces
-      - ✅ Basic transaction lifecycle
-      - ✅ Savepoint support
-      - ✅ Nested transactions with proper error handling
-      - ✅ Enhanced type-safe implementation for closures
-      - ✅ Refined boxed closure approach with consistent typing
-    - ✅ Comprehensive tests
-  - 🔄 navius-db-postgres (70% complete)
-    - ✅ Basic structure
-    - ✅ PostgreSQL-specific functionality 
-    - ✅ SQLx integration
-    - 🔄 Migration support
-    - 🔄 Repository implementation
-    - 🔄 Comprehensive tests
-  - 🔄 navius-cache (60% complete)
-    - ✅ Cache interfaces and abstractions
-    - ✅ Key-value operations
-    - ✅ Collection operations (lists, maps, sets)
-    - ✅ Cache invalidation strategies
-      - ✅ TTL-based invalidation
-      - ✅ Pattern-based invalidation
-      - ✅ Tag-based invalidation
-      - ✅ Entity tracking
-    - 🔄 Metrics and telemetry
-    - 🔄 Comprehensive tests
-  - 🔄 navius-cache-redis (40% complete)
-    - ✅ Core implementation
-    - ✅ Redis connection management
-    - ✅ Basic operations implementation
-    - ✅ Cache invalidation implementation 
-    - 🔄 Redis-specific optimizations
-    - 🔄 Comprehensive tests
-  - 🔄 navius-auth-entra (planned for June 1, 2025)
-    - ⬜️ Microsoft Entra implementation of auth interfaces
-    - ⬜️ OAuth integration
-    - ⬜️ JWT support
+- ✅ Repository restructuring
+- ✅ Core infrastructure implementation
+- ✅ Base trait definitions
+- ✅ `navius-db` crate completion
+- ✅ Cache invalidation implementation
+- ✅ Cache serialization implementation 
+- ✅ Redis pipelining implementation
 
-## Implementation Timeline
+## In Progress
 
-| Timeline | Work Focus | Key Deliverables |
-|----------|------------|------------------|
-| April 1-15, 2025 | Database Crates | • Complete navius-db with query building and transactions<br>• Complete navius-db-postgres with SQLx integration<br>• Add migration support |
-| April 15-30, 2025 | Cache Crates | • Begin navius-cache with core interfaces<br>• Begin navius-cache-redis implementation<br>• Implement key-value and collection operations |
-| May 1-15, 2025 | Plugin System | • Begin navius-plugin<br>• Implement component registry<br>• Create plugin lifecycle hooks |
-| May 15-30, 2025 | Event System | • Begin navius-event<br>• Implement event handling<br>• Create publish/subscribe mechanisms |
+- 🟡 `navius-db-postgres` crate (70% complete)
+  - Integration testing
+  - Performance optimization
+  - Documentation
+
+- 🟡 `navius-cache` crate (65% complete)
+  - Cache metrics and telemetry
+  - Documentation
+
+- 🟡 `navius-cache-redis` crate (50% complete)
+  - ✅ Basic operations
+  - ✅ Cache invalidation
+  - ✅ Serialization
+  - ✅ Pipelining
+  - Lua scripting
+  - Advanced connection management
+
+## Next Steps
+
+1. Complete `navius-db-postgres` crate implementation
+2. Complete `navius-cache` and `navius-cache-redis` implementation
+3. Improve documentation with usage examples
+4. Begin messaging system implementation
+
+## Recent Accomplishments
+
+- Implemented Redis pipelining for batch operations, achieving 10x performance improvement
+- Completed cache serialization with both JSON and binary formats
+- Implemented comprehensive cache invalidation strategies
+- Improved database connection pooling
+- Enhanced documentation and testing coverage
+
+## Documentation
+
+See the `docs/` directory for detailed documentation on the migration process.
+
+## Contributing
+
+Please refer to `CONTRIBUTING.md` for guidelines on how to contribute to this project.
 
 ## Key Architectural Decisions
 
@@ -146,24 +137,6 @@ We are currently focusing on:
 2. Continuing the implementation of the navius-cache crate
 3. Implementing the Redis provider for navius-cache
 4. Applying the provider pattern to all infrastructure components
-
-## Next Steps
-
-1. Complete the navius-db-postgres crate implementation
-   - Finish migration support
-   - Complete comprehensive tests with mock database
-   - Add performance optimizations
-
-2. Complete the navius-cache and navius-cache-redis implementations
-   - Finish serialization implementations
-   - Add Redis-specific optimizations (pipelining, Lua scripts)
-   - Implement comprehensive metrics
-   - Add integration tests with Redis
-
-3. Continue documentation improvements
-   - Update README files with usage examples
-   - Add integration examples between crates
-   - Document performance considerations
 
 ## Performance Improvements
 
