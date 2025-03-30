@@ -690,27 +690,34 @@ TBD - Will be detailed when implementation begins
 
 ### Crates Migration (⬜️ 0%)
 
-- [ ] **Assessment and Inventory**
-  - [ ] Create inventory of all crates in root and workspace location
-  - [ ] Document versions, dependencies, and feature flags
-  - [ ] Identify duplicate crates
-- [ ] **Code Comparison Analysis**
-  - [ ] Create methodology for determining most recent implementation
-  - [ ] Compare modification dates, versions, and features
-  - [ ] Document findings for each crate
-- [ ] **Migration Execution**
-  - [ ] Migrate infrastructure crates (core, util, test-utils)
-  - [ ] Migrate provider interface crates (db, cache, http)
-  - [ ] Migrate implementation crates (db-postgres, cache-redis, auth)
-  - [ ] Migrate service crates (event, job, messaging, plugin)
-- [ ] **Validation and Cleanup**
-  - [ ] Verify all crates compile successfully
-  - [ ] Run comprehensive test suite
-  - [ ] Update examples and documentation
-  - [ ] Remove root `/crates` directory
+- ⬜️ **Assessment and Inventory** (April 1-5, 2025)
+  - ⬜️ Create inventory of all crates in both locations
+  - ⬜️ Document versions, dependencies, and feature flags
+  - ⬜️ Identify duplicate crates
+  - ⬜️ Develop comparison methodology
+  - ⬜️ Compare implementations and document findings
+
+- ⬜️ **Migration Planning** (April 6-10, 2025)
+  - ⬜️ Create prioritized migration order
+  - ⬜️ Develop detailed migration procedures
+  - ⬜️ Establish rollback and verification processes
+  - ⬜️ Set up tracking system for migration progress
+
+- ⬜️ **Migration Execution** (April 11-18, 2025)
+  - ⬜️ Migrate infrastructure crates (core, util)
+  - ⬜️ Migrate provider interface crates (db, cache, http)
+  - ⬜️ Migrate implementation crates (db-postgres, cache-redis)
+  - ⬜️ Migrate service crates (event, messaging, plugin)
+  - ⬜️ Update integration tests and examples
+
+- ⬜️ **Finalization** (April 19-20, 2025)
+  - ⬜️ Update all documentation with new paths
+  - ⬜️ Remove root `/crates` directory
+  - ⬜️ Final validation of workspace structure
+  - ⬜️ Update CI/CD pipelines to use new structure
 
 **Assignee:** TBD  
-**Timeline:** March 30, 2025
+**Timeline:** April 1-20, 2025  
 **Dependencies:** None  
 **Documentation:** [crates-migration-plan.md](../crates-migration-plan.md)
 

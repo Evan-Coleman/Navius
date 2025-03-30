@@ -18,23 +18,45 @@ With the successful completion of Phase 3 (Create Additional Crates), the Navius
 6. Establish CI/CD pipeline for the complete workspace
 7. Prepare for first alpha release
 
+## Phase 4 Priorities
+
+Our highest priority for Phase 4 is to complete the crates migration to ensure we have a unified codebase structure. We've identified duplicate implementations in the root `/crates` directory and the `/workspace_migration/examples/crates` directory that must be consolidated.
+
+### Current Progress
+
+- ✅ Dependency Injection Implementation (50% Complete) - March 29, 2025
+- ⬜️ Crates Migration (0% Complete) - Planned April 1-20, 2025
+- ⬜️ Integration Examples (0% Complete)
+- ⬜️ API Stabilization (0% Complete)
+- ⬜️ Release Preparation (0% Complete)
+
 ## Implementation Plan
 
-### Stage 0: Crates Migration (March 30, 2025)
+### Stage 0: Crates Migration (April 1-20, 2025)
 
 See detailed plan in [crates-migration-plan.md](./crates-migration-plan.md)
 
-1. **Assessment and Inventory**
+1. **Assessment and Inventory (April 1-5, 2025)**
    - Complete inventory of all crates in root and workspace locations
-   - Code comparison analysis
+   - Code comparison analysis to determine most up-to-date implementations
    - Dependency graph mapping
 
-2. **Migration Execution**
-   - Prioritized migration of crates from `/crates` to `/workspace_migration/crates`
-   - Ensure most up-to-date implementations are preserved
-   - Complete validation of migrated codebase
+2. **Migration Planning (April 6-10, 2025)**
+   - Create prioritized migration order based on dependencies
+   - Develop detailed migration procedures
+   - Establish rollback and verification processes
 
-### Stage 1: Integration Framework (April 1-15, 2025)
+3. **Migration Execution (April 11-18, 2025)**
+   - Execute migration for each crate in priority order
+   - Validate all functionality is preserved
+   - Update integration tests and examples
+
+4. **Finalization (April 19-20, 2025)**
+   - Remove root `/crates` directory
+   - Update all documentation
+   - Final validation of the unified workspace structure
+
+### Stage 1: Integration Framework (April 21-May 5, 2025)
 
 1. **Component Registry Implementation** (🟡 50% Complete)
    - ✅ Implement lightweight component registry for dependency injection
@@ -64,7 +86,7 @@ See detailed plan in [crates-migration-plan.md](./crates-migration-plan.md)
    - Implement test fixtures for common scenarios
    - Add performance benchmarking framework
 
-### Stage 2: Integration Examples (April 15-30, 2025)
+### Stage 2: Integration Examples (May 6-20, 2025)
 
 1. **Basic Integration Example**
    - Create example showing core crates working together
@@ -90,7 +112,7 @@ See detailed plan in [crates-migration-plan.md](./crates-migration-plan.md)
    - Add monitoring and telemetry
    - Create deployment examples for different environments
 
-### Stage 3: API Stabilization (May 1-31, 2025)
+### Stage 3: API Stabilization (May 21-June 10, 2025)
 
 1. **API Review**
    - Review all public APIs for consistency and usability
@@ -110,27 +132,7 @@ See detailed plan in [crates-migration-plan.md](./crates-migration-plan.md)
    - Add performance benchmarks for key operations
    - Implement API compatibility tests
 
-### Stage 4: Spring-rs Integration (June 1-15, 2025)
-
-1. **Dependency Injection**
-   - Implement component registry based on spring-rs research
-   - Create annotation-like macros for component definition
-   - Add lifecycle hooks for components
-   - Implement autowiring mechanism
-
-2. **Configuration Management**
-   - Enhance configuration with profiles (dev, test, prod)
-   - Add configuration binding to Rust structs
-   - Implement configuration validation
-   - Add support for environment-specific configurations
-
-3. **Integration with Existing Crates**
-   - Update existing crates to work with the component registry
-   - Add configuration support to all crates
-   - Implement provider registration through component system
-   - Create examples showing the updated patterns
-
-### Stage 5: Release Preparation (June 15-30, 2025)
+### Stage 4: Release Preparation (June 11-30, 2025)
 
 1. **Performance Optimization**
    - Perform comprehensive benchmarking
@@ -160,6 +162,7 @@ See detailed plan in [crates-migration-plan.md](./crates-migration-plan.md)
 
 | Risk | Impact | Likelihood | Mitigation |
 |------|--------|------------|------------|
+| Codebase fragmentation from parallel implementations | High | High | Prioritize crates migration as first step |
 | API incompatibilities | High | Medium | Comprehensive integration testing, clear API contracts |
 | Performance regressions | Medium | Medium | Continuous benchmarking, performance regression tests |
 | Complex integration patterns | Medium | High | Clear documentation, integration examples, simplified APIs |
@@ -168,6 +171,7 @@ See detailed plan in [crates-migration-plan.md](./crates-migration-plan.md)
 
 ## Success Criteria
 
+- All crates consolidated into workspace structure
 - All crates work together seamlessly in integration examples
 - Public APIs are stable and well-documented
 - Performance meets or exceeds targets
@@ -182,32 +186,11 @@ Progress for Phase 4 will be tracked in:
 - [progress.md](../../progress.md) - High-level progress updates
 - Weekly status reports in the reports folder
 
-## Integration with Spring-rs Patterns
-
-Based on our [spring-rs research](./sub-process/spring-rs-integration-research.md), we'll implement the following patterns:
-
-1. **Component Registry**
-   - Lightweight dependency injection system
-   - Component lifecycle management
-   - Support for different scopes (singleton, prototype)
-
-2. **Configuration Management**
-   - Environment-specific configuration
-   - Type-safe configuration binding
-   - Configuration validation
-
-3. **Plugin System Integration**
-   - Enhanced plugin lifecycle hooks
-   - Plugin dependency management
-   - Dynamic plugin discovery
-
-These patterns will be implemented to complement our existing provider pattern, creating a cohesive framework for building applications.
-
 ## Next Steps
 
-1. Begin implementation of the component registry
-2. Create first integration examples
-3. Establish API review process
-4. Set up cross-crate testing infrastructure
+1. Begin crates migration assessment and inventory (April 1, 2025)
+2. Complete the component registry implementation
+3. Continue development of integration examples
+4. Establish API review process
 
-*Updated: March 31, 2025* 
+*Updated: March 29, 2025* 
