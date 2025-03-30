@@ -1,5 +1,7 @@
 use crate::config::CacheConfig;
 use crate::error::{CacheError, CacheResult};
+#[cfg(feature = "metrics")]
+use crate::metrics::{CacheOperation, CacheTimer};
 use crate::operations::{Cache, CacheKey, CacheOperations, CacheOptions};
 use async_trait::async_trait;
 use redis::{Client, RedisResult, aio::ConnectionManager};
@@ -107,6 +109,9 @@ impl CacheOperations for RedisCache {
         let prefixed_key = self.prefixed_key(key);
         debug!("Getting value for key: {}", prefixed_key);
 
+        #[cfg(feature = "metrics")]
+        let timer = CacheTimer::new(CacheOperation::Get, "redis");
+
         let result: RedisResult<Option<String>> = redis::cmd("GET")
             .arg(&prefixed_key)
             .query_async(&mut self.connection.clone())
@@ -115,14 +120,20 @@ impl CacheOperations for RedisCache {
         match result {
             Ok(Some(data)) => {
                 debug!("Found value for key: {}", prefixed_key);
+                #[cfg(feature = "metrics")]
+                timer.hit();
                 self.deserialize(data).map(Some)
             }
             Ok(None) => {
                 debug!("No value found for key: {}", prefixed_key);
+                #[cfg(feature = "metrics")]
+                timer.miss();
                 Ok(None)
             }
             Err(e) => {
                 error!("Failed to get value for key {}: {}", prefixed_key, e);
+                #[cfg(feature = "metrics")]
+                timer.error();
                 Err(e.into())
             }
         }
@@ -185,6 +196,9 @@ impl CacheOperations for RedisCache {
         let prefixed_key = self.prefixed_key(key);
         debug!("Setting value for key: {}", prefixed_key);
 
+        #[cfg(feature = "metrics")]
+        let timer = CacheTimer::new(CacheOperation::Set, "redis");
+
         let serialized = self.serialize(value)?;
         let ttl = self.get_ttl(options);
 
@@ -209,10 +223,14 @@ impl CacheOperations for RedisCache {
         match result {
             Ok(_) => {
                 debug!("Successfully set value for key: {}", prefixed_key);
+                #[cfg(feature = "metrics")]
+                timer.success();
                 Ok(())
             }
             Err(e) => {
                 error!("Failed to set value for key {}: {}", prefixed_key, e);
+                #[cfg(feature = "metrics")]
+                timer.error();
                 Err(e.into())
             }
         }
@@ -439,6 +457,9 @@ impl CacheOperations for RedisCache {
     async fn health_check(&self) -> CacheResult<()> {
         debug!("Performing Redis health check");
 
+        #[cfg(feature = "metrics")]
+        let timer = CacheTimer::new(CacheOperation::HealthCheck, "redis");
+
         let result: RedisResult<String> = redis::cmd("PING")
             .query_async(&mut self.connection.clone())
             .await;
@@ -447,12 +468,16 @@ impl CacheOperations for RedisCache {
             Ok(response) => {
                 if response == "PONG" {
                     debug!("Redis health check successful");
+                    #[cfg(feature = "metrics")]
+                    timer.success();
                     Ok(())
                 } else {
                     error!(
                         "Redis health check failed: unexpected response: {}",
                         response
                     );
+                    #[cfg(feature = "metrics")]
+                    timer.error();
                     Err(CacheError::ConnectionError(
                         "Unexpected response from Redis".to_string(),
                     ))
@@ -460,6 +485,8 @@ impl CacheOperations for RedisCache {
             }
             Err(e) => {
                 error!("Redis health check failed: {}", e);
+                #[cfg(feature = "metrics")]
+                timer.error();
                 Err(e.into())
             }
         }

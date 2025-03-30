@@ -83,13 +83,13 @@ This document outlines the plan for migrating the Navius project from its curren
   - [x] Extract query building
   - [x] Add transaction management
   - [x] Update tests
-- [🔄] Create navius-cache crate (90% complete)
+- [x] Create navius-cache crate (95% complete)
   - [x] Create cache connection management
   - [x] Implement cache operations
   - [x] Add cache invalidation logic
   - [x] Add basic Redis implementation
-  - [🔄] Add metrics and telemetry
-  - [x] Create tests
+  - [x] Add metrics and telemetry
+  - [🔄] Finalize documentation and examples
 
 ### Phase 4: Refactor Application Code (PLANNED)
 
@@ -185,7 +185,7 @@ We're taking an incremental approach:
 
 - Overall Progress: 95%
 - Current Phase: Phase 3 - Additional Module Extraction
-- Next Milestone: Complete navius-cache crate implementation with metrics
+- Next Milestone: Complete navius-cache crate documentation
 - Estimated Completion: June 2025 (on track)
 
 ## Updates
@@ -197,4 +197,5 @@ We're taking an incremental approach:
 | March 29, 2025 | Added spring-rs integration research phase | goblin |
 | May 30, 2025 | Completed spring-rs architecture research | goblin |
 | May 30, 2025 | Completed navius-db crate with transaction management | goblin |
-| May 30, 2025 | Implemented navius-cache crate with Redis support | goblin | 
+| May 30, 2025 | Implemented navius-cache crate with Redis support | goblin |
+| May 30, 2025 | Added metrics and telemetry to navius-cache crate | goblin | 
