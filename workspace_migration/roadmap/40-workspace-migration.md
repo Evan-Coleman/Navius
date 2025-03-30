@@ -79,7 +79,7 @@ For more detailed information, refer to:
   - [x] Implement error testing framework
   - [x] Create mock implementations for interfaces (100% complete)
   - [x] Create integration test utilities (100% complete)
-  - [ ] Update existing tests to use new infrastructure (60% complete)
+  - [ ] Update existing tests to use new infrastructure (70% complete)
 
 ### Phase 5: Finalize Documentation and Build (PLANNED)
 
@@ -212,7 +212,11 @@ For the complete rationale, alternatives considered, and implementation approach
 
 ## Next Steps
 
-1. Complete updating existing tests to use the Cross-Crate Testing Infrastructure (60% → 100%)
+1. Complete updating existing tests to use the Cross-Crate Testing Infrastructure (70% → 100%)
+   - Finish navius-db test migration
+   - Begin migrating navius-cache and navius-config tests
+   - Migrate remaining crate tests
+
 2. Create documentation and examples for the testing infrastructure
 3. Begin planning for the Template Engine crate implementation
 4. Start design for the CLI interface
