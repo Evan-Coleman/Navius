@@ -87,42 +87,80 @@ impl Default for Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use navius_test::error::{TestResult, assert_contains, assert_eq, assert_false, assert_true};
 
     #[test]
-    fn get_set_config() {
+    fn get_set_config() -> TestResult<()> {
         let mut config = Config::new();
-        config.set("app.name", "test-app").unwrap();
-        config.set("app.port", "8080").unwrap();
+        config.set("app.name", "test-app")?;
+        config.set("app.port", "8080")?;
 
-        assert_eq!(config.get::<String>("app.name").unwrap(), "test-app");
-        assert_eq!(config.get::<u16>("app.port").unwrap(), 8080);
+        let app_name = config.get::<String>("app.name")?;
+        assert_eq(
+            app_name,
+            "test-app".to_string(),
+            "Config should return the correct app name",
+        )?;
+
+        let app_port = config.get::<u16>("app.port")?;
+        assert_eq(
+            app_port,
+            8080,
+            "Config should return the correct port number",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn key_not_found() {
+    fn key_not_found() -> TestResult<()> {
         let config = Config::new();
         let result = config.get::<String>("app.name");
-        assert!(result.is_err());
+
+        assert_true(
+            result.is_err(),
+            "Getting a non-existent key should return an error",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn has_key() {
+    fn has_key() -> TestResult<()> {
         let mut config = Config::new();
-        config.set("app.name", "test-app").unwrap();
+        config.set("app.name", "test-app")?;
 
-        assert!(config.has("app.name"));
-        assert!(!config.has("app.port"));
+        assert_true(
+            config.has("app.name"),
+            "Config should have the key that was set",
+        )?;
+
+        assert_false(
+            config.has("app.port"),
+            "Config should not have keys that were not set",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn config_keys() {
+    fn config_keys() -> TestResult<()> {
         let mut config = Config::new();
-        config.set("app.name", "test-app").unwrap();
-        config.set("app.port", "8080").unwrap();
+        config.set("app.name", "test-app")?;
+        config.set("app.port", "8080")?;
 
         let keys = config.keys();
-        assert_eq!(keys.len(), 2);
-        assert!(keys.contains(&"app.name"));
-        assert!(keys.contains(&"app.port"));
+
+        assert_eq(
+            keys.len(),
+            2,
+            "Config should have the correct number of keys",
+        )?;
+
+        assert_contains(&keys, &"app.name", "Keys should contain app.name")?;
+
+        assert_contains(&keys, &"app.port", "Keys should contain app.port")?;
+
+        Ok(())
     }
 }

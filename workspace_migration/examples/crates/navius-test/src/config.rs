@@ -345,23 +345,54 @@ impl TestConfigBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::{
+        TestResult, assert_eq, assert_false, assert_none, assert_some, assert_true,
+    };
     use tempfile::tempdir;
 
     #[test]
-    fn test_default_config() {
+    fn test_default_config() -> TestResult<()> {
         let config = TestConfig::default();
-        assert_eq!(config.name, "unnamed_test");
-        assert!(config.description.is_none());
-        assert!(config.resources.base_dir.is_none());
-        assert!(config.resources.output_dir.is_none());
-        assert!(config.resources.cleanup);
-        assert!(config.mocks.verify_expectations);
-        assert!(config.environment.restore_after_test);
-        assert_eq!(config.timeouts.test_timeout_secs, 30);
+        assert_eq(
+            config.name,
+            "unnamed_test",
+            "Default config should have the unnamed_test name",
+        )?;
+        assert_none(
+            config.description.as_ref(),
+            "Default config should have no description",
+        )?;
+        assert_none(
+            config.resources.base_dir.as_ref(),
+            "Default config should have no base directory",
+        )?;
+        assert_none(
+            config.resources.output_dir.as_ref(),
+            "Default config should have no output directory",
+        )?;
+        assert_true(
+            config.resources.cleanup,
+            "Default config should have cleanup enabled",
+        )?;
+        assert_true(
+            config.mocks.verify_expectations,
+            "Default config should verify expectations",
+        )?;
+        assert_true(
+            config.environment.restore_after_test,
+            "Default config should restore environment after test",
+        )?;
+        assert_eq(
+            config.timeouts.test_timeout_secs,
+            30,
+            "Default config should have 30 second test timeout",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_config_builder() {
+    fn test_config_builder() -> TestResult<()> {
         let config = TestConfigBuilder::new("test_config")
             .with_description("Test configuration")
             .with_resource_dir("/tmp/test")
@@ -374,33 +405,61 @@ mod tests {
             .with_option("custom_option", "custom_value")
             .build();
 
-        assert_eq!(config.name, "test_config");
-        assert_eq!(config.description, Some("Test configuration".to_string()));
-        assert_eq!(config.resources.base_dir, Some(PathBuf::from("/tmp/test")));
-        assert_eq!(
+        assert_eq(
+            config.name,
+            "test_config",
+            "Config should have the correct name",
+        )?;
+        assert_eq(
+            config.description,
+            Some("Test configuration".to_string()),
+            "Config should have the correct description",
+        )?;
+        assert_eq(
+            config.resources.base_dir,
+            Some(PathBuf::from("/tmp/test")),
+            "Config should have the correct base directory",
+        )?;
+        assert_eq(
             config.resources.input_files.get("input"),
-            Some(&PathBuf::from("input.txt"))
-        );
-        assert_eq!(
+            Some(&PathBuf::from("input.txt")),
+            "Config should have the correct input file",
+        )?;
+        assert_eq(
             config.resources.output_dir,
-            Some(PathBuf::from("/tmp/test/output"))
-        );
-        assert!(!config.resources.cleanup);
-        assert!(config.mocks.verify_expectations);
-        assert_eq!(
+            Some(PathBuf::from("/tmp/test/output")),
+            "Config should have the correct output directory",
+        )?;
+        assert_false(
+            config.resources.cleanup,
+            "Config should have cleanup disabled",
+        )?;
+        assert_true(
+            config.mocks.verify_expectations,
+            "Config should verify expectations",
+        )?;
+        assert_eq(
             config.environment.variables.get("TEST_VAR"),
-            Some(&"test_value".to_string())
-        );
-        assert_eq!(config.timeouts.test_timeout_secs, 60);
-        assert_eq!(
-            config.get_option::<String>("custom_option").unwrap(),
-            Some("custom_value".to_string())
-        );
+            Some(&"test_value".to_string()),
+            "Config should have the correct environment variable",
+        )?;
+        assert_eq(
+            config.timeouts.test_timeout_secs,
+            60,
+            "Config should have the correct test timeout",
+        )?;
+        assert_eq(
+            config.get_option::<String>("custom_option")?,
+            Some("custom_value".to_string()),
+            "Config should have the correct custom option",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_json_serialization() {
-        let temp_dir = tempdir().unwrap();
+    fn test_json_serialization() -> TestResult<()> {
+        let temp_dir = tempdir()?;
         let config_path = temp_dir.path().join("config.json");
 
         let config = TestConfigBuilder::new("json_test")
@@ -409,25 +468,37 @@ mod tests {
             .with_env_var("TEST_VAR", "test_value")
             .build();
 
-        config.to_json_file(&config_path).unwrap();
+        config.to_json_file(&config_path)?;
 
-        let loaded_config = TestConfig::from_json_file(&config_path).unwrap();
+        let loaded_config = TestConfig::from_json_file(&config_path)?;
 
-        assert_eq!(loaded_config.name, "json_test");
-        assert_eq!(loaded_config.description, Some("JSON test".to_string()));
-        assert_eq!(
+        assert_eq(
+            loaded_config.name,
+            "json_test",
+            "Loaded config should have the correct name",
+        )?;
+        assert_eq(
+            loaded_config.description,
+            Some("JSON test".to_string()),
+            "Loaded config should have the correct description",
+        )?;
+        assert_eq(
             loaded_config.resources.base_dir,
-            Some(PathBuf::from("/tmp/test"))
-        );
-        assert_eq!(
+            Some(PathBuf::from("/tmp/test")),
+            "Loaded config should have the correct base directory",
+        )?;
+        assert_eq(
             loaded_config.environment.variables.get("TEST_VAR"),
-            Some(&"test_value".to_string())
-        );
+            Some(&"test_value".to_string()),
+            "Loaded config should have the correct environment variable",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_toml_serialization() {
-        let temp_dir = tempdir().unwrap();
+    fn test_toml_serialization() -> TestResult<()> {
+        let temp_dir = tempdir()?;
         let config_path = temp_dir.path().join("config.toml");
 
         let config = TestConfigBuilder::new("toml_test")
@@ -436,38 +507,62 @@ mod tests {
             .with_env_var("TEST_VAR", "test_value")
             .build();
 
-        config.to_toml_file(&config_path).unwrap();
+        config.to_toml_file(&config_path)?;
 
-        let loaded_config = TestConfig::from_toml_file(&config_path).unwrap();
+        let loaded_config = TestConfig::from_toml_file(&config_path)?;
 
-        assert_eq!(loaded_config.name, "toml_test");
-        assert_eq!(loaded_config.description, Some("TOML test".to_string()));
-        assert_eq!(
+        assert_eq(
+            loaded_config.name,
+            "toml_test",
+            "Loaded config should have the correct name",
+        )?;
+        assert_eq(
+            loaded_config.description,
+            Some("TOML test".to_string()),
+            "Loaded config should have the correct description",
+        )?;
+        assert_eq(
             loaded_config.resources.base_dir,
-            Some(PathBuf::from("/tmp/test"))
-        );
-        assert_eq!(
+            Some(PathBuf::from("/tmp/test")),
+            "Loaded config should have the correct base directory",
+        )?;
+        assert_eq(
             loaded_config.environment.variables.get("TEST_VAR"),
-            Some(&"test_value".to_string())
-        );
+            Some(&"test_value".to_string()),
+            "Loaded config should have the correct environment variable",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_option_access() {
+    fn test_option_access() -> TestResult<()> {
         let mut config = TestConfig::default();
         config.set_option("string_option", "string_value");
         config.set_option("int_option", "42");
         config.set_option("bool_option", "true");
 
-        assert_eq!(
-            config.get_option::<String>("string_option").unwrap(),
-            Some("string_value".to_string())
-        );
-        assert_eq!(config.get_option::<i32>("int_option").unwrap(), Some(42));
-        assert_eq!(
-            config.get_option::<bool>("bool_option").unwrap(),
-            Some(true)
-        );
-        assert_eq!(config.get_option::<String>("non_existent").unwrap(), None);
+        assert_eq(
+            config.get_option::<String>("string_option")?,
+            Some("string_value".to_string()),
+            "String option should have the correct value",
+        )?;
+        assert_eq(
+            config.get_option::<i32>("int_option")?,
+            Some(42),
+            "Integer option should have the correct value",
+        )?;
+        assert_eq(
+            config.get_option::<bool>("bool_option")?,
+            Some(true),
+            "Boolean option should have the correct value",
+        )?;
+        assert_eq(
+            config.get_option::<String>("non_existent")?,
+            None,
+            "Non-existent option should return None",
+        )?;
+
+        Ok(())
     }
 }

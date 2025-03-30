@@ -1,5 +1,6 @@
 use crate::error::DatabaseResult;
 use async_trait::async_trait;
+use navius_test::error::{TestResult, assert_eq};
 use serde::de::DeserializeOwned;
 use std::marker::PhantomData;
 
@@ -669,7 +670,7 @@ mod tests {
     }
 
     #[test]
-    fn test_query_build() {
+    fn test_query_build() -> TestResult<()> {
         let mut query = Query::<TestEntity>::new("test_table");
 
         query
@@ -680,35 +681,47 @@ mod tests {
             .offset(20);
 
         let sql = query.build_sql();
-        assert_eq!(
+        assert_eq(
             sql,
-            "SELECT * FROM test_table WHERE name = $1 AND age = $2 ORDER BY name ASC LIMIT 10 OFFSET 20"
-        );
+            "SELECT * FROM test_table WHERE name = $1 AND age = $2 ORDER BY name ASC LIMIT 10 OFFSET 20",
+            "SQL query with where, and, order by, limit, and offset should be constructed correctly",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_query_select_columns() {
+    fn test_query_select_columns() -> TestResult<()> {
         let query = Query::<TestEntity>::new("test_table").select(&["id", "name", "age"]);
 
         let sql = query.build_sql();
-        assert_eq!(sql, "SELECT id, name, age FROM test_table");
+        assert_eq(
+            sql,
+            "SELECT id, name, age FROM test_table",
+            "SQL query with select columns should be constructed correctly",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_query_or_clause() {
+    fn test_query_or_clause() -> TestResult<()> {
         let mut query = Query::<TestEntity>::new("test_table");
 
         query.where_eq("name", "test1").or_eq("name", "test2");
 
         let sql = query.build_sql();
-        assert_eq!(
+        assert_eq(
             sql,
-            "SELECT * FROM test_table WHERE name = $1 AND name = $2"
-        );
+            "SELECT * FROM test_table WHERE name = $1 AND name = $2",
+            "SQL query with OR clause should be constructed correctly",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_comparison_operators() {
+    fn test_comparison_operators() -> TestResult<()> {
         let mut query = Query::<TestEntity>::new("test_table");
 
         query
@@ -716,24 +729,33 @@ mod tests {
             .and_comp("score", ComparisonOperator::LessThanOrEqual, 100);
 
         let sql = query.build_sql();
-        assert_eq!(
+        assert_eq(
             sql,
-            "SELECT * FROM test_table WHERE age > $1 AND score <= $2"
-        );
+            "SELECT * FROM test_table WHERE age > $1 AND score <= $2",
+            "SQL query with comparison operators should be constructed correctly",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_not_operator() {
+    fn test_not_operator() -> TestResult<()> {
         let mut query = Query::<TestEntity>::new("test_table");
 
         query.not().where_eq("active", true);
 
         let sql = query.build_sql();
-        assert_eq!(sql, "SELECT * FROM test_table WHERE NOT (active = $1)");
+        assert_eq(
+            sql,
+            "SELECT * FROM test_table WHERE NOT (active = $1)",
+            "SQL query with NOT operator should be constructed correctly",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_grouping() {
+    fn test_grouping() -> TestResult<()> {
         let mut query = Query::<TestEntity>::new("test_table");
 
         query
@@ -744,14 +766,17 @@ mod tests {
             .end_group();
 
         let sql = query.build_sql();
-        assert_eq!(
+        assert_eq(
             sql,
-            "SELECT * FROM test_table WHERE type = $1 AND (age = $2 AND age = $3)"
-        );
+            "SELECT * FROM test_table WHERE type = $1 AND (age = $2 AND age = $3)",
+            "SQL query with grouping should be constructed correctly",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_multiple_order_by() {
+    fn test_multiple_order_by() -> TestResult<()> {
         let mut query = Query::<TestEntity>::new("test_table");
 
         query.order_by_multiple(&[
@@ -760,14 +785,17 @@ mod tests {
         ]);
 
         let sql = query.build_sql();
-        assert_eq!(
+        assert_eq(
             sql,
-            "SELECT * FROM test_table ORDER BY last_name ASC, first_name ASC"
-        );
+            "SELECT * FROM test_table ORDER BY last_name ASC, first_name ASC",
+            "SQL query with multiple order by clauses should be constructed correctly",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_offset_pagination() {
+    fn test_offset_pagination() -> TestResult<()> {
         let mut query = Query::<TestEntity>::new("test_table");
 
         query.paginate(PaginationStrategy::Offset {
@@ -776,11 +804,17 @@ mod tests {
         });
 
         let sql = query.build_sql();
-        assert_eq!(sql, "SELECT * FROM test_table LIMIT 10 OFFSET 20");
+        assert_eq(
+            sql,
+            "SELECT * FROM test_table LIMIT 10 OFFSET 20",
+            "SQL query with offset pagination should be constructed correctly",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_cursor_pagination_forward() {
+    fn test_cursor_pagination_forward() -> TestResult<()> {
         let mut query = Query::<TestEntity>::new("test_table");
 
         query.paginate(PaginationStrategy::Cursor {
@@ -791,14 +825,17 @@ mod tests {
         });
 
         let sql = query.build_sql();
-        assert_eq!(
+        assert_eq(
             sql,
-            "SELECT * FROM test_table WHERE id > '100' ORDER BY id ASC LIMIT 10"
-        );
+            "SELECT * FROM test_table WHERE id > '100' ORDER BY id ASC LIMIT 10",
+            "SQL query with forward cursor pagination should be constructed correctly",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_cursor_pagination_backward() {
+    fn test_cursor_pagination_backward() -> TestResult<()> {
         let mut query = Query::<TestEntity>::new("test_table");
 
         query.paginate(PaginationStrategy::Cursor {
@@ -809,14 +846,17 @@ mod tests {
         });
 
         let sql = query.build_sql();
-        assert_eq!(
+        assert_eq(
             sql,
-            "SELECT * FROM test_table WHERE id < '100' ORDER BY id DESC LIMIT 10"
-        );
+            "SELECT * FROM test_table WHERE id < '100' ORDER BY id DESC LIMIT 10",
+            "SQL query with backward cursor pagination should be constructed correctly",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_cursor_pagination_initial() {
+    fn test_cursor_pagination_initial() -> TestResult<()> {
         let mut query = Query::<TestEntity>::new("test_table");
 
         query.paginate(PaginationStrategy::Cursor {
@@ -827,11 +867,17 @@ mod tests {
         });
 
         let sql = query.build_sql();
-        assert_eq!(sql, "SELECT * FROM test_table ORDER BY id ASC LIMIT 10");
+        assert_eq(
+            sql,
+            "SELECT * FROM test_table ORDER BY id ASC LIMIT 10",
+            "SQL query with initial cursor pagination should be constructed correctly",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_complex_query_with_logical_operators() {
+    fn test_complex_query_with_logical_operators() -> TestResult<()> {
         let mut query = Query::<TestEntity>::new("test_table");
 
         query
@@ -848,9 +894,12 @@ mod tests {
             .where_eq("blocked", true);
 
         let sql = query.build_sql();
-        assert_eq!(
+        assert_eq(
             sql,
-            "SELECT * FROM test_table WHERE status = $1 AND (age = $2 OR age = $3) AND (score > $4 OR rank < $5) AND NOT (blocked = $6)"
-        );
+            "SELECT * FROM test_table WHERE status = $1 AND (age = $2 OR age = $3) AND (score > $4 OR rank < $5) AND NOT (blocked = $6)",
+            "Complex SQL query with logical operators should be constructed correctly",
+        )?;
+
+        Ok(())
     }
 }

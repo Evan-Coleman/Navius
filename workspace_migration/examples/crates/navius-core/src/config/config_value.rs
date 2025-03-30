@@ -373,48 +373,100 @@ impl Default for ConfigValues {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use navius_test::error::{TestResult, assert_eq, assert_false, assert_true};
 
     #[test]
-    fn test_config_value_conversions() {
+    fn test_config_value_conversions() -> TestResult<()> {
         // String conversions
         let string_value = ConfigValue::String("test".to_string());
-        assert_eq!(string_value.as_string().unwrap(), "test");
-        assert!(string_value.as_integer().is_err());
+        assert_eq(
+            string_value.as_string()?,
+            "test",
+            "String value should be correctly retrieved",
+        )?;
+        assert_true(
+            string_value.as_integer().is_err(),
+            "String value should not be convertible to integer",
+        )?;
 
         // Integer conversions
         let int_value = ConfigValue::Integer(42);
-        assert_eq!(int_value.as_integer().unwrap(), 42);
-        assert_eq!(int_value.as_float().unwrap(), 42.0);
-        assert!(int_value.as_string().is_err());
+        assert_eq(
+            int_value.as_integer()?,
+            42,
+            "Integer value should be correctly retrieved",
+        )?;
+        assert_eq(
+            int_value.as_float()?,
+            42.0,
+            "Integer value should be convertible to float",
+        )?;
+        assert_true(
+            int_value.as_string().is_err(),
+            "Integer value should not be convertible to string",
+        )?;
 
         // Boolean conversions
         let bool_value = ConfigValue::Boolean(true);
-        assert_eq!(bool_value.as_boolean().unwrap(), true);
-        assert!(bool_value.as_integer().is_err());
+        assert_eq(
+            bool_value.as_boolean()?,
+            true,
+            "Boolean value should be correctly retrieved",
+        )?;
+        assert_true(
+            bool_value.as_integer().is_err(),
+            "Boolean value should not be convertible to integer",
+        )?;
 
         // Complex types
         let array_value =
             ConfigValue::Array(vec![ConfigValue::Integer(1), ConfigValue::Integer(2)]);
-        let array_result = array_value.as_array().unwrap();
-        assert_eq!(array_result.len(), 2);
-        assert_eq!(array_result[0], ConfigValue::Integer(1));
+        let array_result = array_value.as_array()?;
+        assert_eq(
+            array_result.len(),
+            2,
+            "Array should have the correct length",
+        )?;
+        assert_eq(
+            array_result[0],
+            ConfigValue::Integer(1),
+            "Array element should match expected value",
+        )?;
 
         // String to boolean conversion
         let string_true = ConfigValue::String("true".to_string());
-        assert_eq!(string_true.as_boolean().unwrap(), true);
+        assert_eq(
+            string_true.as_boolean()?,
+            true,
+            "String 'true' should convert to boolean true",
+        )?;
 
         let string_yes = ConfigValue::String("yes".to_string());
-        assert_eq!(string_yes.as_boolean().unwrap(), true);
+        assert_eq(
+            string_yes.as_boolean()?,
+            true,
+            "String 'yes' should convert to boolean true",
+        )?;
 
         let string_false = ConfigValue::String("false".to_string());
-        assert_eq!(string_false.as_boolean().unwrap(), false);
+        assert_eq(
+            string_false.as_boolean()?,
+            false,
+            "String 'false' should convert to boolean false",
+        )?;
 
         let string_no = ConfigValue::String("no".to_string());
-        assert_eq!(string_no.as_boolean().unwrap(), false);
+        assert_eq(
+            string_no.as_boolean()?,
+            false,
+            "String 'no' should convert to boolean false",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_config_values() {
+    fn test_config_values() -> TestResult<()> {
         let mut config = ConfigValues::new();
 
         // Test simple values
@@ -422,10 +474,24 @@ mod tests {
         config.set("version", "1.0.0");
         config.set("port", 8080);
 
-        assert_eq!(config.get("name").unwrap().as_string().unwrap(), "test-app");
-        assert_eq!(config.get("port").unwrap().as_integer().unwrap(), 8080);
-        assert!(config.has("name"));
-        assert!(!config.has("missing"));
+        assert_eq(
+            config.get("name").unwrap().as_string()?,
+            "test-app",
+            "Config should store and retrieve string value",
+        )?;
+        assert_eq(
+            config.get("port").unwrap().as_integer()?,
+            8080,
+            "Config should store and retrieve integer value",
+        )?;
+        assert_true(
+            config.has("name"),
+            "Config should indicate that existing key exists",
+        )?;
+        assert_false(
+            config.has("missing"),
+            "Config should indicate that missing key does not exist",
+        )?;
 
         // Test nested values
         let mut db_config = HashMap::new();
@@ -434,28 +500,38 @@ mod tests {
 
         config.set("database", db_config);
 
-        let db = config.get("database").unwrap().as_object().unwrap();
-        assert_eq!(
-            db.get("url").unwrap().as_string().unwrap(),
-            "postgres://localhost"
-        );
+        let db = config.get("database").unwrap().as_object()?;
+        assert_eq(
+            db.get("url").unwrap().as_string()?,
+            "postgres://localhost",
+            "Nested config should store and retrieve string value",
+        )?;
 
         // Test dot notation access
-        assert_eq!(
-            config.get("database.url").unwrap().as_string().unwrap(),
-            "postgres://localhost"
-        );
-        assert_eq!(
-            config.get("database.port").unwrap().as_integer().unwrap(),
-            5432
-        );
+        assert_eq(
+            config.get("database.url").unwrap().as_string()?,
+            "postgres://localhost",
+            "Dot notation should access nested properties",
+        )?;
+        assert_eq(
+            config.get("database.port").unwrap().as_integer()?,
+            5432,
+            "Dot notation should access nested integer properties",
+        )?;
 
         // Test subset
         let db_subset = config.subset("database");
-        assert_eq!(
-            db_subset.get("url").unwrap().as_string().unwrap(),
-            "postgres://localhost"
-        );
-        assert_eq!(db_subset.get("port").unwrap().as_integer().unwrap(), 5432);
+        assert_eq(
+            db_subset.get("url").unwrap().as_string()?,
+            "postgres://localhost",
+            "Subset should contain the correct values",
+        )?;
+        assert_eq(
+            db_subset.get("port").unwrap().as_integer()?,
+            5432,
+            "Subset should contain the correct integer values",
+        )?;
+
+        Ok(())
     }
 }

@@ -16,6 +16,7 @@
 //!
 //! This module defines the sources from which configuration can be loaded.
 
+use navius_test::error::{TestResult, assert_contains, assert_eq};
 use std::fmt;
 use std::path::PathBuf;
 
@@ -230,47 +231,80 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn test_file_format_from_extension() {
-        assert_eq!(
+    fn test_file_format_from_extension() -> TestResult<()> {
+        assert_eq(
             FileFormat::from_extension(Path::new("config.json")),
-            FileFormat::Json
-        );
-        assert_eq!(
+            FileFormat::Json,
+            "Should detect JSON format from .json extension",
+        )?;
+
+        assert_eq(
             FileFormat::from_extension(Path::new("config.yaml")),
-            FileFormat::Yaml
-        );
-        assert_eq!(
+            FileFormat::Yaml,
+            "Should detect YAML format from .yaml extension",
+        )?;
+
+        assert_eq(
             FileFormat::from_extension(Path::new("config.yml")),
-            FileFormat::Yaml
-        );
-        assert_eq!(
+            FileFormat::Yaml,
+            "Should detect YAML format from .yml extension",
+        )?;
+
+        assert_eq(
             FileFormat::from_extension(Path::new("config.toml")),
-            FileFormat::Toml
-        );
-        assert_eq!(
+            FileFormat::Toml,
+            "Should detect TOML format from .toml extension",
+        )?;
+
+        assert_eq(
             FileFormat::from_extension(Path::new("config.ini")),
-            FileFormat::Ini
-        );
-        assert_eq!(
+            FileFormat::Ini,
+            "Should detect INI format from .ini extension",
+        )?;
+
+        assert_eq(
             FileFormat::from_extension(Path::new("config.properties")),
-            FileFormat::Properties
-        );
-        assert_eq!(
+            FileFormat::Properties,
+            "Should detect Properties format from .properties extension",
+        )?;
+
+        assert_eq(
             FileFormat::from_extension(Path::new("config")),
-            FileFormat::Json
-        );
+            FileFormat::Json,
+            "Should default to JSON format for files without extension",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_config_source_descriptions() {
+    fn test_config_source_descriptions() -> TestResult<()> {
         let file_source = ConfigSource::file("config.json", FileFormat::Json);
-        assert!(file_source.description().contains("config.json"));
+        assert_contains(
+            &file_source.description(),
+            "config.json",
+            "File source description should contain the file path",
+        )?;
 
         let env_source = ConfigSource::environment("APP_", "__");
-        assert!(env_source.description().contains("APP_"));
-        assert!(env_source.description().contains("__"));
+        assert_contains(
+            &env_source.description(),
+            "APP_",
+            "Environment source description should contain the prefix",
+        )?;
+        assert_contains(
+            &env_source.description(),
+            "__",
+            "Environment source description should contain the separator",
+        )?;
 
         let memory_source = ConfigSource::memory();
-        assert_eq!(memory_source.description(), "memory");
+        assert_eq(
+            memory_source.description(),
+            "memory",
+            "Memory source description should be 'memory'",
+        )?;
+
+        Ok(())
     }
 }

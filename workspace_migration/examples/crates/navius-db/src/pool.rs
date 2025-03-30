@@ -788,6 +788,7 @@ mod tests {
     use crate::transaction::Transaction;
     use mockall::mock;
     use mockall::predicate::*;
+    use navius_test::error::{TestResult, assert_eq, assert_true};
     use std::sync::Arc;
 
     mock! {
@@ -837,7 +838,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_transaction_auto_rollback_on_error() {
+    async fn test_transaction_auto_rollback_on_error() -> TestResult<()> {
         let mut mock_pool = MockDatabasePool::new();
         let mut mock_conn = MockDatabaseConn::new();
         let mut mock_tx = MockDatabaseTx::new();
@@ -870,13 +871,22 @@ mod tests {
             .await;
 
         // Verify that the transaction was rolled back
-        assert!(result.is_err());
-        match result {
-            Err(DatabaseError::QueryError(msg)) => {
-                assert_eq!(msg, "Test error");
-            }
-            _ => panic!("Expected QueryError"),
+        assert_true(
+            result.is_err(),
+            "Transaction should return an error when the closure returns an error",
+        )?;
+
+        if let Err(DatabaseError::QueryError(msg)) = result {
+            assert_eq(
+                msg,
+                "Test error",
+                "Error message should match the original error",
+            )?;
+        } else {
+            return Err("Expected QueryError".into());
         }
+
+        Ok(())
     }
 
     // Add more tests as needed...

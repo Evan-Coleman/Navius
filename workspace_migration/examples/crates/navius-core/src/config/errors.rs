@@ -261,39 +261,59 @@ impl ConfigError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use navius_test::error::{TestResult, assert_eq, assert_true};
 
     #[test]
-    fn test_error_display() {
+    fn test_error_display() -> TestResult<()> {
         let error = ConfigError::key_not_found("database.url");
-        assert_eq!(
+        assert_eq(
             error.to_string(),
-            "Configuration key not found: database.url"
-        );
+            "Configuration key not found: database.url",
+            "Key not found error should have the correct message",
+        )?;
 
         let error = ConfigError::type_error("string", "integer");
-        assert_eq!(
+        assert_eq(
             error.to_string(),
-            "Configuration type error: expected string, got integer"
-        );
+            "Configuration type error: expected string, got integer",
+            "Type error should have the correct message",
+        )?;
 
         let error = ConfigError::load_error("config.json", "file not found");
-        assert_eq!(
+        assert_eq(
             error.to_string(),
-            "Failed to load configuration from config.json: file not found"
-        );
+            "Failed to load configuration from config.json: file not found",
+            "Load error should have the correct message",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_error_conversions() {
+    fn test_error_conversions() -> TestResult<()> {
         let io_error = io::Error::new(io::ErrorKind::NotFound, "file not found");
         let config_error: ConfigError = io_error.into();
 
         match config_error {
-            ConfigError::Io(_) => {}
-            _ => panic!("Expected Io error variant"),
+            ConfigError::Io(_) => {
+                // The expected case
+                assert_true(
+                    true,
+                    "IO error should be converted to ConfigError::Io variant",
+                )?;
+            }
+            _ => {
+                return Err("Expected Io error variant".into());
+            }
         }
 
         let app_error: crate::error::Error = ConfigError::key_not_found("test").into();
-        assert_eq!(app_error.code(), "CONFIG_KEY_NOT_FOUND");
+        assert_eq(
+            app_error.code(),
+            "CONFIG_KEY_NOT_FOUND",
+            "Application error should have the correct error code",
+        )?;
+
+        Ok(())
     }
 }

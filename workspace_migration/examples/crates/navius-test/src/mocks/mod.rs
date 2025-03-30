@@ -1,4 +1,5 @@
 // Re-export mock implementations
+pub mod cache;
 pub mod database;
 pub mod filesystem;
 
@@ -22,9 +23,6 @@ pub mod config;
 
 // Module for authentication mocks
 pub mod auth;
-
-// Module for cache mocks
-pub mod cache;
 
 // Module for logger mocks
 pub mod logger;
@@ -68,7 +66,7 @@ pub trait CommonMocks: HasMockDatabase + HasMockFileSystem {}
 #[derive(Debug)]
 pub struct MockFixture {
     /// The mock registry
-    registry: Arc<MockRegistry>,
+    registry: Arc<crate::mock::MockRegistry>,
 
     /// The mock database client
     database: Arc<database::MockDatabaseClient>,
@@ -98,7 +96,7 @@ impl MockFixture {
     }
 
     /// Get the mock registry
-    pub fn registry(&self) -> Arc<MockRegistry> {
+    pub fn registry(&self) -> Arc<crate::mock::MockRegistry> {
         Arc::clone(&self.registry)
     }
 
