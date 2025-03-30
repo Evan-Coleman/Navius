@@ -1,0 +1,15 @@
+[package]
+name = "navius-di"
+version = "0.1.0"
+edition = "2024"
+description = "Dependency Injection for Navius applications"
+license = "Apache-2.0"
+
+[dependencies]
+async-trait = "0.1.88"
+thiserror = "2.0.12"
+tracing = "0.1.41"
+tokio = { version = "1.44.1", features = ["full"] }
+
+[dev-dependencies]
+tokio-test = "0.4.4" 
