@@ -1,35 +1,32 @@
 [package]
-name = "navius-plugin"
+name = "navius-event"
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
-description = "Plugin system for the Navius framework"
+description = "Event handling and notification interfaces for the Navius framework"
 repository = "https://github.com/navius/navius"
 readme = "README.md"
 
 [dependencies]
 async-trait = "0.1.88"
 chrono = { version = "0.4.40", features = ["serde"] }
-libloading = "0.8.6"
+futures = "0.3.31"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-semver = "1.0.26"
 thiserror = "2.0.12"
 tokio = { version = "1.44.1", features = ["full"] }
+tokio-stream = "0.1.17"
 tracing = "0.1.41"
+uuid = { version = "1.16.0", features = ["v4", "serde"] }
 
 [dev-dependencies]
 tokio-test = "0.4.4"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 
 [[example]]
-name = "simple_plugin"
-path = "examples/simple_plugin.rs"
+name = "basic_events"
+path = "examples/basic_events.rs"
 
 [[example]]
-name = "plugin_loading"
-path = "examples/plugin_loading.rs"
-
-[[example]]
-name = "plugin_capabilities"
-path = "examples/plugin_capabilities.rs" 
+name = "filtered_events"
+path = "examples/filtered_events.rs" 

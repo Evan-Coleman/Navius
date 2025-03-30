@@ -1,94 +1,97 @@
-# Next Crate Implementation Plan: navius-cache
+# Next Crate Implementation Plan: navius-job
 
-**Date**: March 29, 2025  
-**Target Implementation**: April 15, 2025
+**Date**: March 30, 2025  
+**Target Implementation**: April 20, 2025
 
 ## Overview
 
-After successful implementation of the provider pattern for database access with `navius-db` and `navius-db-postgres`, we'll apply the same architectural pattern to the caching functionality. This document outlines the plan for implementing the `navius-cache` crate and its first provider implementation, `navius-cache-redis`.
+After successful implementation of the event system with `navius-event`, we'll now focus on creating a robust background job processing system. This document outlines the plan for implementing the `navius-job` crate and potentially a first provider implementation.
 
 ## Goals
 
-1. Create a flexible caching abstraction that can support multiple backends
-2. Provide type-safe caching operations with serialization support
-3. Support key-value operations, collections, and pub/sub patterns
-4. Implement Redis as the first provider with feature-complete support
-5. Document the provider pattern for future cache implementations
+1. Create a flexible job processing abstraction that can support multiple backends
+2. Provide type-safe job definitions with serialization support
+3. Support one-time jobs, scheduled jobs, and recurring jobs
+4. Implement an in-memory job processor as the first provider
+5. Ensure integration with the existing event system
+6. Document the provider pattern for future job implementations
 
 ## Implementation Plan
 
-### Phase 1: Core Interfaces (navius-cache)
+### Phase 1: Core Interfaces (navius-job)
 
-1. **CacheProvider Interface**
-   - Define the CacheProvider trait
+1. **JobProvider Interface**
+   - Define the JobProvider trait
    - Implement provider registration
-   - Create connection configuration
+   - Create job configuration
 
-2. **Cache Operations**
-   - Key-value operations (get, set, delete)
-   - Collection operations (lists, sets, maps)
-   - Expiration and TTL management
-   - Batch operations
-   - Publish/subscribe mechanisms
+2. **Job Operations**
+   - Job definition and creation
+   - Job scheduling and queueing
+   - Job execution and monitoring
+   - Job cancellation and rescheduling
+   - Recurring job patterns (cron-like)
 
 3. **Serialization Support**
-   - Generic serialization/deserialization of cache values
+   - Generic serialization/deserialization of job payloads
    - Support for serde_json
    - Support for bincode
    - Custom serializer extension points
 
 4. **Error Handling**
-   - Define cache-specific error types
+   - Define job-specific error types
    - Error conversion utilities
    - Consistent error patterns
+   - Retry policies
 
 5. **Telemetry**
-   - Hit/miss metrics
+   - Job execution metrics
    - Timing measurements
-   - Cache size tracking
-   - Operation counters
+   - Queue size tracking
+   - Success/failure counters
 
-### Phase 2: Redis Implementation (navius-cache-redis)
+### Phase 2: Memory Implementation (navius-job-memory)
 
-1. **RedisCacheProvider**
-   - Implement the CacheProvider trait for Redis
-   - Connection pooling
-   - Redis cluster support
+1. **MemoryJobProvider**
+   - Implement the JobProvider trait for in-memory processing
+   - Worker thread management
+   - Job persistence (optional)
 
-2. **Redis Operations**
-   - Implement key-value operations
-   - Implement collection operations
-   - Implement pub/sub functionality
-   - Implement Redis-specific operations (lua scripts, etc.)
+2. **Job Operations**
+   - Implement job creation and scheduling
+   - Implement job execution
+   - Implement recurring jobs
+   - Implement job cancellation
 
-3. **Redis Configuration**
-   - Connection URL parsing
-   - Sentinel support
-   - TLS configuration
-   - Authentication options
+3. **Job Configuration**
+   - Worker thread settings
+   - Queue size limitations
+   - Job prioritization
+   - Error handling policies
 
-4. **Error Handling**
-   - Map Redis-specific errors to cache errors
-   - Redis connection error handling
-   - Redis command error handling
+4. **Integration with Event System**
+   - Job status events
+   - Job completion notifications
+   - Error reporting via events
 
-5. **Redis-specific Optimizations**
-   - Pipelining
-   - Script caching
-   - Batch operations
+5. **Memory-specific Optimizations**
+   - Efficient job scheduling
+   - Priority queues
+   - Job batching where applicable
 
 ### Phase 3: Testing
 
 1. **Unit Tests**
    - Interface tests
-   - Redis provider tests
+   - Memory provider tests
    - Error handling tests
    - Serialization tests
 
 2. **Integration Tests**
-   - End-to-end tests with Redis
-   - Connection management tests
-   - Operation correctness tests
+   - End-to-end tests with the memory provider
+   - Worker management tests
+   - Job execution correctness tests
+   - Integration with event system tests
 
 3. **Performance Tests**
    - Throughput benchmarks
@@ -102,7 +105,7 @@ After successful implementation of the provider pattern for database access with
    - Example code for common operations
    - Best practices
 
-2. **Cache Provider Guide**
+2. **Job Provider Guide**
    - Provider implementation requirements
    - Testing requirements
    - Performance considerations
@@ -115,50 +118,54 @@ After successful implementation of the provider pattern for database access with
 ## Dependencies
 
 - `navius-core`: For configuration and error handling
-- `navius-plugin`: For provider registration (when available)
-- `redis`: For Redis implementation
+- `navius-event`: For job notifications and status updates
+- `navius-plugin`: For provider registration
 - `serde`, `serde_json`: For serialization
 - `metrics`: For telemetry
 - `tokio`: For async runtime
 - `thiserror`: For error definitions
+- `chrono`: For date/time handling
+- `cron`: For cron-pattern scheduling
 
 ## Timeline
 
 - **Week 1**: Core interfaces and basic operations
-- **Week 2**: Redis implementation
-- **Week 3**: Advanced operations and testing
-- **Week 4**: Documentation and integration
+- **Week 2**: Memory implementation and event integration
+- **Week 3**: Advanced scheduling and testing
+- **Week 4**: Documentation and integration examples
 
 ## Success Criteria
 
-- All cache operations work correctly with the Redis provider
+- All job operations work correctly with the memory provider
 - Comprehensive test coverage
 - Documentation for API usage and provider implementation
-- Performance metrics show acceptable latency and throughput
-- Clean integration with the Navius plugin system (when available)
+- Performance metrics show acceptable throughput
+- Clean integration with the Navius event system and plugin system
+- Support for scheduling, recurring jobs, and error handling
 
 ## Next Steps After Completion
 
 1. Consider implementing additional providers:
-   - `navius-cache-memory`: In-memory cache implementation
-   - `navius-cache-memcached`: Memcached implementation
+   - `navius-job-redis`: Redis-backed job queue
+   - `navius-job-postgres`: PostgreSQL-backed job persistence
 
-2. Integrate the cache system with:
-   - HTTP response caching
-   - Database result caching
-   - Session storage
+2. Integrate the job system with:
+   - Event-triggered jobs
+   - HTTP webhook processing
+   - Distributed job coordination
 
 ## Risks and Mitigations
 
 | Risk | Mitigation |
 |------|------------|
-| Redis client API changes | Pin Redis client version and update carefully |
-| Performance bottlenecks | Early benchmarking and performance testing |
-| Serialization complexity | Clear documentation and strong type safety |
-| Connection handling edge cases | Robust connection pool management and timeouts |
+| Scheduling complexity | Thoroughly test cron pattern implementation |
+| Job serialization failures | Strong typing and validation for job payloads |
+| Worker thread management | Careful thread lifecycle management and monitoring |
+| Memory leaks in long-running jobs | Resource usage tracking and timeout mechanisms |
 | API design limitations | Carefully consider future-proofing interfaces |
 
 ## Related Documents
 
-- [Database Provider Pattern ADR](../docs/architectural-decisions/001-database-provider-pattern.md)
-- [Cache Implementation Progress](./sub-process/implementation-progress.md) 
+- [Plugin System Implementation](../reports/progress_2025-03-29_plugin_system.md)
+- [Event System Implementation](../reports/progress_2025-03-29_event_system_implementation.md)
+- [Job Implementation Progress](./sub-process/implementation-progress.md) 

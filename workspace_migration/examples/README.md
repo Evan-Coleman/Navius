@@ -137,6 +137,39 @@ cargo test -p navius-core
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to contribute to Navius.
 
+### Running Examples
+
+#### Database Examples
+
+```bash
+# Run database migration example
+cargo run --example migration_example --package navius-db-postgres
+```
+
+#### Cache Examples
+
+```bash
+# Run Redis cache example
+cargo run --example redis_example --package navius-cache-redis
+```
+
+#### Plugin Examples
+
+```bash
+# Run simple plugin example
+cargo run --example simple_plugin --package navius-plugin
+```
+
+#### Event System Examples
+
+```bash
+# Run basic events example
+cargo run --example basic_events --package navius-event
+
+# Run filtered events example
+cargo run --example filtered_events --package navius-event
+```
+
 ## License
 
 This project is licensed under the Apache License, Version 2.0 - see the [LICENSE](LICENSE) file for details. 

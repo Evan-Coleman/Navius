@@ -53,13 +53,19 @@
 ### Current Implementation Status by Crate
 | Crate | Status | Description |
 |-------|--------|-------------|
-| navius-core | 100% | Core utilities and shared functionality |
-| navius-http | 100% | HTTP client and server abstractions |
-| navius-auth | 100% | Authentication and authorization |
-| navius-db | 100% | Database interface and operations |
-| navius-db-postgres | 70% | PostgreSQL implementation |
-| navius-cache | 80% | Cache interface and operations |
-| navius-cache-redis | 70% | Redis implementation |
+| navius-core | ✅ 100% | Core functionality, configuration, errors |
+| navius-http | ✅ 100% | HTTP server, routing, middleware |
+| navius-auth | ✅ 100% | Authentication and authorization interfaces |
+| navius-auth-entra | ⬜️ 0% | Microsoft Entra implementation of auth interfaces |
+| navius-db | ✅ 100% | Database interfaces and abstractions |
+| navius-db-postgres | ✅ 100% | PostgreSQL implementation of database interfaces |
+| navius-cache | ✅ 100% | Caching interfaces and abstractions |
+| navius-cache-redis | ✅ 100% | Redis implementation of cache interfaces |
+| navius-plugin | ✅ 100% | Plugin system and component registry |
+| navius-event | ✅ 100% | Event handling and notification interfaces |
+| navius-job | ⬜️ 0% | Background job processing interfaces |
+| navius-template | ⬜️ 0% | Template rendering interfaces |
+| navius-cli | ⬜️ 0% | Command line tools |
 
 ### Architectural Decisions
 1. The `navius-cache` crate now implements a comprehensive serialization system that supports multiple formats, including JSON and binary serialization.
