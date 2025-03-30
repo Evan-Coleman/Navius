@@ -1,208 +1,228 @@
 # Navius API Review Guidelines
 
 **Version:** 1.0  
-**Created:** March 29, 2025  
-**Status:** Draft  
-**Phase:** Phase 4 - Integration and API Stabilization
+**Updated:** March 29, 2025  
+**Status:** Approved
 
-## Overview
+## Purpose
 
-This document outlines the guidelines and process for the API Review phase of the Navius Framework Workspace Migration project. The API Review is a critical step in ensuring that the Navius framework provides a consistent, ergonomic, and well-documented API across all crates.
+These guidelines establish the criteria and process for evaluating APIs during the Navius API Review phase. They ensure consistency, quality, and maintainability across all public interfaces in the Navius framework.
 
-## Objectives
+## API Review Principles
 
-The API Review process aims to achieve the following objectives:
-
-1. **Consistency**: Ensure consistent naming, parameter ordering, and behavior across all crates
-2. **Ergonomics**: Optimize API design for developer experience and ease of use
-3. **Documentation**: Ensure comprehensive and clear documentation for all public APIs
-4. **Type Safety**: Ensure appropriate use of Rust's type system to prevent misuse
-5. **Error Handling**: Ensure consistent and informative error handling
-6. **Object Safety**: Ensure trait designs support intended usage patterns
-7. **Future Compatibility**: Design APIs with evolution and future changes in mind
-
-## API Review Process
-
-The API Review will follow a structured process:
-
-1. **Inventory Phase** (April 1-7, 2025)
-   - Create a complete inventory of public APIs across all crates
-   - Document the purpose and current usage of each API
-   - Identify cross-crate API dependencies
-   
-2. **Design Evaluation Phase** (April 8-21, 2025)
-   - Evaluate each API against the review criteria
-   - Identify inconsistencies, usability issues, and documentation gaps
-   - Document proposed changes to improve APIs
-   
-3. **Implementation Phase** (April 22-May 5, 2025)
-   - Apply approved changes to APIs
-   - Update example code and integration tests
-   - Update documentation to reflect changes
-   
-4. **Verification Phase** (May 6-19, 2025)
-   - Test API changes against example applications
-   - Ensure all integration examples function correctly
-   - Verify documentation accuracy and completeness
-
-## Crate Prioritization
-
-The API Review will focus on crates in the following order of priority:
-
-1. **Core Crates**: `navius-core`, `navius-di`
-2. **Infrastructure Crates**: `navius-http`, `navius-db`, `navius-cache`
-3. **Integration Crates**: `navius-db-postgres`, `navius-cache-redis`
-4. **Feature Crates**: `navius-auth`, `navius-plugin`, `navius-event`
-5. **Utility Crates**: `navius-cli`, `navius-template`
+1. **Consistency** - APIs should be consistent in naming, parameter ordering, error handling, and behavior patterns across all crates.
+2. **Ergonomics** - APIs should be intuitive and easy to use correctly.
+3. **Safety** - APIs should guide users toward safe usage patterns and prevent common mistakes.
+4. **Performance** - APIs should efficiently serve their intended purpose without unexpected overhead.
+5. **Documentation** - All public APIs must be thoroughly documented.
+6. **Testability** - APIs should be designed to facilitate testing.
 
 ## Review Criteria
 
-Each API will be evaluated against the following criteria:
-
 ### 1. Naming Conventions
 
-- Function, method, and trait names should be clear and descriptive
-- Function and method names should use verbs to indicate actions
-- Trait names should describe capabilities or behaviors
-- Type names should use nouns and be concise
-- Follow Rust naming conventions (snake_case for functions, CamelCase for types)
-- Use consistent prefixing/suffixing across similar functions
+| Aspect | Guideline |
+|--------|-----------|
+| Crate Names | Use kebab-case (e.g., `navius-http`) |
+| Type Names | Use PascalCase (e.g., `HttpClient`) |
+| Trait Names | Use PascalCase (e.g., `HttpHandler`) |
+| Function/Method Names | Use snake_case (e.g., `get_user`) |
+| Constants | Use SCREAMING_SNAKE_CASE (e.g., `MAX_CONNECTIONS`) |
+| Modules | Use snake_case (e.g., `error_handling`) |
 
-### 2. Parameter Design
+**Semantic Guidelines:**
+- Use consistent verb prefixes (`get_`, `create_`, `update_`, `delete_`)
+- Avoid abbreviations unless universally recognized
+- Prefer clarity over brevity
+- Follow Rust standard library naming patterns where appropriate
 
-- Most frequently used parameters should appear first
-- Related parameters should be grouped together
-- Optional parameters should come after required parameters
-- Parameter types should be as generic as possible while maintaining type safety
-- Consider using structured options for functions with many parameters
-- Use consistent parameter ordering across similar functions
+### 2. Interface Design
+
+| Aspect | Guideline |
+|--------|-----------|
+| Method Parameters | Limit to 5 or fewer when possible |
+| Builder Pattern | Use for complex object construction |
+| Fluent Interfaces | Prefer for chainable operations |
+| Default Values | Provide sensible defaults via `Default` trait |
+| Type Parameters | Use sparingly and with clear constraints |
+| Trait Bounds | Keep minimal while ensuring correctness |
+
+**Parameter Ordering Conventions:**
+1. Subject/target of operation
+2. Required parameters
+3. Optional parameters
 
 ### 3. Error Handling
 
-- Use the `Result<T, Error>` pattern consistently
-- Ensure errors have appropriate context and are traceable
-- Use appropriate error types for each kind of failure
-- Provide extension methods for common error transformations
-- Ensure error messages are user-friendly and actionable
+| Aspect | Guideline |
+|--------|-----------|
+| Return Types | Use `Result<T, E>` for operations that can fail |
+| Error Types | Define domain-specific error types that implement `std::error::Error` |
+| Error Context | Include relevant context for debugging |
+| Panic Conditions | Document any conditions that might cause panics |
+| Result Propagation | Design for ergonomic error propagation with `?` operator |
 
-### 4. Trait Design
+### 4. Documentation
 
-- Design traits with object safety in mind where appropriate
-- Use associated types for related types that have 1:1 relationships
-- Use generic parameters for types that may have multiple implementations
-- Provide default implementations where reasonable
-- Consider trait bounds carefully to avoid unnecessary constraints
+| Aspect | Guideline |
+|--------|-----------|
+| Crate Documentation | Provide overview, examples, and architecture description |
+| Module Documentation | Explain purpose and organization |
+| Type/Trait Documentation | Describe purpose, invariants, and usage patterns |
+| Function Documentation | Document parameters, return values, errors, and examples |
+| Examples | Include at least one example per public item |
+| Rustdoc Attributes | Use `#[doc(hidden)]` for implementation details that must be public |
 
-### 5. Documentation
+**Required Documentation Sections:**
+- Brief description
+- Detailed explanation if needed
+- Examples
+- Safety considerations (if applicable)
+- Performance characteristics (if significant)
 
-- All public APIs must have documentation
-- Documentation should include:
-  - Purpose and overview
-  - Parameter descriptions
-  - Return value descriptions
-  - Error conditions and handling
-  - Example usage code
-  - Notes on performance characteristics where relevant
-  - Links to related APIs
+### 5. API Stability
 
-### 6. Async Design
+| Aspect | Guideline |
+|--------|-----------|
+| Breaking Changes | Identify and minimize potential breaking changes |
+| Feature Flags | Use for experimental or unstable features |
+| Versioning | Follow semantic versioning principles |
+| Deprecation | Mark deprecated items with `#[deprecated]` and migration path |
+| API Evolution | Design for extension without breaking changes |
 
-- Ensure consistent approach to async functions
-- Use appropriate executor traits
-- Handle cancellation appropriately
-- Document blocking operations clearly
-- Consider sync alternatives for simple operations
+### 6. Performance Considerations
 
-### 7. Type Safety
+| Aspect | Guideline |
+|--------|-----------|
+| Allocation | Minimize unnecessary allocations |
+| Copying | Prefer references over copying where appropriate |
+| Async/Sync | Clearly document blocking behavior |
+| Resource Management | Ensure proper cleanup of resources |
+| Benchmarking | Document performance characteristics of critical operations |
 
-- Use newtype patterns to prevent misuse of primitive types
-- Use enum types for closed sets of options
-- Use appropriate trait bounds to ensure type safety
-- Leverage Rust's type system to make invalid states unrepresentable
-- Consider using phantom types for additional type safety
+## Review Process
 
-## Documentation Standards
+### Pre-Review Preparation
 
-All API documentation should follow these standards:
+1. Run the API Inventory Tool to generate a complete inventory of public APIs
+2. Ensure documentation coverage meets minimum threshold (80%)
+3. Address obvious naming inconsistencies
+4. Identify cross-crate dependencies
 
-1. **Crate-level Documentation**:
-   - Overview of the crate's purpose
-   - Key concepts and abstractions
-   - Quick start example
-   - Links to major components
+### Review Phases
 
-2. **Module-level Documentation**:
-   - Purpose of the module
-   - Key types and functions
-   - Usage patterns
-   - Examples
+1. **Inventory Review** (April 1-7, 2025)
+   - Catalog all public APIs
+   - Identify interfaces missing documentation
 
-3. **Type/Trait Documentation**:
-   - Purpose and overview
-   - Methods and associated functions
-   - Implementation considerations
-   - Usage examples
+2. **Design Evaluation** (April 8-21, 2025)
+   - Apply review criteria to each public API
+   - Identify inconsistencies across crates
+   - Document required changes
 
-4. **Function/Method Documentation**:
-   - Purpose and behavior
-   - Parameter descriptions
-   - Return value descriptions
-   - Error conditions
-   - Example usage
+3. **Implementation** (April 22-May 5, 2025)
+   - Make approved changes to APIs
+   - Complete missing documentation
+   - Update tests to reflect changes
 
-5. **Example Code**:
-   - All examples must be tested using doc tests
-   - Examples should be simple but realistic
-   - Examples should showcase common use cases
+4. **Verification** (May 6-19, 2025)
+   - Verify changes address review findings
+   - Run integration tests across crates
+   - Update examples to use revised APIs
 
-## Deliverables
+5. **Stabilization** (May 20-June 10, 2025)
+   - Assign stability levels to all APIs
+   - Finalize documentation
+   - Prepare for alpha release
 
-The API Review process will produce the following deliverables:
+### API Stability Levels
 
-1. **API Inventory**: Complete list of public APIs with purpose and usage
-2. **API Evaluation Report**: Assessment of each API against review criteria
-3. **Change Proposals**: Specific changes to improve APIs
-4. **Implementation Plan**: Schedule and approach for implementing changes
-5. **Updated API Documentation**: Comprehensive documentation for all public APIs
-6. **API Stability Report**: Assessment of each API's stability and potential for change
+| Level | Description |
+|-------|-------------|
+| **Stable** | API is fully reviewed, tested, and committed to backward compatibility |
+| **Beta** | API is complete but may have minor changes before stabilization |
+| **Experimental** | API is available for testing but may change significantly |
+| **Internal** | API is not intended for public use despite being technically public |
 
-## Timeline
+## Documentation Requirements
 
-| Phase | Dates | Key Activities |
-|-------|-------|---------------|
-| Inventory | April 1-7, 2025 | Create API inventory, document current usage |
-| Evaluation | April 8-21, 2025 | Evaluate APIs against criteria, propose changes |
-| Implementation | April 22-May 5, 2025 | Apply approved changes, update documentation |
-| Verification | May 6-19, 2025 | Test changes, verify documentation accuracy |
-| Stabilization | May 20-June 10, 2025 | Finalize APIs, mark stability levels |
+### Minimal Documentation Checklist
 
-## API Versioning Strategy
+- [ ] Purpose of the item clearly stated
+- [ ] Parameters described with types and constraints
+- [ ] Return values explained
+- [ ] Error conditions documented
+- [ ] At least one usage example
+- [ ] Any safety requirements or invariants
+- [ ] Links to related APIs
 
-As part of the API Review, we will establish a versioning strategy:
+### Documentation Style Guide
 
-1. **API Stability Levels**:
-   - **Stable**: APIs that are unlikely to change
-   - **Beta**: APIs that may have minor changes before stabilization
-   - **Experimental**: APIs that may undergo significant changes
-
-2. **Versioning Practices**:
-   - Use semantic versioning for releases
-   - Document breaking changes clearly in CHANGELOG.md
-   - Provide migration guides for major version changes
-   - Use deprecation notices before removing API elements
+- Use present tense ("Returns" not "Will return")
+- Be concise but complete
+- Include code examples that can be compiled
+- Document edge cases and special behavior
+- Use consistent terminology across the codebase
 
 ## Tools and Resources
 
-The following tools and resources will be used for the API Review:
+- [API Inventory Tool](../tools/api-inventory/README.md): Catalogs public APIs and documentation status
+- [Cross-Crate Testing Infrastructure](../roadmap/sub-process/cross-crate-testing-infrastructure.md): Tools for testing APIs across crate boundaries
+- [API Review Timeline](api-review-timeline.md): Detailed schedule for the API Review process
 
-1. **Documentation Generation**: Rustdoc with custom templates
-2. **API Inventory Tool**: Custom script to extract and catalog public APIs
-3. **Consistency Checker**: Custom linting rules to enforce naming and style conventions
-4. **Test Coverage Analysis**: Cargo tarpaulin to identify untested API elements
-5. **API Usage Analysis**: Tooling to identify how APIs are used in examples and integration code
+## Appendix: API Review Checklist
 
-## Conclusion
+```markdown
+### Basic Information
+- [ ] Crate: _____________________
+- [ ] Item: _____________________
+- [ ] Location: _____________________
+- [ ] Reviewer: _____________________
+- [ ] Date: _____________________
 
-The API Review is a critical step in ensuring that the Navius framework provides a high-quality developer experience. By systematically reviewing and improving our APIs, we can ensure that the framework is consistent, ergonomic, and well-documented, which will make it easier for developers to use and contribute to the project.
+### Naming
+- [ ] Follows naming conventions
+- [ ] Name clearly communicates purpose
+- [ ] Consistent with related APIs
+
+### Design
+- [ ] Interface is intuitive
+- [ ] Parameter count and order is logical
+- [ ] Default values provided where appropriate
+- [ ] Follows builder/fluent patterns where appropriate
+
+### Error Handling
+- [ ] Uses appropriate Result types
+- [ ] Error types are descriptive
+- [ ] Error context is sufficient
+- [ ] Panic conditions are documented
+
+### Documentation
+- [ ] Complete doc comments
+- [ ] Examples are provided
+- [ ] Safety considerations noted
+- [ ] Performance characteristics described
+
+### Stability
+- [ ] Breaking change potential identified
+- [ ] Appropriate stability level assigned
+- [ ] Extension points considered
+
+### Performance
+- [ ] Minimizes allocations
+- [ ] Efficient resource usage
+- [ ] Blocking behavior documented
+
+### Overall Assessment
+- [ ] Approved as is
+- [ ] Approved with minor changes
+- [ ] Needs significant revision
+- [ ] Not approved
+
+### Comments
+_____________________
+```
+
+---
 
 *Updated: March 29, 2025* 
