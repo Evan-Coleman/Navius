@@ -23,4 +23,4 @@ uuid = { workspace = true }
 thiserror = { workspace = true }
 
 # PostgreSQL-specific dependencies
-sqlx = { version = "0.8.3", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json", "macros"] } 
+sqlx = { workspace = true, features = ["postgres", "uuid", "chrono", "json", "macros"] } 

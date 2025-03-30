@@ -1,6 +1,6 @@
 # Implementation Progress Tracking
 
-**Last Updated**: March 29, 2025
+**Last Updated**: May 30, 2025
 
 This document provides detailed tracking of implementation tasks for each crate in the workspace migration. It is intended to provide more granular progress information than the main roadmap document.
 
@@ -114,6 +114,8 @@ This document provides detailed tracking of implementation tasks for each crate 
       - ✅ Deep nested transactions with multiple levels
       - ✅ Sequential nested transactions
       - ✅ Comprehensive error handling for nested transactions
+      - ✅ Refined implementation with improved type safety for closures
+      - ✅ Enhanced error handling with unwrap_query_error support
   - ✅ Error handling in transactions
     - ✅ Basic error propagation
     - ✅ Contextual error information

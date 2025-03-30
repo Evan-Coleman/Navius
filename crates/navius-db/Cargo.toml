@@ -10,6 +10,10 @@ readme = "README.md"
 keywords = ["database", "orm", "navius"]
 categories = ["database"]
 
+[features]
+default = ["postgres"]
+postgres = []
+
 [dependencies]
 # Core dependencies
 navius-core = { path = "../navius-core", version = "0.1.0" }
@@ -20,3 +24,7 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 thiserror = { workspace = true }
+sqlx = { workspace = true, features = ["postgres", "runtime-tokio-native-tls"] }
+
+[dev-dependencies]
+mockall = "0.13.1"

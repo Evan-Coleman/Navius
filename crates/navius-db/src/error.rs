@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
 /// Database errors that can occur during database operations
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 pub enum DatabaseError {
     /// Connection errors
     #[error("Failed to connect to database: {0}")]
@@ -636,6 +636,14 @@ impl DatabaseError {
 
         let db_error = DatabaseError::SQLXError(sqlx_err);
         db_error.with_detailed_context(context)
+    }
+
+    /// Unwraps a QueryError and returns the error message
+    pub fn unwrap_query_error(&self) -> &str {
+        match self {
+            DatabaseError::QueryError(msg) => msg,
+            _ => panic!("Expected QueryError, got {:?}", self),
+        }
     }
 }
 
