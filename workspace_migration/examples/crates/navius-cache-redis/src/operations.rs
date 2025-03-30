@@ -15,35 +15,42 @@ use crate::{
     config::RedisCacheConfig,
     connection::RedisConnectionManager,
     error::{RedisCacheError, RedisCacheResult},
+    lua::RedisLuaManager,
 };
 
 /// Redis cache implementation
-#[derive(Clone)]
 pub struct RedisCache {
-    /// Connection manager
+    /// Connection manager for Redis
     connection_manager: RedisConnectionManager,
-    /// Serializer for data conversion
-    serializer: Arc<dyn CacheSerializer>,
+    /// Serializer for cache values
+    serializer: Box<dyn CacheSerializer + Send + Sync>,
+    /// Lua script manager
+    lua_manager: Option<Arc<RedisLuaManager>>,
 }
 
 impl RedisCache {
-    /// Create a new Redis cache
-    pub fn new(connection_manager: RedisConnectionManager) -> RedisCacheResult<Self> {
-        Ok(Self {
-            connection_manager,
-            serializer: Arc::new(JsonSerializer),
-        })
+    /// Create a new Redis cache with default configuration
+    pub fn new(connection_manager: RedisConnectionManager) -> CacheResult<Self> {
+        Self::with_serializer(connection_manager, JsonSerializer)
     }
 
-    /// Create a new Redis cache with a custom serializer
-    pub fn with_serializer(
+    /// Create a new Redis cache with custom serializer
+    pub fn with_serializer<S: CacheSerializer + Send + Sync + 'static>(
         connection_manager: RedisConnectionManager,
-        serializer: impl CacheSerializer + 'static,
-    ) -> RedisCacheResult<Self> {
-        Ok(Self {
+        serializer: S,
+    ) -> CacheResult<Self> {
+        // Create the Redis cache instance
+        let mut cache = Self {
             connection_manager,
-            serializer: Arc::new(serializer),
-        })
+            serializer: Box::new(serializer),
+            lua_manager: None,
+        };
+
+        // Initialize the Lua manager
+        let lua_manager = Arc::new(RedisLuaManager::new(cache.connection_manager().clone()));
+        cache.lua_manager = Some(lua_manager);
+
+        Ok(cache)
     }
 
     /// Get the connection manager
@@ -52,8 +59,22 @@ impl RedisCache {
     }
 
     /// Get the serializer
-    pub fn serializer(&self) -> &Arc<dyn CacheSerializer> {
-        &self.serializer
+    pub fn serializer(&self) -> &dyn CacheSerializer {
+        self.serializer.as_ref()
+    }
+
+    /// Get the Lua manager
+    pub fn lua_manager(&self) -> Option<&Arc<RedisLuaManager>> {
+        self.lua_manager.as_ref()
+    }
+
+    /// Enable Lua scripting support
+    pub fn with_lua_scripting(mut self) -> Self {
+        if self.lua_manager.is_none() {
+            let lua_manager = Arc::new(RedisLuaManager::new(self.connection_manager().clone()));
+            self.lua_manager = Some(lua_manager);
+        }
+        self
     }
 }
 

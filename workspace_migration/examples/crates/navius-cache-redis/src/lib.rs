@@ -9,6 +9,8 @@
 pub mod config;
 /// Redis cache invalidation
 pub mod invalidation;
+/// Redis cache lua scripting
+pub mod lua;
 /// Redis cache operations
 pub mod operations;
 /// Redis cache pipelining
@@ -17,7 +19,9 @@ pub mod pipeline;
 // Re-export important types
 pub use config::RedisCacheConfig;
 pub use invalidation::RedisInvalidator;
+pub use lua::{RedisLuaManager, RedisLuaScripting, initialize_common_scripts};
 pub use operations::RedisCache;
+pub use pipeline::{Pipeline, RedisPipeline};
 
 // Error types
 pub mod error;
