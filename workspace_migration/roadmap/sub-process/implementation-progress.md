@@ -721,7 +721,7 @@ TBD - Will be detailed when implementation begins
 **Dependencies:** None  
 **Documentation:** [crates-migration-plan.md](../crates-migration-plan.md)
 
-### Dependency Injection (🟡 50%)
+### Dependency Injection (✅ 100%)
 
 - ✅ Component registry
   - ✅ Component registration and retrieval
@@ -738,19 +738,52 @@ TBD - Will be detailed when implementation begins
   - ✅ Asynchronous lifecycle hooks
   - ✅ Proper component initialization
   - ✅ Clean shutdown with component destruction
-- ⬜️ Service initialization
-  - ⬜️ Automatic dependency resolution
-  - ⬜️ Constructor injection
-  - ⬜️ Lifecycle hooks (init, destroy)
-- ⬜️ Configuration injection
-  - ⬜️ Binding configuration to components
-  - ⬜️ Environment-specific configuration
-  - ⬜️ Configuration validation
+- ✅ Service initialization
+  - ✅ Automatic dependency resolution
+  - ✅ Constructor injection
+  - ✅ Lifecycle hooks (init, destroy)
+- ✅ Configuration injection
+  - ✅ Binding configuration to components
+  - ✅ Environment-specific configuration
+  - ✅ Configuration validation
 
 **Assignee:** Navius Development Team  
 **Timeline:** March 15-April 15, 2025  
-**Progress Report:** [dependency-injection.md](../../../reports/progress_2025-03-29_dependency_injection.md)
+**Progress Report:** [dependency-injection.md](../../../reports/progress_2025-03-29_dependency_injection.md)  
 **Example Implementation:** [dependency-injection](../../../examples/dependency-injection/main.rs)
+
+### Integration Examples (🟡 10%)
+
+- ✅ Basic Integration Example
+  - ✅ Integrate navius-core, navius-http, and navius-auth
+  - ✅ Demonstrate component registry and dependency injection
+  - ✅ Show HTTP server setup with routing
+  - ✅ Implement authentication with protected routes
+  - ✅ Add health check endpoint
+  - ✅ Document example with comprehensive README
+- ⬜️ Database + Cache Integration Example
+  - ⬜️ Integrate navius-db and navius-cache
+  - ⬜️ Demonstrate transaction management
+  - ⬜️ Implement caching strategies
+  - ⬜️ Show cache invalidation based on database changes
+  - ⬜️ Document patterns and best practices
+- ⬜️ Event System Integration Example
+  - ⬜️ Integrate navius-event and other crates
+  - ⬜️ Demonstrate event-driven architecture
+  - ⬜️ Implement event handlers for different scenarios
+  - ⬜️ Show publish-subscribe patterns
+  - ⬜️ Document event-based communication
+- ⬜️ Full Stack Example
+  - ⬜️ Integrate all major crates
+  - ⬜️ Implement a realistic application scenario
+  - ⬜️ Show deployment configuration
+  - ⬜️ Add monitoring and telemetry
+  - ⬜️ Document comprehensive application structure
+
+**Assignee:** Navius Development Team  
+**Timeline:** March 29-April 20, 2025  
+**Progress Report:** [integration_examples_progress.md](../../../reports/integration_examples_progress.md)  
+**Example Implementation:** [integration/basic](../../../examples/integration/basic)
 
 ## Notes
 

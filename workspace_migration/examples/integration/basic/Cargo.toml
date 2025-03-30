@@ -1,0 +1,12 @@
+[package]
+name = "basic-integration-example"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+navius-core = { path = "../../../examples/crates/navius-core" }
+navius-http = { path = "../../../examples/crates/navius-http" }
+navius-auth = { path = "../../../examples/crates/navius-auth" }
+tokio = { version = "1.44.1", features = ["full"] }
+serde = { version = "1.0.219", features = ["derive"] }
+async-trait = "0.1.88" 
