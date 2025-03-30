@@ -33,19 +33,22 @@ default = ["redis"]
 redis = ["dep:redis"]
 metrics = ["dep:metrics"]
 
-# Examples configuration
 [[example]]
 name = "metrics"
 required-features = ["metrics", "redis"]
+path = "examples/metrics.rs"
 
 [[example]]
 name = "basic_usage"
 required-features = ["redis"]
+path = "examples/basic_usage.rs"
 
 [[example]]
 name = "metrics_usage"
 required-features = ["metrics", "redis"]
+path = "examples/metrics_usage.rs"
 
 [[example]]
 name = "repository_pattern"
-required-features = ["redis"] 
+required-features = ["redis"]
+path = "examples/repository_pattern.rs" 

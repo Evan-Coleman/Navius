@@ -7,6 +7,8 @@ members = [
     "crates/navius-http",
     "crates/navius-auth",
     "crates/navius-db",
+    "crates/navius-cache",
+    "crates/navius-plugin",
     # Add new crates here as they are created
 ]
 
@@ -128,6 +130,10 @@ navius-http = { path = "crates/navius-http", version = "0.1.0" }
 navius-auth = { path = "crates/navius-auth", version = "0.1.0" }
 # DB crate
 navius-db = { path = "crates/navius-db", version = "0.1.0" }
+# Cache crate
+navius-cache = { path = "crates/navius-cache", version = "0.1.0" }
+# Plugin crate
+navius-plugin = { path = "crates/navius-plugin", version = "0.1.0" }
 
 # Add other crates as they are created
 
