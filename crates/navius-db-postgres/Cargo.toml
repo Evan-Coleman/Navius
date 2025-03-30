@@ -1,17 +1,18 @@
 [package]
-name = "navius-db"
+name = "navius-db-postgres"
 version = "0.1.0"
 edition = "2024"
 authors = ["Evan Coleman"]
-description = "Database functionality for the Navius framework"
+description = "PostgreSQL implementation for the Navius database framework"
 license = "Apache-2.0"
 repository = "https://github.com/Evan-Coleman/Navius"
 readme = "README.md"
-keywords = ["database", "orm", "navius"]
+keywords = ["database", "postgres", "sqlx", "orm", "navius"]
 categories = ["database"]
 
 [dependencies]
 # Core dependencies
+navius-db = { path = "../navius-db", version = "0.1.0" }
 navius-core = { path = "../navius-core", version = "0.1.0" }
 async-trait = { workspace = true }
 serde = { workspace = true }
@@ -20,3 +21,6 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 thiserror = { workspace = true }
+
+# PostgreSQL-specific dependencies
+sqlx = { version = "0.8.3", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json", "macros"] } 

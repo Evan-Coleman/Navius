@@ -7,6 +7,7 @@ members = [
     "crates/navius-http",
     "crates/navius-auth",
     "crates/navius-db",
+    "crates/navius-db-postgres",
     "crates/navius-cache",
     "crates/navius-plugin",
     "crates/navius-event",
@@ -131,6 +132,8 @@ navius-http = { path = "crates/navius-http", version = "0.1.0" }
 navius-auth = { path = "crates/navius-auth", version = "0.1.0" }
 # DB crate
 navius-db = { path = "crates/navius-db", version = "0.1.0" }
+# DB PostgreSQL implementation
+navius-db-postgres = { path = "crates/navius-db-postgres", version = "0.1.0" }
 # Cache crate
 navius-cache = { path = "crates/navius-cache", version = "0.1.0" }
 # Plugin crate

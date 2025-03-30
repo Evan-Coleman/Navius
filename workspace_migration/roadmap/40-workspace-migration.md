@@ -193,26 +193,25 @@ We're taking an incremental approach:
 | navius-core | ✅ 100% | Core functionality, configuration, errors |
 | navius-http | ✅ 100% | HTTP server, routing, middleware |
 | navius-auth | ✅ 100% | Authentication and authorization |
-| navius-db | ✅ 100% | Database access and models |
-| navius-cache | ✅ 100% | Caching functionality with Redis support and metrics |
-| navius-plugin | ✅ 100% | Plugin system and component registry |
+| navius-db | 🔄 75% | Database access and models |
+| navius-cache | 🔄 0% | Caching functionality with Redis support |
+| navius-plugin | 🔄 0% | Plugin system and component registry |
 | navius-event | 🔄 0% | Event handling and notifications |
 | navius-job | 🔄 0% | Background job processing |
 | navius-template | 🔄 0% | Template rendering and email |
 | navius-cli | 🔄 0% | Command line tools |
 
-## Overall Progress: 60%
+## Overall Progress: 40%
 
 ## Next Milestone
-- Complete the next crate: navius-event
+- Complete the navius-db crate implementation
+- Begin work on navius-cache crate
 
 ## Recent Updates
 
 | Date | Description |
 |------|-------------|
-| 2025-06-30 | Completed navius-plugin crate implementation with component registry and lifecycle hooks |
-| 2025-05-30 | Completed navius-cache crate implementation with Redis support and metrics |
-| 2025-04-15 | Completed navius-db crate implementation with entity framework |
+| 2025-03-29 | Working on navius-db crate implementation with entity framework |
 | 2025-03-01 | Completed navius-auth crate implementation with OAuth, JWT support |
 | 2025-02-15 | Completed navius-http crate implementation with routing and middleware |
 | 2025-01-30 | Completed navius-core crate implementation with config, logging |
@@ -231,7 +230,7 @@ We're taking an incremental approach:
 | May 30, 2025 | Added metrics and telemetry to navius-cache crate | goblin |
 | May 30, 2025 | Completed documentation and examples for navius-cache crate | goblin |
 | 2025-06-30 | Completed navius-plugin crate implementation with component registry and lifecycle hooks | goblin |
-| 2025-05-30 | Completed navius-cache crate implementation with Redis support and metrics | goblin |
+| 2025-05-30 | Completed navius-cache crate implementation with Redis support | goblin |
 | 2025-04-15 | Completed navius-db crate implementation with entity framework | goblin |
 | 2025-03-01 | Completed navius-auth crate implementation with OAuth, JWT support | goblin |
 | 2025-02-15 | Completed navius-http crate implementation with routing and middleware | goblin |

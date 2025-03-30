@@ -395,31 +395,99 @@ impl PgConnection {
     }
 }
 
+/// PostgreSQL transaction
+#[cfg(feature = "postgres")]
+#[derive(Debug)]
+pub struct PgTransaction {
+    tx: sqlx::Transaction<'static, sqlx::Postgres>,
+}
+
+#[cfg(feature = "postgres")]
+impl PgTransaction {
+    /// Create a new PostgreSQL transaction
+    pub fn new(tx: sqlx::Transaction<'static, sqlx::Postgres>) -> Self {
+        Self { tx }
+    }
+}
+
 #[cfg(feature = "postgres")]
 #[async_trait]
 impl DatabaseConnection for PgConnection {
     async fn execute(
         &mut self,
-        _query: &str,
-        _params: &[&(dyn sqlx::Encode<'_, sqlx::Postgres> + Sync)],
+        query: &str,
+        params: &[&(dyn sqlx::Encode<'_, sqlx::Postgres> + Sync)],
     ) -> DatabaseResult<u64> {
-        // This is a placeholder for now - actual implementation would use sqlx
-        Ok(0)
+        let result = sqlx::query_with(query, params)
+            .execute(&mut self.conn)
+            .await
+            .map_err(|e| DatabaseError::QueryError(format!("Query execution failed: {}", e)))?;
+
+        Ok(result.rows_affected())
     }
 
     async fn query(
         &mut self,
-        _query: &str,
-        _params: &[&(dyn sqlx::Encode<'_, sqlx::Postgres> + Sync)],
+        query: &str,
+        params: &[&(dyn sqlx::Encode<'_, sqlx::Postgres> + Sync)],
     ) -> DatabaseResult<Box<dyn DatabaseRowSet>> {
-        // This is a placeholder for now - actual implementation would use sqlx
-        Err(DatabaseError::QueryError("Not implemented yet".to_string()))
+        struct PgRowSet {
+            rows: Vec<sqlx::postgres::PgRow>,
+            pos: usize,
+        }
+
+        impl DatabaseRowSet for PgRowSet {
+            fn next(&mut self) -> DatabaseResult<Option<PgRow>> {
+                if self.pos >= self.rows.len() {
+                    return Ok(None);
+                }
+
+                let row = self.rows.remove(self.pos);
+                Ok(Some(PgRow::new(row)))
+            }
+        }
+
+        impl std::fmt::Debug for PgRowSet {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct("PgRowSet")
+                    .field("rows", &self.rows.len())
+                    .field("pos", &self.pos)
+                    .finish()
+            }
+        }
+
+        let rows = sqlx::query_with(query, params)
+            .fetch_all(&mut self.conn)
+            .await
+            .map_err(|e| DatabaseError::QueryError(format!("Query execution failed: {}", e)))?;
+
+        Ok(Box::new(PgRowSet { rows, pos: 0 }))
     }
 
     async fn begin(&mut self) -> DatabaseResult<Box<dyn DatabaseTransaction>> {
-        // This is a placeholder for now - actual implementation would use sqlx
-        Err(DatabaseError::TransactionError(
-            "Not implemented yet".to_string(),
-        ))
+        let tx = self.conn.begin().await.map_err(|e| {
+            DatabaseError::TransactionError(format!("Failed to begin transaction: {}", e))
+        })?;
+
+        // Convert the transaction to a 'static lifetime
+        let tx: sqlx::Transaction<'static, sqlx::Postgres> = unsafe { std::mem::transmute(tx) };
+
+        Ok(Box::new(PgTransaction::new(tx)))
+    }
+}
+
+#[cfg(feature = "postgres")]
+#[async_trait]
+impl DatabaseTransaction for PgTransaction {
+    async fn commit(self: Box<Self>) -> DatabaseResult<()> {
+        self.tx.commit().await.map_err(|e| {
+            DatabaseError::TransactionError(format!("Transaction commit failed: {}", e))
+        })
+    }
+
+    async fn rollback(self: Box<Self>) -> DatabaseResult<()> {
+        self.tx.rollback().await.map_err(|e| {
+            DatabaseError::TransactionError(format!("Transaction rollback failed: {}", e))
+        })
     }
 }

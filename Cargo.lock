@@ -1901,6 +1901,7 @@ dependencies = [
  "navius-cache",
  "navius-core",
  "navius-db",
+ "navius-db-postgres",
  "navius-event",
  "navius-http",
  "navius-plugin",
@@ -2000,6 +2001,21 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "navius-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "navius-db-postgres"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "navius-core",
+ "navius-db",
  "serde",
  "serde_json",
  "sqlx",

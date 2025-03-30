@@ -2,12 +2,8 @@
 Navius DB - Database functionality for the Navius framework
 
 This crate provides database connectivity, query execution, and ORM functionality
-for the Navius framework. It supports PostgreSQL through SQLx.
+for the Navius framework with pluggable database backends.
 */
-
-// Re-export dependencies for convenience
-#[cfg(feature = "postgres")]
-pub use sqlx;
 
 // Internal modules
 mod config;
@@ -22,12 +18,21 @@ mod transaction;
 pub use config::DatabaseConfig;
 pub use connection::DatabaseConnectionManager;
 pub use error::{DatabaseError, DatabaseResult};
-#[cfg(feature = "postgres")]
-pub use pool::PgPool;
-pub use pool::{DatabasePool, PoolOptions};
+pub use pool::{
+    DatabaseConnection, DatabasePool, DatabaseRowSet, DatabaseTransaction, PoolOptions,
+};
 pub use query::{Query, QueryBuilder, QueryExecutor, SortDirection};
 pub use repository::{Entity, Repository};
 pub use transaction::Transaction;
+
+/// Database provider interface
+pub trait DatabaseProvider: Send + Sync + 'static {
+    /// Get the provider name
+    fn name(&self) -> &'static str;
+
+    /// Get the provider version
+    fn version(&self) -> &'static str;
+}
 
 /// Database module to be used in applications
 pub mod database {
