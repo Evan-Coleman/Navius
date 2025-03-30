@@ -2,7 +2,7 @@ use crate::config::DatabaseConfig;
 use crate::error::{DatabaseError, DatabaseResult};
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 
 // Import needed traits
 use async_trait::async_trait;
@@ -684,4 +684,682 @@ impl DatabaseTransaction for PgTransaction {
 /// Savepoint names should only contain alphanumeric characters and underscores
 fn is_valid_savepoint_name(name: &str) -> bool {
     !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_')
+}
+
+impl DatabaseConnectionManager {
+    /// Run a closure within a transaction, automatically rolling back on error.
+    ///
+    /// This function starts a transaction, executes the closure with the transaction,
+    /// and then commits the transaction if the closure returns `Ok` or rolls back
+    /// the transaction if the closure returns `Err`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use navius_db::{DatabaseConnectionManager, DatabaseError};
+    ///
+    /// async fn transfer_funds(
+    ///     db: &DatabaseConnectionManager,
+    ///     from_account: &str,
+    ///     to_account: &str,
+    ///     amount: f64,
+    /// ) -> Result<(), DatabaseError> {
+    ///     db.transaction(|mut tx| async move {
+    ///         // Deduct from source account
+    ///         let from_query = "UPDATE accounts SET balance = balance - $1 WHERE account_id = $2 AND balance >= $1";
+    ///         let rows = tx.execute_with(from_query, &[&amount, &from_account]).await?;
+    ///         
+    ///         if rows == 0 {
+    ///             // No rows updated, likely insufficient funds
+    ///             return Err(DatabaseError::ValidationError("Insufficient funds".to_string()));
+    ///         }
+    ///         
+    ///         // Add to destination account
+    ///         let to_query = "UPDATE accounts SET balance = balance + $1 WHERE account_id = $2";
+    ///         tx.execute_with(to_query, &[&amount, &to_account]).await?;
+    ///         
+    ///         // Transaction automatically commits on success
+    ///         Ok(())
+    ///     }).await
+    /// }
+    /// ```
+    #[instrument(skip(self, f), level = "debug")]
+    pub async fn transaction<F, Fut, T>(&self, f: F) -> DatabaseResult<T>
+    where
+        F: FnOnce(Transaction<'_>) -> Fut,
+        Fut: std::future::Future<Output = DatabaseResult<T>>,
+    {
+        debug!("Starting database transaction");
+
+        // Get a connection from the pool
+        let conn = self.acquire().await?;
+
+        // Begin a transaction
+        let tx = conn.begin().await?;
+
+        // Execute the closure
+        match f(tx).await {
+            Ok(result) => {
+                debug!("Transaction completed successfully, committing");
+                match tx.commit().await {
+                    Ok(_) => Ok(result),
+                    Err(e) => {
+                        error!(error = %e, "Failed to commit transaction");
+                        Err(e.with_context("Transaction commit failed"))
+                    }
+                }
+            }
+            Err(e) => {
+                // Automatically roll back on error
+                warn!(error = %e, "Transaction failed, performing automatic rollback");
+
+                // Try to roll back the transaction
+                match tx.rollback().await {
+                    Ok(_) => {
+                        debug!("Transaction rollback successful");
+                        Err(e)
+                    }
+                    Err(rollback_err) => {
+                        // If rollback itself fails, return a compound error
+                        error!(
+                            original_error = %e,
+                            rollback_error = %rollback_err,
+                            "Failed to roll back transaction after error"
+                        );
+
+                        // Create context with detailed information about both errors
+                        let context = crate::error::ErrorContext::new()
+                            .with_operation("Transaction")
+                            .with_additional_info(format!(
+                                "Failed to roll back transaction: {}",
+                                rollback_err
+                            ));
+
+                        Err(e.chain_error("Transaction failed with rollback error", context))
+                    }
+                }
+            }
+        }
+    }
+
+    /// Run a closure within a transaction with retry logic for transient errors.
+    ///
+    /// This function is similar to `transaction`, but it automatically retries
+    /// the operation if a transient error occurs, such as a deadlock or
+    /// serialization failure.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use navius_db::{DatabaseConnectionManager, DatabaseError};
+    ///
+    /// async fn update_counter(db: &DatabaseConnectionManager, id: i32) -> Result<i32, DatabaseError> {
+    ///     // Retry up to 3 times on transient errors like deadlocks
+    ///     db.transaction_with_retry(3, |mut tx| async move {
+    ///         // Update counter
+    ///         let query = "UPDATE counters SET value = value + 1 WHERE id = $1 RETURNING value";
+    ///         let rows = tx.query_with(query, &[&id]).await?;
+    ///         
+    ///         let row = rows.first()?;
+    ///         let new_value: i32 = row.get("value")?;
+    ///         
+    ///         Ok(new_value)
+    ///     }).await
+    /// }
+    /// ```
+    #[instrument(skip(self, f), level = "debug")]
+    pub async fn transaction_with_retry<F, Fut, T>(
+        &self,
+        max_attempts: usize,
+        f: F,
+    ) -> DatabaseResult<T>
+    where
+        F: Fn(Transaction<'_>) -> Fut + Send + Sync,
+        Fut: std::future::Future<Output = DatabaseResult<T>> + Send,
+    {
+        debug!(max_attempts, "Starting database transaction with retry");
+
+        if max_attempts == 0 {
+            return Err(DatabaseError::ValidationError(
+                "max_attempts must be greater than 0".to_string(),
+            ));
+        }
+
+        let mut attempt = 0;
+        let mut last_error = None;
+
+        // Try multiple times
+        while attempt < max_attempts {
+            attempt += 1;
+            debug!(attempt, max_attempts, "Transaction retry attempt");
+
+            // Get a connection from the pool
+            let conn = match self.acquire().await {
+                Ok(conn) => conn,
+                Err(e) => {
+                    // If we can't get a connection, don't retry
+                    return Err(e.with_context(format!(
+                        "Failed to acquire connection for transaction (attempt {}/{})",
+                        attempt, max_attempts
+                    )));
+                }
+            };
+
+            // Begin a transaction
+            let tx = match conn.begin().await {
+                Ok(tx) => tx,
+                Err(e) => {
+                    // If we can't begin a transaction, don't retry
+                    return Err(e.with_context(format!(
+                        "Failed to begin transaction (attempt {}/{})",
+                        attempt, max_attempts
+                    )));
+                }
+            };
+
+            // Execute the closure
+            match f(tx).await {
+                Ok(result) => {
+                    debug!(
+                        "Transaction successful, committing (attempt {}/{})",
+                        attempt, max_attempts
+                    );
+
+                    // Commit the transaction
+                    match tx.commit().await {
+                        Ok(_) => {
+                            debug!("Transaction commit successful");
+                            return Ok(result);
+                        }
+                        Err(e) => {
+                            if e.is_transient() && attempt < max_attempts {
+                                // If commit fails with a transient error, we can retry
+                                warn!(
+                                    error = %e,
+                                    attempt,
+                                    max_attempts,
+                                    "Transaction commit failed with transient error, retrying"
+                                );
+                                last_error = Some(e);
+                                continue;
+                            } else {
+                                // Non-transient error or last attempt
+                                error!(
+                                    error = %e,
+                                    attempt,
+                                    max_attempts,
+                                    "Transaction commit failed"
+                                );
+                                return Err(e.with_context(format!(
+                                    "Transaction commit failed (attempt {}/{})",
+                                    attempt, max_attempts
+                                )));
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    // Try to roll back the transaction
+                    let _ = tx.rollback().await;
+
+                    if e.is_transient() && attempt < max_attempts {
+                        // If the error is transient and we have attempts left, retry
+                        warn!(
+                            error = %e,
+                            attempt,
+                            max_attempts,
+                            "Transaction failed with transient error, retrying"
+                        );
+                        last_error = Some(e);
+                    } else {
+                        // Non-transient error or last attempt
+                        if e.is_transient() {
+                            warn!(
+                                error = %e,
+                                attempt,
+                                max_attempts,
+                                "Transaction failed with transient error on final attempt"
+                            );
+                        } else {
+                            debug!(
+                                error = %e,
+                                attempt,
+                                max_attempts,
+                                "Transaction failed with non-transient error"
+                            );
+                        }
+
+                        return Err(e.with_context(format!(
+                            "Transaction failed (attempt {}/{})",
+                            attempt, max_attempts
+                        )));
+                    }
+                }
+            }
+        }
+
+        // If we get here, all attempts failed with transient errors
+        let err = last_error.unwrap_or_else(|| {
+            DatabaseError::UnexpectedStateError(
+                "No error was recorded but all transaction retry attempts failed".to_string(),
+            )
+        });
+
+        error!(
+            error = %err,
+            attempts = attempt,
+            "All transaction retry attempts failed with transient errors"
+        );
+
+        Err(err.with_context(format!(
+            "Transaction failed after {} retry attempts",
+            max_attempts
+        )))
+    }
+
+    /// Execute a nested function in the database transaction with savepoints
+    ///
+    /// This method is useful when you need to perform multiple operations that should
+    /// be seen as a single unit, but you also want to be able to roll back parts of the
+    /// transaction if specific operations fail.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use navius_db::{DatabaseConnectionManager, DatabaseError};
+    ///
+    /// async fn complex_operation(db: &DatabaseConnectionManager) -> Result<(), DatabaseError> {
+    ///     db.transaction_nested(|mut tx| async move {
+    ///         // First part of transaction
+    ///         tx.execute("INSERT INTO logs (message) VALUES ('Starting operation')").await?;
+    ///         
+    ///         // Nested transaction that may fail
+    ///         let result = tx.nested(|| async {
+    ///             tx.execute("UPDATE accounts SET status = 'PROCESSING' WHERE id = 123").await?;
+    ///             
+    ///             // This might fail, and only the nested part will be rolled back
+    ///             tx.execute("INSERT INTO process_queue (account_id) VALUES (123)").await
+    ///         }).await;
+    ///         
+    ///         if result.is_err() {
+    ///             // Log the failure but continue with the transaction
+    ///             tx.execute("INSERT INTO logs (message) VALUES ('Processing failed')").await?;
+    ///         } else {
+    ///             tx.execute("INSERT INTO logs (message) VALUES ('Processing succeeded')").await?;
+    ///         }
+    ///         
+    ///         // The main transaction still commits
+    ///         tx.execute("INSERT INTO logs (message) VALUES ('Operation completed')").await?;
+    ///         
+    ///         Ok(())
+    ///     }).await
+    /// }
+    /// ```
+    #[instrument(skip(self, f), level = "debug")]
+    pub async fn transaction_nested<F, Fut, T>(&self, f: F) -> DatabaseResult<T>
+    where
+        F: FnOnce(Transaction<'_>) -> Fut,
+        Fut: std::future::Future<Output = DatabaseResult<T>>,
+    {
+        debug!("Starting database transaction with nested support");
+
+        // Get a connection from the pool
+        let conn = self.acquire().await?;
+
+        // Begin a transaction
+        let tx = conn.begin().await?;
+
+        // Execute the closure
+        match f(tx).await {
+            Ok(result) => {
+                debug!("Transaction completed successfully, committing");
+                match tx.commit().await {
+                    Ok(_) => Ok(result),
+                    Err(e) => {
+                        error!(error = %e, "Failed to commit transaction");
+                        Err(e.with_context("Transaction commit failed"))
+                    }
+                }
+            }
+            Err(e) => {
+                // Automatically roll back on error
+                warn!(error = %e, "Transaction failed, performing automatic rollback");
+
+                // Try to roll back the transaction
+                match tx.rollback().await {
+                    Ok(_) => {
+                        debug!("Transaction rollback successful");
+                        Err(e)
+                    }
+                    Err(rollback_err) => {
+                        // If rollback itself fails, return a compound error
+                        error!(
+                            original_error = %e,
+                            rollback_error = %rollback_err,
+                            "Failed to roll back transaction after error"
+                        );
+
+                        // Create context with detailed information about both errors
+                        let context = crate::error::ErrorContext::new()
+                            .with_operation("Transaction")
+                            .with_additional_info(format!(
+                                "Failed to roll back transaction: {}",
+                                rollback_err
+                            ));
+
+                        Err(e.chain_error("Transaction failed with rollback error", context))
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::DatabaseError;
+    use crate::transaction::Transaction;
+    use mockall::mock;
+    use mockall::predicate::*;
+    use std::sync::Arc;
+
+    mock! {
+        pub DatabasePool {}
+
+        impl DatabasePool for DatabasePool {
+            async fn acquire(&self) -> DatabaseResult<Box<dyn DatabaseConnection>>;
+            async fn close(&self) -> DatabaseResult<()>;
+            fn name(&self) -> &str;
+        }
+    }
+
+    mock! {
+        pub DatabaseConn {}
+
+        impl DatabaseConnection for DatabaseConn {
+            async fn execute(&mut self, query: &str, params: &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]) -> DatabaseResult<u64>;
+            async fn query(&mut self, query: &str, params: &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]) -> DatabaseResult<Box<dyn DatabaseRowSet>>;
+            async fn begin(&mut self) -> DatabaseResult<Transaction>;
+            async fn close(self: Box<Self>) -> DatabaseResult<()>;
+        }
+    }
+
+    mock! {
+        pub DatabaseTx {}
+
+        impl DatabaseTransaction for DatabaseTx {
+            async fn execute(&mut self, query: &str, params: &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]) -> DatabaseResult<u64>;
+            async fn query(&mut self, query: &str, params: &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]) -> DatabaseResult<Box<dyn DatabaseRowSet>>;
+            async fn commit(self: Box<Self>) -> DatabaseResult<()>;
+            async fn rollback(self: Box<Self>) -> DatabaseResult<()>;
+        }
+    }
+
+    mock! {
+        pub DatabaseRows {}
+
+        impl DatabaseRowSet for DatabaseRows {
+            fn len(&self) -> usize;
+            fn is_empty(&self) -> bool;
+            fn first(&self) -> DatabaseResult<Box<dyn DatabaseRow>>;
+            fn get(&self, idx: usize) -> DatabaseResult<Box<dyn DatabaseRow>>;
+            fn iter(&self) -> Box<dyn Iterator<Item = DatabaseResult<Box<dyn DatabaseRow>>> + '_>;
+        }
+    }
+
+    mock! {
+        pub DatabaseRowData {}
+
+        impl DatabaseRow for DatabaseRowData {
+            fn get<T: sqlx::Type<sqlx::Postgres> + 'static>(&self, col: &str) -> DatabaseResult<T>;
+            fn get_raw<T: sqlx::Type<sqlx::Postgres> + 'static>(&self, col: usize) -> DatabaseResult<T>;
+            fn columns(&self) -> &[&str];
+        }
+    }
+
+    #[tokio::test]
+    async fn test_transaction_auto_rollback_on_error() {
+        let mut mock_pool = MockDatabasePool::new();
+        let mut mock_conn = MockDatabaseConn::new();
+        let mut mock_tx = MockDatabaseTx::new();
+
+        // Set up the mock pool to return a mocked connection
+        mock_pool
+            .expect_acquire()
+            .times(1)
+            .return_once(move || Ok(Box::new(mock_conn)));
+
+        // Set up the mock connection
+        mock_conn.expect_begin().times(1).returning(move || {
+            let tx = Box::new(mock_tx);
+            Ok(Transaction::new(tx))
+        });
+
+        // Set up expectations for rollback
+        mock_tx.expect_rollback().times(1).returning(|_| Ok(()));
+
+        // Create a connection manager with the mock pool
+        let manager = DatabaseConnectionManager {
+            pool: Arc::new(Box::new(mock_pool) as Box<dyn DatabasePool>),
+        };
+
+        // Execute a transaction that returns an error
+        let result = manager
+            .transaction(|_tx| async {
+                Err::<(), _>(DatabaseError::QueryError("Test error".to_string()))
+            })
+            .await;
+
+        // Verify that the transaction was rolled back
+        assert!(result.is_err());
+        match result {
+            Err(DatabaseError::QueryError(msg)) => {
+                assert_eq!(msg, "Test error");
+            }
+            _ => panic!("Expected QueryError"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_transaction_auto_rollback_failure() {
+        let mut mock_pool = MockDatabasePool::new();
+        let mut mock_conn = MockDatabaseConn::new();
+        let mut mock_tx = MockDatabaseTx::new();
+
+        // Set up the mock pool to return a mocked connection
+        mock_pool
+            .expect_acquire()
+            .times(1)
+            .return_once(move || Ok(Box::new(mock_conn)));
+
+        // Set up the mock connection
+        mock_conn.expect_begin().times(1).returning(move || {
+            let tx = Box::new(mock_tx);
+            Ok(Transaction::new(tx))
+        });
+
+        // Set up expectations for rollback to fail
+        mock_tx.expect_rollback().times(1).returning(|_| {
+            Err(DatabaseError::TransactionError(
+                "Rollback failed".to_string(),
+            ))
+        });
+
+        // Create a connection manager with the mock pool
+        let manager = DatabaseConnectionManager {
+            pool: Arc::new(Box::new(mock_pool) as Box<dyn DatabasePool>),
+        };
+
+        // Execute a transaction that returns an error
+        let result = manager
+            .transaction(|_tx| async {
+                Err::<(), _>(DatabaseError::QueryError("Test error".to_string()))
+            })
+            .await;
+
+        // Verify that we get a chained error with both the original and rollback errors
+        assert!(result.is_err());
+        match result {
+            Err(DatabaseError::ChainedError { message, chain, .. }) => {
+                assert!(message.contains("Transaction failed with rollback error"));
+                assert_eq!(chain.len(), 1);
+                assert!(matches!(*chain[0], DatabaseError::QueryError(_)));
+            }
+            _ => panic!("Expected ChainedError"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_transaction_commit_success() {
+        let mut mock_pool = MockDatabasePool::new();
+        let mut mock_conn = MockDatabaseConn::new();
+        let mut mock_tx = MockDatabaseTx::new();
+
+        // Set up the mock pool to return a mocked connection
+        mock_pool
+            .expect_acquire()
+            .times(1)
+            .return_once(move || Ok(Box::new(mock_conn)));
+
+        // Set up the mock connection
+        mock_conn.expect_begin().times(1).returning(move || {
+            let tx = Box::new(mock_tx);
+            Ok(Transaction::new(tx))
+        });
+
+        // Set up expectations for commit
+        mock_tx.expect_commit().times(1).returning(|_| Ok(()));
+
+        // Create a connection manager with the mock pool
+        let manager = DatabaseConnectionManager {
+            pool: Arc::new(Box::new(mock_pool) as Box<dyn DatabasePool>),
+        };
+
+        // Execute a transaction that succeeds
+        let result = manager.transaction(|_tx| async { Ok(42) }).await;
+
+        // Verify that the transaction was committed and returned the correct result
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[tokio::test]
+    async fn test_transaction_commit_failure() {
+        let mut mock_pool = MockDatabasePool::new();
+        let mut mock_conn = MockDatabaseConn::new();
+        let mut mock_tx = MockDatabaseTx::new();
+
+        // Set up the mock pool to return a mocked connection
+        mock_pool
+            .expect_acquire()
+            .times(1)
+            .return_once(move || Ok(Box::new(mock_conn)));
+
+        // Set up the mock connection
+        mock_conn.expect_begin().times(1).returning(move || {
+            let tx = Box::new(mock_tx);
+            Ok(Transaction::new(tx))
+        });
+
+        // Set up expectations for commit to fail
+        mock_tx
+            .expect_commit()
+            .times(1)
+            .returning(|_| Err(DatabaseError::TransactionError("Commit failed".to_string())));
+
+        // Create a connection manager with the mock pool
+        let manager = DatabaseConnectionManager {
+            pool: Arc::new(Box::new(mock_pool) as Box<dyn DatabasePool>),
+        };
+
+        // Execute a transaction that succeeds but fails to commit
+        let result = manager.transaction(|_tx| async { Ok(42) }).await;
+
+        // Verify that we get an error about the commit failure
+        assert!(result.is_err());
+        match result {
+            Err(DatabaseError::WithContext { context, source }) => {
+                assert_eq!(context, "Transaction commit failed");
+                assert!(matches!(*source, DatabaseError::TransactionError(_)));
+            }
+            _ => panic!("Expected WithContext error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_transaction_with_retry_success_after_transient_error() {
+        let mut mock_pool = MockDatabasePool::new();
+
+        // For the first attempt
+        let mut mock_conn1 = MockDatabaseConn::new();
+        let mut mock_tx1 = MockDatabaseTx::new();
+
+        // For the second attempt that will succeed
+        let mut mock_conn2 = MockDatabaseConn::new();
+        let mut mock_tx2 = MockDatabaseTx::new();
+
+        // Set up the mock pool to return mocked connections
+        mock_pool.expect_acquire().times(2).returning(move || {
+            // Return a different connection each time
+            if mock_conn1.checkpoint.len() == 0 {
+                Ok(Box::new(mock_conn1))
+            } else {
+                Ok(Box::new(mock_conn2))
+            }
+        });
+
+        // Set up the first mock connection
+        mock_conn1.expect_begin().times(1).returning(move || {
+            let tx = Box::new(mock_tx1);
+            Ok(Transaction::new(tx))
+        });
+
+        // Set up the second mock connection
+        mock_conn2.expect_begin().times(1).returning(move || {
+            let tx = Box::new(mock_tx2);
+            Ok(Transaction::new(tx))
+        });
+
+        // Set up expectations for commit on the second transaction
+        mock_tx2.expect_commit().times(1).returning(|_| Ok(()));
+
+        // Set up expectations for rollback on the first transaction
+        mock_tx1.expect_rollback().times(1).returning(|_| Ok(()));
+
+        // Create a connection manager with the mock pool
+        let manager = DatabaseConnectionManager {
+            pool: Arc::new(Box::new(mock_pool) as Box<dyn DatabasePool>),
+        };
+
+        // A variable to track which attempt we're on
+        let attempt = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let attempt_clone = attempt.clone();
+
+        // Execute a transaction with retry that fails with a transient error on first attempt
+        let result = manager
+            .transaction_with_retry(3, move |_tx| {
+                let current_attempt =
+                    attempt_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                async move {
+                    if current_attempt == 0 {
+                        // First attempt fails with a transient error
+                        let err = sqlx::Error::Database(Box::new(sqlx::error::DatabaseError::new(
+                            "40001", // serialization_failure - transient error
+                            "Serialization failure",
+                        )));
+                        Err(DatabaseError::SQLXError(err))
+                    } else {
+                        // Second attempt succeeds
+                        Ok(42)
+                    }
+                }
+            })
+            .await;
+
+        // Verify that we get the correct result after retrying
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 42);
+        assert_eq!(attempt.load(std::sync::atomic::Ordering::SeqCst), 2); // Should have made 2 attempts
+    }
 }

@@ -321,7 +321,7 @@ impl<T> QueryBuilder for Query<T> {
             return self.where_eq(column, _value);
         }
 
-        // If we're in a group, the OR is implicit in how we'll join the conditions
+        // Create a new OR condition
         let param_index = self.next_param_index();
         let condition = FilterCondition::Simple {
             column: column.to_string(),
@@ -329,7 +329,40 @@ impl<T> QueryBuilder for Query<T> {
             param_index,
         };
 
-        self.add_condition(condition);
+        // For OR conditions outside of a group, we need to create a logical group
+        if self.group_stack.is_empty() {
+            // Take the last condition from the main conditions list
+            if let Some(last_condition) = self.conditions.pop() {
+                // Create a new OR group with the last condition and the new one
+                let or_group = FilterCondition::Group {
+                    operator: LogicalOperator::Or,
+                    conditions: vec![last_condition, condition],
+                };
+
+                // Add the OR group to main conditions
+                self.conditions.push(or_group);
+                return self;
+            }
+        }
+
+        // If we're in a group and it's an OR group, add the condition normally
+        if let Some((LogicalOperator::Or, conditions)) = self.group_stack.last_mut() {
+            conditions.push(condition);
+        } else {
+            // If we're in an AND group, we need to handle differently
+            if let Some((LogicalOperator::And, _)) = self.group_stack.last() {
+                // Start an OR subgroup
+                self.or_group();
+                // Add the condition
+                self.add_condition(condition);
+                // End the OR subgroup
+                self.end_group();
+            } else {
+                // Fallback: treat as normal condition
+                self.add_condition(condition);
+            }
+        }
+
         self
     }
 
@@ -371,6 +404,11 @@ impl<T> QueryBuilder for Query<T> {
 
     fn end_group(&mut self) -> &mut Self {
         if let Some((operator, conditions)) = self.group_stack.pop() {
+            if conditions.is_empty() {
+                // Don't create empty groups
+                return self;
+            }
+
             let group_condition = FilterCondition::Group {
                 operator,
                 conditions,
@@ -423,17 +461,33 @@ impl<T> QueryBuilder for Query<T> {
             } => {
                 self.limit_value = Some(limit);
 
+                // If we have a cursor value, add a condition based on cursor and direction
                 if let Some(cursor_value) = cursor {
-                    let op = if forward {
+                    let operator = if forward {
                         ComparisonOperator::GreaterThan
                     } else {
                         ComparisonOperator::LessThan
                     };
 
-                    // Add cursor condition
-                    self.where_raw(&format!("{} {} '{}'", column, op.as_sql(), cursor_value));
+                    // Add the cursor condition to the query
+                    self.where_raw(&format!(
+                        "{} {} '{}'",
+                        column,
+                        operator.as_sql(),
+                        cursor_value
+                    ));
 
-                    // Order by the cursor column
+                    // Set the order direction based on forward/backward pagination
+                    let direction = if forward {
+                        SortDirection::Ascending
+                    } else {
+                        SortDirection::Descending
+                    };
+
+                    // Order by the cursor column to ensure consistent results
+                    self.order_by(&column, direction);
+                } else {
+                    // No cursor, just order by the column
                     let direction = if forward {
                         SortDirection::Ascending
                     } else {
@@ -490,7 +544,8 @@ impl<T> Query<T> {
         let mut parts = Vec::new();
 
         for (i, condition) in conditions.iter().enumerate() {
-            // Only add AND between conditions (not before the first one)
+            // For the first condition, no prefix
+            // For subsequent conditions in an AND context, use "AND "
             let prefix = if i > 0 { "AND " } else { "" };
 
             match condition {
@@ -528,18 +583,67 @@ impl<T> Query<T> {
                     operator,
                     conditions,
                 } => {
-                    let inner_clause = self.build_where_clause(conditions);
-
+                    // Build the inner clause with appropriate logic
                     match operator {
                         LogicalOperator::Not => {
+                            let inner_clause = self.build_where_clause(conditions);
                             parts.push(format!("{}NOT ({})", prefix, inner_clause));
                         }
                         LogicalOperator::And => {
+                            let inner_clause = self.build_where_clause(conditions);
                             parts.push(format!("{}({})", prefix, inner_clause));
                         }
                         LogicalOperator::Or => {
-                            // Convert ANDs to ORs in the inner clause
-                            let or_clause = inner_clause.replace("AND ", "OR ");
+                            // For OR groups, we need to join conditions with OR
+                            let mut or_parts = Vec::new();
+
+                            for (j, inner_condition) in conditions.iter().enumerate() {
+                                match inner_condition {
+                                    FilterCondition::Simple {
+                                        column,
+                                        operator,
+                                        param_index,
+                                    } => match operator {
+                                        ComparisonOperator::IsNull => {
+                                            or_parts.push(format!("{} IS NULL", column));
+                                        }
+                                        ComparisonOperator::IsNotNull => {
+                                            or_parts.push(format!("{} IS NOT NULL", column));
+                                        }
+                                        ComparisonOperator::In | ComparisonOperator::NotIn => {
+                                            or_parts.push(format!(
+                                                "{} {} (${{{}}}_array)",
+                                                column,
+                                                operator.as_sql(),
+                                                param_index
+                                            ));
+                                        }
+                                        _ => {
+                                            or_parts.push(format!(
+                                                "{} {} ${}",
+                                                column,
+                                                operator.as_sql(),
+                                                param_index
+                                            ));
+                                        }
+                                    },
+                                    FilterCondition::Group { .. } => {
+                                        // For nested groups within OR, recursively build
+                                        let inner_sql =
+                                            self.build_where_clause(&[inner_condition.clone()]);
+                                        // Remove any leading "AND " that might be present
+                                        let clean_inner_sql =
+                                            inner_sql.trim_start_matches("AND ").to_string();
+                                        or_parts.push(clean_inner_sql);
+                                    }
+                                    FilterCondition::Raw(sql) => {
+                                        or_parts.push(sql.clone());
+                                    }
+                                }
+                            }
+
+                            // Join all OR parts
+                            let or_clause = or_parts.join(" OR ");
                             parts.push(format!("{}({})", prefix, or_clause));
                         }
                     }
@@ -676,7 +780,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cursor_pagination() {
+    fn test_cursor_pagination_forward() {
         let mut query = Query::<TestEntity>::new("test_table");
 
         query.paginate(PaginationStrategy::Cursor {
@@ -690,6 +794,63 @@ mod tests {
         assert_eq!(
             sql,
             "SELECT * FROM test_table WHERE id > '100' ORDER BY id ASC LIMIT 10"
+        );
+    }
+
+    #[test]
+    fn test_cursor_pagination_backward() {
+        let mut query = Query::<TestEntity>::new("test_table");
+
+        query.paginate(PaginationStrategy::Cursor {
+            limit: 10,
+            column: "id".to_string(),
+            cursor: Some("100".to_string()),
+            forward: false,
+        });
+
+        let sql = query.build_sql();
+        assert_eq!(
+            sql,
+            "SELECT * FROM test_table WHERE id < '100' ORDER BY id DESC LIMIT 10"
+        );
+    }
+
+    #[test]
+    fn test_cursor_pagination_initial() {
+        let mut query = Query::<TestEntity>::new("test_table");
+
+        query.paginate(PaginationStrategy::Cursor {
+            limit: 10,
+            column: "id".to_string(),
+            cursor: None,
+            forward: true,
+        });
+
+        let sql = query.build_sql();
+        assert_eq!(sql, "SELECT * FROM test_table ORDER BY id ASC LIMIT 10");
+    }
+
+    #[test]
+    fn test_complex_query_with_logical_operators() {
+        let mut query = Query::<TestEntity>::new("test_table");
+
+        query
+            .where_eq("status", "active")
+            .and_group()
+            .where_eq("age", 18)
+            .or_eq("age", 21)
+            .end_group()
+            .and_group()
+            .where_comp("score", ComparisonOperator::GreaterThan, 70)
+            .or_comp("rank", ComparisonOperator::LessThan, 100)
+            .end_group()
+            .not()
+            .where_eq("blocked", true);
+
+        let sql = query.build_sql();
+        assert_eq!(
+            sql,
+            "SELECT * FROM test_table WHERE status = $1 AND (age = $2 OR age = $3) AND (score > $4 OR rank < $5) AND NOT (blocked = $6)"
         );
     }
 }

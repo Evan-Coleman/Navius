@@ -124,6 +124,74 @@ use tracing::{debug, error, info, instrument, warn};
 ///     }).await
 /// }
 /// ```
+///
+/// # Nested Transaction Sequence
+///
+/// You can execute multiple nested transactions sequentially using the `nested_sequence` method.
+///
+/// ```rust
+/// use navius_db::{DatabaseConnectionManager, PgPool, PoolOptions, DatabaseError};
+///
+/// async fn complex_nested_sequence(db: &DatabaseConnectionManager) -> Result<(), DatabaseError> {
+///     db.transaction(|mut tx| async move {
+///         // Level 1
+///         tx.deep_nested(1, |mut tx| async move {
+///             tx.execute("INSERT INTO logs (message) VALUES ('Level 1')").await?;
+///             
+///             // Level 2
+///             tx.deep_nested(2, |mut tx| async move {
+///                 tx.execute("INSERT INTO logs (message) VALUES ('Level 2')").await?;
+///                 
+///                 // Level 3 - will fail
+///                 let level3_result = tx.deep_nested(3, |mut tx| async move {
+///                     tx.execute("INSERT INTO logs (message) VALUES ('Level 3')").await?;
+///                     Err(DatabaseError::ValidationError("Level 3 error".to_string()))
+///                 }).await;
+///                 
+///                 // Level 3 failed but Level 2 continues
+///                 assert!(level3_result.is_err());
+///                 tx.execute("INSERT INTO logs (message) VALUES ('Level 2 continues')").await
+///             }).await?;
+///             
+///             tx.execute("INSERT INTO logs (message) VALUES ('Level 1 continues')").await
+///         }).await
+///     }).await
+/// }
+/// ```
+///
+/// # Deep Nested Transactions
+///
+/// You can execute deeply nested transactions with proper cleanup using the `deep_nested` method.
+///
+/// ```rust
+/// use navius_db::{DatabaseConnectionManager, PgPool, PoolOptions, DatabaseError};
+///
+/// async fn complex_deep_nested(db: &DatabaseConnectionManager) -> Result<(), DatabaseError> {
+///     db.transaction(|mut tx| async move {
+///         // Level 1
+///         tx.deep_nested(1, |mut tx| async move {
+///             tx.execute("INSERT INTO logs (message) VALUES ('Level 1')").await?;
+///             
+///             // Level 2
+///             tx.deep_nested(2, |mut tx| async move {
+///                 tx.execute("INSERT INTO logs (message) VALUES ('Level 2')").await?;
+///                 
+///                 // Level 3 - will fail
+///                 let level3_result = tx.deep_nested(3, |mut tx| async move {
+///                     tx.execute("INSERT INTO logs (message) VALUES ('Level 3')").await?;
+///                     Err(DatabaseError::ValidationError("Level 3 error".to_string()))
+///                 }).await;
+///                 
+///                 // Level 3 failed but Level 2 continues
+///                 assert!(level3_result.is_err());
+///                 tx.execute("INSERT INTO logs (message) VALUES ('Level 2 continues')").await
+///             }).await?;
+///             
+///             tx.execute("INSERT INTO logs (message) VALUES ('Level 1 continues')").await
+///         }).await
+///     }).await
+/// }
+/// ```
 pub struct Transaction<'a> {
     tx: Option<Box<dyn DatabaseTransaction>>,
     _lifetime: std::marker::PhantomData<&'a ()>,
@@ -369,18 +437,47 @@ impl<'a> Transaction<'a> {
         );
 
         self.check_active()?;
+
+        // Track the current nesting level for restoring on error
+        let previous_nesting_level = self.nesting_level;
         self.nesting_level += 1;
 
         // Create a savepoint with an auto-generated name
-        let savepoint_name = self.auto_savepoint().await?;
+        let savepoint_name = match self.auto_savepoint().await {
+            Ok(name) => name,
+            Err(err) => {
+                // Restore nesting level on savepoint creation failure
+                self.nesting_level = previous_nesting_level;
+                return Err(err.with_context(format!(
+                    "Failed to create savepoint for nested transaction at level {}",
+                    self.nesting_level
+                )));
+            }
+        };
 
         // Execute the closure
         match f().await {
             Ok(result) => {
                 // Release the savepoint on success
-                self.release_savepoint(&savepoint_name).await?;
-                self.nesting_level -= 1;
-                Ok(result)
+                match self.release_savepoint(&savepoint_name).await {
+                    Ok(_) => {
+                        // Success path
+                        self.nesting_level = previous_nesting_level;
+                        Ok(result)
+                    }
+                    Err(err) => {
+                        // Failed to release savepoint, but operation succeeded
+                        // This is unusual but not fatal, so we'll log a warning and continue
+                        warn!(
+                            error = %err,
+                            savepoint = savepoint_name,
+                            nesting_level = self.nesting_level,
+                            "Failed to release savepoint after successful nested transaction"
+                        );
+                        self.nesting_level = previous_nesting_level;
+                        Ok(result)
+                    }
+                }
             }
             Err(err) => {
                 // Roll back to the savepoint on error
@@ -391,9 +488,32 @@ impl<'a> Transaction<'a> {
                     "Rolling back nested transaction due to error"
                 );
 
-                self.rollback_to_savepoint(&savepoint_name).await?;
-                self.nesting_level -= 1;
-                Err(err)
+                // Try to rollback to the savepoint
+                let rollback_result = self.rollback_to_savepoint(&savepoint_name).await;
+                // Restore nesting level regardless of rollback result
+                self.nesting_level = previous_nesting_level;
+
+                // If rollback failed, return a compound error
+                if let Err(rollback_err) = rollback_result {
+                    error!(
+                        original_error = %err,
+                        rollback_error = %rollback_err,
+                        savepoint = savepoint_name,
+                        "Failed to rollback nested transaction after error"
+                    );
+
+                    // Wrap the original error with the rollback error for context
+                    return Err(err.with_context(format!(
+                        "Failed to rollback savepoint '{}': {}",
+                        savepoint_name, rollback_err
+                    )));
+                }
+
+                // Return the original error
+                Err(err.with_context(format!(
+                    "Error in nested transaction at level {}",
+                    self.nesting_level
+                )))
             }
         }
     }
@@ -527,6 +647,209 @@ impl<'a> Transaction<'a> {
     /// Get the active savepoints in this transaction
     pub fn active_savepoints(&self) -> &[String] {
         &self.savepoint_stack
+    }
+
+    /// Execute multiple nested transactions sequentially
+    ///
+    /// This method allows executing a series of nested transactions where each one
+    /// builds on the previous one's successful completion. If any transaction fails,
+    /// all subsequent transactions are skipped and the error is returned.
+    ///
+    /// This is useful for complex operations that need to be broken down into
+    /// discrete steps that can be individually rolled back.
+    #[instrument(skip(self, transactions))]
+    pub async fn nested_sequence<F, Fut, T>(
+        &mut self,
+        transactions: Vec<F>,
+    ) -> DatabaseResult<Vec<T>>
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = DatabaseResult<T>>,
+    {
+        debug!(
+            nesting_level = self.nesting_level,
+            count = transactions.len(),
+            "Starting nested transaction sequence"
+        );
+
+        let mut results = Vec::with_capacity(transactions.len());
+
+        // Execute each transaction in sequence
+        for (idx, transaction) in transactions.into_iter().enumerate() {
+            debug!(
+                nesting_level = self.nesting_level,
+                transaction_idx = idx,
+                "Executing transaction in sequence"
+            );
+
+            match self.nested(transaction).await {
+                Ok(result) => {
+                    results.push(result);
+                }
+                Err(err) => {
+                    return Err(err
+                        .with_context(format!("Failed in transaction sequence at index {}", idx)));
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Execute deeply nested transactions with proper cleanup
+    ///
+    /// This method supports creating multiple levels of nested transactions.
+    /// Each level creates a new savepoint that can be rolled back independently.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use navius_db::{DatabaseConnectionManager, PgPool, PoolOptions, DatabaseError};
+    ///
+    /// async fn complex_nested_operation(db: &DatabaseConnectionManager) -> Result<(), DatabaseError> {
+    ///     db.transaction(|mut tx| async move {
+    ///         // Level 1
+    ///         tx.deep_nested(1, |mut tx| async move {
+    ///             tx.execute("INSERT INTO logs (message) VALUES ('Level 1')").await?;
+    ///             
+    ///             // Level 2
+    ///             tx.deep_nested(2, |mut tx| async move {
+    ///                 tx.execute("INSERT INTO logs (message) VALUES ('Level 2')").await?;
+    ///                 
+    ///                 // Level 3 - will fail
+    ///                 let level3_result = tx.deep_nested(3, |mut tx| async move {
+    ///                     tx.execute("INSERT INTO logs (message) VALUES ('Level 3')").await?;
+    ///                     Err(DatabaseError::ValidationError("Level 3 error".to_string()))
+    ///                 }).await;
+    ///                 
+    ///                 // Level 3 failed but Level 2 continues
+    ///                 assert!(level3_result.is_err());
+    ///                 tx.execute("INSERT INTO logs (message) VALUES ('Level 2 continues')").await
+    ///             }).await?;
+    ///             
+    ///             tx.execute("INSERT INTO logs (message) VALUES ('Level 1 continues')").await
+    ///         }).await
+    ///     }).await
+    /// }
+    /// ```
+    #[instrument(skip(self, f))]
+    pub async fn deep_nested<F, Fut, T>(&mut self, level: usize, f: F) -> DatabaseResult<T>
+    where
+        F: FnOnce(&mut Self) -> Fut,
+        Fut: std::future::Future<Output = DatabaseResult<T>>,
+    {
+        debug!(
+            nesting_level = self.nesting_level,
+            level = level,
+            "Starting deep nested transaction"
+        );
+
+        self.check_active()?;
+
+        // Set the level-specific nesting identifier
+        let nested_id = format!("level_{}", level);
+        let savepoint_name = format!(
+            "deep_{}_sp_{}",
+            level,
+            self.savepoint_counter.fetch_add(1, Ordering::SeqCst)
+        );
+
+        // Create a savepoint for this nesting level
+        match self.savepoint(&savepoint_name).await {
+            Ok(_) => {
+                // Add to stack to ensure proper cleanup
+                self.savepoint_stack.push(savepoint_name.clone());
+            }
+            Err(err) => {
+                return Err(err.with_context(format!(
+                    "Failed to create savepoint for deep nested transaction at level {}",
+                    level
+                )));
+            }
+        }
+
+        // Execute the closure, passing self as parameter
+        let result = f(self).await;
+
+        // Handle the result
+        match result {
+            Ok(value) => {
+                // Release the savepoint on success
+                match self.release_savepoint(&savepoint_name).await {
+                    Ok(_) => {
+                        // Remove from stack
+                        if let Some(idx) = self
+                            .savepoint_stack
+                            .iter()
+                            .position(|s| s == &savepoint_name)
+                        {
+                            self.savepoint_stack.remove(idx);
+                        }
+                        Ok(value)
+                    }
+                    Err(err) => {
+                        warn!(
+                            error = %err,
+                            savepoint = savepoint_name,
+                            level = level,
+                            "Failed to release savepoint after successful deep nested transaction"
+                        );
+                        // Remove from stack anyway
+                        if let Some(idx) = self
+                            .savepoint_stack
+                            .iter()
+                            .position(|s| s == &savepoint_name)
+                        {
+                            self.savepoint_stack.remove(idx);
+                        }
+                        Ok(value)
+                    }
+                }
+            }
+            Err(err) => {
+                info!(
+                    error = %err,
+                    savepoint = savepoint_name,
+                    level = level,
+                    "Rolling back deep nested transaction due to error"
+                );
+
+                // Try to rollback to the savepoint
+                let rollback_result = self.rollback_to_savepoint(&savepoint_name).await;
+
+                // Remove from stack regardless of result
+                if let Some(idx) = self
+                    .savepoint_stack
+                    .iter()
+                    .position(|s| s == &savepoint_name)
+                {
+                    self.savepoint_stack.remove(idx);
+                }
+
+                // If rollback failed, return a compound error
+                if let Err(rollback_err) = rollback_result {
+                    error!(
+                        original_error = %err,
+                        rollback_error = %rollback_err,
+                        savepoint = savepoint_name,
+                        level = level,
+                        "Failed to rollback deep nested transaction after error"
+                    );
+
+                    // Wrap the original error with the rollback error for context
+                    return Err(err.with_context(format!(
+                        "Failed to rollback savepoint '{}' at level {}: {}",
+                        savepoint_name, level, rollback_err
+                    )));
+                }
+
+                // Return the original error
+                Err(err.with_context(format!(
+                    "Error in deep nested transaction at level {}",
+                    level
+                )))
+            }
+        }
     }
 }
 
@@ -700,6 +1023,353 @@ mod tests {
         match result {
             Err(DatabaseError::QueryError(msg)) => assert_eq!(msg, "test error"),
             _ => panic!("Unexpected error type"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_nested_transaction_savepoint_creation_failure() {
+        let mut mock_tx = MockDatabaseTx::new();
+
+        // Expect savepoint creation failure
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("SAVEPOINT sp_0"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| Err(DatabaseError::savepoint_error("Test savepoint error")));
+
+        let mut tx = Transaction::new(Box::new(mock_tx));
+        let result = tx.nested(|| async { Ok(42) }).await;
+
+        assert!(result.is_err());
+        match result {
+            Err(DatabaseError::WithContext { source, .. }) => {
+                assert!(matches!(*source, DatabaseError::SavepointError(_)));
+            }
+            _ => panic!("Expected WithContext error with SavepointError source"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_nested_transaction_release_failure() {
+        let mut mock_tx = MockDatabaseTx::new();
+
+        // Expect auto savepoint
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("SAVEPOINT sp_0"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| Ok(1));
+
+        // Expect release savepoint to fail
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("RELEASE SAVEPOINT sp_0"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| {
+                Err(DatabaseError::savepoint_error(
+                    "Failed to release savepoint",
+                ))
+            });
+
+        let mut tx = Transaction::new(Box::new(mock_tx));
+        let result = tx.nested(|| async { Ok(42) }).await;
+
+        // The transaction should still succeed even if releasing the savepoint fails
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[tokio::test]
+    async fn test_nested_transaction_rollback_failure() {
+        let mut mock_tx = MockDatabaseTx::new();
+
+        // Expect auto savepoint
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("SAVEPOINT sp_0"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| Ok(1));
+
+        // Expect rollback to savepoint to fail
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("ROLLBACK TO SAVEPOINT sp_0"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| {
+                Err(DatabaseError::savepoint_error(
+                    "Failed to rollback to savepoint",
+                ))
+            });
+
+        let mut tx = Transaction::new(Box::new(mock_tx));
+        let result = tx
+            .nested(|| async { Err(DatabaseError::QueryError("test error".to_string())) })
+            .await;
+
+        assert!(result.is_err());
+        match result {
+            Err(DatabaseError::WithContext { source, .. }) => {
+                assert!(matches!(*source, DatabaseError::QueryError(_)));
+            }
+            _ => panic!("Expected WithContext error with QueryError source"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_nested_sequence() {
+        let mut mock_tx = MockDatabaseTx::new();
+
+        // Expect three savepoints for the three transactions in sequence
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("SAVEPOINT sp_0"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| Ok(1))
+            .times(3);
+
+        // Expect three savepoint releases
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("RELEASE SAVEPOINT sp_0"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| Ok(1))
+            .times(3);
+
+        let mut tx = Transaction::new(Box::new(mock_tx));
+
+        let transactions = vec![|| async { Ok(1) }, || async { Ok(2) }, || async { Ok(3) }];
+
+        let result = tx.nested_sequence(transactions).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), vec![1, 2, 3]);
+    }
+
+    #[tokio::test]
+    async fn test_nested_sequence_failure() {
+        let mut mock_tx = MockDatabaseTx::new();
+
+        // Expect first savepoint
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("SAVEPOINT sp_0"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| Ok(1));
+
+        // Expect first savepoint release
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("RELEASE SAVEPOINT sp_0"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| Ok(1));
+
+        // Expect second savepoint
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("SAVEPOINT sp_0"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| Ok(1));
+
+        // Expect rollback to savepoint for the failing transaction
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("ROLLBACK TO SAVEPOINT sp_0"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| Ok(1));
+
+        let mut tx = Transaction::new(Box::new(mock_tx));
+
+        let transactions = vec![
+            || async { Ok(1) },
+            || async {
+                Err(DatabaseError::QueryError(
+                    "Failed in second transaction".to_string(),
+                ))
+            },
+            || async { Ok(3) }, // This shouldn't be executed
+        ];
+
+        let result = tx.nested_sequence(transactions).await;
+        assert!(result.is_err());
+        match result {
+            Err(DatabaseError::WithContext { source, .. }) => {
+                assert!(matches!(*source, DatabaseError::QueryError(_)));
+            }
+            _ => panic!("Expected WithContext error with QueryError source"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_deep_nested_transaction_success() {
+        let mut mock_tx = MockDatabaseTx::new();
+
+        // Expect savepoint creation
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("SAVEPOINT deep_1_sp_0"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| Ok(1));
+
+        // Expect a second level nested transaction
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("SAVEPOINT deep_2_sp_1"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| Ok(1));
+
+        // Expect release of level 2 savepoint
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("RELEASE SAVEPOINT deep_2_sp_1"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| Ok(1));
+
+        // Expect release of level 1 savepoint
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("RELEASE SAVEPOINT deep_1_sp_0"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| Ok(1));
+
+        let mut tx = Transaction::new(Box::new(mock_tx));
+
+        let result = tx
+            .deep_nested(1, |tx| async {
+                // Level 1 operation
+                let level1_result = 10;
+
+                // Level 2 operation
+                let level2_result = tx.deep_nested(2, |_tx| async { Ok(20) }).await?;
+
+                Ok(level1_result + level2_result)
+            })
+            .await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 30);
+    }
+
+    #[tokio::test]
+    async fn test_deep_nested_transaction_inner_failure() {
+        let mut mock_tx = MockDatabaseTx::new();
+
+        // Expect savepoint creation for level 1
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("SAVEPOINT deep_1_sp_0"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| Ok(1));
+
+        // Expect a second level nested transaction
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("SAVEPOINT deep_2_sp_1"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| Ok(1));
+
+        // Expect rollback of level 2 savepoint
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("ROLLBACK TO SAVEPOINT deep_2_sp_1"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| Ok(1));
+
+        // Expect rollback of level 1 savepoint
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("ROLLBACK TO SAVEPOINT deep_1_sp_0"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| Ok(1));
+
+        let mut tx = Transaction::new(Box::new(mock_tx));
+
+        let result = tx
+            .deep_nested(1, |tx| async {
+                // Level 1 operation
+                let level1_result = 10;
+
+                // Level 2 operation that fails
+                let level2_result = tx
+                    .deep_nested(2, |_tx| async {
+                        Err(DatabaseError::QueryError("Level 2 failure".to_string()))
+                    })
+                    .await?;
+
+                Ok(level1_result + level2_result)
+            })
+            .await;
+
+        assert!(result.is_err());
+        match result {
+            Err(DatabaseError::WithContext { source, .. }) => {
+                assert!(matches!(*source, DatabaseError::WithContext { .. }));
+                let inner = source.unwrap_context();
+                assert!(matches!(inner, DatabaseError::QueryError(_)));
+            }
+            _ => panic!("Expected nested WithContext errors"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_deep_nested_transaction_savepoint_creation_failure() {
+        let mut mock_tx = MockDatabaseTx::new();
+
+        // Expect savepoint creation to fail
+        mock_tx
+            .expect_execute()
+            .with(
+                eq("SAVEPOINT deep_1_sp_0"),
+                eq(&[] as &[&(dyn sqlx::Encode<sqlx::Postgres> + Sync)]),
+            )
+            .returning(|_, _| Err(DatabaseError::savepoint_error("Failed to create savepoint")));
+
+        let mut tx = Transaction::new(Box::new(mock_tx));
+
+        let result = tx.deep_nested(1, |_tx| async { Ok(42) }).await;
+
+        assert!(result.is_err());
+        match result {
+            Err(DatabaseError::WithContext { source, .. }) => {
+                assert!(matches!(*source, DatabaseError::SavepointError(_)));
+            }
+            _ => panic!("Expected WithContext error with SavepointError source"),
         }
     }
 }
