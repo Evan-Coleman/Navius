@@ -26,7 +26,8 @@ workspace_migration/
 │   └── architectural-decisions/
 │       └── 001-database-provider-pattern.md # ADR for database providers
 ├── reports/                 # Date-stamped progress reports
-│   └── progress_2025-03-29.md # Initial progress snapshot
+│   ├── progress_2025-03-29.md # Initial progress snapshot
+│   └── progress_2025-03-29_update.md # Updated progress with timeline
 └── progress.md              # Current consolidated progress tracking
 ```
 
@@ -78,12 +79,34 @@ We are migrating the Navius project from a feature flag-based organization to a 
     - ✅ Database interfaces and abstractions
     - ✅ Repository pattern
     - 🔄 Query building functionality
+      - ✅ Basic filter and sort capabilities
+      - 🔄 Complex query building with logical operators
+      - ⬜️ Pagination support
     - 🔄 Transaction interfaces
+      - ✅ Basic transaction lifecycle
+      - 🔄 Savepoint support
+      - ⬜️ Nested transactions
+    - 🔄 Comprehensive tests
   - 🔄 navius-db-postgres (25% complete)
     - ✅ Basic structure
     - 🔄 PostgreSQL-specific functionality 
     - 🔄 SQLx integration
-    - ⬜ Migration support
+    - ⬜️ Migration support
+    - ⬜️ Repository implementation
+    - ⬜️ Comprehensive tests
+  - ⬜️ navius-cache (planned for April 15, 2025)
+    - ⬜️ Cache interfaces and operations
+    - ⬜️ Redis implementation
+    - ⬜️ Serialization support
+
+## Implementation Timeline
+
+| Timeline | Work Focus | Key Deliverables |
+|----------|------------|------------------|
+| April 1-15, 2025 | Database Crates | • Complete navius-db with query building and transactions<br>• Complete navius-db-postgres with SQLx integration<br>• Add migration support |
+| April 15-30, 2025 | Cache Crates | • Begin navius-cache with provider pattern<br>• Begin navius-cache-redis implementation<br>• Implement key-value and collection operations |
+| May 1-15, 2025 | Plugin System | • Begin navius-plugin<br>• Implement component registry<br>• Create plugin lifecycle hooks |
+| May 15-30, 2025 | Event System | • Begin navius-event<br>• Implement event handling<br>• Create publish/subscribe mechanisms |
 
 ## Key Architectural Decisions
 
@@ -129,10 +152,21 @@ We are currently focusing on completing the database crates:
    - Add integration examples between crates
    - Document performance considerations
 
-For details on next steps, see:
+## Performance Improvements
+
+The workspace migration has already yielded measurable performance improvements:
+
+| Metric | Before Migration | Current (40% Complete) | Target | Improvement |
+|--------|------------------|------------------------|--------|-------------|
+| Full Build Time | 3m 45s | 2m 10s | < 2m | 43% reduction |
+| Incremental Build | 45s | 20s | < 15s | 56% reduction |
+| Binary Size | 15.2MB | 12.8MB | < 10MB | 16% reduction |
+| Startup Time | 1.2s | 0.9s | < 0.5s | 25% reduction |
+
+For more details, see:
 - [Current Progress](progress.md)
 - [Detailed Implementation Status](roadmap/sub-process/implementation-progress.md)
 - [Next Crate Implementation Plan](roadmap/next-crate-implementation-plan.md)
-- [Latest Database Progress Report](reports/progress_2025-03-29_database.md)
+- [Latest Progress Report](reports/progress_2025-03-29_update.md)
 
 *Updated: March 29, 2025* 

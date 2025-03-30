@@ -227,11 +227,41 @@ For the complete rationale, alternatives considered, and implementation approach
 
 ## Next Steps
 
-1. Complete the query building functionality in navius-db
-2. Implement transaction interfaces in navius-db
-3. Complete the SQLx integration in navius-db-postgres
-4. Add database migration support to navius-db-postgres
-5. Begin preparation for navius-cache implementation
+1. Database Implementation (Priority: High)
+   - Complete the query building functionality in navius-db
+     - Implement filter mechanisms with support for complex conditions
+     - Add sorting capabilities with multiple sort criteria
+     - Implement pagination with cursor and offset/limit strategies
+   - Finalize transaction interfaces in navius-db
+     - Implement transaction lifecycle management
+     - Add support for savepoints and partial rollback
+     - Create error handling patterns for transactions
+   - Complete the SQLx integration in navius-db-postgres
+     - Implement parameter binding with proper type conversion
+     - Add result mapping with field name normalization
+     - Support for PostgreSQL-specific query features
+   - Add database migration support to navius-db-postgres
+     - Create migration runner with version tracking
+     - Support for both SQL and Rust-based migrations
+     - Add CLI commands for database operations
+
+2. Cache Implementation (Priority: Medium)
+   - Begin preparation for navius-cache implementation
+     - Define core cache interfaces following provider pattern
+     - Design Redis implementation strategy
+     - Plan serialization/deserialization approach
+   - Review spring-rs component registration for cache implementation
+     - Apply learnings from spring-rs research to component lifecycle
+     - Plan implementation of cache component registration
+   - Prepare test infrastructure for cache components
+     - Design mock cache implementation
+     - Create test utilities for cache operations
+
+3. Documentation (Priority: Medium)
+   - Complete the database provider guide with implementation examples
+   - Document the success patterns from the navius-db implementation
+   - Create diagrams for provider pattern architecture
+   - Prepare documentation for the navius-cache implementation
 
 For detailed plans about implementing the next crate (navius-cache), see [next-crate-implementation-plan.md](./next-crate-implementation-plan.md).
 
@@ -239,25 +269,16 @@ For detailed plans about implementing the next crate (navius-cache), see [next-c
 
 | Date | Description |
 |------|-------------|
+| 2025-03-29 | Added detailed next steps for completing navius-db and navius-db-postgres implementations |
 | 2025-03-29 | Created architectural decision record (ADR) for the database provider pattern |
 | 2025-03-29 | Documented database provider implementation approach in DATABASE_PROVIDER_GUIDE.md |
 | 2025-03-29 | Split database functionality into navius-db interfaces and navius-db-postgres implementation |
-| 2025-03-29 | Working on navius-db and navius-db-postgres crates |
+| 2025-03-29 | Updated implementation timeline with specific tasks for April-May |
+| 2025-03-29 | Created implementation plan for navius-cache crate |
 | 2025-03-01 | Completed navius-auth crate implementation with OAuth, JWT support |
 | 2025-02-15 | Completed navius-http crate implementation with routing and middleware |
 | 2025-01-30 | Completed navius-core crate implementation with config, logging |
 
 ## Updates
 
-| Date | Update | Updated By |
-|------|--------|------------|
-| March 29, 2025 | Created architectural decision record for database provider pattern | goblin |
-| March 29, 2025 | Updated progress report with provider pattern implementation details | goblin |
-| March 29, 2025 | Created detailed implementation progress tracking document | goblin |
-| March 29, 2025 | Created migration plan and supporting documentation | goblin |
-| March 29, 2025 | Completed Phase 1 and Phase 2, working on Phase 3 | goblin |
-| March 29, 2025 | Implemented provider pattern for database access with navius-db-postgres | goblin |
-| March 29, 2025 | Created database provider implementation guide | goblin |
-| March 29, 2025 | Working on database interfaces in navius-db | goblin |
-| March 29, 2025 | Working on PostgreSQL implementation in navius-db-postgres | goblin |
-| March 15, 2025 | Initial migration plan developed, repository structure established | goblin | 
+*Last Updated: March 29, 2025* 
