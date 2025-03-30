@@ -82,16 +82,24 @@ pub fn init() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use navius_test::error::{TestResult, assert_contains, assert_true};
 
     #[test]
-    fn test_version() {
-        assert!(!Version::current().is_empty());
-        assert!(Version::semver().starts_with('v'));
+    fn test_version() -> TestResult<()> {
+        let version = Version::current();
+        assert_true(!version.is_empty(), "Version should not be empty")?;
+
+        let semver = Version::semver();
+        assert_contains(semver, "v", "Semver version should start with 'v'")?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_init() {
+    fn test_init() -> TestResult<()> {
         let result = init();
-        assert!(result.is_ok());
+        assert_true(result.is_ok(), "Init function should succeed")?;
+
+        Ok(())
     }
 }

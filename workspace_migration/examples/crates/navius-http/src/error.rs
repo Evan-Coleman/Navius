@@ -114,22 +114,41 @@ impl Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use navius_test::error::{TestResult, assert_eq, assert_true};
 
     #[test]
-    fn test_error_construction() {
+    fn test_error_construction() -> TestResult<()> {
         let err = Error::internal("Something went wrong");
-        assert!(matches!(err, Error::Internal(_)));
+        assert_true(
+            matches!(err, Error::Internal(_)),
+            "Error should be an Internal error",
+        )?;
 
         let err = Error::http(404, "Not found");
-        assert!(matches!(err, Error::Http { status: 404, .. }));
+        assert_true(
+            matches!(err, Error::Http { status: 404, .. }),
+            "Error should be an HTTP error with status 404",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_status_code() {
+    fn test_status_code() -> TestResult<()> {
         let err = Error::validation("Invalid input");
-        assert_eq!(err.status_code(), Some(400));
+        assert_eq(
+            err.status_code(),
+            Some(400),
+            "Validation error should have status code 400",
+        )?;
 
         let err = Error::http(418, "I'm a teapot");
-        assert_eq!(err.status_code(), Some(418));
+        assert_eq(
+            err.status_code(),
+            Some(418),
+            "HTTP error should preserve the provided status code",
+        )?;
+
+        Ok(())
     }
 }

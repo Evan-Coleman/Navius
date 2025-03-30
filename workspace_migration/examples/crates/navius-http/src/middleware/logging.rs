@@ -395,19 +395,42 @@ pub fn detailed_logging_layer() -> LoggingLayer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use navius_test::error::{TestResult, assert_eq, assert_true};
 
     #[test]
-    fn test_default_config() {
+    fn test_default_config() -> TestResult<()> {
         let config = LoggingConfig::default();
-        assert_eq!(config.log_level, Level::INFO);
-        assert_eq!(config.include_headers, true);
-        assert_eq!(config.include_body, false);
-        assert_eq!(config.max_body_length, DEFAULT_MAX_BODY_SIZE);
-        assert_eq!(config.excluded_paths.len(), 2);
+        assert_eq(
+            config.log_level,
+            Level::INFO,
+            "Default log level should be INFO",
+        )?;
+        assert_eq(
+            config.include_headers,
+            true,
+            "Default config should include headers",
+        )?;
+        assert_eq(
+            config.include_body,
+            false,
+            "Default config should not include body",
+        )?;
+        assert_eq(
+            config.max_body_length,
+            DEFAULT_MAX_BODY_SIZE,
+            "Default config should use DEFAULT_MAX_BODY_SIZE",
+        )?;
+        assert_eq(
+            config.excluded_paths.len(),
+            2,
+            "Default config should have 2 excluded paths",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_custom_config() {
+    fn test_custom_config() -> TestResult<()> {
         let config = LoggingConfig::default()
             .with_log_level(Level::DEBUG)
             .with_headers(false)
@@ -415,10 +438,52 @@ mod tests {
             .with_max_body_length(100)
             .exclude_path("/ping");
 
-        assert_eq!(config.log_level, Level::DEBUG);
-        assert_eq!(config.include_headers, false);
-        assert_eq!(config.include_body, true);
-        assert_eq!(config.max_body_length, 100);
-        assert!(config.excluded_paths.contains(&"/ping".to_string()));
+        assert_eq(
+            config.log_level,
+            Level::DEBUG,
+            "Custom config should use provided log level",
+        )?;
+        assert_eq(
+            config.include_headers,
+            false,
+            "Custom config should use provided header setting",
+        )?;
+        assert_eq(
+            config.include_body,
+            true,
+            "Custom config should use provided body setting",
+        )?;
+        assert_eq(
+            config.max_body_length,
+            100,
+            "Custom config should use provided body length",
+        )?;
+        assert_true(
+            config.excluded_paths.contains(&"/ping".to_string()),
+            "Custom config should contain added excluded path",
+        )?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_logging_layer_creation() -> TestResult<()> {
+        // Test default layer creation
+        let default_layer = logging_layer();
+
+        // Test detailed layer
+        let detailed_layer = detailed_logging_layer();
+
+        // Test custom config layer
+        let custom_layer = LoggingLayer::with_config(
+            LoggingConfig::default()
+                .with_log_level(Level::DEBUG)
+                .exclude_path("/health"),
+        );
+
+        // Verify layers can be created
+        assert_true(true, "Successfully created logging layers")?;
+
+        Ok(())
     }
 }

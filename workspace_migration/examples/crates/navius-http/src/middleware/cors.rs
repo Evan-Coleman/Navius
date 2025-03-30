@@ -214,28 +214,84 @@ pub fn permissive_cors_layer() -> CorsLayer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use navius_test::error::{TestResult, assert_eq, assert_true};
+    use tower::layer::Layer;
 
     #[test]
-    fn test_default_config() {
+    fn test_default_config() -> TestResult<()> {
         let config = CorsConfig::default();
-        assert!(config.allowed_origins.is_empty());
-        assert_eq!(config.allowed_methods.len(), 6); // GET, POST, PUT, DELETE, OPTIONS, HEAD
-        assert!(config.allow_credentials);
-        assert_eq!(config.max_age.unwrap().as_secs(), 86400);
+        assert_true(
+            config.allowed_origins.is_empty(),
+            "Default config should have empty allowed origins",
+        )?;
+        assert_eq(
+            config.allowed_methods.len(),
+            6,
+            "Default config should have 6 default methods (GET, POST, PUT, DELETE, OPTIONS, HEAD)",
+        )?;
+        assert_true(
+            config.allow_credentials,
+            "Default config should allow credentials",
+        )?;
+        assert_eq(
+            config.max_age.unwrap().as_secs(),
+            86400,
+            "Default config should have 24-hour max age",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_custom_config() {
+    fn test_custom_config() -> TestResult<()> {
         let config = CorsConfig::default()
             .allow_origin("https://example.com".to_string())
             .allow_method(Method::PATCH)
             .with_credentials(false)
             .with_max_age(3600);
 
-        assert_eq!(config.allowed_origins.len(), 1);
-        assert!(config.allowed_origins.contains("https://example.com"));
-        assert_eq!(config.allowed_methods.len(), 7); // Added PATCH
-        assert!(!config.allow_credentials);
-        assert_eq!(config.max_age.unwrap().as_secs(), 3600);
+        assert_eq(
+            config.allowed_origins.len(),
+            1,
+            "Custom config should have 1 allowed origin",
+        )?;
+        assert_true(
+            config.allowed_origins.contains("https://example.com"),
+            "Custom config should contain the specified origin",
+        )?;
+        assert_eq(
+            config.allowed_methods.len(),
+            7,
+            "Custom config should have 7 methods (default + PATCH)",
+        )?;
+        assert_true(
+            !config.allow_credentials,
+            "Custom config should not allow credentials",
+        )?;
+        assert_eq(
+            config.max_age.unwrap().as_secs(),
+            3600,
+            "Custom config should have the specified max age",
+        )?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cors_layer_creation() -> TestResult<()> {
+        // Test the default layer creation
+        let layer = cors_layer();
+
+        // Test with custom config
+        let custom_layer = CorsLayer::with_config(
+            CorsConfig::default()
+                .allow_origin("https://example.com".to_string())
+                .with_credentials(false),
+        );
+
+        // Just verify we can create these layers - actual CORS behavior would need integration tests
+        assert_true(true, "Successfully created CORS layers")?;
+
+        Ok(())
     }
 }

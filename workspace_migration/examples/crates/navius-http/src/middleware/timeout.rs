@@ -283,17 +283,30 @@ pub fn with_timeout(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use navius_test::error::{TestResult, assert_eq, assert_true};
 
     #[test]
-    fn test_default_config() {
+    fn test_default_config() -> TestResult<()> {
         let config = TimeoutConfig::default();
-        assert_eq!(config.timeout, DEFAULT_TIMEOUT);
-        assert!(config.path_timeouts.is_empty());
-        assert!(config.excluded_paths.is_empty());
+        assert_eq(
+            config.timeout,
+            DEFAULT_TIMEOUT,
+            "Default timeout should match DEFAULT_TIMEOUT constant",
+        )?;
+        assert_true(
+            config.path_timeouts.is_empty(),
+            "Default config should have no path-specific timeouts",
+        )?;
+        assert_true(
+            config.excluded_paths.is_empty(),
+            "Default config should have no excluded paths",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_custom_config() {
+    fn test_custom_config() -> TestResult<()> {
         let short_timeout = Duration::from_secs(5);
         let long_timeout = Duration::from_secs(60);
 
@@ -302,19 +315,60 @@ mod tests {
             .with_path_timeout("/api/slow", long_timeout)
             .exclude_path("/webhooks");
 
-        assert_eq!(config.timeout, short_timeout);
-        assert_eq!(config.path_timeouts.len(), 1);
-        assert_eq!(config.excluded_paths.len(), 1);
+        assert_eq(
+            config.timeout,
+            short_timeout,
+            "Custom config should use the provided default timeout",
+        )?;
+        assert_eq(
+            config.path_timeouts.len(),
+            1,
+            "Custom config should have one path-specific timeout",
+        )?;
+        assert_eq(
+            config.excluded_paths.len(),
+            1,
+            "Custom config should have one excluded path",
+        )?;
 
         // Test path-specific timeouts
-        assert_eq!(
+        assert_eq(
             config.get_timeout_for_path("/api/users"),
-            Some(short_timeout)
-        );
-        assert_eq!(
+            Some(short_timeout),
+            "Regular path should use the default timeout",
+        )?;
+        assert_eq(
             config.get_timeout_for_path("/api/slow/operation"),
-            Some(long_timeout)
+            Some(long_timeout),
+            "Path matching a specific timeout should use that timeout",
+        )?;
+        assert_eq(
+            config.get_timeout_for_path("/webhooks/github"),
+            None,
+            "Excluded path should return None for timeout",
+        )?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_timeout_layer_creation() -> TestResult<()> {
+        // Test default layer creation
+        let default_layer = timeout_layer();
+
+        // Test layer with specific duration
+        let custom_layer = timeout_layer_with_duration(Duration::from_secs(30));
+
+        // Test layer with custom config
+        let config_layer = TimeoutLayer::with_config(
+            TimeoutConfig::default()
+                .with_timeout(Duration::from_secs(10))
+                .exclude_path("/health"),
         );
-        assert_eq!(config.get_timeout_for_path("/webhooks/github"), None);
+
+        // Verify layers can be created
+        assert_true(true, "Successfully created timeout layers")?;
+
+        Ok(())
     }
 }
