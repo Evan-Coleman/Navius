@@ -1,0 +1,43 @@
+[package]
+name = "navius-template"
+version = "0.1.0"
+description = "Template rendering system for the Navius framework"
+edition = "2024"
+license = "Apache-2.0"
+
+[dependencies]
+async-trait = "0.1.88"
+chrono = "0.4.40"
+futures = "0.3.31"
+md5 = "0.7.0"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+thiserror = "2.0.12"
+tokio = { version = "1.44.1", features = ["full"] }
+tracing = "0.1.41"
+
+# Template engine implementations - all optional
+handlebars = { version = "6.3.2", optional = true }
+tera = { version = "1.20.0", optional = true }
+liquid = { version = "0.26.11", optional = true }
+
+[dev-dependencies]
+tokio-test = "0.4.4"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+
+[features]
+default = []
+handlebars = ["dep:handlebars"]
+tera = ["dep:tera"]
+liquid = ["dep:liquid"]
+all-engines = ["handlebars", "tera", "liquid"]
+
+[[example]]
+name = "basic_template"
+path = "examples/basic_template.rs"
+required-features = ["handlebars"]
+
+[[example]]
+name = "advanced_template"
+path = "examples/advanced_template.rs"
+required-features = ["handlebars", "tera"] 
