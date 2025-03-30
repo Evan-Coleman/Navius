@@ -108,6 +108,40 @@ The Navius Redis Cache provides comprehensive metrics for monitoring cache perfo
    - `navius_redis_cache_script_execution_duration_seconds`: Histogram of script execution times
    - `navius_redis_cache_script_errors_total`: Counter of script execution errors
 
+### Metrics Implementation Details
+
+The metrics system in navius-cache-redis uses several technical approaches to provide comprehensive monitoring:
+
+#### TimedOperation Utility
+
+For automatic metric collection, we use a `TimedOperation` struct that handles:
+- Recording operation start time
+- Tracking success or failure
+- Categorizing errors by type
+- Recording timing in appropriate histograms
+
+Example usage:
+```rust
+let timer = TimedOperation::new(metrics::names::GET);
+let result = perform_operation();
+timer.record(&result);
+```
+
+#### Health Tracking
+
+Connection health is tracked using:
+- A three-state model: `Healthy`, `Degraded`, or `Unhealthy`
+- Detailed reason recording for degraded/unhealthy states
+- Gauges that reflect current health on a 0-1 scale
+
+#### Pool Statistics
+
+Connection pool metrics track:
+- Total connections created/closed
+- Current active/idle connections
+- Acquisition successes/failures/timeouts
+- Connection acquisition timing
+
 ### Viewing Metrics
 
 To view metrics in real-time, run the metrics example:
@@ -128,6 +162,53 @@ For visualization, import the provided Grafana dashboard JSON:
 ```
 docs/dashboards/redis_cache_metrics.json
 ```
+
+The dashboard includes:
+- Operation rate and latency panels
+- Error rate tracking
+- Connection pool utilization
+- Script execution performance
+- Collection operation metrics
+
+### Integration with Monitoring Systems
+
+The metrics implementation is designed to work with:
+
+1. **Prometheus**: Direct export of metrics in Prometheus format
+   ```rust
+   // To set up a Prometheus metrics endpoint
+   use metrics_exporter_prometheus::PrometheusBuilder;
+   
+   let builder = PrometheusBuilder::new();
+   let handle = builder.install_recorder().expect("Failed to install recorder");
+   ```
+
+2. **Custom Monitoring**: You can implement your own recorder
+   ```rust
+   // Register your custom metrics recorder
+   metrics::set_boxed_recorder(Box::new(MyCustomRecorder::new()))?;
+   ```
+
+3. **Structured Logging**: Metrics data can be included in logs
+   ```rust
+   // Log current connection pool stats
+   let stats = connection_manager.get_stats().await;
+   tracing::info!(
+       pool_size = stats.current_active_connections + stats.current_idle_connections,
+       active = stats.current_active_connections,
+       idle = stats.current_idle_connections,
+       "Connection pool stats"
+   );
+   ```
+
+### Testing Metrics
+
+The crate includes comprehensive tests for metrics:
+- Verification of metric recording for all operations
+- Validation of connection pool metrics
+- Tests for error metrics recording
+
+See `tests/metrics_test.rs` for examples of how to test metrics.
 
 ## Examples
 
