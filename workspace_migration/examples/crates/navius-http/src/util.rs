@@ -114,62 +114,118 @@ impl FromStr for Method {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use navius_test::error::{TestResult, assert_eq, assert_true};
 
     #[test]
-    fn test_to_header_value() {
+    fn test_to_header_value() -> TestResult<()> {
         let value = to_header_value("test-value").unwrap();
-        assert_eq!(value, HeaderValue::from_static("test-value"));
+        assert_eq(
+            value,
+            HeaderValue::from_static("test-value"),
+            "Header value should match string input",
+        )?;
 
         let value = to_header_value(42).unwrap();
-        assert_eq!(value, HeaderValue::from_static("42"));
+        assert_eq(
+            value,
+            HeaderValue::from_static("42"),
+            "Header value should match numeric input",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_map_to_headers() {
+    fn test_map_to_headers() -> TestResult<()> {
         let mut map = HashMap::new();
         map.insert("content-type".to_string(), "application/json".to_string());
         map.insert("x-request-id".to_string(), "123".to_string());
 
         let headers = map_to_headers(&map).unwrap();
-        assert_eq!(headers.len(), 2);
-        assert_eq!(
+        assert_eq(headers.len(), 2, "Headers map should contain 2 entries")?;
+        assert_eq(
             headers.get("content-type").unwrap(),
-            HeaderValue::from_static("application/json")
-        );
-        assert_eq!(
+            HeaderValue::from_static("application/json"),
+            "Content-type header should have correct value",
+        )?;
+        assert_eq(
             headers.get("x-request-id").unwrap(),
-            HeaderValue::from_static("123")
-        );
+            HeaderValue::from_static("123"),
+            "Request ID header should have correct value",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_parse_url() {
+    fn test_parse_url() -> TestResult<()> {
         let url = parse_url("https://example.com").unwrap();
-        assert_eq!(url.as_str(), "https://example.com/");
+        assert_eq(
+            url.as_str(),
+            "https://example.com/",
+            "URL should be correctly parsed",
+        )?;
 
         let result = parse_url("invalid");
-        assert!(result.is_err());
+        assert_true(result.is_err(), "Invalid URL should return an error")?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_join_url() {
+    fn test_join_url() -> TestResult<()> {
         let url = join_url("https://example.com", "/api/users").unwrap();
-        assert_eq!(url.as_str(), "https://example.com/api/users");
+        assert_eq(
+            url.as_str(),
+            "https://example.com/api/users",
+            "URL should be joined correctly with leading slash",
+        )?;
 
         let url = join_url("https://example.com/", "api/users").unwrap();
-        assert_eq!(url.as_str(), "https://example.com/api/users");
+        assert_eq(
+            url.as_str(),
+            "https://example.com/api/users",
+            "URL should be joined correctly without leading slash",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_method_display() {
-        assert_eq!(Method::Get.to_string(), "GET");
-        assert_eq!(Method::Post.to_string(), "POST");
+    fn test_method_display() -> TestResult<()> {
+        assert_eq(
+            Method::Get.to_string(),
+            "GET",
+            "Method::Get should display as GET",
+        )?;
+        assert_eq(
+            Method::Post.to_string(),
+            "POST",
+            "Method::Post should display as POST",
+        )?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_method_from_str() {
-        assert_eq!(Method::from_str("GET").unwrap(), Method::Get);
-        assert_eq!(Method::from_str("post").unwrap(), Method::Post);
-        assert!(Method::from_str("INVALID").is_err());
+    fn test_method_from_str() -> TestResult<()> {
+        assert_eq(
+            Method::from_str("GET").unwrap(),
+            Method::Get,
+            "GET should parse to Method::Get",
+        )?;
+        assert_eq(
+            Method::from_str("post").unwrap(),
+            Method::Post,
+            "post should parse to Method::Post (case insensitive)",
+        )?;
+
+        let result = Method::from_str("INVALID");
+        assert_true(
+            result.is_err(),
+            "Invalid method string should return an error",
+        )?;
+
+        Ok(())
     }
 }

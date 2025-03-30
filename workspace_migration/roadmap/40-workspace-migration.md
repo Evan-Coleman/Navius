@@ -79,7 +79,7 @@ For more detailed information, refer to:
   - [x] Implement error testing framework
   - [x] Create mock implementations for interfaces (100% complete)
   - [x] Create integration test utilities (100% complete)
-  - [ ] Update existing tests to use new infrastructure (30% complete)
+  - [ ] Update existing tests to use new infrastructure (50% complete)
 
 ### Phase 5: Finalize Documentation and Build (PLANNED)
 
@@ -212,7 +212,7 @@ For the complete rationale, alternatives considered, and implementation approach
 
 ## Next Steps
 
-1. Complete updating existing tests to use the new Cross-Crate Testing Infrastructure (30% → 100%)
+1. Complete updating existing tests to use the Cross-Crate Testing Infrastructure (50% → 100%)
 2. Create documentation and examples for the testing infrastructure
 3. Begin planning for the Template Engine crate implementation
 4. Start design for the CLI interface
