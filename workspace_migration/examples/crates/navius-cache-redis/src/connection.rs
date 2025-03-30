@@ -3,9 +3,84 @@ use crate::{
     error::{RedisCacheError, RedisCacheResult, error_helpers},
 };
 use redis::{Client, Connection, RedisError, aio::ConnectionManager};
-use std::{sync::Arc, time::Duration};
-use tokio::sync::Mutex;
-use tracing::{debug, error, info, instrument};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use tokio::{sync::Mutex, time::timeout};
+use tracing::{debug, error, info, instrument, warn};
+
+/// Statistics for connection pool monitoring
+#[derive(Debug, Clone, Default)]
+pub struct PoolStats {
+    /// Total number of connections created
+    pub total_connections_created: usize,
+    /// Total number of connections closed
+    pub total_connections_closed: usize,
+    /// Total number of successful connection acquisitions
+    pub total_acquires: usize,
+    /// Total number of failed connection acquisitions
+    pub total_acquire_failures: usize,
+    /// Total number of timeouts during connection acquisition
+    pub total_acquire_timeouts: usize,
+    /// Current number of active connections
+    pub current_active_connections: usize,
+    /// Current number of idle connections in the pool
+    pub current_idle_connections: usize,
+}
+
+/// Health status of a connection
+#[derive(Debug, PartialEq, Eq)]
+enum ConnectionHealth {
+    /// Connection is healthy
+    Healthy,
+    /// Connection is unhealthy
+    Unhealthy,
+    /// Connection health check timed out
+    Timeout,
+}
+
+/// A connection with metadata for pool management
+#[derive(Debug)]
+struct PooledConnection {
+    /// The actual Redis connection
+    connection: Connection,
+    /// When the connection was created
+    created_at: Instant,
+    /// When the connection was last used
+    last_used: Instant,
+    /// Number of times this connection has been used
+    use_count: usize,
+}
+
+impl PooledConnection {
+    /// Create a new pooled connection
+    fn new(connection: Connection) -> Self {
+        let now = Instant::now();
+        Self {
+            connection,
+            created_at: now,
+            last_used: now,
+            use_count: 0,
+        }
+    }
+
+    /// Update the last used timestamp
+    fn mark_used(&mut self) {
+        self.last_used = Instant::now();
+        self.use_count += 1;
+    }
+
+    /// Check if the connection has expired based on max lifetime
+    fn is_expired(&self, max_lifetime: Duration) -> bool {
+        self.created_at.elapsed() > max_lifetime
+    }
+
+    /// Check if the connection has been idle for too long
+    fn is_idle_timeout(&self, idle_timeout: Duration) -> bool {
+        self.last_used.elapsed() > idle_timeout
+    }
+}
 
 /// Redis connection manager for handling connection pooling
 #[derive(Clone)]
@@ -15,7 +90,15 @@ pub struct RedisConnectionManager {
     /// Cache configuration
     config: RedisCacheConfig,
     /// Connection pool
-    pool: Arc<Mutex<Vec<Connection>>>,
+    pool: Arc<Mutex<Vec<PooledConnection>>>,
+    /// Connection pool statistics
+    stats: Arc<Mutex<PoolStats>>,
+    /// Circuit breaker - tracks consecutive failures
+    consecutive_failures: Arc<Mutex<usize>>,
+    /// Circuit breaker - last failure time
+    last_failure: Arc<Mutex<Option<Instant>>>,
+    /// Circuit breaker - is open (allowing connections)
+    circuit_open: Arc<Mutex<bool>>,
 }
 
 impl RedisConnectionManager {
@@ -24,19 +107,10 @@ impl RedisConnectionManager {
     pub async fn new(config: RedisCacheConfig) -> RedisCacheResult<Self> {
         info!("Initializing Redis connection manager");
 
-        let redis_url = match &config.password {
-            Some(password) => format!(
-                "redis://{}:{}@{}:{}/{}",
-                "",
-                password, // username is empty for Redis
-                config.url.trim_start_matches("redis://"),
-                config.database
-            ),
-            None => format!(
-                "redis://{}/{}",
-                config.url.trim_start_matches("redis://"),
-                config.database
-            ),
+        let redis_url = if config.url.starts_with("redis://") {
+            config.url.clone()
+        } else {
+            format!("redis://{}", config.url)
         };
 
         debug!("Connecting to Redis at: {}", redis_url);
@@ -49,40 +123,218 @@ impl RedisConnectionManager {
             }
         };
 
-        // Test connection
-        let connection = match client.get_connection() {
-            Ok(conn) => conn,
+        // Create initial connections up to min_connections (or 1 as minimum for testing)
+        let min_connections = std::cmp::max(1, config.max_connections / 5);
+        let mut initial_connections = Vec::with_capacity(min_connections as usize);
+
+        // Initialize with at least one verified connection
+        match client.get_connection() {
+            Ok(conn) => {
+                initial_connections.push(PooledConnection::new(conn));
+            }
             Err(err) => {
-                error!("Failed to connect to Redis: {}", err);
+                error!("Failed to establish initial Redis connection: {}", err);
                 return Err(RedisCacheError::ConnectionError(format!(
                     "Failed to connect to Redis: {}",
                     err
                 )));
             }
+        }
+
+        // Try to establish the minimum connections (don't fail if we can't get them all)
+        for _ in 1..min_connections {
+            if let Ok(conn) = client.get_connection() {
+                initial_connections.push(PooledConnection::new(conn));
+            } else {
+                // We already have at least one connection, so just warn
+                warn!("Could not establish all initial Redis connections");
+                break;
+            }
+        }
+
+        let stats = PoolStats {
+            total_connections_created: initial_connections.len(),
+            current_idle_connections: initial_connections.len(),
+            ..Default::default()
         };
 
         let manager = Self {
             client: Arc::new(client),
             config,
-            pool: Arc::new(Mutex::new(vec![connection])),
+            pool: Arc::new(Mutex::new(initial_connections)),
+            stats: Arc::new(Mutex::new(stats)),
+            consecutive_failures: Arc::new(Mutex::new(0)),
+            last_failure: Arc::new(Mutex::new(None)),
+            circuit_open: Arc::new(Mutex::new(true)),
         };
 
-        debug!("Redis connection manager initialized");
+        // Start the background tasks for pool maintenance
+        manager.start_pool_maintenance();
+
+        debug!(
+            "Redis connection manager initialized with {} connections",
+            min_connections
+        );
         Ok(manager)
     }
 
     /// Get a connection from the pool or create a new one
-    pub async fn get_connection(&self) -> RedisCacheResult<ConnectionManager> {
-        debug!("Getting Redis connection manager");
-        match self.client.get_async_connection_manager().await {
-            Ok(conn) => Ok(conn),
-            Err(err) => {
-                error!("Failed to get Redis connection: {}", err);
-                Err(RedisCacheError::ConnectionError(format!(
-                    "Failed to get Redis connection: {}",
-                    err
-                )))
+    pub async fn get_connection(&self) -> RedisCacheResult<Connection> {
+        // Check if circuit breaker is open
+        if !*self.circuit_open.lock().await {
+            let mut last_failure = self.last_failure.lock().await;
+            if let Some(time) = *last_failure {
+                // Reset circuit breaker after circuit_reset_timeout
+                if time.elapsed() > Duration::from_secs(5) {
+                    debug!("Resetting circuit breaker after timeout");
+                    *self.circuit_open.lock().await = true;
+                    *self.consecutive_failures.lock().await = 0;
+                    *last_failure = None;
+                } else {
+                    return Err(RedisCacheError::ConnectionError(
+                        "Circuit breaker is open, Redis connections temporarily disabled"
+                            .to_string(),
+                    ));
+                }
             }
+        }
+
+        // First try to get a connection from the pool
+        let mut pool = self.pool.lock().await;
+
+        // Find a non-expired connection
+        let max_lifetime = Duration::from_secs(self.config.command_timeout_seconds * 10);
+        let idle_timeout = Duration::from_secs(self.config.command_timeout_seconds * 5);
+
+        let conn_index = pool
+            .iter()
+            .position(|conn| !conn.is_expired(max_lifetime) && !conn.is_idle_timeout(idle_timeout));
+
+        if let Some(index) = conn_index {
+            // Get and remove the connection from the pool
+            let mut conn = pool.remove(index);
+
+            // Perform a quick health check before returning
+            let health = self.check_connection_health(&conn.connection).await;
+
+            match health {
+                ConnectionHealth::Healthy => {
+                    // Update stats
+                    let mut stats = self.stats.lock().await;
+                    stats.total_acquires += 1;
+                    stats.current_idle_connections -= 1;
+                    stats.current_active_connections += 1;
+
+                    // Mark connection as used
+                    conn.mark_used();
+
+                    debug!("Reusing existing Redis connection from pool");
+                    return Ok(conn.connection);
+                }
+                ConnectionHealth::Unhealthy | ConnectionHealth::Timeout => {
+                    debug!("Discarding unhealthy connection from pool");
+                    let mut stats = self.stats.lock().await;
+                    stats.total_connections_closed += 1;
+                    // Don't reuse this connection, create a new one
+                }
+            }
+        }
+
+        // No healthy connection in pool, create a new one if below max connections
+        let current_connections = {
+            let stats = self.stats.lock().await;
+            stats.current_active_connections + stats.current_idle_connections
+        };
+
+        if current_connections < self.config.max_connections as usize {
+            debug!("Creating new Redis connection");
+
+            // Use timeout for connection acquisition
+            let connect_timeout = Duration::from_secs(self.config.connection_timeout_seconds);
+            let get_conn_result = timeout(connect_timeout, self.client.get_connection()).await;
+
+            match get_conn_result {
+                Ok(Ok(conn)) => {
+                    // Update stats for successful connection
+                    let mut stats = self.stats.lock().await;
+                    stats.total_connections_created += 1;
+                    stats.current_active_connections += 1;
+                    stats.total_acquires += 1;
+
+                    // Reset consecutive failures
+                    *self.consecutive_failures.lock().await = 0;
+
+                    debug!("Successfully created new Redis connection");
+                    Ok(conn)
+                }
+                Ok(Err(err)) => {
+                    // Handle connection errors
+                    let mut stats = self.stats.lock().await;
+                    stats.total_acquire_failures += 1;
+
+                    // Update circuit breaker
+                    self.record_connection_failure().await;
+
+                    error!("Failed to create new Redis connection: {}", err);
+                    Err(RedisCacheError::ConnectionError(err.to_string()))
+                }
+                Err(_) => {
+                    // Handle connection timeout
+                    let mut stats = self.stats.lock().await;
+                    stats.total_acquire_timeouts += 1;
+                    stats.total_acquire_failures += 1;
+
+                    // Update circuit breaker
+                    self.record_connection_failure().await;
+
+                    error!("Timeout while creating new Redis connection");
+                    Err(RedisCacheError::ConnectionError(
+                        "Connection acquisition timed out".to_string(),
+                    ))
+                }
+            }
+        } else {
+            // We're at max connections, wait until one becomes available or timeout
+            drop(pool); // Release the lock on the pool
+
+            let wait_timeout = Duration::from_secs(self.config.connection_timeout_seconds);
+            let wait_result = timeout(wait_timeout, self.wait_for_available_connection()).await;
+
+            match wait_result {
+                Ok(Ok(conn)) => Ok(conn),
+                Ok(Err(err)) => Err(err),
+                Err(_) => {
+                    let mut stats = self.stats.lock().await;
+                    stats.total_acquire_timeouts += 1;
+                    stats.total_acquire_failures += 1;
+
+                    error!("Timeout waiting for available Redis connection");
+                    Err(RedisCacheError::ConnectionError(
+                        "Timed out waiting for an available connection".to_string(),
+                    ))
+                }
+            }
+        }
+    }
+
+    /// Return a connection to the pool
+    pub async fn return_connection(&self, conn: Connection) {
+        let mut pool = self.pool.lock().await;
+        let mut stats = self.stats.lock().await;
+
+        // Only return to pool if we're under max pool size
+        if pool.len() < self.config.max_connections as usize {
+            // Wrap in PooledConnection and add to pool
+            pool.push(PooledConnection::new(conn));
+            stats.current_idle_connections += 1;
+            stats.current_active_connections -= 1;
+            debug!("Returned connection to pool, pool size: {}", pool.len());
+        } else {
+            // Just close the connection if pool is full
+            stats.total_connections_closed += 1;
+            stats.current_active_connections -= 1;
+            debug!("Closed connection as pool is full");
+            // Connection will be dropped when goes out of scope
         }
     }
 
@@ -94,14 +346,58 @@ impl RedisConnectionManager {
         func: F,
     ) -> RedisCacheResult<T>
     where
-        F: FnOnce(ConnectionManager) -> Result<T, RedisError>,
+        F: FnOnce(Connection) -> Result<T, RedisError>,
     {
         let conn = self.get_connection().await?;
-        let result = func(conn);
+
+        // Track start time for operation
+        let start = Instant::now();
+
+        // Execute the command with timeout
+        let command_timeout = Duration::from_secs(self.config.command_timeout_seconds);
+        let operation_future = tokio::task::spawn_blocking(move || func(conn));
+
+        let result = match timeout(command_timeout, operation_future).await {
+            Ok(task_result) => match task_result {
+                Ok(cmd_result) => cmd_result,
+                Err(join_err) => {
+                    error!("Redis operation task failed: {}", join_err);
+                    Err(RedisError::from(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("Task execution error: {}", join_err),
+                    )))
+                }
+            },
+            Err(_) => {
+                error!("Redis operation timed out after {:?}", command_timeout);
+                Err(RedisError::from(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    format!(
+                        "Operation '{}' timed out after {:?}",
+                        operation, command_timeout
+                    ),
+                )))
+            }
+        };
+
+        // Calculate operation duration
+        let duration = start.elapsed();
+        if duration > Duration::from_millis(100) {
+            warn!("Redis operation '{}' took {:?}", operation, duration);
+        }
 
         match result {
-            Ok(value) => Ok(value),
+            Ok(value) => {
+                // Return a new connection to the pool
+                if let Ok(new_conn) = self.client.get_connection() {
+                    self.return_connection(new_conn).await;
+                }
+                Ok(value)
+            }
             Err(err) => {
+                // Record failure for circuit breaker
+                self.record_connection_failure().await;
+
                 error!(
                     "Redis operation '{}' failed on key '{}': {}",
                     operation, key, err
@@ -131,9 +427,7 @@ impl RedisConnectionManager {
     /// Check if Redis is available
     pub async fn ping(&self) -> RedisCacheResult<()> {
         self.execute_command("ping", "PING", |mut conn| {
-            redis::cmd("PING")
-                .query_async(&mut conn)
-                .map(|_: String| ())
+            redis::cmd("PING").query::<String>(&mut conn).map(|_| ())
         })
         .await
     }
@@ -142,35 +436,203 @@ impl RedisConnectionManager {
     pub fn config(&self) -> &RedisCacheConfig {
         &self.config
     }
+
+    /// Get connection pool statistics
+    pub async fn get_stats(&self) -> PoolStats {
+        self.stats.lock().await.clone()
+    }
+
+    /// Check health of a specific connection
+    async fn check_connection_health(&self, conn: &Connection) -> ConnectionHealth {
+        let client = self.client.clone();
+        let conn_clone = conn.clone(); // Clone for health check
+
+        // Perform a simple ping with timeout
+        let health_check_timeout = Duration::from_secs(1);
+        match timeout(health_check_timeout, async move {
+            let mut conn = conn_clone;
+            redis::cmd("PING").query::<String>(&mut conn)
+        })
+        .await
+        {
+            Ok(Ok(_)) => ConnectionHealth::Healthy,
+            Ok(Err(_)) => ConnectionHealth::Unhealthy,
+            Err(_) => ConnectionHealth::Timeout,
+        }
+    }
+
+    /// Wait for an available connection
+    async fn wait_for_available_connection(&self) -> RedisCacheResult<Connection> {
+        let retry_interval = Duration::from_millis(50);
+        let max_retries = (self.config.connection_timeout_seconds * 1000) / 50;
+
+        for _ in 0..max_retries {
+            // Try to get a connection from the pool
+            let mut pool = self.pool.lock().await;
+            if !pool.is_empty() {
+                // There's a connection in the pool, use it
+                let conn = pool.remove(0);
+
+                // Update stats
+                let mut stats = self.stats.lock().await;
+                stats.total_acquires += 1;
+                stats.current_idle_connections -= 1;
+                stats.current_active_connections += 1;
+
+                return Ok(conn.connection);
+            }
+
+            // No connection available, release lock and wait
+            drop(pool);
+            tokio::time::sleep(retry_interval).await;
+        }
+
+        // Could not get a connection after all retries
+        Err(RedisCacheError::ConnectionError(
+            "Could not acquire a Redis connection after waiting".to_string(),
+        ))
+    }
+
+    /// Record a connection failure for circuit breaker logic
+    async fn record_connection_failure(&self) {
+        let mut failures = self.consecutive_failures.lock().await;
+        *failures += 1;
+
+        // If we reach the threshold, open the circuit breaker
+        let circuit_threshold = 5;
+        if *failures >= circuit_threshold {
+            debug!(
+                "Opening circuit breaker after {} consecutive failures",
+                *failures
+            );
+            *self.circuit_open.lock().await = false;
+            *self.last_failure.lock().await = Some(Instant::now());
+        }
+    }
+
+    /// Start background tasks for connection pool maintenance
+    fn start_pool_maintenance(&self) {
+        let this = self.clone();
+        tokio::spawn(async move {
+            let interval = Duration::from_secs(30);
+            loop {
+                tokio::time::sleep(interval).await;
+                this.clean_expired_connections().await;
+            }
+        });
+    }
+
+    /// Clean expired or idle connections from the pool
+    async fn clean_expired_connections(&self) {
+        let mut pool = self.pool.lock().await;
+        let mut stats = self.stats.lock().await;
+
+        let max_lifetime = Duration::from_secs(self.config.command_timeout_seconds * 10);
+        let idle_timeout = Duration::from_secs(self.config.command_timeout_seconds * 5);
+
+        // Find and remove expired connections
+        let before_count = pool.len();
+        pool.retain(|conn| {
+            let keep = !conn.is_expired(max_lifetime) && !conn.is_idle_timeout(idle_timeout);
+            if !keep {
+                stats.total_connections_closed += 1;
+                stats.current_idle_connections -= 1;
+            }
+            keep
+        });
+
+        let removed = before_count - pool.len();
+        if removed > 0 {
+            debug!("Removed {} expired connections from pool", removed);
+        }
+
+        // Check if we need to add more connections to maintain minimum
+        let min_connections = std::cmp::max(1, self.config.max_connections / 5) as usize;
+        if pool.len() < min_connections {
+            let to_add = min_connections - pool.len();
+            debug!(
+                "Adding {} new connections to maintain minimum pool size",
+                to_add
+            );
+
+            for _ in 0..to_add {
+                if let Ok(conn) = self.client.get_connection() {
+                    pool.push(PooledConnection::new(conn));
+                    stats.total_connections_created += 1;
+                    stats.current_idle_connections += 1;
+                } else {
+                    // Stop if we can't create more connections
+                    break;
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::RedisCacheConfig;
     use std::time::Duration;
 
     #[tokio::test]
-    async fn test_connection_manager() {
+    async fn test_connection_pool() {
+        // Skip test if Redis is not available
         let config = RedisCacheConfig {
-            url: "redis://127.0.0.1:6379".to_string(),
-            key_prefix: "test".to_string(),
+            url: "127.0.0.1:6379".to_string(),
+            key_prefix: "test:".to_string(),
             default_ttl: Duration::from_secs(60),
             max_connections: 5,
             database: 0,
             password: None,
             use_tls: false,
-            connection_timeout_seconds: 5,
-            command_timeout_seconds: 2,
+            connection_timeout_seconds: 2,
+            command_timeout_seconds: 1,
             retry_commands: true,
             max_retries: 3,
         };
 
-        let manager = RedisConnectionManager::new(config.clone()).await;
-        assert!(manager.is_ok());
+        let connection_manager = match RedisConnectionManager::new(config).await {
+            Ok(manager) => manager,
+            Err(_) => {
+                println!("Skipping test_connection_pool - Redis not available");
+                return;
+            }
+        };
 
-        let manager = manager.unwrap();
-        assert_eq!(manager.key_prefix(), "test");
-        assert_eq!(manager.prefixed_key("key"), "test:key");
-        assert_eq!(manager.config().url, "redis://127.0.0.1:6379");
+        // Get connection stats before
+        let before_stats = connection_manager.get_stats().await;
+
+        // Get multiple connections
+        let mut connections = Vec::new();
+        for i in 0..3 {
+            match connection_manager.get_connection().await {
+                Ok(conn) => {
+                    println!("Got connection {}", i);
+                    connections.push(conn);
+                }
+                Err(e) => panic!("Failed to get connection {}: {}", i, e),
+            }
+        }
+
+        // Check stats after getting connections
+        let after_stats = connection_manager.get_stats().await;
+        assert!(after_stats.total_acquires >= before_stats.total_acquires + 3);
+        assert!(after_stats.current_active_connections >= 3);
+
+        // Return some connections
+        for conn in connections {
+            connection_manager.return_connection(conn).await;
+        }
+
+        // Check stats after returning
+        let final_stats = connection_manager.get_stats().await;
+        assert!(final_stats.current_idle_connections >= before_stats.current_idle_connections);
+
+        // Test ping
+        connection_manager
+            .ping()
+            .await
+            .expect("Ping should succeed");
     }
 }

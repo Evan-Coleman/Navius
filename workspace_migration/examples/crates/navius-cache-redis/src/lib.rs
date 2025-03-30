@@ -29,4 +29,4 @@ pub use error::{RedisCacheError, RedisCacheResult};
 
 // Connection management
 pub mod connection;
-pub use connection::RedisConnectionManager;
+pub use connection::{ConnectionHealth, PoolStats, RedisConnectionManager};

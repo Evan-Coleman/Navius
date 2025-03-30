@@ -41,6 +41,10 @@ path = "examples/pipeline.rs"
 name = "lua_scripting"
 path = "examples/lua_scripting.rs"
 
+[[example]]
+name = "connection_pooling"
+path = "examples/connection_pooling.rs"
+
 [[bench]]
 name = "redis_operations"
 harness = false 
