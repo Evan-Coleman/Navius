@@ -1,7 +1,7 @@
 # Phase 4 Implementation Plan: Integration and API Stabilization
 
 **Current Status:** Planning Stage  
-**Date:** March 29, 2025  
+**Date:** March 31, 2025  
 **Target Completion:** June 30, 2025
 
 ## Overview
@@ -10,14 +10,29 @@ With the successful completion of Phase 3 (Create Additional Crates), the Navius
 
 ## Goals
 
-1. Create comprehensive integration examples demonstrating crate interactions
-2. Stabilize public APIs with clear documentation and version guarantees
-3. Implement dependency injection based on spring-rs research
-4. Create a comprehensive testing strategy across crate boundaries
-5. Establish CI/CD pipeline for the complete workspace
-6. Prepare for first alpha release
+1. Consolidate crates from root directory to workspace structure
+2. Create comprehensive integration examples demonstrating crate interactions
+3. Stabilize public APIs with clear documentation and version guarantees
+4. Implement dependency injection based on spring-rs research
+5. Create a comprehensive testing strategy across crate boundaries
+6. Establish CI/CD pipeline for the complete workspace
+7. Prepare for first alpha release
 
 ## Implementation Plan
+
+### Stage 0: Crates Migration (April 1-20, 2025)
+
+See detailed plan in [crates-migration-plan.md](./crates-migration-plan.md)
+
+1. **Assessment and Inventory**
+   - Complete inventory of all crates in root and workspace locations
+   - Code comparison analysis
+   - Dependency graph mapping
+
+2. **Migration Execution**
+   - Prioritized migration of crates from `/crates` to `/workspace_migration/crates`
+   - Ensure most up-to-date implementations are preserved
+   - Complete validation of migrated codebase
 
 ### Stage 1: Integration Framework (April 1-15, 2025)
 
@@ -185,4 +200,4 @@ These patterns will be implemented to complement our existing provider pattern, 
 3. Establish API review process
 4. Set up cross-crate testing infrastructure
 
-*Updated: March 29, 2025* 
+*Updated: March 31, 2025* 

@@ -1,6 +1,6 @@
 # Implementation Progress Tracking
 
-**Last Updated**: March 29, 2025
+**Last Updated**: March 30, 2025
 
 This document provides detailed tracking of implementation tasks for each crate in the workspace migration. It is intended to provide more granular progress information than the main roadmap document.
 
@@ -687,6 +687,32 @@ TBD - Will be detailed when implementation begins
 TBD - Will be detailed when implementation begins
 
 ## Integration and Application Refactoring
+
+### Crates Migration (⬜️ 0%)
+
+- [ ] **Assessment and Inventory**
+  - [ ] Create inventory of all crates in root and workspace location
+  - [ ] Document versions, dependencies, and feature flags
+  - [ ] Identify duplicate crates
+- [ ] **Code Comparison Analysis**
+  - [ ] Create methodology for determining most recent implementation
+  - [ ] Compare modification dates, versions, and features
+  - [ ] Document findings for each crate
+- [ ] **Migration Execution**
+  - [ ] Migrate infrastructure crates (core, util, test-utils)
+  - [ ] Migrate provider interface crates (db, cache, http)
+  - [ ] Migrate implementation crates (db-postgres, cache-redis, auth)
+  - [ ] Migrate service crates (event, job, messaging, plugin)
+- [ ] **Validation and Cleanup**
+  - [ ] Verify all crates compile successfully
+  - [ ] Run comprehensive test suite
+  - [ ] Update examples and documentation
+  - [ ] Remove root `/crates` directory
+
+**Assignee:** TBD  
+**Timeline:** March 30, 2025
+**Dependencies:** None  
+**Documentation:** [crates-migration-plan.md](../crates-migration-plan.md)
 
 ### Application Entry Points (⬜️ 0%)
 

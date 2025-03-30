@@ -1,0 +1,10 @@
+[package]
+name = "dependency-injection-example"
+version = "0.1.0"
+edition = "2024"
+description = "Example demonstrating dependency injection in the Navius framework"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+navius-core = { path = "../crates/navius-core" } 

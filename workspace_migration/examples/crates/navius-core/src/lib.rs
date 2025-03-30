@@ -3,16 +3,16 @@
 //! This crate provides essential types, utilities, and functionality used by all other Navius crates.
 //! It includes error handling, configuration management, common constants, and utility functions.
 
+// Modules
 pub mod config;
 pub mod constants;
+pub mod di;
 pub mod error;
 pub mod types;
 pub mod util;
 
-// Re-export commonly used types for convenience
-pub use config::Config;
+// Re-exports
 pub use error::{Error, Result};
-pub use types::*;
 
 /// Navius version information
 pub struct Version;
@@ -32,16 +32,24 @@ impl Version {
 /// Initialize core functionality
 pub fn init() -> Result<()> {
     tracing::info!("Initializing Navius Core v{}", Version::current());
+
+    // Initialize the dependency injection system
+    let _registry = di::init();
+
     Ok(())
 }
 
 /// Initialize with custom configuration
-pub fn init_with_config(config: Config) -> Result<()> {
+pub fn init_with_config(config: config::Config) -> Result<()> {
     tracing::info!(
         "Initializing Navius Core v{} with custom config",
         Version::current()
     );
     tracing::debug!("Configuration: {:?}", config);
+
+    // Initialize the dependency injection system
+    let _registry = di::init();
+
     Ok(())
 }
 
