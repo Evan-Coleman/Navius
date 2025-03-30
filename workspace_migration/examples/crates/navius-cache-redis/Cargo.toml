@@ -2,6 +2,9 @@
 name = "navius-cache-redis"
 version = "0.1.0"
 edition = "2021"
+license = "Apache-2.0"
+description = "Redis cache implementation for Navius"
+authors = ["Navius Team <maintainers@navius.org>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -18,6 +21,7 @@ tokio = { version = "1.44.1", features = ["full"] }
 futures = "0.3.31"
 rand = "0.9.0"
 metrics = "0.24.1"
+uuid = { version = "1.16.0", features = ["v4", "serde"] }
 
 [dev-dependencies]
 anyhow = "1.0.97"
@@ -27,6 +31,7 @@ criterion = { version = "0.5.1", features = ["async_tokio"] }
 bincode = "2.0.1"
 metrics-exporter-prometheus = "0.16.2"
 metrics-util = "0.19.0"
+serde = { version = "1.0.219", features = ["derive"] }
 
 [[example]]
 name = "basic"
@@ -58,4 +63,8 @@ path = "examples/metrics_example.rs"
 
 [[bench]]
 name = "redis_operations"
+harness = false
+
+[[bench]]
+name = "redis_benchmark"
 harness = false 

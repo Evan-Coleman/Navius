@@ -237,6 +237,100 @@ cargo test
 - Lua scripts provide atomic operations without network round-trips
 - Monitor metrics to identify bottlenecks and optimize accordingly
 
+## Performance Benchmarking
+
+The Redis Cache implementation includes a comprehensive benchmarking suite to evaluate performance across various operations and scenarios. This enables you to understand the performance characteristics of the cache and make informed decisions about configuration and usage patterns.
+
+### Running Benchmarks
+
+To run the benchmarks:
+
+```bash
+# Run all benchmarks with default settings
+cargo bench --bench redis_benchmark
+
+# Run a specific benchmark group
+cargo bench --bench redis_benchmark -- "Basic Operations"
+
+# Run a specific benchmark
+cargo bench --bench redis_benchmark -- "Pipeline operations"
+
+# Output detailed results for visualization
+cargo bench --bench redis_benchmark -- --verbose > benchmark_results.txt
+```
+
+### Visualizing Benchmark Results
+
+The package includes a benchmark visualizer to help interpret results:
+
+```bash
+# Run the visualizer on the benchmark results
+cargo run --example benchmark_visualizer -- benchmark_results.txt
+```
+
+This will generate bar charts and performance comparisons to help you understand the relative performance of different operations.
+
+### Benchmark Categories
+
+The benchmark suite covers the following categories:
+
+1. **Basic Operations**
+   - GET/SET operations for strings
+   - SET with expiration
+   - DELETE operations
+   - EXISTS checks
+
+2. **Serialization Performance**
+   - Serialization of small objects
+   - Serialization of collections
+   - Deserialization performance
+
+3. **Data Structure Operations**
+   - List operations (LPUSH, RPUSH, LPOP, LRANGE)
+   - Hash operations (HSET, HGET, HGETALL)
+   - Set operations (SADD, SISMEMBER, SMEMBERS, SINTER, SUNION)
+   - Sorted Set operations (ZADD, ZRANGE, ZRANGEBYSCORE)
+
+4. **Lua Scripting Performance**
+   - Simple Lua script execution
+   - Complex script operations
+
+5. **Pipelining**
+   - Pipeline vs. individual operations comparison
+   - Scaling with operation count
+
+6. **Connection Pool Performance**
+   - Concurrent operation handling
+   - Pool size impact on throughput
+
+### Performance Optimization Guidelines
+
+Based on benchmark findings, here are some guidelines for optimizing Redis Cache performance:
+
+1. **Use pipelining for bulk operations**: The benchmarks demonstrate that pipelining can provide significant performance improvements (often 5-10x) when executing multiple Redis commands in sequence.
+
+2. **Optimize connection pool size**: Benchmark your specific workload to determine the optimal connection pool size. Too few connections can limit throughput, while too many might waste resources.
+
+3. **Consider serialization overhead**: For complex objects, serialization can become a bottleneck. Use compact serialization formats and consider caching frequently accessed objects.
+
+4. **Leverage Lua scripts**: For operations that require multiple commands, Lua scripts can reduce network roundtrips and provide atomic execution.
+
+5. **Balance TTL settings**: Setting expiration times adds some overhead. Only use TTL when necessary, and consider appropriate values based on your application's needs.
+
+### Interpreting Benchmark Results
+
+The benchmark results provide several key metrics:
+
+- **Average Time**: The mean execution time per operation
+- **Throughput**: Operations per second the cache can handle
+- **Min/Max Times**: Range of performance variation
+
+For most applications, the throughput (operations per second) is the most important metric to optimize for.
+
+### Customizing Benchmarks
+
+You can customize the benchmarks for your specific environment by modifying the Redis connection parameters in the `create_test_cache()` function in the benchmark code.
+
 ## License
 
 Apache 2.0 

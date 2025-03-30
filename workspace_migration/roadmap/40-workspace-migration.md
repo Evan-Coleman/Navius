@@ -117,7 +117,7 @@ For more detailed information, refer to:
     - ✅ Composite serializer
   - ✅ Add metrics and telemetry
   - 🔄 Update tests
-- 🔄 Create navius-cache-redis crate (85% complete)
+- 🔄 Create navius-cache-redis crate (95% complete)
   - ✅ Core implementation
     - ✅ Redis connection handling
     - ✅ Configuration
@@ -281,7 +281,7 @@ For the complete rationale, alternatives considered, and implementation approach
 | navius-db | ✅ 100% | Database interfaces and abstractions |
 | navius-db-postgres | 🔄 100% | PostgreSQL implementation of database interfaces |
 | navius-cache | 🔄 90% | Caching interfaces and abstractions |
-| navius-cache-redis | 🔄 85% | Redis implementation of cache interfaces |
+| navius-cache-redis | 🔄 95% | Redis implementation of cache interfaces |
 | navius-plugin | ⬜️ 0% | Plugin system and component registry |
 | navius-event | ⬜️ 0% | Event handling and notification interfaces |
 | navius-job | ⬜️ 0% | Background job processing interfaces |
