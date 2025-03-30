@@ -3,16 +3,19 @@
 
 [workspace]
 members = [
-    "crates/navius-core",
-    "crates/navius-http",
-    "crates/navius-auth",
-    "crates/navius-db",
-    "crates/navius-db-postgres",
-    "crates/navius-cache",
-    "crates/navius-cache-redis",
-    "crates/navius-messaging",
-    "crates/navius-plugin",
-    "crates/navius-event",
+    "workspace_migration/examples/crates/navius-core",
+    "workspace_migration/examples/crates/navius-http",
+    "workspace_migration/examples/crates/navius-auth",
+    "workspace_migration/examples/crates/navius-db",
+    "workspace_migration/examples/crates/navius-db-postgres",
+    "workspace_migration/examples/crates/navius-cache",
+    "workspace_migration/examples/crates/navius-cache-redis",
+    "workspace_migration/examples/crates/navius-messaging",
+    "workspace_migration/examples/crates/navius-plugin",
+    "workspace_migration/examples/crates/navius-event",
+    "workspace_migration/examples/crates/navius-metrics",
+    "workspace_migration/examples/crates/navius-metrics-prometheus",
+    "workspace_migration/examples/crates/navius-job",
     # Add new crates here as they are created
 ]
 
@@ -94,6 +97,9 @@ assert_matches = "1.5.0"
 once_cell = "1.21.3"
 mockall = "0.13.1"
 tempfile = "3.19.1"
+tokio-test = "0.4.4"
+criterion = { version = "0.5.1", features = ["async_tokio"] }
+anyhow = "1.0.97"
 
 # Profiles shared across the workspace
 [profile.dev]
@@ -128,27 +134,31 @@ categories = ["web-programming", "asynchronous"]
 # Root package dependencies - minimal, mostly just for workspace management
 [dependencies]
 # Core crate
-navius-core = { path = "crates/navius-core", version = "0.1.0" }
+navius-core = { path = "workspace_migration/examples/crates/navius-core", version = "0.1.0" }
 # HTTP crate
-navius-http = { path = "crates/navius-http", version = "0.1.0" }
+navius-http = { path = "workspace_migration/examples/crates/navius-http", version = "0.1.0" }
 # Auth crate
-navius-auth = { path = "crates/navius-auth", version = "0.1.0" }
+navius-auth = { path = "workspace_migration/examples/crates/navius-auth", version = "0.1.0" }
 # DB crate
-navius-db = { path = "crates/navius-db", version = "0.1.0" }
+navius-db = { path = "workspace_migration/examples/crates/navius-db", version = "0.1.0" }
 # DB PostgreSQL implementation
-navius-db-postgres = { path = "crates/navius-db-postgres", version = "0.1.0" }
+navius-db-postgres = { path = "workspace_migration/examples/crates/navius-db-postgres", version = "0.1.0" }
 # Cache crate
-navius-cache = { path = "crates/navius-cache", version = "0.1.0" }
+navius-cache = { path = "workspace_migration/examples/crates/navius-cache", version = "0.1.0" }
 # Cache Redis implementation
-navius-cache-redis = { path = "crates/navius-cache-redis", version = "0.1.0" }
+navius-cache-redis = { path = "workspace_migration/examples/crates/navius-cache-redis", version = "0.1.0" }
 # Plugin crate
-navius-plugin = { path = "crates/navius-plugin", version = "0.1.0" }
+navius-plugin = { path = "workspace_migration/examples/crates/navius-plugin", version = "0.1.0" }
 # Event crate
-navius-event = { path = "crates/navius-event", version = "0.1.0" }
+navius-event = { path = "workspace_migration/examples/crates/navius-event", version = "0.1.0" }
 # Messaging crate
-navius-messaging = { path = "crates/navius-messaging", version = "0.1.0" }
-
-# Add other crates as they are created
+navius-messaging = { path = "workspace_migration/examples/crates/navius-messaging", version = "0.1.0" }
+# Metrics crate
+navius-metrics = { path = "workspace_migration/examples/crates/navius-metrics", version = "0.1.0" }
+# Metrics Prometheus implementation
+navius-metrics-prometheus = { path = "workspace_migration/examples/crates/navius-metrics-prometheus", version = "0.1.0" }
+# Job crate
+navius-job = { path = "workspace_migration/examples/crates/navius-job", version = "0.1.0" }
 
 # Optional dependencies that were moved from workspace.dependencies
 jsonwebtoken = { version = "9.3.1", optional = true }
