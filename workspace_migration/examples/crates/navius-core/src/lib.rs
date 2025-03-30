@@ -145,3 +145,7 @@ mod tests {
         assert_eq!(app.environment(), Environment::Production);
     }
 }
+
+// Include the error_test module for integration testing
+#[cfg(test)]
+mod error_test;
