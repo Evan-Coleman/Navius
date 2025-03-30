@@ -6,6 +6,7 @@
 // Modules
 pub mod config;
 pub mod constants;
+pub mod di;
 pub mod error;
 pub mod types;
 pub mod util;
@@ -31,6 +32,10 @@ impl Version {
 /// Initialize core functionality
 pub fn init() -> Result<()> {
     tracing::info!("Initializing Navius Core v{}", Version::current());
+
+    // Initialize the dependency injection system
+    let _registry = di::init();
+
     Ok(())
 }
 
@@ -41,6 +46,10 @@ pub fn init_with_config(config: config::Config) -> Result<()> {
         Version::current()
     );
     tracing::debug!("Configuration: {:?}", config);
+
+    // Initialize the dependency injection system
+    let _registry = di::init();
+
     Ok(())
 }
 
