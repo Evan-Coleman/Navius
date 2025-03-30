@@ -1,0 +1,7 @@
+# Ignore compiled dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# But keep the directory structure
+!.gitignore 

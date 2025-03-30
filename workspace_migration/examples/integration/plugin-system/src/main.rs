@@ -6,10 +6,10 @@
 
 use navius_core::error::Result;
 use navius_plugin::PluginRegistry;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 use tracing::{error, info};
 
-use plugin_system::{api::ApiServer, create_plugin_system_app};
+use plugin_system::{api::ApiServer, create_plugin_system_app, load_dynamic_plugins};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -23,6 +23,30 @@ async fn main() -> Result<()> {
     let mut app = app_builder.build();
 
     info!("Application built successfully");
+
+    // Get the plugin registry
+    let plugin_registry = app.plugin_registry();
+
+    // Try to load dynamic plugins
+    let plugins_dir = PathBuf::from("plugins");
+    info!("Looking for dynamic plugins in: {:?}", plugins_dir);
+
+    match load_dynamic_plugins(&plugin_registry, plugins_dir).await {
+        Ok(loaded_plugins) => {
+            if loaded_plugins.is_empty() {
+                info!("No dynamic plugins were loaded");
+            } else {
+                info!("Loaded dynamic plugins: {:?}", loaded_plugins);
+            }
+        }
+        Err(e) => {
+            error!("Error loading dynamic plugins: {}", e);
+            // Continue even if dynamic plugin loading fails
+        }
+    }
+
+    // Initialize all plugins (including any newly loaded dynamic plugins)
+    plugin_registry.initialize_all().await?;
 
     // Retrieve components from the registry
     let logger = app
@@ -68,7 +92,6 @@ async fn main() -> Result<()> {
     api_server.stop().await?;
 
     // Shutdown the application
-    let plugin_registry = app.plugin_registry();
     plugin_registry.shutdown_all().await?;
 
     info!("Plugin System Integration Example shut down successfully");

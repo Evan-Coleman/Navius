@@ -29,6 +29,11 @@ This example demonstrates the integration of plugin system components in the Nav
    - Event-based notification system
    - Dependency management for plugin interactions
 
+6. **Dynamic Plugin Loading**:
+   - Loading plugins from compiled shared libraries
+   - Runtime discovery of plugin capabilities
+   - Integration with existing plugin registry
+
 ## Plugin Types Implemented
 
 ### Core Infrastructure Plugins
@@ -43,6 +48,10 @@ This example demonstrates the integration of plugin system components in the Nav
 - **UserPlugin**: Provides user management capabilities
 - **AnalyticsPlugin**: Provides analytics functionalities
 
+### Dynamic Plugins
+
+- **DynamicPlugin**: A plugin loaded at runtime from a dynamic library
+
 ## Configuration and Extensibility
 
 The example demonstrates multiple configuration sources:
@@ -54,6 +63,15 @@ The example demonstrates multiple configuration sources:
 
 ## Running the Example
 
+First, build the dynamic plugins:
+
+```bash
+# Build the dynamic plugins
+./build_plugins.sh
+```
+
+Then run the example:
+
 ```bash
 # From the workspace_migration/examples/integration/plugin-system directory
 cargo run
@@ -61,10 +79,11 @@ cargo run
 
 This will start the example application with all plugins loaded. The application will:
 
-1. Initialize all plugins in dependency order
-2. Start the HTTP API
-3. Run until terminated with Ctrl+C
-4. Gracefully shut down all plugins in reverse dependency order
+1. Initialize all built-in plugins
+2. Discover and load dynamic plugins
+3. Start the HTTP API
+4. Run until terminated with Ctrl+C
+5. Gracefully shut down all plugins in reverse dependency order
 
 ## Testing
 
@@ -84,6 +103,7 @@ cargo test
 - `src/services.rs` - Service implementations for capabilities
 - `src/api.rs` - HTTP API implementation
 - `src/config.rs` - Configuration management utilities
+- `plugins/` - Dynamic plugin implementations
 - `tests/` - Integration tests for plugin lifecycle
 
 ## Key Design Patterns
@@ -104,6 +124,16 @@ cargo test
 - Robust error handling and logging
 - Comprehensive testing of plugin lifecycle
 - Clear dependency management between plugins
+
+## Dynamic Plugin Implementation
+
+The dynamic plugin implementation showcases:
+
+1. **Library Structure**: How to structure a dynamically loadable plugin
+2. **Export Functions**: Required functions for loading by the plugin system
+3. **Capability Registration**: How to expose capabilities to the main application
+4. **Dependency Management**: How to depend on capabilities from other plugins
+5. **Lifecycle Hooks**: Proper initialization, startup, and shutdown procedures
 
 ## Implementation Notes
 

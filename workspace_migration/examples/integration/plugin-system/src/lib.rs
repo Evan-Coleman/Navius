@@ -15,8 +15,9 @@ use navius_core::{
     di::{Application, ApplicationBuilder, ComponentScope, Environment},
     error::Result,
 };
-use navius_plugin::{Plugin, PluginContext, PluginRegistry};
+use navius_plugin::{Plugin, PluginContext, PluginLoader, PluginRegistry};
 
+use std::path::Path;
 use std::sync::Arc;
 use tracing::info;
 
@@ -38,4 +39,44 @@ pub async fn create_plugin_system_app() -> Result<ApplicationBuilder> {
     plugin_registry.initialize_all().await?;
 
     Ok(app_builder)
+}
+
+/// Load dynamic plugins from a directory
+pub async fn load_dynamic_plugins(
+    registry: &Arc<PluginRegistry>,
+    plugin_dir: impl AsRef<Path>,
+) -> Result<Vec<String>> {
+    let mut plugin_loader = PluginLoader::new();
+    plugin_loader.add_search_path(plugin_dir);
+
+    info!(
+        "Searching for dynamic plugins in: {:?}",
+        plugin_loader.search_paths()
+    );
+
+    let plugin_paths = plugin_loader.find_plugins()?;
+    if plugin_paths.is_empty() {
+        info!("No dynamic plugins found");
+        return Ok(Vec::new());
+    }
+
+    info!("Found {} dynamic plugin(s)", plugin_paths.len());
+
+    let mut loaded_plugin_names = Vec::new();
+    for path in plugin_paths {
+        info!("Loading dynamic plugin from: {:?}", path);
+        match plugin_loader.load_plugin(&path) {
+            Ok(plugin) => {
+                let plugin_name = plugin.name().to_string();
+                info!("Loaded dynamic plugin: {}", plugin_name);
+                registry.register(plugin)?;
+                loaded_plugin_names.push(plugin_name);
+            }
+            Err(e) => {
+                tracing::error!("Failed to load dynamic plugin from {:?}: {}", path, e);
+            }
+        }
+    }
+
+    Ok(loaded_plugin_names)
 }
