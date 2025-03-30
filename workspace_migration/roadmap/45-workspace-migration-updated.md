@@ -54,15 +54,15 @@ This document is an updated roadmap for the Navius workspace migration project, 
   - [x] Create component registry
   - [x] Update service initialization
 
-- [ ] Implement cross-crate testing infrastructure (40% complete)
+- [ ] Implement cross-crate testing infrastructure (85% complete)
   - [x] Design testing architecture
   - [x] Create test fixture framework
   - [x] Create mock registry
   - [x] Create test harness
   - [x] Implement error testing framework
-  - [ ] Create mock implementations for interfaces (25% complete)
-  - [ ] Create integration test utilities (10% complete)
-  - [ ] Update existing tests to use new infrastructure
+  - [x] Create mock implementations for interfaces (100% complete)
+  - [x] Create integration test utilities (100% complete)
+  - [ ] Update existing tests to use new infrastructure (30% complete)
 
 - [ ] Implement template engine (0% complete)
   - [ ] Define template interfaces
@@ -193,9 +193,10 @@ This document is an updated roadmap for the Navius workspace migration project, 
 
 | Milestone | Target Date | Status |
 |-----------|-------------|--------|
-| Complete Mock Interface Registry | April 10, 2025 | 🔄 In Progress (25%) |
-| Complete Integration Test Utilities | April 20, 2025 | 🔄 In Progress (10%) |
-| Complete Cross-Crate Testing | April 26, 2025 | 🔄 In Progress (40%) |
+| Complete Mock Interface Registry | April 10, 2025 | ✅ Complete (100%) |
+| Complete Integration Test Utilities | April 20, 2025 | ✅ Complete (100%) |
+| Update Existing Tests | April 5, 2025 | 🔄 In Progress (30%) |
+| Complete Cross-Crate Testing | April 26, 2025 | 🔄 In Progress (85%) |
 | Start Template Engine Implementation | May 1, 2025 | ⏳ Not Started |
 | Complete Template Engine | May 15, 2025 | ⏳ Not Started |
 | Start CLI Interface Development | May 16, 2025 | ⏳ Not Started |
@@ -213,11 +214,10 @@ This document is an updated roadmap for the Navius workspace migration project, 
 
 ## Next Steps
 
-1. Complete the Mock Interface Registry implementation (25% → 100%)
-2. Develop Integration Test Utilities (10% → 100%)
-3. Update documentation and examples
-4. Begin planning for Template Engine implementation
-5. Create project templates for bootstrapping new Navius applications
+1. Complete updating existing tests to use the Cross-Crate Testing Infrastructure (30% → 100%)
+2. Update documentation and examples with lessons learned during test migration
+3. Begin planning for Template Engine implementation
+4. Create project templates for bootstrapping new Navius applications
 
 ## Reference Documentation
 

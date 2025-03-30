@@ -79,7 +79,7 @@ For more detailed information, refer to:
   - [x] Implement error testing framework
   - [x] Create mock implementations for interfaces (100% complete)
   - [x] Create integration test utilities (100% complete)
-  - [ ] Update existing tests to use new infrastructure
+  - [ ] Update existing tests to use new infrastructure (30% complete)
 
 ### Phase 5: Finalize Documentation and Build (PLANNED)
 
@@ -203,7 +203,7 @@ For the complete rationale, alternatives considered, and implementation approach
 | navius-cache | Complete | 100% |
 | navius-config | Complete | 100% |
 | navius-db | Complete | 100% |
-| navius-test | In Progress | 70% |
+| navius-test | In Progress | 85% |
 | navius-auth-entra | Complete | 100% |
 | navius-template | Not Started | 0% |
 | navius-cli | Not Started | 0% |
@@ -212,7 +212,7 @@ For the complete rationale, alternatives considered, and implementation approach
 
 ## Next Steps
 
-1. Update existing tests to use the new Cross-Crate Testing Infrastructure
+1. Complete updating existing tests to use the new Cross-Crate Testing Infrastructure (30% → 100%)
 2. Create documentation and examples for the testing infrastructure
 3. Begin planning for the Template Engine crate implementation
 4. Start design for the CLI interface
@@ -256,6 +256,6 @@ The integration of spring-rs lessons has been completed and documented in the fo
 | Complete Phase 1 | January 31, 2025 | ✅ Complete |
 | Complete Phase 2 | February 28, 2025 | ✅ Complete |
 | Complete Phase 3 | March 15, 2025 | ✅ Complete |
-| Complete Cross-Crate Testing | April 20, 2025 | 🔄 In Progress (40%) |
+| Complete Cross-Crate Testing | April 20, 2025 | 🔄 In Progress (85%) |
 | Complete Phase 4 | May 15, 2025 | 🔄 In Progress |
 | Complete Phase 5 | May 31, 2025 | ⏳ Not Started | 

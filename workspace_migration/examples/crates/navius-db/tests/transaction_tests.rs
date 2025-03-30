@@ -1,67 +1,113 @@
 use navius_db::{DatabaseConnectionManager, DatabaseError, DatabaseResult, PgPool, PoolOptions};
+use navius_test::{
+    error::{TestResult, assert_ok},
+    fixture::TestFixture,
+    harness::{TestHarness, TestOptions},
+    mock::MockRegistry,
+    mocks::{
+        MockFixture,
+        database::{DatabaseClient, MockDatabaseClient, MockQueryResult, MockValue},
+    },
+};
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::test;
 
-// Helper function to create a test database pool
-async fn create_test_pool() -> PgPool {
+// Helper function to create a test fixture with a configured MockDatabaseClient
+async fn create_test_fixture() -> MockFixture {
+    let fixture = MockFixture::new();
+
+    // Configure the mock database client with default responses
+    let db = fixture.database();
+    db.expect_query(
+        "SELECT * FROM test_table WHERE name = 'test1'",
+        Ok(MockQueryResult::new().add_row({
+            let mut row = HashMap::new();
+            row.insert("id".to_string(), MockValue::Integer(1));
+            row.insert("name".to_string(), MockValue::String("test1".to_string()));
+            row
+        })),
+    );
+
+    // Set up expected responses for transaction-related queries
+    db.expect_execute("INSERT INTO test_table (name) VALUES ('test')", Ok(1));
+    db.expect_execute("INSERT INTO test_table (name) VALUES ('test1')", Ok(1));
+    db.expect_execute("INSERT INTO test_table (name) VALUES ('test2')", Ok(1));
+    db.expect_execute("INSERT INTO test_table (name) VALUES ('outer')", Ok(1));
+
+    fixture
+}
+
+// Helper function to create a test database pool using the mock client
+async fn create_test_pool(fixture: &MockFixture) -> PgPool {
     let options = PoolOptions::new()
         .max_connections(5)
         .connect_timeout(std::time::Duration::from_secs(3));
 
-    // You would typically use an env var or test config here
-    // For tests, we're using a mock implementation
-    PgPool::new_mock(options)
+    // Use the mock database client from the fixture
+    PgPool::new_with_client(fixture.database(), options)
 }
 
-// Helper to create a test database connection
-async fn create_test_db() -> Arc<DatabaseConnectionManager> {
-    let pool_options = PoolOptions::new()
-        .max_connections(5)
-        .min_connections(1)
-        .connect_timeout(std::time::Duration::from_secs(5));
-
-    // Use a test database URL - in a real test this would be a separate test database
-    let url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/test_db".to_string());
-
-    let pool = PgPool::connect_with_options(&url, pool_options)
-        .await
-        .expect("Failed to connect to database");
-
+// Helper to create a test database connection manager
+async fn create_test_db(fixture: &MockFixture) -> Arc<DatabaseConnectionManager> {
+    let pool = create_test_pool(fixture).await;
     Arc::new(DatabaseConnectionManager::new(pool))
 }
 
 #[test]
-async fn test_transaction_commit() {
+async fn test_transaction_commit() -> TestResult<()> {
     // Arrange
-    let pool = create_test_pool().await;
-    let db = DatabaseConnectionManager::new(pool);
+    let fixture = create_test_fixture().await;
+    let db = create_test_db(&fixture).await;
 
-    // Act & Assert
-    let result = db
-        .transaction(|mut tx| async move {
-            // Execute some queries in the transaction
-            let affected_rows = tx
-                .execute("INSERT INTO test_table (name) VALUES ('test')")
-                .await?;
-            assert_eq!(affected_rows, 1);
+    // Create a test harness with appropriate options
+    let options = TestOptions {
+        verify_mocks: true,
+        cleanup_resources: true,
+        timeout: Some(Duration::from_secs(5)),
+    };
 
-            // Commit happens automatically at the end of the closure if no error
-            Ok::<_, DatabaseError>(42)
+    let harness = TestHarness::new().with_options(options).with_subject(db)?;
+
+    // Act & Assert using the test harness
+    harness
+        .run(|db| async move {
+            let result = db
+                .transaction(|mut tx| async move {
+                    // Execute some queries in the transaction
+                    let affected_rows = tx
+                        .execute("INSERT INTO test_table (name) VALUES ('test')")
+                        .await?;
+                    assert_eq!(affected_rows, 1);
+
+                    // Commit happens automatically at the end of the closure if no error
+                    Ok::<_, DatabaseError>(42)
+                })
+                .await;
+
+            // Verify transaction was successful
+            assert_ok(result, "Transaction should commit successfully")?;
+            assert_eq!(result.unwrap(), 42);
+
+            // Verify all mock expectations were met
+            fixture.verify()?;
+
+            Ok(())
         })
-        .await;
-
-    // Verify transaction was successful
-    assert!(result.is_ok());
-    assert_eq!(result.unwrap(), 42);
+        .await
 }
 
 #[test]
-async fn test_transaction_rollback() {
+async fn test_transaction_rollback() -> TestResult<()> {
     // Arrange
-    let pool = create_test_pool().await;
-    let db = DatabaseConnectionManager::new(pool);
+    let fixture = create_test_fixture().await;
+    let db = create_test_db(&fixture).await;
+
+    // Configure the mock database to expect transaction rollback
+    let mock_db = fixture.database();
+    mock_db.expect_transaction(Err(MockDatabaseError::new("Forced error for testing")));
 
     // Act & Assert
     let result: Result<(), DatabaseError> = db
@@ -87,13 +133,18 @@ async fn test_transaction_rollback() {
         }
         _ => panic!("Expected ValidationError"),
     }
+
+    // Verify all mock expectations were met
+    fixture.verify()?;
+
+    Ok(())
 }
 
 #[test]
-async fn test_transaction_explicit_commit_rollback() {
+async fn test_transaction_explicit_commit_rollback() -> TestResult<()> {
     // Arrange
-    let pool = create_test_pool().await;
-    let db = DatabaseConnectionManager::new(pool);
+    let fixture = create_test_fixture().await;
+    let db = create_test_db(&fixture).await;
     let mut conn = db.get_connection().await.unwrap();
 
     // Test explicit commit
@@ -112,13 +163,18 @@ async fn test_transaction_explicit_commit_rollback() {
         // The transaction is explicitly rolled back
         tx.rollback().await.unwrap();
     }
+
+    // Verify all mock expectations were met
+    fixture.verify()?;
+
+    Ok(())
 }
 
 #[test]
-async fn test_transaction_drop_behavior() {
+async fn test_transaction_drop_behavior() -> TestResult<()> {
     // Arrange
-    let pool = create_test_pool().await;
-    let db = DatabaseConnectionManager::new(pool);
+    let fixture = create_test_fixture().await;
+    let db = create_test_db(&fixture).await;
 
     // Act - Create a transaction scope where the transaction will be dropped without commit/rollback
     {
@@ -130,13 +186,18 @@ async fn test_transaction_drop_behavior() {
     // Assert - This is mostly checking that no panic occurs
     // The actual rollback behavior is handled by the database driver in its Drop implementation
     // and is logged but we can't easily verify it in a unit test
+
+    // Verify all mock expectations were met
+    fixture.verify()?;
+
+    Ok(())
 }
 
 #[test]
-async fn test_multiple_queries_in_transaction() {
+async fn test_multiple_queries_in_transaction() -> TestResult<()> {
     // Arrange
-    let pool = create_test_pool().await;
-    let db = DatabaseConnectionManager::new(pool);
+    let fixture = create_test_fixture().await;
+    let db = create_test_db(&fixture).await;
 
     // Act & Assert
     let result = db
@@ -160,14 +221,19 @@ async fn test_multiple_queries_in_transaction() {
         .await;
 
     // Verify transaction was successful
-    assert!(result.is_ok());
+    assert_ok(result, "Multiple queries in transaction should succeed")?;
+
+    // Verify all mock expectations were met
+    fixture.verify()?;
+
+    Ok(())
 }
 
 #[test]
-async fn test_transaction_already_committed() {
+async fn test_transaction_already_committed() -> TestResult<()> {
     // Arrange
-    let pool = create_test_pool().await;
-    let db = DatabaseConnectionManager::new(pool);
+    let fixture = create_test_fixture().await;
+    let db = create_test_db(&fixture).await;
     let mut conn = db.get_connection().await.unwrap();
     let tx = conn.begin().await.unwrap();
 
@@ -177,13 +243,18 @@ async fn test_transaction_already_committed() {
     // Assert - Attempting a second commit should fail
     // Note: tx is consumed by commit, so we can't test this directly
     // This test is mostly for documentation
+
+    // Verify all mock expectations were met
+    fixture.verify()?;
+
+    Ok(())
 }
 
 #[test]
-async fn test_nested_transactions() {
+async fn test_nested_transactions() -> TestResult<()> {
     // Arrange
-    let pool = create_test_pool().await;
-    let db = DatabaseConnectionManager::new(pool);
+    let fixture = create_test_fixture().await;
+    let db = create_test_db(&fixture).await;
 
     // Act & Assert - Start an outer transaction
     let result = db
@@ -194,7 +265,7 @@ async fn test_nested_transactions() {
                 .await?;
 
             // Get a new transaction - in real database this would be a savepoint
-            let db_inner = DatabaseConnectionManager::new(pool);
+            let db_inner = create_test_db(&fixture).await;
             let result_inner = db_inner
                 .transaction(|mut tx_inner| async move {
                     // Do something in the inner transaction
@@ -213,7 +284,12 @@ async fn test_nested_transactions() {
         .await;
 
     // Verify transaction was successful
-    assert!(result.is_ok());
+    assert_ok(result, "Nested transaction should succeed")?;
+
+    // Verify all mock expectations were met
+    fixture.verify()?;
+
+    Ok(())
 }
 
 // This is a mock test that doesn't require an actual database connection
@@ -298,8 +374,9 @@ async fn test_savepoint_usage_mock() -> DatabaseResult<()> {
 #[tokio::test]
 #[ignore] // Skip by default, run with `cargo test -- --ignored`
 async fn test_transaction_with_savepoints() -> DatabaseResult<()> {
-    // Create test database with tables
-    let db = create_test_db().await;
+    // Create test fixture and database
+    let fixture = create_test_fixture().await;
+    let db = create_test_db(&fixture).await;
 
     // Set up test table
     db.connection()
@@ -401,9 +478,10 @@ async fn test_transaction_with_savepoints() -> DatabaseResult<()> {
 
 // Test that savepoint names are properly validated
 #[tokio::test]
-async fn test_savepoint_name_validation() {
-    // Create test database
-    let db = create_test_db().await;
+async fn test_savepoint_name_validation() -> TestResult<()> {
+    // Create test fixture and database
+    let fixture = create_test_fixture().await;
+    let db = create_test_db(&fixture).await;
 
     // Test invalid savepoint names
     let result = db
@@ -456,6 +534,9 @@ async fn test_savepoint_name_validation() {
 
     // Transaction should complete successfully
     assert!(result.is_ok(), "Transaction failed: {:?}", result);
+
+    // Verify all mock expectations were met
+    fixture.verify()?;
 
     Ok(())
 }
