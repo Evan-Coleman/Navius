@@ -21,9 +21,9 @@ uuid = { version = "1.16.0", features = ["v4", "serde"] }
 metrics = "0.24.1"
 
 # Navius dependencies
-navius-core = { path = "../navius-core" }
-navius-event = { path = "../navius-event" }
-navius-plugin = { path = "../navius-plugin" }
+navius-core = { path = "../../crates/navius-core" }
+navius-event = { path = "../../crates/navius-event" }
+navius-plugin = { path = "../../crates/navius-plugin" }
 
 [dev-dependencies]
 tokio-test = "0.4.4"
