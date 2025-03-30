@@ -1,0 +1,19 @@
+[package]
+name = "event-system-integration-example"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+navius-core = { path = "../../../examples/crates/navius-core" }
+navius-http = { path = "../../../examples/crates/navius-http" }
+navius-db = { path = "../../../examples/crates/navius-db" }
+navius-db-postgres = { path = "../../../examples/crates/navius-db-postgres" }
+navius-event = { path = "../../../examples/crates/navius-event" }
+navius-plugin = { path = "../../../examples/crates/navius-plugin" }
+tokio = { version = "1.44.1", features = ["full"] }
+serde = { version = "1.0.219", features = ["derive"] }
+async-trait = "0.1.88"
+uuid = { version = "1.16.0", features = ["v4", "serde"] }
+chrono = { version = "0.4.40", features = ["serde"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] } 
