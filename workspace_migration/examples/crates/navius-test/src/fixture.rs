@@ -7,273 +7,353 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tempfile::TempDir;
 
-/// A test fixture that manages resources and components for tests
+/// Internal state of the test fixture
+pub struct FixtureState {
+    /// Registered components by type ID
+    components: HashMap<TypeId, Box<dyn Any + Send + Sync>>,
+    /// Resources that need cleanup
+    resources: Vec<Box<dyn Resource + Send + Sync>>,
+    /// Configuration
+    config: FixtureConfig,
+}
+
+impl FixtureState {
+    /// Create a new fixture state
+    pub fn new(config: FixtureConfig) -> Self {
+        Self {
+            components: HashMap::new(),
+            resources: Vec::new(),
+            config,
+        }
+    }
+}
+
+/// Configuration for the test fixture
+#[derive(Clone, Debug)]
+pub struct FixtureConfig {
+    /// Whether to automatically clean up resources
+    pub auto_cleanup: bool,
+    /// Whether to log fixture operations
+    pub verbose_logging: bool,
+}
+
+impl Default for FixtureConfig {
+    fn default() -> Self {
+        Self {
+            auto_cleanup: true,
+            verbose_logging: false,
+        }
+    }
+}
+
+/// A resource that needs cleanup
+pub trait Resource {
+    /// Clean up the resource
+    fn cleanup(&self) -> TestResult<()>;
+    /// Description of the resource
+    fn description(&self) -> String;
+}
+
+/// A test fixture for setting up and tearing down test resources
 #[derive(Clone)]
 pub struct TestFixture {
     /// The internal state of the fixture
     state: Arc<Mutex<FixtureState>>,
 }
 
-/// The internal state of a test fixture
-struct FixtureState {
-    /// Map of registered components by type ID
-    components: HashMap<TypeId, Box<dyn Any + Send + Sync>>,
-
-    /// Temporary directories created for the test
-    temp_dirs: Vec<TempDir>,
-
-    /// Configuration values
-    config: HashMap<String, String>,
-
-    /// Flag indicating whether the fixture is already torn down
-    torn_down: bool,
-}
-
 impl TestFixture {
-    /// Create a new test fixture
+    /// Create a new test fixture with default configuration
     pub fn new() -> TestFixtureBuilder {
         TestFixtureBuilder::new()
     }
 
     /// Register a component with the fixture
-    pub fn register<T: Any + Send + Sync>(&self, component: T) -> TestResult<()> {
-        let type_id = TypeId::of::<T>();
+    pub fn register<T: Any + Send + Sync>(&self, component: T) -> TestResult<&Self> {
         let mut state = self
             .state
             .lock()
             .map_err(|e| TestError::setup_error(format!("Failed to lock fixture state: {}", e)))?;
 
+        let type_id = TypeId::of::<T>();
         state.components.insert(type_id, Box::new(component));
-        Ok(())
+
+        if state.config.verbose_logging {
+            println!(
+                "Registered component of type: {}",
+                std::any::type_name::<T>()
+            );
+        }
+
+        Ok(self)
+    }
+
+    /// Register a resource that needs cleanup
+    pub fn register_resource<R: Resource + Send + Sync + 'static>(
+        &self,
+        resource: R,
+    ) -> TestResult<&Self> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|e| TestError::setup_error(format!("Failed to lock fixture state: {}", e)))?;
+
+        if state.config.verbose_logging {
+            println!("Registered resource: {}", resource.description());
+        }
+
+        state.resources.push(Box::new(resource));
+
+        Ok(self)
     }
 
     /// Get a component from the fixture
-    pub fn get<T: Any + Send + Sync>(&self) -> TestResult<T> {
-        let type_id = TypeId::of::<T>();
+    pub fn get<T: Any + Send + Sync + Clone>(&self) -> TestResult<T> {
         let state = self
             .state
             .lock()
             .map_err(|e| TestError::setup_error(format!("Failed to lock fixture state: {}", e)))?;
 
-        state
+        let type_id = TypeId::of::<T>();
+        let component = state
             .components
             .get(&type_id)
-            .and_then(|boxed| boxed.downcast_ref::<T>())
-            .map(|component| component.clone())
-            .ok_or_else(|| TestError::missing_component(std::any::type_name::<T>()))
+            .ok_or_else(|| TestError::missing_component(std::any::type_name::<T>()))?;
+
+        component
+            .downcast_ref::<T>()
+            .ok_or_else(|| {
+                TestError::setup_error(format!(
+                    "Component type mismatch for {}",
+                    std::any::type_name::<T>()
+                ))
+            })
+            .map(|c| c.clone())
     }
 
-    /// Check if a component is registered
-    pub fn has<T: Any + Send + Sync>(&self) -> bool {
-        let type_id = TypeId::of::<T>();
-        let state = self.state.lock().unwrap_or_else(|e| {
-            // In case of error, log and return an empty state
-            eprintln!("Failed to lock fixture state: {}", e);
-            Default::default()
-        });
-
-        state.components.contains_key(&type_id)
-    }
-
-    /// Create a temporary directory
-    pub fn create_temp_dir(&self, prefix: &str) -> TestResult<PathBuf> {
-        let temp_dir = TempDir::new(prefix).map_err(|e| {
-            TestError::resource_allocation_error(format!("Failed to create temp dir: {}", e))
-        })?;
-
-        let path = temp_dir.path().to_path_buf();
-
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|e| TestError::setup_error(format!("Failed to lock fixture state: {}", e)))?;
-
-        state.temp_dirs.push(temp_dir);
-
-        Ok(path)
-    }
-
-    /// Set a configuration value
-    pub fn set_config(&self, key: &str, value: &str) -> TestResult<()> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|e| TestError::setup_error(format!("Failed to lock fixture state: {}", e)))?;
-
-        state.config.insert(key.to_string(), value.to_string());
-        Ok(())
-    }
-
-    /// Get a configuration value
-    pub fn get_config(&self, key: &str) -> TestResult<String> {
+    /// Get a component by trait object
+    pub fn get_as<T: ?Sized + Any>(&self) -> TestResult<Box<T>>
+    where
+        T: Any,
+    {
         let state = self
             .state
             .lock()
             .map_err(|e| TestError::setup_error(format!("Failed to lock fixture state: {}", e)))?;
 
-        state
-            .config
-            .get(key)
-            .map(|s| s.clone())
-            .ok_or_else(|| TestError::missing_component(format!("Config key '{}'", key)))
+        // Look for a component that implements the trait
+        for (_, component) in state.components.iter() {
+            if let Some(trait_obj) = component.downcast_ref::<Box<T>>() {
+                return Ok(trait_obj.clone());
+            }
+        }
+
+        Err(TestError::missing_component(std::any::type_name::<T>()))
     }
 
-    /// Tear down the fixture
-    pub fn tear_down(&self) -> TestResult<()> {
+    /// Check if the fixture has a component of the given type
+    pub fn has<T: Any + Send + Sync>(&self) -> bool {
+        if let Ok(state) = self.state.lock() {
+            let type_id = TypeId::of::<T>();
+            state.components.contains_key(&type_id)
+        } else {
+            false
+        }
+    }
+
+    /// Clean up all resources
+    pub fn cleanup(&self) -> TestResult<()> {
         let mut state = self.state.lock().map_err(|e| {
             TestError::teardown_error(format!("Failed to lock fixture state: {}", e))
         })?;
 
-        if state.torn_down {
-            return Ok(());
-        }
+        let mut errors = Vec::new();
 
-        // Mark as torn down first to prevent repeated teardown attempts
-        state.torn_down = true;
-
-        // Clear all components
-        state.components.clear();
-
-        // Temp dirs are cleaned up automatically when dropped
-        state.temp_dirs.clear();
-
-        Ok(())
-    }
-}
-
-impl fmt::Debug for TestFixture {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.state.lock() {
-            Ok(state) => {
-                let component_count = state.components.len();
-                let temp_dir_count = state.temp_dirs.len();
-                let config_count = state.config.len();
-
-                f.debug_struct("TestFixture")
-                    .field("components", &format!("{} registered", component_count))
-                    .field("temp_dirs", &format!("{} directories", temp_dir_count))
-                    .field("config", &format!("{} values", config_count))
-                    .finish()
+        for resource in state.resources.drain(..) {
+            if let Err(e) = resource.cleanup() {
+                errors.push(format!(
+                    "Failed to clean up resource {}: {}",
+                    resource.description(),
+                    e
+                ));
             }
-            Err(_) => write!(f, "TestFixture(locked)"),
         }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(TestError::teardown_error(format!(
+                "Failed to clean up resources: {}",
+                errors.join(", ")
+            )))
+        }
+    }
+
+    /// Get the configuration
+    pub fn config(&self) -> TestResult<FixtureConfig> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|e| TestError::setup_error(format!("Failed to lock fixture state: {}", e)))?;
+
+        Ok(state.config.clone())
     }
 }
 
 impl Drop for TestFixture {
     fn drop(&mut self) {
-        // Attempt to tear down the fixture if it's the last reference
+        // Only attempt cleanup if we're the last reference
         if Arc::strong_count(&self.state) == 1 {
-            let _ = self.tear_down();
-        }
-    }
-}
-
-impl Default for FixtureState {
-    fn default() -> Self {
-        Self {
-            components: HashMap::new(),
-            temp_dirs: Vec::new(),
-            config: HashMap::new(),
-            torn_down: false,
+            if let Ok(state) = self.state.lock() {
+                if state.config.auto_cleanup {
+                    let _ = self.cleanup(); // Ignore errors during drop
+                }
+            }
         }
     }
 }
 
 /// Builder for creating test fixtures
 pub struct TestFixtureBuilder {
-    /// Components to register
-    components: HashMap<TypeId, Box<dyn Any + Send + Sync>>,
-
-    /// Configuration values
-    config: HashMap<String, String>,
+    config: FixtureConfig,
 }
 
 impl TestFixtureBuilder {
     /// Create a new test fixture builder
     pub fn new() -> Self {
         Self {
-            components: HashMap::new(),
-            config: HashMap::new(),
+            config: FixtureConfig::default(),
         }
     }
 
-    /// Register a component with the fixture
-    pub fn with_component<T: Any + Send + Sync>(mut self, component: T) -> Self {
-        let type_id = TypeId::of::<T>();
-        self.components.insert(type_id, Box::new(component));
+    /// Set whether to automatically clean up resources
+    pub fn with_auto_cleanup(mut self, auto_cleanup: bool) -> Self {
+        self.config.auto_cleanup = auto_cleanup;
         self
     }
 
-    /// Set a configuration value
-    pub fn with_config(mut self, key: &str, value: &str) -> Self {
-        self.config.insert(key.to_string(), value.to_string());
+    /// Set whether to log fixture operations
+    pub fn with_verbose_logging(mut self, verbose_logging: bool) -> Self {
+        self.config.verbose_logging = verbose_logging;
         self
     }
 
     /// Build the test fixture
     pub fn build(self) -> TestFixture {
-        let mut state = FixtureState::default();
-
-        state.components = self.components;
-        state.config = self.config;
-
         TestFixture {
-            state: Arc::new(Mutex::new(state)),
+            state: Arc::new(Mutex::new(FixtureState::new(self.config))),
+        }
+    }
+
+    /// Add a component to the fixture
+    pub fn with_component<T: Any + Send + Sync>(self, component: T) -> Self {
+        let mut fixture = self.build();
+        let _ = fixture.register(component);
+        TestFixtureBuilder {
+            config: self.config,
+        }
+    }
+
+    /// Add a resource to the fixture
+    pub fn with_resource<R: Resource + Send + Sync + 'static>(self, resource: R) -> Self {
+        let mut fixture = self.build();
+        let _ = fixture.register_resource(resource);
+        TestFixtureBuilder {
+            config: self.config,
         }
     }
 }
 
-/// Extension to TestFixtureBuilder for registering typed components
-impl<T: Any + Send + Sync> ComponentRegistration<T> for TestFixtureBuilder {
-    fn register(self, component: T) -> Self {
-        self.with_component(component)
+impl Default for TestFixtureBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-/// Trait for registering components in a type-safe way
-pub trait ComponentRegistration<T: Any + Send + Sync> {
-    /// Register a component
-    fn register(self, component: T) -> Self;
+// Example implementation of a resource
+pub struct TempDirectory {
+    path: String,
 }
 
-/// Wrapper for a component that can be registered with a test fixture
-pub struct Component<T: Any + Send + Sync> {
-    /// The component value
-    value: T,
-
-    /// Marker type
-    _marker: PhantomData<T>,
-}
-
-impl<T: Any + Send + Sync> Component<T> {
-    /// Create a new component wrapper
-    pub fn new(value: T) -> Self {
+impl TempDirectory {
+    pub fn new(path: &str) -> Self {
         Self {
-            value,
-            _marker: PhantomData,
-        }
-    }
-
-    /// Unwrap the component value
-    pub fn into_inner(self) -> T {
-        self.value
-    }
-}
-
-impl<T: Any + Send + Sync + Clone> Clone for Component<T> {
-    fn clone(&self) -> Self {
-        Self {
-            value: self.value.clone(),
-            _marker: PhantomData,
+            path: path.to_string(),
         }
     }
 }
 
-impl<T: Any + Send + Sync + fmt::Debug> fmt::Debug for Component<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Component")
-            .field("value", &self.value)
-            .finish()
+impl Resource for TempDirectory {
+    fn cleanup(&self) -> TestResult<()> {
+        // In a real implementation, this would delete the directory
+        println!("Cleaning up temp directory: {}", self.path);
+        Ok(())
+    }
+
+    fn description(&self) -> String {
+        format!("TempDirectory({})", self.path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_fixture_register_and_get() {
+        // Create a fixture
+        let fixture = TestFixture::new().build();
+
+        // Register a component
+        fixture.register(String::from("test")).unwrap();
+
+        // Get the component
+        let value: String = fixture.get().unwrap();
+
+        // Verify
+        assert_eq!(value, "test");
+    }
+
+    #[test]
+    fn test_fixture_has_component() {
+        // Create a fixture
+        let fixture = TestFixture::new().build();
+
+        // Initially doesn't have the component
+        assert!(!fixture.has::<i32>());
+
+        // Register a component
+        fixture.register(42).unwrap();
+
+        // Now it has the component
+        assert!(fixture.has::<i32>());
+    }
+
+    #[test]
+    fn test_fixture_register_resource() {
+        // Create a fixture
+        let fixture = TestFixture::new().build();
+
+        // Register a resource
+        fixture
+            .register_resource(TempDirectory::new("/tmp/test"))
+            .unwrap();
+
+        // Cleanup should succeed
+        fixture.cleanup().unwrap();
+    }
+
+    #[test]
+    fn test_fixture_builder() {
+        // Create a fixture with a component
+        let fixture = TestFixture::new()
+            .with_verbose_logging(true)
+            .with_component(42)
+            .build();
+
+        // Verify we have the component
+        assert!(fixture.has::<i32>());
+
+        // Verify configuration
+        assert!(fixture.config().unwrap().verbose_logging);
     }
 }

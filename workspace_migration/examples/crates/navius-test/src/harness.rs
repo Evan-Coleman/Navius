@@ -1,11 +1,12 @@
 use crate::error::{TestError, TestResult};
 use crate::fixture::TestFixture;
 use crate::mock::MockRegistry;
+use std::fmt;
 use std::future::Future;
 use std::sync::Arc;
-use tokio::runtime::Runtime;
+use tokio::runtime::{Builder, Runtime};
 
-/// A test harness for running multi-crate tests
+/// A test harness for running tests with fixtures and mocks
 pub struct TestHarness {
     /// The test fixture
     fixture: TestFixture,
@@ -18,7 +19,7 @@ pub struct TestHarness {
 }
 
 impl TestHarness {
-    /// Create a new test harness
+    /// Create a new test harness without a runtime
     pub fn new() -> Self {
         Self {
             fixture: TestFixture::new().build(),
@@ -27,22 +28,20 @@ impl TestHarness {
         }
     }
 
-    /// Create a new test harness with an existing fixture
-    pub fn with_fixture(fixture: TestFixture) -> Self {
-        Self {
-            fixture,
-            mock_registry: MockRegistry::new(),
-            runtime: None,
-        }
-    }
+    /// Create a new test harness with a tokio runtime
+    pub fn with_runtime() -> TestResult<Self> {
+        let runtime = Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| {
+                TestError::setup_error(format!("Failed to create tokio runtime: {}", e))
+            })?;
 
-    /// Create a new test harness with an existing mock registry
-    pub fn with_mock_registry(mock_registry: MockRegistry) -> Self {
-        Self {
+        Ok(Self {
             fixture: TestFixture::new().build(),
-            mock_registry,
-            runtime: None,
-        }
+            mock_registry: MockRegistry::new(),
+            runtime: Some(runtime),
+        })
     }
 
     /// Get the test fixture
@@ -55,54 +54,54 @@ impl TestHarness {
         &self.mock_registry
     }
 
-    /// Initialize a tokio runtime for async tests
-    pub fn init_runtime(&mut self) -> TestResult<()> {
-        let runtime = Runtime::new().map_err(|e| {
-            TestError::setup_error(format!("Failed to create tokio runtime: {}", e))
-        })?;
+    /// Run a synchronous test function
+    pub fn run<F, T>(&self, f: F) -> TestResult<T>
+    where
+        F: FnOnce(&TestFixture, &MockRegistry) -> TestResult<T>,
+    {
+        // Run the test function
+        let result = f(&self.fixture, &self.mock_registry);
 
-        self.runtime = Some(runtime);
-        Ok(())
+        // Verify all mock expectations
+        self.mock_registry.verify()?;
+
+        // Return the test result
+        result
     }
 
-    /// Run an async function in the test harness
+    /// Run an asynchronous test function
     pub fn run_async<F, Fut, T>(&self, f: F) -> TestResult<T>
     where
         F: FnOnce(Arc<TestFixture>, Arc<MockRegistry>) -> Fut,
         Fut: Future<Output = TestResult<T>>,
     {
-        let runtime = self.runtime.as_ref().ok_or_else(|| {
-            TestError::setup_error("Tokio runtime not initialized. Call init_runtime() first.")
-        })?;
+        // Get the runtime
+        let runtime = self
+            .runtime
+            .as_ref()
+            .ok_or_else(|| TestError::setup_error("No runtime available for async test"))?;
 
-        // Create Arc wrappers for the fixture and mock registry
+        // Create shareable versions of the fixture and registry
         let fixture = Arc::new(self.fixture.clone());
-        let mock_registry = Arc::new(self.mock_registry.clone());
+        let registry = Arc::new(self.mock_registry.clone());
 
-        // Run the function in the tokio runtime
-        runtime.block_on(async { f(fixture, mock_registry).await })
+        // Run the async test function
+        let result = runtime.block_on(f(fixture, registry));
+
+        // Verify all mock expectations
+        self.mock_registry.verify()?;
+
+        // Return the test result
+        result
     }
 
-    /// Run a sync function in the test harness
-    pub fn run<F, T>(&self, f: F) -> TestResult<T>
-    where
-        F: FnOnce(&TestFixture, &MockRegistry) -> TestResult<T>,
-    {
-        f(&self.fixture, &self.mock_registry)
-    }
+    /// Clean up all resources
+    pub fn cleanup(&self) -> TestResult<()> {
+        // Clean up the fixture
+        self.fixture.cleanup()?;
 
-    /// Tear down the test harness
-    pub fn tear_down(self) -> TestResult<()> {
-        // Tear down the fixture
-        self.fixture.tear_down()?;
-
-        // Clear the mock registry
-        self.mock_registry.clear()?;
-
-        // Drop the runtime
-        if let Some(runtime) = self.runtime {
-            drop(runtime);
-        }
+        // Reset the mock registry
+        self.mock_registry.reset()?;
 
         Ok(())
     }
@@ -110,72 +109,76 @@ impl TestHarness {
 
 impl Drop for TestHarness {
     fn drop(&mut self) {
-        // Attempt to tear down the fixture
-        let _ = self.fixture.tear_down();
+        // Attempt to clean up resources
+        let _ = self.cleanup();
 
-        // Attempt to clear the mock registry
-        let _ = self.mock_registry.clear();
+        // Shutdown the runtime if it exists
+        if let Some(runtime) = self.runtime.take() {
+            drop(runtime);
+        }
     }
 }
 
-/// Builder for test harnesses
+/// Builder for creating test harnesses
 pub struct TestHarnessBuilder {
-    /// The test fixture builder
-    fixture_builder: Option<TestFixture>,
+    /// Whether to create a runtime
+    with_runtime: bool,
 
-    /// The mock registry
-    mock_registry: Option<MockRegistry>,
-
-    /// Whether to initialize a tokio runtime
-    init_runtime: bool,
+    /// The fixture builder
+    fixture_builder: Option<crate::fixture::TestFixtureBuilder>,
 }
 
 impl TestHarnessBuilder {
     /// Create a new test harness builder
     pub fn new() -> Self {
         Self {
+            with_runtime: false,
             fixture_builder: None,
-            mock_registry: None,
-            init_runtime: false,
         }
     }
 
-    /// Set the test fixture
-    pub fn with_fixture(mut self, fixture: TestFixture) -> Self {
-        self.fixture_builder = Some(fixture);
-        self
-    }
-
-    /// Set the mock registry
-    pub fn with_mock_registry(mut self, mock_registry: MockRegistry) -> Self {
-        self.mock_registry = Some(mock_registry);
-        self
-    }
-
-    /// Initialize a tokio runtime
+    /// Add a runtime to the harness
     pub fn with_runtime(mut self) -> Self {
-        self.init_runtime = true;
+        self.with_runtime = true;
+        self
+    }
+
+    /// Set the fixture builder
+    pub fn with_fixture(mut self, fixture_builder: crate::fixture::TestFixtureBuilder) -> Self {
+        self.fixture_builder = Some(fixture_builder);
         self
     }
 
     /// Build the test harness
     pub fn build(self) -> TestResult<TestHarness> {
-        let fixture = self
-            .fixture_builder
-            .unwrap_or_else(|| TestFixture::new().build());
-        let mock_registry = self.mock_registry.unwrap_or_else(MockRegistry::new);
-
-        let mut harness = TestHarness {
-            fixture,
-            mock_registry,
-            runtime: None,
+        // Create the fixture
+        let fixture = match self.fixture_builder {
+            Some(builder) => builder.build(),
+            None => TestFixture::new().build(),
         };
 
-        if self.init_runtime {
-            harness.init_runtime()?;
-        }
+        // Create the mock registry
+        let mock_registry = MockRegistry::new();
 
-        Ok(harness)
+        // Create the runtime if needed
+        let runtime = if self.with_runtime {
+            Some(
+                Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(|e| {
+                        TestError::setup_error(format!("Failed to create tokio runtime: {}", e))
+                    })?,
+            )
+        } else {
+            None
+        };
+
+        Ok(TestHarness {
+            fixture,
+            mock_registry,
+            runtime,
+        })
     }
 }
 
@@ -185,58 +188,104 @@ impl Default for TestHarnessBuilder {
     }
 }
 
-/// A simple test case that can be executed by the test harness
-pub struct TestCase<F, T> {
-    /// The name of the test case
-    name: String,
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    /// The test function
-    test_fn: F,
+    #[test]
+    fn test_sync_harness() {
+        // Create a harness
+        let harness = TestHarnessBuilder::new().build().unwrap();
 
-    /// Whether the test is async
-    is_async: bool,
+        // Run a test
+        let result = harness.run(|fixture, _| {
+            // Register a component
+            fixture.register(42)?;
 
-    /// Marker for the return type
-    _marker: std::marker::PhantomData<T>,
-}
+            // Get the component
+            let value: i32 = fixture.get()?;
 
-impl<F, T> TestCase<F, T> {
-    /// Create a new sync test case
-    pub fn new<S: Into<String>>(name: S, test_fn: F) -> Self
-    where
-        F: FnOnce(&TestFixture, &MockRegistry) -> TestResult<T>,
-    {
-        Self {
-            name: name.into(),
-            test_fn,
-            is_async: false,
-            _marker: std::marker::PhantomData,
+            // Assert the value
+            assert_eq!(value, 42);
+
+            Ok(value)
+        });
+
+        // Verify the result
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[tokio::test]
+    async fn test_async_harness() {
+        // Create a harness with runtime
+        let harness = TestHarnessBuilder::new().with_runtime().build().unwrap();
+
+        // Run an async test
+        let result = harness.run_async(|fixture, _| async move {
+            // Register a component
+            fixture.register(42)?;
+
+            // Get the component
+            let value: i32 = fixture.get()?;
+
+            // Assert the value
+            assert_eq!(value, 42);
+
+            Ok(value)
+        });
+
+        // Verify the result
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    // Define a simple trait for testing
+    trait TestService: Send + Sync {
+        fn get_value(&self) -> i32;
+    }
+
+    // Define a mock implementation
+    #[derive(Clone)]
+    struct MockTestService {
+        value: i32,
+    }
+
+    impl TestService for MockTestService {
+        fn get_value(&self) -> i32 {
+            self.value
         }
     }
 
-    /// Get the name of the test case
-    pub fn name(&self) -> &str {
-        &self.name
-    }
+    #[test]
+    fn test_harness_with_mocks() {
+        // Create a harness
+        let harness = TestHarnessBuilder::new().build().unwrap();
 
-    /// Check if the test is async
-    pub fn is_async(&self) -> bool {
-        self.is_async
-    }
-}
+        // Run a test with mocks
+        let result = harness.run(|_, registry| {
+            // Register a mock
+            let mock = MockTestService { value: 42 };
+            registry.register::<dyn TestService, MockTestService>(mock)?;
 
-impl<F, Fut, T> TestCase<F, T>
-where
-    F: FnOnce(Arc<TestFixture>, Arc<MockRegistry>) -> Fut,
-    Fut: Future<Output = TestResult<T>>,
-{
-    /// Create a new async test case
-    pub fn new_async<S: Into<String>>(name: S, test_fn: F) -> TestCase<F, T> {
-        TestCase {
-            name: name.into(),
-            test_fn,
-            is_async: true,
-            _marker: std::marker::PhantomData,
-        }
+            // Set up an expectation
+            registry.expect::<dyn TestService>("get_value")?;
+
+            // Get the mock
+            let mock: MockTestService = registry.get::<dyn TestService, MockTestService>()?;
+
+            // Use the mock
+            let value = mock.get_value();
+            registry.record_call::<dyn TestService>("get_value")?;
+
+            // Assert the value
+            assert_eq!(value, 42);
+
+            Ok(value)
+        });
+
+        // Verify the result
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 42);
     }
 }
