@@ -17,6 +17,7 @@ docs/
 ## Recent Updates
 
 ### March 29, 2025
+- Added Integration Testing Guide for Cross-Crate Testing Infrastructure
 - Added Design Evaluation for navius-job crate
 - Added Design Evaluation for navius-di crate
 - Added Design Evaluation for navius-plugin crate
@@ -53,6 +54,11 @@ docs/
 ### Architecture
 - [Workspace vs Feature Flags](./workspace-vs-feature-flags.md) - Comparison of workspace vs feature flag approaches
 - [Provider Pattern Implementation Guide](./guides/provider-pattern-implementation-guide.md) - Guidelines for implementing the provider pattern
+
+### Testing
+- [Test Migration Guide](./testing/test-migration-guide.md) - Guide for migrating tests to the new infrastructure
+- [Cross-Crate Testing Strategies](./testing/cross-crate-testing-strategies.md) - Strategies for testing across crate boundaries
+- [Integration Testing Guide](./testing/integration-testing.md) - Guide for implementing integration tests
 
 ### Reports
 - **Design Evaluations (11/15 completed, 73%):**
