@@ -5,15 +5,21 @@
 //! test fixture, mock registry, and test harness components to provide
 //! a comprehensive testing environment.
 
+use std::any::TypeId;
 use std::collections::HashMap;
+use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
+
+use serde::{Deserialize, Serialize};
 
 use crate::error::{TestError, TestResult};
 use crate::fixture::TestFixture;
 use crate::harness::{TestHarness, TestOptions};
 use crate::mock::MockRegistry;
+use crate::mocks::database::{DatabaseClient, MockDatabaseClient};
 
 /// Configuration for an integration test
 #[derive(Debug, Clone)]
@@ -30,6 +36,14 @@ pub struct IntegrationTestConfig {
     pub verify_mocks: bool,
     /// Whether to clean up resources automatically
     pub cleanup_resources: bool,
+    /// Service configurations for cross-crate testing
+    pub service_configs: HashMap<String, ServiceConfig>,
+    /// Test data source path
+    pub test_data_path: Option<PathBuf>,
+    /// Database setup scripts
+    pub db_setup_scripts: Vec<String>,
+    /// Test lifecycle hooks
+    pub lifecycle_hooks: TestLifecycleHooks,
 }
 
 impl Default for IntegrationTestConfig {
@@ -41,8 +55,116 @@ impl Default for IntegrationTestConfig {
             timeout: Some(Duration::from_secs(30)),
             verify_mocks: true,
             cleanup_resources: true,
+            service_configs: HashMap::new(),
+            test_data_path: None,
+            db_setup_scripts: Vec::new(),
+            lifecycle_hooks: TestLifecycleHooks::default(),
         }
     }
+}
+
+/// Test lifecycle hooks for integration tests
+#[derive(Debug, Clone)]
+pub struct TestLifecycleHooks {
+    /// Before test setup actions (as commands to execute)
+    pub before_setup: Vec<String>,
+    /// After setup actions
+    pub after_setup: Vec<String>,
+    /// Before test actions
+    pub before_test: Vec<String>,
+    /// After test actions
+    pub after_test: Vec<String>,
+    /// Before teardown actions
+    pub before_teardown: Vec<String>,
+    /// After teardown actions
+    pub after_teardown: Vec<String>,
+}
+
+impl Default for TestLifecycleHooks {
+    fn default() -> Self {
+        Self {
+            before_setup: Vec::new(),
+            after_setup: Vec::new(),
+            before_test: Vec::new(),
+            after_test: Vec::new(),
+            before_teardown: Vec::new(),
+            after_teardown: Vec::new(),
+        }
+    }
+}
+
+/// Configuration for a service in cross-crate tests
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceConfig {
+    /// Service name
+    pub name: String,
+    /// Service type
+    pub service_type: String,
+    /// Service configuration properties
+    pub properties: HashMap<String, ConfigValue>,
+    /// Dependencies on other services
+    pub dependencies: Vec<String>,
+}
+
+/// Configuration value types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ConfigValue {
+    /// String value
+    String(String),
+    /// Integer value
+    Integer(i64),
+    /// Float value
+    Float(f64),
+    /// Boolean value
+    Boolean(bool),
+    /// Array of config values
+    Array(Vec<ConfigValue>),
+    /// Object of config values
+    Object(HashMap<String, ConfigValue>),
+}
+
+impl ConfigValue {
+    /// Get as string
+    pub fn as_string(&self) -> Option<String> {
+        match self {
+            ConfigValue::String(s) => Some(s.clone()),
+            _ => None,
+        }
+    }
+
+    /// Get as integer
+    pub fn as_integer(&self) -> Option<i64> {
+        match self {
+            ConfigValue::Integer(i) => Some(*i),
+            _ => None,
+        }
+    }
+
+    /// Get as float
+    pub fn as_float(&self) -> Option<f64> {
+        match self {
+            ConfigValue::Float(f) => Some(*f),
+            _ => None,
+        }
+    }
+
+    /// Get as boolean
+    pub fn as_boolean(&self) -> Option<bool> {
+        match self {
+            ConfigValue::Boolean(b) => Some(*b),
+            _ => None,
+        }
+    }
+}
+
+/// Service discovery result for component registration
+#[derive(Debug)]
+pub struct ServiceDiscoveryResult {
+    /// Discovered service instances
+    pub instances: HashMap<String, Arc<dyn std::any::Any + Send + Sync>>,
+    /// Dependencies between services
+    pub dependencies: HashMap<String, Vec<String>>,
 }
 
 /// Context for cross-crate integration tests
@@ -62,6 +184,18 @@ pub struct IntegrationContext {
     env_vars: Arc<Mutex<HashMap<String, String>>>,
     registry: Arc<MockRegistry>,
     original_env: HashMap<String, Option<String>>,
+    services: Arc<RwLock<HashMap<String, Arc<dyn std::any::Any + Send + Sync>>>>,
+    test_data: Arc<RwLock<HashMap<String, TestData>>>,
+    db_client: Option<Arc<MockDatabaseClient>>,
+}
+
+/// Test data for integration tests
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TestData {
+    /// Data identifier
+    pub id: String,
+    /// Data content
+    pub content: HashMap<String, ConfigValue>,
 }
 
 impl IntegrationContext {
@@ -83,14 +217,34 @@ impl IntegrationContext {
 
         let registry = Arc::new(MockRegistry::new());
 
-        Ok(Self {
+        let context = Self {
             config,
             fixtures: Vec::new(),
             test_dir,
             env_vars: Arc::new(Mutex::new(HashMap::new())),
             registry,
             original_env,
-        })
+            services: Arc::new(RwLock::new(HashMap::new())),
+            test_data: Arc::new(RwLock::new(HashMap::new())),
+            db_client: None,
+        };
+
+        // Set environment variables
+        for (key, value) in &context.config.env_vars {
+            context.set_env_var(key, value)?;
+        }
+
+        // Load test data if configured
+        if let Some(path) = &context.config.test_data_path {
+            context.load_test_data(path)?;
+        }
+
+        // Set up database if needed
+        if !context.config.db_setup_scripts.is_empty() {
+            context.setup_database()?;
+        }
+
+        Ok(context)
     }
 
     /// Create a new fixture within this integration context
@@ -115,9 +269,7 @@ impl IntegrationContext {
             .lock()
             .map_err(|_| TestError::concurrency_error("Failed to acquire lock for env vars"))?;
         env_vars.insert(key.to_string(), value.to_string());
-        unsafe {
-            std::env::set_var(key, value);
-        }
+        std::env::set_var(key, value);
         Ok(())
     }
 
@@ -151,15 +303,165 @@ impl IntegrationContext {
             .with_fixture(Arc::new(fixture))
             .with_options(options)
     }
+
+    /// Load test data from the given path
+    pub fn load_test_data(&self, path: &PathBuf) -> TestResult<()> {
+        if !path.exists() {
+            return Err(TestError::ConfigurationError(format!(
+                "Test data path does not exist: {}",
+                path.display()
+            )));
+        }
+
+        if path.is_dir() {
+            // Load all JSON files in the directory
+            for entry in std::fs::read_dir(path)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_file() && path.extension().map_or(false, |ext| ext == "json") {
+                    self.load_test_data_file(&path)?;
+                }
+            }
+        } else if path.is_file() {
+            // Load a single file
+            self.load_test_data_file(path)?;
+        }
+
+        Ok(())
+    }
+
+    /// Load test data from a specific file
+    pub fn load_test_data_file(&self, path: &PathBuf) -> TestResult<()> {
+        let file_content = std::fs::read_to_string(path)?;
+        let data: TestData = serde_json::from_str(&file_content)?;
+
+        let mut test_data = self.test_data.write().map_err(|_| {
+            TestError::concurrency_error("Failed to acquire write lock for test data")
+        })?;
+        test_data.insert(data.id.clone(), data);
+
+        Ok(())
+    }
+
+    /// Get test data by ID
+    pub fn get_test_data(&self, id: &str) -> TestResult<TestData> {
+        let test_data = self.test_data.read().map_err(|_| {
+            TestError::concurrency_error("Failed to acquire read lock for test data")
+        })?;
+
+        test_data
+            .get(id)
+            .cloned()
+            .ok_or_else(|| TestError::missing_component(format!("Test data not found: {}", id)))
+    }
+
+    /// Set up database for testing
+    pub fn setup_database(&self) -> TestResult<()> {
+        // Create mock database client if not already created
+        let db_client = Arc::new(MockDatabaseClient::new());
+
+        // Register with registry
+        self.registry
+            .register::<dyn DatabaseClient, _>(db_client.clone())?;
+
+        // Execute setup scripts
+        for script in &self.config.db_setup_scripts {
+            db_client.expect_execute(script, Ok(1))?;
+        }
+
+        Ok(())
+    }
+
+    /// Register a service with the context
+    pub fn register_service<T: 'static + Send + Sync>(
+        &self,
+        name: &str,
+        service: T,
+    ) -> TestResult<()> {
+        let mut services = self.services.write().map_err(|_| {
+            TestError::concurrency_error("Failed to acquire write lock for services")
+        })?;
+
+        services.insert(name.to_string(), Arc::new(service));
+        Ok(())
+    }
+
+    /// Get a service by name and type
+    pub fn get_service<T: 'static + Send + Sync>(&self, name: &str) -> TestResult<Arc<T>> {
+        let services = self.services.read().map_err(|_| {
+            TestError::concurrency_error("Failed to acquire read lock for services")
+        })?;
+
+        if let Some(service) = services.get(name) {
+            if let Some(typed_service) = service.clone().downcast_arc::<T>() {
+                Ok(typed_service)
+            } else {
+                Err(TestError::type_mismatch(format!(
+                    "Service {} is not of requested type",
+                    name
+                )))
+            }
+        } else {
+            Err(TestError::missing_component(format!(
+                "Service not found: {}",
+                name
+            )))
+        }
+    }
+
+    /// Discover and register services based on configuration
+    pub fn discover_services(&self) -> TestResult<ServiceDiscoveryResult> {
+        let mut instances = HashMap::new();
+        let mut dependencies = HashMap::new();
+
+        // Process service configs in dependency order
+        let configs = self.config.service_configs.clone();
+        for (name, config) in &configs {
+            dependencies.insert(name.clone(), config.dependencies.clone());
+
+            // In a real implementation, this would create actual service instances
+            // based on configuration, but for now we'll just create placeholder instances
+            let instance: Arc<dyn std::any::Any + Send + Sync> = Arc::new(());
+            instances.insert(name.clone(), instance);
+        }
+
+        let result = ServiceDiscoveryResult {
+            instances,
+            dependencies,
+        };
+
+        // Register discovered services
+        for (name, instance) in &result.instances {
+            let mut services = self.services.write().map_err(|_| {
+                TestError::concurrency_error("Failed to acquire write lock for services")
+            })?;
+            services.insert(name.clone(), instance.clone());
+        }
+
+        Ok(result)
+    }
+
+    /// Execute hooks for a specific lifecycle stage
+    pub fn execute_hooks(&self, hooks: &[String]) -> TestResult<()> {
+        for hook in hooks {
+            // In a real implementation, this would execute the hook command
+            // For now, we'll just log that we would execute it
+            println!("Executing hook: {}", hook);
+        }
+        Ok(())
+    }
 }
 
 impl Drop for IntegrationContext {
     fn drop(&mut self) {
+        // Execute before teardown hooks
+        let _ = self.execute_hooks(&self.config.lifecycle_hooks.before_teardown);
+
         // Restore original environment variables
         for (key, value) in &self.original_env {
             match value {
-                Some(val) => unsafe { std::env::set_var(key, val) },
-                None => unsafe { std::env::remove_var(key) },
+                Some(val) => std::env::set_var(key, val),
+                None => std::env::remove_var(key),
             }
         }
 
@@ -169,6 +471,9 @@ impl Drop for IntegrationContext {
                 let _ = std::fs::remove_dir_all(dir);
             }
         }
+
+        // Execute after teardown hooks
+        let _ = self.execute_hooks(&self.config.lifecycle_hooks.after_teardown);
     }
 }
 
@@ -183,8 +488,18 @@ pub struct IntegrationRunner {
 impl IntegrationRunner {
     /// Create a new integration test runner
     pub fn new(config: IntegrationTestConfig) -> TestResult<Self> {
-        let context = IntegrationContext::new(config)?;
-        Ok(Self { context })
+        // Execute before setup hooks
+        let context = IntegrationContext::new(config.clone())?;
+        context.execute_hooks(&config.lifecycle_hooks.before_setup)?;
+
+        let runner = Self { context };
+
+        // Execute after setup hooks
+        runner
+            .context
+            .execute_hooks(&config.lifecycle_hooks.after_setup)?;
+
+        Ok(runner)
     }
 
     /// Access the integration context
@@ -202,15 +517,16 @@ impl IntegrationRunner {
     where
         F: FnOnce(&IntegrationContext) -> TestResult<T>,
     {
-        // Set up environment variables
-        for (key, value) in self.context.config.env_vars.iter() {
-            unsafe {
-                std::env::set_var(key, value);
-            }
-        }
+        // Execute before test hooks
+        self.context
+            .execute_hooks(&self.context.config.lifecycle_hooks.before_test)?;
 
         // Run the test
         let result = test_fn(&self.context);
+
+        // Execute after test hooks
+        self.context
+            .execute_hooks(&self.context.config.lifecycle_hooks.after_test)?;
 
         // Verify mocks if configured to do so
         if self.context.config.verify_mocks {
@@ -233,6 +549,10 @@ impl IntegrationRunner {
             let (tx, rx) = std::sync::mpsc::channel();
             let context_arc = Arc::new(self.context.clone());
 
+            // Execute before test hooks
+            self.context
+                .execute_hooks(&self.context.config.lifecycle_hooks.before_test)?;
+
             let handle = thread::spawn(move || {
                 let result = test_fn(&context_arc);
                 let _ = tx.send(result);
@@ -241,8 +561,18 @@ impl IntegrationRunner {
             let start = Instant::now();
             let result = rx.recv_timeout(timeout);
 
+            // Execute after test hooks regardless of test result
+            self.context
+                .execute_hooks(&self.context.config.lifecycle_hooks.after_test)?;
+
             match result {
-                Ok(test_result) => test_result,
+                Ok(test_result) => {
+                    // Verify mocks if configured to do so
+                    if self.context.config.verify_mocks {
+                        self.context.registry.verify()?;
+                    }
+                    test_result
+                }
                 Err(_) => {
                     let elapsed = start.elapsed();
                     let _ = handle.join();
@@ -271,6 +601,14 @@ pub struct CrossCrateTestConfig {
     pub timeout: Option<Duration>,
     /// Test resources directory
     pub resources_dir: Option<PathBuf>,
+    /// Service configurations
+    pub service_configs: HashMap<String, ServiceConfig>,
+    /// Test data path
+    pub test_data_path: Option<PathBuf>,
+    /// Database setup scripts
+    pub db_setup_scripts: Vec<String>,
+    /// Lifecycle hooks
+    pub lifecycle_hooks: TestLifecycleHooks,
 }
 
 impl Default for CrossCrateTestConfig {
@@ -280,6 +618,10 @@ impl Default for CrossCrateTestConfig {
             crates: Vec::new(),
             timeout: Some(Duration::from_secs(60)),
             resources_dir: None,
+            service_configs: HashMap::new(),
+            test_data_path: None,
+            db_setup_scripts: Vec::new(),
+            lifecycle_hooks: TestLifecycleHooks::default(),
         }
     }
 }
@@ -294,55 +636,169 @@ pub struct CrossCrateTestBuilder {
 }
 
 impl CrossCrateTestBuilder {
-    /// Create a new cross-crate test builder
+    /// Creates a new builder with the given name
     pub fn new(name: impl Into<String>) -> Self {
         let name = name.into();
-        let integration_config = IntegrationTestConfig {
-            name: name.clone(),
-            ..Default::default()
-        };
         Self {
             config: CrossCrateTestConfig {
-                name,
-                ..Default::default()
+                name: name.clone(),
+                crates: Vec::new(),
+                timeout: Some(Duration::from_secs(60)),
+                resources_dir: None,
             },
-            integration_config,
-            fixtures: HashMap::new(),
+            integration_config: IntegrationTestConfig {
+                name,
+                test_dir: None,
+                env_vars: HashMap::new(),
+                verify_mocks: true,
+                clean_resources: true,
+                timeout: Some(Duration::from_secs(60)),
+                test_data_path: None,
+                service_configs: HashMap::new(),
+                db_setup_scripts: Vec::new(),
+                lifecycle_hooks: TestLifecycleHooks::default(),
+            },
         }
     }
 
-    /// Add a crate to the test
-    pub fn with_crate(mut self, crate_name: impl Into<String>) -> Self {
-        self.config.crates.push(crate_name.into());
+    /// Adds a crate to the test
+    pub fn with_crate(&mut self, crate_name: impl Into<String>) -> &mut Self {
+        let crate_name = crate_name.into();
+        self.config.crates.push(crate_name.clone());
         self
     }
 
-    /// Set the test timeout
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+    /// Sets the timeout for the test
+    pub fn with_timeout(&mut self, timeout: Duration) -> &mut Self {
         self.config.timeout = Some(timeout);
         self.integration_config.timeout = Some(timeout);
         self
     }
 
-    /// Set the resources directory
-    pub fn with_resources_dir(mut self, dir: PathBuf) -> Self {
-        self.config.resources_dir = Some(dir.clone());
-        self.integration_config.test_dir = Some(dir);
+    /// Sets the resources directory for the test
+    pub fn with_resources_dir(&mut self, dir: impl Into<PathBuf>) -> &mut Self {
+        self.config.resources_dir = Some(dir.into());
         self
     }
 
-    /// Set an environment variable for the test
-    pub fn with_env_var(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+    /// Adds an environment variable to the test
+    pub fn with_env_var(&mut self, key: impl Into<String>, value: impl Into<String>) -> &mut Self {
         self.integration_config
             .env_vars
             .insert(key.into(), value.into());
         self
     }
 
-    /// Create a test runner from this builder
-    pub fn build(self) -> TestResult<IntegrationRunner> {
-        IntegrationRunner::new(self.integration_config)
+    /// Sets whether to verify mocks after the test
+    pub fn with_verify_mocks(&mut self, verify: bool) -> &mut Self {
+        self.integration_config.verify_mocks = verify;
+        self
     }
+
+    /// Sets whether to clean resources after the test
+    pub fn with_clean_resources(&mut self, clean: bool) -> &mut Self {
+        self.integration_config.clean_resources = clean;
+        self
+    }
+
+    /// Sets the test data path
+    pub fn with_test_data_path(&mut self, path: impl Into<PathBuf>) -> &mut Self {
+        self.integration_config.test_data_path = Some(path.into());
+        self
+    }
+
+    /// Adds a service configuration
+    pub fn with_service_config(
+        &mut self,
+        name: impl Into<String>,
+        config: ServiceConfig,
+    ) -> &mut Self {
+        self.integration_config
+            .service_configs
+            .insert(name.into(), config);
+        self
+    }
+
+    /// Adds a database setup script
+    pub fn with_db_setup_script(&mut self, script: impl Into<String>) -> &mut Self {
+        self.integration_config.db_setup_scripts.push(script.into());
+        self
+    }
+
+    /// Adds a lifecycle hook
+    pub fn with_lifecycle_hook(
+        &mut self,
+        stage: LifecycleStage,
+        command: impl Into<String>,
+    ) -> &mut Self {
+        let command = command.into();
+        match stage {
+            LifecycleStage::BeforeSetup => self
+                .integration_config
+                .lifecycle_hooks
+                .before_setup
+                .push(command),
+            LifecycleStage::AfterSetup => self
+                .integration_config
+                .lifecycle_hooks
+                .after_setup
+                .push(command),
+            LifecycleStage::BeforeTest => self
+                .integration_config
+                .lifecycle_hooks
+                .before_test
+                .push(command),
+            LifecycleStage::AfterTest => self
+                .integration_config
+                .lifecycle_hooks
+                .after_test
+                .push(command),
+            LifecycleStage::BeforeTeardown => self
+                .integration_config
+                .lifecycle_hooks
+                .before_teardown
+                .push(command),
+            LifecycleStage::AfterTeardown => self
+                .integration_config
+                .lifecycle_hooks
+                .after_teardown
+                .push(command),
+        }
+        self
+    }
+
+    /// Builds the integration runner
+    pub fn build(&self) -> Result<IntegrationRunner, TestError> {
+        IntegrationRunner::new(self.integration_config.clone())
+    }
+}
+
+/// Simplified enum representing lifecycle stages for hooks
+#[derive(Debug, Clone, PartialEq)]
+pub enum LifecycleStage {
+    BeforeSetup,
+    AfterSetup,
+    BeforeTest,
+    AfterTest,
+    BeforeTeardown,
+    AfterTeardown,
+}
+
+/// Convenience function to create a cross-crate test using a builder function
+pub fn create_cross_crate_test<F>(name: &str, builder_fn: F) -> Result<IntegrationRunner, TestError>
+where
+    F: FnOnce(&mut CrossCrateTestBuilder) -> &mut CrossCrateTestBuilder,
+{
+    let mut builder = CrossCrateTestBuilder::new(name);
+    builder_fn(&mut builder);
+    let config = builder.build()?;
+    IntegrationRunner::new(config)
+}
+
+/// Helper trait for creating service instances from configuration
+pub trait ServiceFactory<T> {
+    /// Create a service instance from configuration
+    fn create(config: &ServiceConfig, context: &IntegrationContext) -> TestResult<T>;
 }
 
 #[cfg(test)]
@@ -455,5 +911,121 @@ mod tests {
             .unwrap();
 
         assert!(result);
+    }
+
+    #[test]
+    fn test_service_config_and_discovery() {
+        let mut service_configs = HashMap::new();
+        let mut db_properties = HashMap::new();
+        db_properties.insert(
+            "url".to_string(),
+            ConfigValue::String("postgres://localhost/test".to_string()),
+        );
+
+        let db_config = ServiceConfig {
+            name: "database".to_string(),
+            service_type: "PostgresDatabase".to_string(),
+            properties: db_properties,
+            dependencies: Vec::new(),
+        };
+
+        service_configs.insert("database".to_string(), db_config);
+
+        let mut cache_properties = HashMap::new();
+        cache_properties.insert(
+            "url".to_string(),
+            ConfigValue::String("redis://localhost:6379".to_string()),
+        );
+
+        let cache_config = ServiceConfig {
+            name: "cache".to_string(),
+            service_type: "RedisCache".to_string(),
+            properties: cache_properties,
+            dependencies: vec!["database".to_string()],
+        };
+
+        service_configs.insert("cache".to_string(), cache_config);
+
+        let mut config = IntegrationTestConfig::default();
+        config.name = "test_service_discovery".to_string();
+        config.service_configs = service_configs;
+
+        let context = IntegrationContext::new(config).unwrap();
+        let discovery_result = context.discover_services().unwrap();
+
+        assert_eq!(discovery_result.instances.len(), 2);
+        assert_eq!(discovery_result.dependencies.len(), 2);
+        assert!(discovery_result.dependencies.contains_key("database"));
+        assert!(discovery_result.dependencies.contains_key("cache"));
+        assert_eq!(discovery_result.dependencies["database"].len(), 0);
+        assert_eq!(discovery_result.dependencies["cache"].len(), 1);
+        assert_eq!(discovery_result.dependencies["cache"][0], "database");
+    }
+
+    #[test]
+    fn test_lifecycle_hooks() {
+        let mut lifecycle_hooks = TestLifecycleHooks::default();
+        lifecycle_hooks
+            .before_setup
+            .push("echo 'Before setup'".to_string());
+        lifecycle_hooks
+            .after_test
+            .push("echo 'After test'".to_string());
+
+        let mut config = IntegrationTestConfig::default();
+        config.name = "test_lifecycle_hooks".to_string();
+        config.lifecycle_hooks = lifecycle_hooks;
+
+        let runner = IntegrationRunner::new(config).unwrap();
+        let result = runner.run(|_| Ok(true)).unwrap();
+        assert!(result);
+    }
+
+    #[test]
+    fn test_test_data_management() {
+        // Create a temporary test data file
+        let temp_dir = tempfile::tempdir().unwrap();
+        let test_data_path = temp_dir.path().join("test_data.json");
+
+        let mut content = HashMap::new();
+        content.insert(
+            "name".to_string(),
+            ConfigValue::String("Test Entity".to_string()),
+        );
+        content.insert("active".to_string(), ConfigValue::Boolean(true));
+
+        let test_data = TestData {
+            id: "test_entity".to_string(),
+            content,
+        };
+
+        let json = serde_json::to_string_pretty(&test_data).unwrap();
+        std::fs::write(&test_data_path, json).unwrap();
+
+        let mut config = IntegrationTestConfig::default();
+        config.name = "test_data_management".to_string();
+        config.test_data_path = Some(test_data_path);
+
+        let context = IntegrationContext::new(config).unwrap();
+        let loaded_data = context.get_test_data("test_entity").unwrap();
+
+        assert_eq!(loaded_data.id, "test_entity");
+        assert_eq!(
+            loaded_data
+                .content
+                .get("name")
+                .unwrap()
+                .as_string()
+                .unwrap(),
+            "Test Entity"
+        );
+        assert!(
+            loaded_data
+                .content
+                .get("active")
+                .unwrap()
+                .as_boolean()
+                .unwrap()
+        );
     }
 }

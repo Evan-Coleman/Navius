@@ -26,6 +26,39 @@ registry.register::<dyn MyInterface, MockImplementation>(mock_impl);
 registry.expect::<dyn MyInterface>("method_name").times(1);
 ```
 
+### Integration Test Utilities
+
+The `integration` module provides tools for building and running integration tests, particularly those that span multiple crates. It supports test data management, service configuration, and lifecycle hooks.
+
+```rust
+// Using the builder pattern
+let test = CrossCrateTestBuilder::new("my-test")
+    .with_crate("navius-core")
+    .with_crate("navius-db")
+    .with_timeout(Duration::from_secs(30))
+    .with_test_data_path(test_data_path)
+    .with_db_setup_script("CREATE TABLE users (id TEXT, name TEXT)")
+    .with_lifecycle_hook(LifecycleStage::BeforeTest, "echo 'Starting test'")
+    .with_env_var("APP_ENV", "test")
+    .build()?;
+
+// Run the test
+test.run(|context| {
+    // Use context to access mock registry, test data, etc.
+    Ok(true)
+}).await?;
+
+// Or use the convenience function
+let test = create_cross_crate_test("my-test", |builder| {
+    builder
+        .with_crate("navius-core")
+        .with_crate("navius-db")
+        .with_env_var("APP_ENV", "test")
+})?;
+
+test.run(|_| Ok(true)).await?;
+```
+
 ### Test Harness
 
 The `TestHarness` combines fixture and mock functionality to run tests with dependencies and mocks properly set up.
@@ -70,6 +103,11 @@ let verifier = ErrorVerifier::new()
 - **Error injection**: Simulate errors at specific points in your code
 - **Error propagation tracking**: Track how errors propagate through your system
 - **Error verification**: Verify that errors are handled correctly
+- **Cross-crate testing**: Test components from multiple crates working together
+- **Service discovery and configuration**: Configure and discover services for tests
+- **Test data management**: Load and manage test data from files
+- **Database setup**: Configure and set up databases for tests
+- **Test lifecycle hooks**: Run commands at different stages of the test lifecycle
 
 ## Usage
 
@@ -95,6 +133,9 @@ See the `examples` directory for more detailed usage examples:
 - `basic_usage.rs`: Basic usage of the test fixture and harness
 - `mock_example.rs`: Example of using the mock registry
 - `error_testing.rs`: Example of using the error testing framework
+- `integration_test_example.rs`: Example of using the integration test utilities
+- `cross_crate_test_example.rs`: Example of cross-crate integration testing
+- `enhanced_integration_test_example.rs`: Example of using the enhanced integration test features
 
 ## Error Testing Macros
 
