@@ -1,0 +1,53 @@
+[package]
+name = "navius"
+version = "0.1.0"
+edition = "2024"
+authors = ["Navius Contributors"]
+license = "Apache-2.0"
+repository = "https://github.com/navius/navius"
+description = "Enterprise-grade web application framework built in Rust"
+
+[dependencies]
+# Core crates
+navius-core = { workspace = true }
+navius-http = { workspace = true }
+navius-auth = { workspace = true }
+navius-auth-entra = { workspace = true }
+navius-db = { workspace = true }
+navius-db-postgres = { workspace = true }
+navius-cache = { workspace = true }
+navius-cache-redis = { workspace = true }
+navius-di = { workspace = true }
+navius-plugin = { workspace = true }
+navius-event = { workspace = true }
+navius-job = { workspace = true }
+navius-messaging = { workspace = true }
+navius-metrics = { workspace = true }
+navius-metrics-prometheus = { workspace = true }
+
+# External dependencies
+tokio = { workspace = true }
+axum = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[features]
+default = ["full"]
+full = [
+    "web", 
+    "auth", 
+    "db", 
+    "cache", 
+    "metrics",
+    "events",
+    "plugins"
+]
+web = []
+auth = []
+db = []
+cache = []
+metrics = []
+events = []
+plugins = [] 

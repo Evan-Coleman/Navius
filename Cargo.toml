@@ -3,107 +3,51 @@
 
 [workspace]
 members = [
-    "workspace_migration/examples/crates/navius-core",
-    "workspace_migration/examples/crates/navius-http",
-    "workspace_migration/examples/crates/navius-auth",
-    "workspace_migration/examples/crates/navius-db",
-    "workspace_migration/examples/crates/navius-db-postgres",
-    "workspace_migration/examples/crates/navius-cache",
-    "workspace_migration/examples/crates/navius-cache-redis",
-    "workspace_migration/examples/crates/navius-messaging",
-    "workspace_migration/examples/crates/navius-plugin",
-    "workspace_migration/examples/crates/navius-event",
-    "workspace_migration/examples/crates/navius-metrics",
-    "workspace_migration/examples/crates/navius-metrics-prometheus",
-    "workspace_migration/examples/crates/navius-job",
-    "workspace_migration/examples/crates/navius-test-utils",
-    "workspace_migration/tools/api-inventory",
-    # Add new crates here as they are created
+    "crates/*",
+    "examples/*",
+    "src",
 ]
 
-resolver = "2" # Use the modern resolver for proper feature resolution
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["Navius Contributors"]
+license = "Apache-2.0"
+repository = "https://github.com/navius/navius"
+documentation = "https://docs.navius.io"
+readme = "README.md"
 
-# Shared dependencies section - these dependencies cannot be optional
 [workspace.dependencies]
-# Core dependencies
-axum = { version = "0.8.3", features = ["macros"] }
-async-trait = "0.1.88"
-base64 = "0.22.1"
-reqwest = { version = "0.12.15", features = ["json"] }
+# Core crates
+navius-core = { path = "crates/navius-core" }
+navius-http = { path = "crates/navius-http" }
+navius-auth = { path = "crates/navius-auth" }
+navius-auth-entra = { path = "crates/navius-auth-entra" }
+navius-db = { path = "crates/navius-db" }
+navius-db-postgres = { path = "crates/navius-db-postgres" }
+navius-cache = { path = "crates/navius-cache" }
+navius-cache-redis = { path = "crates/navius-cache-redis" }
+navius-di = { path = "crates/navius-di" }
+navius-plugin = { path = "crates/navius-plugin" }
+navius-event = { path = "crates/navius-event" }
+navius-job = { path = "crates/navius-job" }
+navius-messaging = { path = "crates/navius-messaging" }
+navius-metrics = { path = "crates/navius-metrics" }
+navius-metrics-prometheus = { path = "crates/navius-metrics-prometheus" }
+navius-test = { path = "crates/navius-test" }
+navius-test-utils = { path = "crates/navius-test-utils" }
+navius-template = { path = "crates/navius-template" }
+navius-cli = { path = "crates/navius-cli" }
+
+# External dependencies
+tokio = { version = "1.44.1", features = ["full"] }
+axum = "0.8.3"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-yaml-rust2 = "0.10.1"
-tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }
-tracing = { version = "0.1.41", features = ["log"] }
-tracing-subscriber = "0.3.19"
-tracing-appender = "0.2.3"
-sqlx = { version = "0.8.3", features = ["runtime-tokio-native-tls", "postgres", "uuid", "chrono", "json"] }
-
-# Configuration dependencies
-config = { version = "0.15.11", features = ["yaml"] }
-dotenvy = "0.15.7"
 thiserror = "2.0.12"
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
 
-# Time handling
-chrono = { version = "0.4.40", features = ["serde"] }
-
-# Middleware and error handling
-tower = { version = "0.5.2", features = ["full"] }
-tower-http = { version = "0.6.2", features = ["trace", "timeout", "catch-panic", "request-id", "cors"] }
-uuid = { version = "1.16.0", features = ["v4", "serde"] }
-tracing-futures = "0.2.5"
-
-# Validation
-validator = { version = "0.20.0", features = ["derive"] }
-
-# Caching dependencies
-moka = { version = "0.12.10", features = ["future"] }
-bincode = "2.0.1"
-bincode_derive = "2.0.1"
-
-# Metrics dependencies
-metrics = "0.24.1"
-opentelemetry = { version = "0.29.0", features = ["metrics"] }
-opentelemetry-semantic-conventions = "0.29.0"
-tracing-opentelemetry = "0.30.0"
-
-# Web framework and related
-pin-project = "1.1.10"
-rand = "0.9.0"
-rand_chacha = "0.9.0"
-lazy_static = "1.5.0"
-bytes = "1.10.1"
-futures = "0.3.31"
-futures-util = { version = "0.3.31", features = ["std"] }
-
-# Common utilities
-governor = "0.10.0"
-nonzero_ext = "0.3.0"
-regex = "1.11.1"
-
-# CLI tools
-clap = "4.5.34"
-colored = "3.0.0"
-indicatif = "0.17.11"
-dialoguer = "0.11.0"
-toml = "0.8.20"
-
-# Also include common dev dependencies for convenience
-mockito = "1.7.0"
-wiremock = "0.6.3"
-mock-it = "0.9.0"
-proptest = "1.6.0"
-fake = { version = "4.2.0", features = ["derive", "chrono", "uuid"] }
-test-context = "0.4.1"
-assert_matches = "1.5.0"
-once_cell = "1.21.3"
-mockall = "0.13.1"
-tempfile = "3.19.1"
-tokio-test = "0.4.4"
-criterion = { version = "0.5.1", features = ["async_tokio"] }
-anyhow = "1.0.97"
-
-# Profiles shared across the workspace
 [profile.dev]
 opt-level = 0
 debug = true
@@ -111,67 +55,6 @@ debug = true
 [profile.release]
 opt-level = 3
 debug = false
-lto = "thin"
+lto = true
 codegen-units = 1
-strip = true
-
-[profile.test]
-opt-level = 0
-debug = true
-
-# This package section is for the root crate
-[package]
-name = "navius"
-version = "0.1.0"
-edition = "2024"
-build = "build.rs"
-authors = ["Evan Coleman"]
-description = "An enterprise-grade web framework built with Rust, designed as a high-performance alternative to Spring Boot"
-license = "Apache-2.0"
-repository = "https://github.com/Evan-Coleman/Navius"
-readme = "README.md"
-keywords = ["api", "backend", "axum", "enterprise", "framework"]
-categories = ["web-programming", "asynchronous"]
-
-# Root package dependencies - minimal, mostly just for workspace management
-[dependencies]
-# Core crate
-navius-core = { path = "workspace_migration/examples/crates/navius-core", version = "0.1.0" }
-# HTTP crate
-navius-http = { path = "workspace_migration/examples/crates/navius-http", version = "0.1.0" }
-# Auth crate
-navius-auth = { path = "workspace_migration/examples/crates/navius-auth", version = "0.1.0" }
-# DB crate
-navius-db = { path = "workspace_migration/examples/crates/navius-db", version = "0.1.0" }
-# DB PostgreSQL implementation
-navius-db-postgres = { path = "workspace_migration/examples/crates/navius-db-postgres", version = "0.1.0" }
-# Cache crate
-navius-cache = { path = "workspace_migration/examples/crates/navius-cache", version = "0.1.0" }
-# Cache Redis implementation
-navius-cache-redis = { path = "workspace_migration/examples/crates/navius-cache-redis", version = "0.1.0" }
-# Plugin crate
-navius-plugin = { path = "workspace_migration/examples/crates/navius-plugin", version = "0.1.0" }
-# Event crate
-navius-event = { path = "workspace_migration/examples/crates/navius-event", version = "0.1.0" }
-# Messaging crate
-navius-messaging = { path = "workspace_migration/examples/crates/navius-messaging", version = "0.1.0" }
-# Metrics crate
-navius-metrics = { path = "workspace_migration/examples/crates/navius-metrics", version = "0.1.0" }
-# Metrics Prometheus implementation
-navius-metrics-prometheus = { path = "workspace_migration/examples/crates/navius-metrics-prometheus", version = "0.1.0" }
-# Job crate
-navius-job = { path = "workspace_migration/examples/crates/navius-job", version = "0.1.0" }
-
-# Optional dependencies that were moved from workspace.dependencies
-jsonwebtoken = { version = "9.3.1", optional = true }
-oauth2 = { version = "5.0.0", features = ["reqwest"], optional = true }
-reqwest-middleware = { version = "0.4.1", optional = true }
-metrics-exporter-prometheus = { version = "0.16.2", features = ["http-listener"], optional = true }
-opentelemetry-dynatrace = { version = "0.4.0", optional = true }
-opentelemetry-jaeger = { version = "0.22.0", optional = true }
-opentelemetry-otlp = { version = "0.29.0", features = ["http-proto", "metrics", "tracing"], optional = true }
-
-# Build dependencies
-[build-dependencies]
-regex = { workspace = true }
-serde_json = { workspace = true }
+panic = "abort"
