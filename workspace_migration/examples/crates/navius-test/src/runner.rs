@@ -140,12 +140,9 @@ impl TestRunner {
             }
 
             if let Some(report_dir) = &self.report_dir {
-                let report_path = report_dir.join(format!("{}.json", report.name));
-                let report_json = serde_json::to_string_pretty(&report).map_err(|e| {
-                    TestError::IoError(format!("Failed to serialize test report: {}", e))
-                })?;
-                std::fs::write(report_path, report_json).map_err(|e| {
-                    TestError::IoError(format!("Failed to write test report: {}", e))
+                let report_path = report_dir.join(format!("{}.txt", report.name));
+                std::fs::write(&report_path, format!("{:?}", report)).map_err(|e| {
+                    TestError::SetupError(format!("Failed to write test report: {}", e))
                 })?;
             }
 
@@ -202,9 +199,10 @@ impl TestRunner {
                 Ok(result) => result,
                 Err(_) => {
                     let _ = handle.join();
-                    Err(TestError::TimeoutError(format!(
-                        "Test timed out after {:?}",
-                        timeout
+                    Err(TestError::execution_error(format!(
+                        "Test '{}' timed out after {} seconds",
+                        test.name(),
+                        timeout.as_secs()
                     )))
                 }
             }

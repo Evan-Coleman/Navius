@@ -6,6 +6,32 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
+// Define the CacheConnection trait
+pub trait CacheConnection: Send + Sync {
+    fn get<K, V>(&self, key: K) -> Result<Option<V>, Box<dyn std::error::Error + Send + Sync>>
+    where
+        K: 'static + Send + Sync + Clone + Eq + Hash + std::fmt::Debug,
+        V: 'static + Send + Sync + Clone + std::fmt::Debug;
+
+    fn set<K, V>(
+        &self,
+        key: K,
+        value: V,
+        ttl: Option<Duration>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+    where
+        K: 'static + Send + Sync + Clone + Eq + Hash + std::fmt::Debug,
+        V: 'static + Send + Sync + Clone + std::fmt::Debug;
+
+    fn delete<K>(&self, key: K) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>
+    where
+        K: 'static + Send + Sync + Clone + Eq + Hash + std::fmt::Debug;
+
+    fn exists<K>(&self, key: K) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>
+    where
+        K: 'static + Send + Sync + Clone + Eq + Hash + std::fmt::Debug;
+}
+
 // Define the mock for Cache interface
 mock! {
     pub Cache<K, V>

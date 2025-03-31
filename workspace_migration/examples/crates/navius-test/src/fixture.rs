@@ -61,7 +61,7 @@ pub struct TestFixture {
     components: RwLock<HashMap<TypeId, Box<dyn Any + Send + Sync>>>,
 
     /// Resources that need cleanup when the fixture is dropped
-    resources: Mutex<Vec<Box<dyn Resource>>>,
+    resources: Mutex<Vec<Box<dyn Resource + Send + Sync>>>,
 }
 
 impl TestFixture {
@@ -85,18 +85,19 @@ impl TestFixture {
         Ok(())
     }
 
-    /// Get a component from the fixture
-    pub fn get<T: Any + Send + Sync>(&self) -> TestResult<&T> {
-        let components = self.components.read().map_err(|_| {
-            TestError::FixtureError("Failed to acquire read lock on components".to_string())
-        })?;
-
+    /// Get a component by type
+    pub fn get_component<T: Any + ?Sized>(&self) -> TestResult<Arc<T>> {
         let type_id = TypeId::of::<T>();
-        let component = components.get(&type_id).ok_or_else(|| {
-            TestError::FixtureError(format!("Component of type {:?} not found", type_id))
+        let components = self.components.lock().expect("Failed to lock components");
+
+        let component_any = components.get(&type_id).ok_or_else(|| {
+            TestError::FixtureError(format!("Component of type ID {:?} not found", type_id))
         })?;
 
-        component.downcast_ref::<T>().ok_or_else(|| {
+        // Clone the Arc before returning it
+        let component_arc = Arc::clone(component_any);
+
+        component_arc.downcast::<T>().map_err(|_| {
             TestError::FixtureError(format!(
                 "Component for type ID {:?} is not of the expected type",
                 type_id
@@ -104,9 +105,9 @@ impl TestFixture {
         })
     }
 
-    /// Add a resource that needs cleanup
-    pub fn add_resource<R: Resource>(&self, resource: R) {
-        let mut resources = self.resources.lock().unwrap();
+    /// Add a resource to the fixture
+    pub fn add_resource<R: Resource + 'static>(&self, resource: R) {
+        let mut resources = self.resources.lock().expect("Failed to lock resources");
         resources.push(Box::new(resource));
     }
 
@@ -217,8 +218,8 @@ impl TestFixtureBuilder {
         Ok(self)
     }
 
-    /// Add a resource to the fixture
-    pub fn with_resource<R: Resource>(self, resource: R) -> Self {
+    /// Add a resource to the fixture builder
+    pub fn with_resource<R: Resource + 'static>(self, resource: R) -> Self {
         self.fixture.add_resource(resource);
         self
     }
@@ -327,14 +328,14 @@ mod tests {
         fixture.register(42i32).unwrap();
 
         // Get the component
-        let value = fixture.get::<i32>().unwrap();
+        let value = fixture.get_component::<i32>().unwrap();
         assert_eq!(*value, 42);
 
         // Register another component
         fixture.register("hello".to_string()).unwrap();
 
         // Get the string component
-        let string = fixture.get::<String>().unwrap();
+        let string = fixture.get_component::<String>().unwrap();
         assert_eq!(string, "hello");
     }
 
@@ -343,7 +344,7 @@ mod tests {
         let fixture = TestFixture::new();
 
         // Try to get a component that doesn't exist
-        let result = fixture.get::<i32>();
+        let result = fixture.get_component::<i32>();
         assert!(result.is_err());
     }
 
@@ -357,10 +358,10 @@ mod tests {
             .build();
 
         // Get the components
-        let value = fixture.get::<i32>().unwrap();
+        let value = fixture.get_component::<i32>().unwrap();
         assert_eq!(*value, 42);
 
-        let string = fixture.get::<String>().unwrap();
+        let string = fixture.get_component::<String>().unwrap();
         assert_eq!(string, "hello");
     }
 

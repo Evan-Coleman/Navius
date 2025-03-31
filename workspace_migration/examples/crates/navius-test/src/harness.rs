@@ -1,6 +1,7 @@
 use crate::error::{TestError, TestResult};
 use crate::fixture::TestFixture;
 use crate::mock::MockRegistry;
+use crate::mocks;
 use std::fmt;
 use std::fmt::Debug;
 use std::future::Future;

@@ -127,9 +127,12 @@ pub use fixture::TestFixture;
 pub use harness::TestHarness;
 pub use mock::MockRegistry;
 
-// Re-export macros
-pub use crate::test_case;
-pub use crate::test_suite;
+// Re-export common mocks types for convenience
+pub use mocks::{
+    CommonMocks, HasMockAuth, HasMockConfiguration, HasMockDatabase, HasMockEventBroker,
+    HasMockFileSystem, HasMockHttpClient, HasMockLogger, HasMockMessageBroker, HasMockMetrics,
+    HasMockRbac, MockFixture, setup_common_mocks,
+};
 
 /// Error testing module for testing error handling
 ///

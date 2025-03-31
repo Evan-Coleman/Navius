@@ -154,8 +154,8 @@ impl Drop for IntegrationContext {
         // Restore original environment variables
         for (key, value) in &self.original_env {
             match value {
-                Some(val) => std::env::set_var(key, val),
-                None => std::env::remove_var(key),
+                Some(val) => unsafe { std::env::set_var(key, val) },
+                None => unsafe { std::env::remove_var(key) },
             }
         }
 
@@ -318,9 +318,9 @@ impl CrossCrateTestBuilder {
         self
     }
 
-    /// Set the test resources directory
+    /// Set the resources directory
     pub fn with_resources_dir(mut self, dir: PathBuf) -> Self {
-        self.config.resources_dir = Some(dir);
+        self.config.resources_dir = Some(dir.clone());
         self.integration_config.test_dir = Some(dir);
         self
     }

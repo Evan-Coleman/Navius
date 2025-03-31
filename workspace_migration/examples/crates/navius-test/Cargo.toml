@@ -13,6 +13,8 @@ toml = "0.8.20"
 uuid = { version = "1.16.0", features = ["v4", "serde"] }
 thiserror = "2.0.12"
 anyhow = "1.0.97"
+chrono = { version = "0.4.40", features = ["serde"] }
+rand = "0.9.0"
 
 # Async utilities
 tokio = { version = "1.44.1", features = ["full"] }
@@ -35,8 +37,3 @@ pretty_assertions = "1.4.1"
 [features]
 default = []
 bench = ["criterion"]
-
-[[bench]]
-name = "mock_bench"
-harness = false
-required-features = ["bench"]
