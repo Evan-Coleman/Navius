@@ -805,6 +805,12 @@ impl MessageBroker for MockMessageBroker {
     }
 }
 
+impl From<serde_json::Error> for MockMessagingError {
+    fn from(err: serde_json::Error) -> Self {
+        MockMessagingError::SerializationError(err.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
