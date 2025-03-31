@@ -8,6 +8,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::api::middleware::CurrentUser;
 use crate::application::{TaskFilter, TaskService};
 use crate::domain::{Priority, TaskStatus};
 use crate::infrastructure::ServiceRegistry;
@@ -160,6 +161,7 @@ fn parse_date(date_str: &str) -> Result<DateTime<Utc>> {
 pub async fn get_tasks(
     State(registry): State<Arc<ServiceRegistry>>,
     Query(params): Query<TaskListParams>,
+    _current_user: CurrentUser, // Ensure user is authenticated
 ) -> Result<Json<Vec<TaskResponse>>> {
     // Parse query parameters
     let task_service = registry.task_service();
@@ -225,6 +227,7 @@ pub async fn get_tasks(
 pub async fn get_task(
     State(registry): State<Arc<ServiceRegistry>>,
     Path(id_str): Path<String>,
+    _current_user: CurrentUser, // Ensure user is authenticated
 ) -> Result<Json<TaskResponse>> {
     let task_service = registry.task_service();
 
@@ -245,12 +248,12 @@ pub async fn get_task(
 pub async fn create_task(
     State(registry): State<Arc<ServiceRegistry>>,
     Json(request): Json<CreateTaskRequest>,
-    // CurrentUser information would be extracted from auth middleware
+    current_user: CurrentUser, // Get current user from authentication
 ) -> Result<Json<TaskResponse>> {
     let task_service = registry.task_service();
 
-    // Mock user ID for now (would come from authentication)
-    let current_user_id = Uuid::new_v4();
+    // Get current user ID from the authentication
+    let current_user_id = current_user.0;
 
     // Parse priority
     let priority = match &request.priority {
@@ -308,12 +311,12 @@ pub async fn update_task(
     State(registry): State<Arc<ServiceRegistry>>,
     Path(id_str): Path<String>,
     Json(request): Json<UpdateTaskRequest>,
-    // CurrentUser would be extracted from auth middleware
+    current_user: CurrentUser, // Get current user from authentication
 ) -> Result<Json<TaskResponse>> {
     let task_service = registry.task_service();
 
-    // Mock user ID for now (would come from authentication)
-    let current_user_id = Uuid::new_v4();
+    // Get current user ID from the authentication
+    let current_user_id = current_user.0;
 
     // Parse task ID
     let id =
@@ -387,12 +390,12 @@ pub async fn update_task(
 pub async fn delete_task(
     State(registry): State<Arc<ServiceRegistry>>,
     Path(id_str): Path<String>,
-    // CurrentUser would be extracted from auth middleware
+    current_user: CurrentUser, // Get current user from authentication
 ) -> Result<StatusCode> {
     let task_service = registry.task_service();
 
-    // Mock user ID for now (would come from authentication)
-    let current_user_id = Uuid::new_v4();
+    // Get current user ID from the authentication
+    let current_user_id = current_user.0;
 
     // Parse task ID
     let id =
@@ -419,12 +422,12 @@ pub async fn delete_task(
 pub async fn assign_task(
     State(registry): State<Arc<ServiceRegistry>>,
     Path((id_str, user_id_str)): Path<(String, String)>,
-    // CurrentUser would be extracted from auth middleware
+    current_user: CurrentUser, // Get current user from authentication
 ) -> Result<StatusCode> {
     let task_service = registry.task_service();
 
-    // Mock user ID for now (would come from authentication)
-    let current_user_id = Uuid::new_v4();
+    // Get current user ID from the authentication
+    let current_user_id = current_user.0;
 
     // Parse task ID
     let id =
@@ -472,12 +475,12 @@ pub async fn assign_task(
 pub async fn unassign_task(
     State(registry): State<Arc<ServiceRegistry>>,
     Path(id_str): Path<String>,
-    // CurrentUser would be extracted from auth middleware
+    current_user: CurrentUser, // Get current user from authentication
 ) -> Result<StatusCode> {
     let task_service = registry.task_service();
 
-    // Mock user ID for now (would come from authentication)
-    let current_user_id = Uuid::new_v4();
+    // Get current user ID from the authentication
+    let current_user_id = current_user.0;
 
     // Parse task ID
     let id =
@@ -521,6 +524,7 @@ pub async fn unassign_task(
 pub async fn get_task_comments(
     State(registry): State<Arc<ServiceRegistry>>,
     Path(id_str): Path<String>,
+    _current_user: CurrentUser, // Ensure user is authenticated
 ) -> Result<Json<Vec<CommentResponse>>> {
     let task_service = registry.task_service();
 
@@ -549,12 +553,12 @@ pub async fn add_comment(
     State(registry): State<Arc<ServiceRegistry>>,
     Path(id_str): Path<String>,
     Json(request): Json<AddCommentRequest>,
-    // CurrentUser would be extracted from auth middleware
+    current_user: CurrentUser, // Get current user from authentication
 ) -> Result<Json<CommentResponse>> {
     let task_service = registry.task_service();
 
-    // Mock user ID for now (would come from authentication)
-    let current_user_id = Uuid::new_v4();
+    // Get current user ID from the authentication
+    let current_user_id = current_user.0;
 
     // Parse task ID
     let id =
@@ -582,12 +586,12 @@ pub async fn update_comment(
     State(registry): State<Arc<ServiceRegistry>>,
     Path((task_id_str, comment_id_str)): Path<(String, String)>,
     Json(request): Json<UpdateCommentRequest>,
-    // CurrentUser would be extracted from auth middleware
+    current_user: CurrentUser, // Get current user from authentication
 ) -> Result<Json<CommentResponse>> {
     let task_service = registry.task_service();
 
-    // Mock user ID for now (would come from authentication)
-    let current_user_id = Uuid::new_v4();
+    // Get current user ID from the authentication
+    let current_user_id = current_user.0;
 
     // Parse task ID and comment ID
     let task_id = Uuid::parse_str(&task_id_str)
@@ -620,12 +624,12 @@ pub async fn update_comment(
 pub async fn delete_comment(
     State(registry): State<Arc<ServiceRegistry>>,
     Path((task_id_str, comment_id_str)): Path<(String, String)>,
-    // CurrentUser would be extracted from auth middleware
+    current_user: CurrentUser, // Get current user from authentication
 ) -> Result<StatusCode> {
     let task_service = registry.task_service();
 
-    // Mock user ID for now (would come from authentication)
-    let current_user_id = Uuid::new_v4();
+    // Get current user ID from the authentication
+    let current_user_id = current_user.0;
 
     // Parse comment ID
     let comment_id = Uuid::parse_str(&comment_id_str)

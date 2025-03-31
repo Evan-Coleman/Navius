@@ -1,170 +1,75 @@
 # Full Stack Integration Example
 
-This example demonstrates a complete application built with the Navius framework, showcasing how all major components work together. It implements a Task Management System with user authentication, task tracking, notifications, and reporting.
+This example demonstrates a complete integration of the Navius framework components, showcasing a task management application with authentication, task CRUD operations, comments, notifications, and more.
 
 ## Features
 
-- **User Management**
-  - Registration and authentication
-  - Role-based permissions
-  - User profiles
-
-- **Task Management**
-  - Create, read, update, delete tasks
-  - Assign tasks to users
-  - Categorize and prioritize tasks
-
-- **Notification System**
-  - Real-time notifications
-  - Email notifications (simulated)
-  - Notification history
-
-- **Reporting**
-  - Task statistics
-  - User activity metrics
-  - Performance dashboard
+- **Authentication**: JWT-based authentication with registration, login, and token refresh
+- **User Management**: Create, update, and retrieve user profiles
+- **Task Management**: Create, read, update, delete tasks with support for:
+  - Priority levels
+  - Status tracking
+  - Due dates
+  - Categories
+  - Assignees
+- **Comments**: Add, update, and delete comments on tasks
+- **Notifications**: Receive notifications for task assignments and updates
+- **Role-Based Access Control**: Different permissions for regular users and managers
 
 ## Architecture
 
-This example follows a clean architecture approach with:
+The example follows clean architecture principles with:
 
-- **Domain Layer**: Core business entities and logic
-- **Application Layer**: Use cases and orchestration
-- **Infrastructure Layer**: External systems integration
-- **API Layer**: HTTP endpoints and controllers
-
-### Component Integration
-
-The example demonstrates integration between all major Navius components:
-
-- **navius-core**: Application setup, configuration, error handling
-- **navius-http**: HTTP server, routing, middleware
-- **navius-auth**: Authentication, authorization, role management
-- **navius-db/navius-db-postgres**: Database access and transactions
-- **navius-cache/navius-cache-redis**: Caching and session management
-- **navius-event**: Event dispatching and subscription
-- **navius-plugin**: Plugin registration and lifecycle management
-- **navius-di**: Dependency injection and component registry
+- **Domain Layer**: Core business entities and rules
+- **Application Layer**: Use cases and business logic
+- **Infrastructure Layer**: Technical implementations (repositories, services)
+- **API Layer**: HTTP interface with controllers and routes
 
 ## Getting Started
 
 ### Prerequisites
 
-- Rust 1.75 or later
-- Docker and Docker Compose
-- Cargo 1.75 or later
+- Rust 1.70 or later
+- Cargo
 
 ### Running the Example
 
-1. Start the infrastructure:
-
 ```bash
 cd workspace_migration/examples/integration/full-stack
-docker-compose up -d
-```
-
-2. Run database migrations:
-
-```bash
-cargo run --bin migrations
-```
-
-3. Start the application:
-
-```bash
 cargo run
 ```
 
-4. Access the application:
-   - API: http://localhost:8080/api
-   - Swagger: http://localhost:8080/swagger
-   - Metrics: http://localhost:8080/metrics
-   - Grafana Dashboard: http://localhost:3000 (admin/admin)
+The server will start on `http://127.0.0.1:3000` by default.
 
-### Sample API Requests
+### API Routes
 
-#### Register a new user:
+- **Auth**: `/api/auth/*` - Authentication endpoints
+- **Users**: `/api/users/*` - User management
+- **Tasks**: `/api/tasks/*` - Task management
+- **Categories**: `/api/categories/*` - Category management
+- **Notifications**: `/api/notifications/*` - Notification endpoints
+- **Health**: `/api/health` - Service health check
 
-```bash
-curl -X POST http://localhost:8080/api/users \
-  -H "Content-Type: application/json" \
-  -d '{"username":"testuser","email":"test@example.com","password":"Password123!"}'
-```
+### Testing
 
-#### Login:
+Run the integration tests to verify the functionality:
 
 ```bash
-curl -X POST http://localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"Password123!"}'
+cargo test --test integration_test
 ```
 
-#### Create a task:
+## Implementation Notes
 
-```bash
-curl -X POST http://localhost:8080/api/tasks \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer {token}" \
-  -d '{"title":"Test Task","description":"This is a test task","due_date":"2025-04-15T12:00:00Z","priority":"HIGH"}'
-```
+- Uses in-memory repositories for demonstration purposes
+- Implements JWT authentication with role-based middleware
+- Showcases proper error handling and consistent response formats
+- Demonstrates service registration and dependency injection
 
-## Project Structure
+## Next Steps
 
-```
-full-stack/
-├── src/
-│   ├── main.rs                 # Application entry point
-│   ├── config.rs               # Configuration
-│   ├── domain/                 # Domain entities and rules
-│   │   ├── user.rs             # User entity
-│   │   ├── task.rs             # Task entity
-│   │   └── notification.rs     # Notification entity
-│   ├── application/            # Application services
-│   │   ├── user_service.rs     # User management
-│   │   ├── task_service.rs     # Task management
-│   │   └── notification_service.rs # Notification handling
-│   ├── infrastructure/         # External integrations
-│   │   ├── repositories/       # Database repositories
-│   │   ├── cache/              # Cache implementations
-│   │   └── email/              # Email service
-│   ├── api/                    # HTTP API
-│   │   ├── routes.rs           # Route definitions
-│   │   ├── controllers/        # Request handlers
-│   │   └── middleware/         # HTTP middleware
-│   └── plugins/                # Plugin implementations
-│       ├── metrics_plugin.rs   # Metrics collection
-│       └── reporting_plugin.rs # Reporting functionality
-├── tests/                      # Integration tests
-├── examples/                   # Additional examples
-├── data/                       # Configuration files for services
-│   ├── init.sql                # Database initialization
-│   └── prometheus.yml          # Prometheus configuration
-├── docs/                       # Documentation
-├── Cargo.toml                  # Project manifest
-└── docker-compose.yml          # Infrastructure setup
-```
+This example can be extended with:
 
-## Testing
-
-Run the tests with:
-
-```bash
-cargo test
-```
-
-## Documentation
-
-- [API Documentation](./docs/api.md)
-- [Architecture Overview](./docs/architecture.md)
-- [Plugin Development](./docs/plugins.md)
-
-## Performance Monitoring
-
-The example includes Prometheus and Grafana for monitoring:
-
-- **Prometheus**: http://localhost:9090
-- **Grafana**: http://localhost:3000
-
-## License
-
-MIT OR Apache-2.0 
+- Database integration (PostgreSQL, MongoDB)
+- Redis for caching
+- Frontend integration
+- Deployment examples 

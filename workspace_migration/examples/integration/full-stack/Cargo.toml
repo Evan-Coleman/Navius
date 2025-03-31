@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 description = "Full Stack Integration Example for the Navius Framework"
 
+[workspace]
+
 [dependencies]
 # Core components
 navius-core = { path = "../../../examples/crates/navius-core" }
