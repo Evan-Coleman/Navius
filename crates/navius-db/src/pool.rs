@@ -409,13 +409,14 @@ impl DatabaseTransaction for PgTransaction {
         query: &str,
         params: &[&'a (dyn sqlx::Encode<'a, sqlx::Postgres> + Sync)],
     ) -> DatabaseResult<u64> {
-        let result = sqlx::query_with(
-            query,
-            sqlx::postgres::PgArguments::from_iter(params.iter().copied()),
-        )
-        .execute(&mut self.tx)
-        .await
-        .map_err(|e| DatabaseError::query_error(format!("Query execution error: {}", e)))?;
+        let mut query = sqlx::query(query);
+        for param in params.iter() {
+            query = query.bind(param);
+        }
+        let result = query
+            .execute(&mut self.tx)
+            .await
+            .map_err(|e| DatabaseError::query_error(format!("Query execution error: {}", e)))?;
 
         Ok(result.rows_affected())
     }
@@ -425,13 +426,14 @@ impl DatabaseTransaction for PgTransaction {
         query: &str,
         params: &[&'a (dyn sqlx::Encode<'a, sqlx::Postgres> + Sync)],
     ) -> DatabaseResult<Box<dyn DatabaseRowSet>> {
-        let result = sqlx::query_with(
-            query,
-            sqlx::postgres::PgArguments::from_iter(params.iter().copied()),
-        )
-        .fetch_all(&mut self.tx)
-        .await
-        .map_err(|e| DatabaseError::query_error(format!("Query execution error: {}", e)))?;
+        let mut query = sqlx::query(query);
+        for param in params.iter() {
+            query = query.bind(param);
+        }
+        let result = query
+            .fetch_all(&mut self.tx)
+            .await
+            .map_err(|e| DatabaseError::query_error(format!("Query execution error: {}", e)))?;
 
         Ok(Box::new(PgRowSet::new(result)))
     }
@@ -547,7 +549,11 @@ impl DatabaseConnection for PgConnection {
         query: &str,
         params: &[&(dyn sqlx::Encode<'_, sqlx::Postgres> + Sync)],
     ) -> DatabaseResult<u64> {
-        let result = sqlx::query_with(query, params)
+        let mut query = sqlx::query(query);
+        for param in params.iter() {
+            query = query.bind(param);
+        }
+        let result = query
             .execute(&mut self.conn)
             .await
             .map_err(|e| DatabaseError::QueryError(format!("Query execution failed: {}", e)))?;
@@ -585,7 +591,11 @@ impl DatabaseConnection for PgConnection {
             }
         }
 
-        let rows = sqlx::query_with(query, params)
+        let mut query = sqlx::query(query);
+        for param in params.iter() {
+            query = query.bind(param);
+        }
+        let rows = query
             .fetch_all(&mut self.conn)
             .await
             .map_err(|e| DatabaseError::QueryError(format!("Query execution failed: {}", e)))?;
@@ -602,81 +612,6 @@ impl DatabaseConnection for PgConnection {
         let tx: sqlx::Transaction<'static, sqlx::Postgres> = unsafe { std::mem::transmute(tx) };
 
         Ok(Box::new(PgTransaction::new(tx)))
-    }
-}
-
-#[cfg(feature = "postgres")]
-#[async_trait]
-impl DatabaseTransaction for PgTransaction {
-    async fn execute<'a>(
-        &mut self,
-        query: &str,
-        params: &[&'a (dyn sqlx::Encode<'a, sqlx::Postgres> + Sync)],
-    ) -> DatabaseResult<u64> {
-        let result = sqlx::query_with(
-            query,
-            sqlx::postgres::PgArguments::from_iter(params.iter().copied()),
-        )
-        .execute(&mut self.tx)
-        .await
-        .map_err(|e| DatabaseError::query_error(format!("Query execution error: {}", e)))?;
-
-        Ok(result.rows_affected())
-    }
-
-    async fn query<'a>(
-        &mut self,
-        query: &str,
-        params: &[&'a (dyn sqlx::Encode<'a, sqlx::Postgres> + Sync)],
-    ) -> DatabaseResult<Box<dyn DatabaseRowSet>> {
-        let result = sqlx::query_with(
-            query,
-            sqlx::postgres::PgArguments::from_iter(params.iter().copied()),
-        )
-        .fetch_all(&mut self.tx)
-        .await
-        .map_err(|e| DatabaseError::query_error(format!("Query execution error: {}", e)))?;
-
-        Ok(Box::new(PgRowSet::new(result)))
-    }
-
-    async fn commit(self: Box<Self>) -> DatabaseResult<()> {
-        self.tx.commit().await.map_err(|e| {
-            DatabaseError::transaction_error(format!("Failed to commit transaction: {}", e))
-        })
-    }
-
-    async fn rollback(self: Box<Self>) -> DatabaseResult<()> {
-        self.tx.rollback().await.map_err(|e| {
-            DatabaseError::transaction_error(format!("Failed to rollback transaction: {}", e))
-        })
-    }
-
-    async fn savepoint(&mut self, name: &str) -> DatabaseResult<()> {
-        self.validate_savepoint_name(name)?;
-
-        let query = format!("SAVEPOINT {}", name);
-        self.execute(&query, &[]).await.map(|_| ()).map_err(|e| {
-            DatabaseError::savepoint_error(format!("Failed to create savepoint: {}", e))
-        })
-    }
-
-    async fn rollback_to_savepoint(&mut self, name: &str) -> DatabaseResult<()> {
-        self.validate_savepoint_name(name)?;
-
-        let query = format!("ROLLBACK TO SAVEPOINT {}", name);
-        self.execute(&query, &[]).await.map(|_| ()).map_err(|e| {
-            DatabaseError::savepoint_error(format!("Failed to rollback to savepoint: {}", e))
-        })
-    }
-
-    async fn release_savepoint(&mut self, name: &str) -> DatabaseResult<()> {
-        self.validate_savepoint_name(name)?;
-
-        let query = format!("RELEASE SAVEPOINT {}", name);
-        self.execute(&query, &[]).await.map(|_| ()).map_err(|e| {
-            DatabaseError::savepoint_error(format!("Failed to release savepoint: {}", e))
-        })
     }
 }
 
