@@ -217,6 +217,7 @@ pub trait MessageHandler: Send + Sync {
 }
 
 /// Represents a plugin in the system
+#[async_trait::async_trait]
 pub trait Plugin: Send + Sync + Debug + MessageHandler {
     /// Get the plugin ID
     fn id(&self) -> &str;
