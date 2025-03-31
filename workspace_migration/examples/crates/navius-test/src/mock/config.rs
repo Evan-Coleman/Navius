@@ -85,22 +85,6 @@ pub struct MockExpectBuilder<T> {
     _marker: PhantomData<T>,
 }
 
-/// Expected return value for a method
-#[derive(Debug)]
-pub enum ReturnValue<T> {
-    /// The method will return a specific value
-    Value(Box<dyn Any + Send + Sync>),
-
-    /// The method will return a value based on the arguments
-    Function(Box<dyn Fn(&[String]) -> Box<dyn Any + Send + Sync> + Send + Sync>),
-
-    /// The method will return different values on successive calls
-    Sequence(Vec<Box<dyn Any + Send + Sync>>),
-
-    /// Type marker
-    _Phantom(PhantomData<T>),
-}
-
 /// Types of configuration values
 #[derive(Clone)]
 pub enum ConfigValue {
@@ -117,7 +101,46 @@ pub enum ConfigValue {
     /// Object (map) of values
     Object(HashMap<String, ConfigValue>),
     /// A function that returns a value
-    Function(Box<dyn Fn(&[String]) -> Box<dyn Any + Send + Sync> + Send + Sync>),
+    Function(ConfigFunction),
+}
+
+// A newtype wrapper for function types to implement Clone and Debug
+#[derive(Clone)]
+pub struct ConfigFunction(Arc<dyn Fn(&[String]) -> Box<dyn Any + Send + Sync> + Send + Sync>);
+
+impl Debug for ConfigFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ConfigFunction(<fn>)")
+    }
+}
+
+impl ConfigFunction {
+    pub fn new<F>(func: F) -> Self
+    where
+        F: Fn(&[String]) -> Box<dyn Any + Send + Sync> + Send + Sync + 'static,
+    {
+        ConfigFunction(Arc::new(func))
+    }
+
+    pub fn call(&self, args: &[String]) -> Box<dyn Any + Send + Sync> {
+        (self.0)(args)
+    }
+}
+
+/// Expected return value for a method
+#[derive(Debug)]
+pub enum ReturnValue<T> {
+    /// The method will return a specific value
+    Value(Box<dyn Any + Send + Sync>),
+
+    /// The method will return a value based on the arguments
+    Function(ConfigFunction),
+
+    /// The method will return different values on successive calls
+    Sequence(Vec<Box<dyn Any + Send + Sync>>),
+
+    /// Type marker
+    _Phantom(PhantomData<T>),
 }
 
 impl Debug for ConfigValue {
@@ -129,7 +152,7 @@ impl Debug for ConfigValue {
             ConfigValue::Boolean(b) => write!(f, "Boolean({})", b),
             ConfigValue::Array(a) => write!(f, "Array({:?})", a),
             ConfigValue::Object(o) => write!(f, "Object({:?})", o),
-            ConfigValue::Function(_) => write!(f, "Function(<fn>)"),
+            ConfigValue::Function(func) => write!(f, "{:?}", func),
         }
     }
 }

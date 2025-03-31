@@ -1,11 +1,9 @@
 use async_trait::async_trait;
-use mockall::mock;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
 use std::hash::Hash;
-use std::sync::Arc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -38,65 +36,11 @@ pub trait CacheConnection: Send + Sync {
         K: Send + Sync + Debug + 'static;
 }
 
-// Define the mock for Cache interface
-mock! {
-    pub Cache<K, V>
-    where
-        K: 'static + Send + Sync + Clone + Eq + Hash + std::fmt::Debug,
-        V: 'static + Send + Sync + Clone + std::fmt::Debug,
-    {
-        pub fn get(&self, key: K) -> Result<Option<V>, Box<dyn std::error::Error + Send + Sync>>;
-        pub fn set(&self, key: K, value: V, ttl: Option<Duration>) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
-        pub fn delete(&self, key: K) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>;
-        pub fn exists(&self, key: K) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>;
-        pub fn clear(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
-        pub fn get_many(&self, keys: Vec<K>) -> Result<Vec<Option<V>>, Box<dyn std::error::Error + Send + Sync>>;
-        pub fn get_ttl(&self, key: K) -> Result<Option<Duration>, Box<dyn std::error::Error + Send + Sync>>;
-        pub fn set_ttl(&self, key: K, ttl: Duration) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>;
-        pub fn increment(&self, key: K, amount: i64) -> Result<i64, Box<dyn std::error::Error + Send + Sync>>;
-        pub fn health_check(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
-    }
-}
-
-// Define the mock for CacheInvalidator interface
-mock! {
-    pub CacheInvalidator {
-        pub fn invalidate_key(&self, key: String) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
-        pub fn invalidate_pattern(&self, pattern: String) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
-        pub fn invalidate_all(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
-    }
-}
-
-// Define the mock for CacheConnectionManager interface
-mock! {
-    pub CacheConnectionManager {
-        pub fn get_connection(&self) -> Result<Arc<dyn CacheConnection>, Box<dyn std::error::Error + Send + Sync>>;
-        pub fn health_check(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
-        pub fn close(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
-    }
-}
-
-// Define the mock for CacheConnection interface
-mock! {
-    pub CacheConnection {
-        pub fn get<K, V>(&self, key: K) -> Result<Option<V>, Box<dyn std::error::Error + Send + Sync>>
-        where
-            K: 'static + Send + Sync + Clone + Eq + Hash + std::fmt::Debug,
-            V: 'static + Send + Sync + Clone + std::fmt::Debug;
-
-        pub fn set<K, V>(&self, key: K, value: V, ttl: Option<Duration>) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
-        where
-            K: 'static + Send + Sync + Clone + Eq + Hash + std::fmt::Debug,
-            V: 'static + Send + Sync + Clone + std::fmt::Debug;
-
-        pub fn delete<K>(&self, key: K) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>
-        where
-            K: 'static + Send + Sync + Clone + Eq + Hash + std::fmt::Debug;
-
-        pub fn exists<K>(&self, key: K) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>
-        where
-            K: 'static + Send + Sync + Clone + Eq + Hash + std::fmt::Debug;
-    }
+pub trait CacheConnectionManager: Send + Sync {
+    fn get_connection(
+        &self,
+    ) -> Result<Arc<dyn MockableCacheConnection>, Box<dyn std::error::Error + Send + Sync>>;
+    fn health_check(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 }
 
 // Implement a simple in-memory cache for testing
@@ -243,13 +187,13 @@ impl AsyncCache for InMemoryCache {
             if let Some(expiry_time) = expiry {
                 if Instant::now() > *expiry_time {
                     amount
-                } else if let Some(num) = value.downcast_ref::<i64>() {
-                    num + amount
+                } else if let Some(int_value) = value.downcast_ref::<i64>() {
+                    int_value + amount
                 } else {
                     return Err("Value is not an integer".into());
                 }
-            } else if let Some(num) = value.downcast_ref::<i64>() {
-                num + amount
+            } else if let Some(int_value) = value.downcast_ref::<i64>() {
+                int_value + amount
             } else {
                 return Err("Value is not an integer".into());
             }
@@ -257,92 +201,20 @@ impl AsyncCache for InMemoryCache {
             amount
         };
 
+        // Store updated value
         data.insert(key.to_string(), (Box::new(new_value), None));
 
         Ok(new_value)
     }
 
     async fn health_check(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        // Simple implementation that always returns OK
+        // InMemoryCache is always healthy
         Ok(())
     }
 }
 
-// Provide a builder for creating configured mock caches
-pub struct MockCacheBuilder;
-
-impl MockCacheBuilder {
-    pub fn new() -> Self {
-        Self
-    }
-
-    pub fn build_with_get<K, V>(&self, key: K, return_value: Option<V>) -> MockCache<K, V>
-    where
-        K: 'static + Send + Sync + Clone + Eq + Hash + std::fmt::Debug,
-        V: 'static + Send + Sync + Clone + std::fmt::Debug,
-    {
-        let mut mock = MockCache::<K, V>::new();
-        mock.expect_get()
-            .with(mockall::predicate::eq(key.clone()))
-            .returning(move |_| Ok(return_value.clone()));
-        mock
-    }
-
-    pub fn build_with_set<K, V>(&self, expected_key: K, expected_value: V) -> MockCache<K, V>
-    where
-        K: 'static + Send + Sync + Clone + Eq + Hash + std::fmt::Debug,
-        V: 'static + Send + Sync + Clone + std::fmt::Debug + PartialEq,
-    {
-        let mut mock = MockCache::<K, V>::new();
-        mock.expect_set()
-            .with(
-                mockall::predicate::eq(expected_key),
-                mockall::predicate::eq(expected_value),
-                mockall::predicate::always(),
-            )
-            .returning(|_, _, _| Ok(()));
-        mock
-    }
-
-    pub fn build_with_delete<K, V>(&self, key: K, return_value: bool) -> MockCache<K, V>
-    where
-        K: 'static + Send + Sync + Clone + Eq + Hash + std::fmt::Debug,
-        V: 'static + Send + Sync + Clone + std::fmt::Debug,
-    {
-        let mut mock = MockCache::<K, V>::new();
-        mock.expect_delete()
-            .with(mockall::predicate::eq(key))
-            .returning(move |_| Ok(return_value));
-        mock
-    }
-}
-
-// Utility function to create a mock cache invalidator
-pub fn mock_cache_invalidator() -> MockCacheInvalidator {
-    MockCacheInvalidator::new()
-}
-
-// Utility function to set up a mock cache invalidator to expect key invalidation
-pub fn expect_invalidate_key(mock: &mut MockCacheInvalidator, key: &str) {
-    mock.expect_invalidate_key()
-        .with(mockall::predicate::eq(key.to_string()))
-        .returning(|_| Ok(()));
-}
-
-// Utility function to set up a mock cache invalidator to expect pattern invalidation
-pub fn expect_invalidate_pattern(mock: &mut MockCacheInvalidator, pattern: &str) {
-    mock.expect_invalidate_pattern()
-        .with(mockall::predicate::eq(pattern.to_string()))
-        .returning(|_| Ok(()));
-}
-
-// Utility function to set up a mock cache invalidator to expect all invalidation
-pub fn expect_invalidate_all(mock: &mut MockCacheInvalidator) {
-    mock.expect_invalidate_all().returning(|| Ok(()));
-}
-
 // This trait provides non-generic methods that will be used to implement mocks
-pub trait MockableCacheConnection: Send + Sync {
+pub trait MockableCacheConnection: Send + Sync + Debug {
     // Get a string value
     fn get_string(
         &self,
