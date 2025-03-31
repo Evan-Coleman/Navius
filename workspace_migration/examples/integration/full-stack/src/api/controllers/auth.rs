@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::api::middleware::CurrentUser;
 use crate::application::UserService;
 use crate::infrastructure::ServiceRegistry;
 
@@ -47,6 +48,12 @@ struct Claims {
 /// Refresh token request
 #[derive(Debug, Deserialize)]
 pub struct RefreshTokenRequest {
+    pub refresh_token: String,
+}
+
+/// Logout request
+#[derive(Debug, Deserialize)]
+pub struct LogoutRequest {
     pub refresh_token: String,
 }
 
@@ -173,14 +180,6 @@ pub async fn refresh_token(
     State(registry): State<Arc<ServiceRegistry>>,
     Json(request): Json<RefreshTokenRequest>,
 ) -> Result<Json<AuthResponse>> {
-    // In a real implementation, we would:
-    // 1. Validate the refresh token
-    // 2. Check if the refresh token is blacklisted
-    // 3. Generate a new access token and refresh token
-    // 4. Blacklist the old refresh token
-
-    // Here we'll do a simplified version
-
     // Parse the token to get the user ID and role
     let token_data = jsonwebtoken::decode::<Claims>(
         &request.refresh_token,
@@ -190,7 +189,7 @@ pub async fn refresh_token(
     .map_err(|_| Error::unauthorized("Invalid refresh token"))?;
 
     let user_id = Uuid::parse_str(&token_data.claims.sub)
-        .map_err(|_| Error::unauthorized("Invalid user ID in token"))?;
+        .map_err(|_| Error::validation_error("Invalid user ID format in token"))?;
 
     let user_service = registry.user_service();
 
@@ -198,7 +197,12 @@ pub async fn refresh_token(
     let user = user_service
         .get_user(user_id)
         .await
-        .map_err(|_| Error::unauthorized("User not found or inactive"))?;
+        .map_err(|e| match e.kind {
+            crate::application::UserServiceErrorKind::NotFound => {
+                Error::not_found("User not found")
+            }
+            _ => Error::internal_server_error(format!("Failed to get user: {}", e.message)),
+        })?;
 
     // Generate new tokens
     let token = generate_token(user.id, &user.role.to_string(), TOKEN_EXPIRATION)?;
@@ -216,10 +220,18 @@ pub async fn refresh_token(
 }
 
 /// Logout endpoint
-pub async fn logout() -> Result<StatusCode> {
+pub async fn logout(
+    _state: State<Arc<ServiceRegistry>>,
+    current_user: CurrentUser,
+    Json(_request): Json<LogoutRequest>,
+) -> Result<StatusCode> {
     // In a real implementation, we would blacklist the refresh token
-    // Since we're using a simplified JWT approach without a token store, we'll just return OK
-    // The client is responsible for removing the tokens from local storage
+    // Here we'll do a simplified version just returning OK
+
+    // For a complete implementation, we would:
+    // 1. Get the refresh token
+    // 2. Add it to a blacklist or mark it as revoked in the database
+    // 3. Set an expiration time for the blacklisted token
 
     Ok(StatusCode::OK)
 }

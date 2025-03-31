@@ -1,10 +1,14 @@
 use axum::Json;
-use axum::extract::{Path, Query};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use chrono::Utc;
-use navius_core::error::Result;
+use navius_core::error::{Error, Result};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use uuid::Uuid;
+
+use crate::api::middleware::CurrentUser;
+use crate::infrastructure::ServiceRegistry;
 
 /// Notification listing query parameters
 #[derive(Debug, Deserialize)]
@@ -50,8 +54,13 @@ pub struct CreateNotificationRequest {
 
 /// Get user notifications
 pub async fn get_notifications(
+    State(registry): State<Arc<ServiceRegistry>>,
     Query(params): Query<NotificationListParams>,
+    current_user: CurrentUser, // Get current user from authentication
 ) -> Result<Json<Vec<NotificationResponse>>> {
+    // Get current user ID from the authentication
+    let _current_user_id = current_user.0;
+
     // Implementation will be added later
     Ok(Json(vec![
         NotificationResponse {
@@ -76,27 +85,64 @@ pub async fn get_notifications(
 }
 
 /// Mark notification as read
-pub async fn mark_as_read(Path(id): Path<String>) -> Result<StatusCode> {
+pub async fn mark_as_read(
+    State(registry): State<Arc<ServiceRegistry>>,
+    Path(id_str): Path<String>,
+    current_user: CurrentUser, // Get current user from authentication
+) -> Result<StatusCode> {
+    // Get current user ID from the authentication
+    let _current_user_id = current_user.0;
+
+    // Parse notification ID
+    let _id = Uuid::parse_str(&id_str)
+        .map_err(|_| Error::validation_error("Invalid notification ID format"))?;
+
     // Implementation will be added later
     Ok(StatusCode::OK)
 }
 
 /// Mark all notifications as read
-pub async fn mark_all_as_read() -> Result<StatusCode> {
+pub async fn mark_all_as_read(
+    State(registry): State<Arc<ServiceRegistry>>,
+    current_user: CurrentUser, // Get current user from authentication
+) -> Result<StatusCode> {
+    // Get current user ID from the authentication
+    let _current_user_id = current_user.0;
+
     // Implementation will be added later
     Ok(StatusCode::OK)
 }
 
 /// Delete notification
-pub async fn delete_notification(Path(id): Path<String>) -> Result<StatusCode> {
+pub async fn delete_notification(
+    State(registry): State<Arc<ServiceRegistry>>,
+    Path(id_str): Path<String>,
+    current_user: CurrentUser, // Get current user from authentication
+) -> Result<StatusCode> {
+    // Get current user ID from the authentication
+    let _current_user_id = current_user.0;
+
+    // Parse notification ID
+    let _id = Uuid::parse_str(&id_str)
+        .map_err(|_| Error::validation_error("Invalid notification ID format"))?;
+
     // Implementation will be added later
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// Send notification (admin only)
 pub async fn send_notification(
+    State(registry): State<Arc<ServiceRegistry>>,
     Json(request): Json<CreateNotificationRequest>,
+    current_user: CurrentUser, // Get current user from authentication
 ) -> Result<Json<NotificationResponse>> {
+    // Get current user ID from the authentication
+    let _current_user_id = current_user.0;
+
+    // Parse user ID
+    let _user_id = Uuid::parse_str(&request.user_id)
+        .map_err(|_| Error::validation_error("Invalid user ID format"))?;
+
     // Implementation will be added later
     let id = Uuid::new_v4().to_string();
     Ok(Json(NotificationResponse {

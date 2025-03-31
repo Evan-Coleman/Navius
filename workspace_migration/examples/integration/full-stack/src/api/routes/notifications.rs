@@ -14,18 +14,25 @@ pub fn configure_routes(
     registry: Arc<ServiceRegistry>,
 ) -> HttpServerBuilder {
     server
+        // Collection routes
         .route(
             "/api/notifications",
-            get(get_notifications)
-                .delete(mark_all_as_read)
-                .layer(requires_auth(registry.clone())),
+            get(get_notifications).layer(requires_auth(registry.clone())),
+        )
+        .route(
+            "/api/notifications",
+            delete(mark_all_as_read).layer(requires_auth(registry.clone())),
+        )
+        // Individual resource routes
+        .route(
+            "/api/notifications/:id",
+            post(mark_as_read).layer(requires_auth(registry.clone())),
         )
         .route(
             "/api/notifications/:id",
-            post(mark_as_read)
-                .delete(delete_notification)
-                .layer(requires_auth(registry.clone())),
+            delete(delete_notification).layer(requires_auth(registry.clone())),
         )
+        // Administrative actions
         .route(
             "/api/notifications/send",
             post(send_notification)

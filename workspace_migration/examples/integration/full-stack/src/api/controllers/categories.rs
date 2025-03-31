@@ -1,10 +1,14 @@
 use axum::Json;
-use axum::extract::{Path, Query};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use chrono::Utc;
-use navius_core::error::Result;
+use navius_core::error::{Error, Result};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use uuid::Uuid;
+
+use crate::api::middleware::CurrentUser;
+use crate::infrastructure::ServiceRegistry;
 
 /// Category listing query parameters
 #[derive(Debug, Deserialize)]
@@ -42,7 +46,9 @@ pub struct UpdateCategoryRequest {
 
 /// Get all categories
 pub async fn get_categories(
+    State(registry): State<Arc<ServiceRegistry>>,
     Query(params): Query<CategoryListParams>,
+    _current_user: CurrentUser, // Ensure user is authenticated
 ) -> Result<Json<Vec<CategoryResponse>>> {
     // Implementation will be added later
     Ok(Json(vec![
@@ -66,10 +72,18 @@ pub async fn get_categories(
 }
 
 /// Get category by ID
-pub async fn get_category(Path(id): Path<String>) -> Result<Json<CategoryResponse>> {
+pub async fn get_category(
+    State(registry): State<Arc<ServiceRegistry>>,
+    Path(id_str): Path<String>,
+    _current_user: CurrentUser, // Ensure user is authenticated
+) -> Result<Json<CategoryResponse>> {
+    // Parse category ID
+    let _id = Uuid::parse_str(&id_str)
+        .map_err(|_| Error::validation_error("Invalid category ID format"))?;
+
     // Implementation will be added later
     Ok(Json(CategoryResponse {
-        id,
+        id: id_str,
         name: "Sample Category".to_string(),
         description: Some("Sample category description".to_string()),
         color: Some("#3357FF".to_string()),
@@ -80,7 +94,9 @@ pub async fn get_category(Path(id): Path<String>) -> Result<Json<CategoryRespons
 
 /// Create category
 pub async fn create_category(
+    State(registry): State<Arc<ServiceRegistry>>,
     Json(request): Json<CreateCategoryRequest>,
+    current_user: CurrentUser, // Get current user from authentication
 ) -> Result<Json<CategoryResponse>> {
     // Implementation will be added later
     let id = Uuid::new_v4().to_string();
@@ -96,12 +112,18 @@ pub async fn create_category(
 
 /// Update category
 pub async fn update_category(
-    Path(id): Path<String>,
+    State(registry): State<Arc<ServiceRegistry>>,
+    Path(id_str): Path<String>,
     Json(request): Json<UpdateCategoryRequest>,
+    current_user: CurrentUser, // Get current user from authentication
 ) -> Result<Json<CategoryResponse>> {
+    // Parse category ID
+    let _id = Uuid::parse_str(&id_str)
+        .map_err(|_| Error::validation_error("Invalid category ID format"))?;
+
     // Implementation will be added later
     Ok(Json(CategoryResponse {
-        id,
+        id: id_str,
         name: request
             .name
             .unwrap_or_else(|| "Sample Category".to_string()),
@@ -113,13 +135,29 @@ pub async fn update_category(
 }
 
 /// Delete category
-pub async fn delete_category(Path(id): Path<String>) -> Result<StatusCode> {
+pub async fn delete_category(
+    State(registry): State<Arc<ServiceRegistry>>,
+    Path(id_str): Path<String>,
+    current_user: CurrentUser, // Get current user from authentication
+) -> Result<StatusCode> {
+    // Parse category ID
+    let _id = Uuid::parse_str(&id_str)
+        .map_err(|_| Error::validation_error("Invalid category ID format"))?;
+
     // Implementation will be added later
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// Get tasks by category
-pub async fn get_tasks_by_category(Path(id): Path<String>) -> Result<Json<Vec<serde_json::Value>>> {
+pub async fn get_tasks_by_category(
+    State(registry): State<Arc<ServiceRegistry>>,
+    Path(id_str): Path<String>,
+    _current_user: CurrentUser, // Ensure user is authenticated
+) -> Result<Json<Vec<serde_json::Value>>> {
+    // Parse category ID
+    let _id = Uuid::parse_str(&id_str)
+        .map_err(|_| Error::validation_error("Invalid category ID format"))?;
+
     // Implementation will be added later
     // This will use the tasks service to get tasks by category
     Ok(Json(vec![]))

@@ -15,16 +15,25 @@ pub fn configure_routes(
     registry: Arc<ServiceRegistry>,
 ) -> HttpServerBuilder {
     server
+        // Collection routes
         .route(
             "/api/categories",
-            get(get_categories)
-                .post(create_category)
+            get(get_categories).layer(requires_auth(registry.clone())),
+        )
+        .route(
+            "/api/categories",
+            post(create_category)
+                .layer(requires_manager())
                 .layer(requires_auth(registry.clone())),
+        )
+        // Individual resource routes
+        .route(
+            "/api/categories/:id",
+            get(get_category).layer(requires_auth(registry.clone())),
         )
         .route(
             "/api/categories/:id",
-            get(get_category)
-                .put(update_category)
+            put(update_category)
                 .layer(requires_manager())
                 .layer(requires_auth(registry.clone())),
         )
@@ -34,6 +43,7 @@ pub fn configure_routes(
                 .layer(requires_manager())
                 .layer(requires_auth(registry.clone())),
         )
+        // Sub-resource routes
         .route(
             "/api/categories/:id/tasks",
             get(get_tasks_by_category).layer(requires_auth(registry.clone())),
