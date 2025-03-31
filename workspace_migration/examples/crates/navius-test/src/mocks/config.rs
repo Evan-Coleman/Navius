@@ -216,7 +216,13 @@ pub trait ConfigurationProvider: Send + Sync {
 }
 
 #[derive(Debug, Default)]
-pub struct MockConfigurationProvider {}
+pub struct MockConfigurationProvider {
+    get_string_results: std::sync::Mutex<Vec<Result<String, MockConfigError>>>,
+    get_integer_results: std::sync::Mutex<Vec<Result<i64, MockConfigError>>>,
+    get_bool_results: std::sync::Mutex<Vec<Result<bool, MockConfigError>>>,
+    get_float_results: std::sync::Mutex<Vec<Result<f64, MockConfigError>>>,
+    load_results: std::sync::Mutex<Vec<Result<(), MockConfigError>>>,
+}
 
 impl MockConfigurationProvider {
     /// Create a new mock configuration provider
@@ -232,167 +238,76 @@ impl MockConfigurationProvider {
         Ok(arc_self)
     }
 
-    /// Create a context for get_string method
-    pub fn get_string_context(
-        &self,
-    ) -> MockGuard<'_, dyn Fn(&str) -> Result<String, MockConfigError>> {
-        self.expect_get_string()
+    /// Expect get_string to be called with a specific key and return the specified result
+    pub fn expect_get_string(&self, _key: &str, result: Result<String, MockConfigError>) {
+        self.get_string_results.lock().unwrap().push(result);
     }
 
-    /// Create a context for get_integer method
-    pub fn get_integer_context(
-        &self,
-    ) -> MockGuard<'_, dyn Fn(&str) -> Result<i64, MockConfigError>> {
-        self.expect_get_integer()
+    /// Expect get_integer to be called with a specific key and return the specified result
+    pub fn expect_get_integer(&self, _key: &str, result: Result<i64, MockConfigError>) {
+        self.get_integer_results.lock().unwrap().push(result);
     }
 
-    /// Create a context for get_float method
-    pub fn get_float_context(&self) -> MockGuard<'_, dyn Fn(&str) -> Result<f64, MockConfigError>> {
-        self.expect_get_float()
+    /// Expect get_bool to be called with a specific key and return the specified result
+    pub fn expect_get_bool(&self, _key: &str, result: Result<bool, MockConfigError>) {
+        self.get_bool_results.lock().unwrap().push(result);
     }
 
-    /// Create a context for get_boolean method
-    pub fn get_boolean_context(
-        &self,
-    ) -> MockGuard<'_, dyn Fn(&str) -> Result<bool, MockConfigError>> {
-        self.expect_get_boolean()
+    /// Expect get_boolean to be called with a specific key and return the specified result
+    pub fn expect_get_boolean(&self, _key: &str, result: Result<bool, MockConfigError>) {
+        self.get_bool_results.lock().unwrap().push(result);
     }
 
-    /// Create a context for get_array method
-    pub fn get_array_context(
-        &self,
-    ) -> MockGuard<'_, dyn Fn(&str) -> Result<Vec<ConfigValue>, MockConfigError>> {
-        self.expect_get_array()
+    /// Expect get_float to be called with a specific key and return the specified result
+    pub fn expect_get_float(&self, _key: &str, result: Result<f64, MockConfigError>) {
+        self.get_float_results.lock().unwrap().push(result);
     }
 
-    /// Create a context for get_object method
-    pub fn get_object_context(
-        &self,
-    ) -> MockGuard<'_, dyn Fn(&str) -> Result<HashMap<String, ConfigValue>, MockConfigError>> {
-        self.expect_get_object()
-    }
-
-    /// Create a context for has method
-    pub fn has_context(&self) -> MockGuard<'_, dyn Fn(&str) -> Result<bool, MockConfigError>> {
-        self.expect_has()
-    }
-
-    /// Create a context for set method
-    pub fn set_context(
-        &self,
-    ) -> MockGuard<'_, dyn Fn(&str, ConfigValue) -> Result<(), MockConfigError>> {
-        self.expect_set()
-    }
-
-    /// Create a context for load_from_file method
-    pub fn load_from_file_context(
-        &self,
-    ) -> MockGuard<'_, dyn Fn(&str) -> Result<(), MockConfigError>> {
-        self.expect_load_from_file()
-    }
-
-    /// Create a context for save_to_file method
-    pub fn save_to_file_context(
-        &self,
-    ) -> MockGuard<'_, dyn Fn(&str) -> Result<(), MockConfigError>> {
-        self.expect_save_to_file()
-    }
-
-    /// Set up expectation for a get_string operation
-    pub fn expect_get_string(&self, key: &str, result: Result<String, MockConfigError>) {
-        let _key_clone = key.to_string();
-
-        // No-op implementation for mock
-    }
-
-    /// Set up expectation for a get_integer operation
-    pub fn expect_get_integer(&self, key: &str, result: Result<i64, MockConfigError>) {
-        let _key_clone = key.to_string();
-
-        // No-op implementation for mock
-    }
-
-    /// Set up expectation for a get_float operation
-    pub fn expect_get_float(&self, key: &str, result: Result<f64, MockConfigError>) {
-        let _key_clone = key.to_string();
-
-        // No-op implementation for mock
-    }
-
-    /// Set up expectation for a get_boolean operation
-    pub fn expect_get_boolean(&self, key: &str, result: Result<bool, MockConfigError>) {
-        let _key_clone = key.to_string();
-
-        // No-op implementation for mock
-    }
-
-    /// Set up expectation for a get_array operation
-    pub fn expect_get_array(&self, key: &str, result: Result<Vec<ConfigValue>, MockConfigError>) {
-        let _key_clone = key.to_string();
-
-        // No-op implementation for mock
-    }
-
-    /// Set up expectation for a get_object operation
-    pub fn expect_get_object(
-        &self,
-        key: &str,
-        result: Result<HashMap<String, ConfigValue>, MockConfigError>,
-    ) {
-        let _key_clone = key.to_string();
-
-        // No-op implementation for mock
-    }
-
-    /// Set up expectation for a has operation
-    pub fn expect_has(&self, key: &str, result: Result<bool, MockConfigError>) {
-        let _key_clone = key.to_string();
-
-        // No-op implementation for mock
-    }
-
-    /// Set up expectation for a set operation
-    pub fn expect_set(&self, key: &str, value: ConfigValue, result: Result<(), MockConfigError>) {
-        let _key_clone = key.to_string();
-        let _value_clone = value;
-
-        // No-op implementation for mock
-    }
-
-    /// Set up expectation for a load_from_file operation
-    pub fn expect_load_from_file(&self, path: &str, result: Result<(), MockConfigError>) {
-        let _path_clone = path.to_string();
-
-        // No-op implementation for mock
-    }
-
-    /// Set up expectation for a save_to_file operation
-    pub fn expect_save_to_file(&self, path: &str, result: Result<(), MockConfigError>) {
-        let _path_clone = path.to_string();
-
-        // No-op implementation for mock
+    /// Expect load to be called with a specific path and return the specified result
+    pub fn expect_load(&self, _path: &str, result: Result<(), MockConfigError>) {
+        self.load_results.lock().unwrap().push(result);
     }
 }
 
 impl ConfigurationProvider for MockConfigurationProvider {
-    fn load_from_file(&self, _path: &str) -> Result<(), MockConfigError> {
-        Err(MockConfigError::NotImplemented)
-    }
-
     fn get_string(&self, _key: &str) -> Result<String, MockConfigError> {
-        Err(MockConfigError::NotImplemented)
+        if let Some(result) = self.get_string_results.lock().unwrap().pop() {
+            result
+        } else {
+            Err(MockConfigError::NotImplemented)
+        }
     }
 
     fn get_integer(&self, _key: &str) -> Result<i64, MockConfigError> {
-        Err(MockConfigError::NotImplemented)
-    }
-
-    fn get_float(&self, _key: &str) -> Result<f64, MockConfigError> {
-        Err(MockConfigError::NotImplemented)
+        if let Some(result) = self.get_integer_results.lock().unwrap().pop() {
+            result
+        } else {
+            Err(MockConfigError::NotImplemented)
+        }
     }
 
     fn get_boolean(&self, _key: &str) -> Result<bool, MockConfigError> {
-        Err(MockConfigError::NotImplemented)
+        if let Some(result) = self.get_bool_results.lock().unwrap().pop() {
+            result
+        } else {
+            Err(MockConfigError::NotImplemented)
+        }
+    }
+
+    fn get_float(&self, _key: &str) -> Result<f64, MockConfigError> {
+        if let Some(result) = self.get_float_results.lock().unwrap().pop() {
+            result
+        } else {
+            Err(MockConfigError::NotImplemented)
+        }
+    }
+
+    fn load_from_file(&self, _path: &str) -> Result<(), MockConfigError> {
+        if let Some(result) = self.load_results.lock().unwrap().pop() {
+            result
+        } else {
+            Err(MockConfigError::NotImplemented)
+        }
     }
 
     fn get_array(&self, _key: &str) -> Result<Vec<ConfigValue>, MockConfigError> {

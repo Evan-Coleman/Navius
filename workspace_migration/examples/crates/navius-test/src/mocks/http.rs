@@ -236,54 +236,65 @@ impl HttpResponse {
     }
 }
 
-/// HTTP client for making HTTP requests
+/// HTTP client for making requests
 pub trait HttpClient: Send + Sync {
-    /// Send an HTTP request
+    /// Send a request with the specified method, URL, headers, and body
     fn request(
         &self,
         method: HttpMethod,
         url: &str,
         headers: Option<HashMap<String, String>>,
-        body: Option<Vec<u8>>,
-    ) -> HttpResult<HttpResponse>;
+        body: Option<String>,
+    ) -> Result<HttpResponse, MockHttpError>;
 
-    /// Send a GET request
-    fn get(&self, url: &str, headers: Option<HashMap<String, String>>) -> HttpResult<HttpResponse>;
+    /// Send a GET request to the specified URL with optional headers
+    fn get(
+        &self,
+        url: &str,
+        headers: Option<HashMap<String, String>>,
+    ) -> Result<HttpResponse, MockHttpError>;
 
-    /// Send a POST request
+    /// Send a POST request to the specified URL with optional headers and body
     fn post(
         &self,
         url: &str,
         headers: Option<HashMap<String, String>>,
-        body: Option<Vec<u8>>,
-    ) -> HttpResult<HttpResponse>;
+        body: Option<String>,
+    ) -> Result<HttpResponse, MockHttpError>;
 
-    /// Send a PUT request
+    /// Send a PUT request to the specified URL with optional headers and body
     fn put(
         &self,
         url: &str,
         headers: Option<HashMap<String, String>>,
-        body: Option<Vec<u8>>,
-    ) -> HttpResult<HttpResponse>;
+        body: Option<String>,
+    ) -> Result<HttpResponse, MockHttpError>;
 
-    /// Send a DELETE request
+    /// Send a DELETE request to the specified URL with optional headers
     fn delete(
         &self,
         url: &str,
         headers: Option<HashMap<String, String>>,
-    ) -> HttpResult<HttpResponse>;
+    ) -> Result<HttpResponse, MockHttpError>;
 
-    /// Send a PATCH request
+    /// Send a PATCH request to the specified URL with optional headers and body
     fn patch(
         &self,
         url: &str,
         headers: Option<HashMap<String, String>>,
-        body: Option<Vec<u8>>,
-    ) -> HttpResult<HttpResponse>;
+        body: Option<String>,
+    ) -> Result<HttpResponse, MockHttpError>;
 }
 
 #[derive(Debug, Default)]
-pub struct MockHttpClient {}
+pub struct MockHttpClient {
+    request_results: std::sync::Mutex<Vec<Result<HttpResponse, MockHttpError>>>,
+    get_results: std::sync::Mutex<Vec<Result<HttpResponse, MockHttpError>>>,
+    post_results: std::sync::Mutex<Vec<Result<HttpResponse, MockHttpError>>>,
+    put_results: std::sync::Mutex<Vec<Result<HttpResponse, MockHttpError>>>,
+    delete_results: std::sync::Mutex<Vec<Result<HttpResponse, MockHttpError>>>,
+    patch_results: std::sync::Mutex<Vec<Result<HttpResponse, MockHttpError>>>,
+}
 
 impl MockHttpClient {
     /// Create a new mock HTTP client
@@ -299,134 +310,69 @@ impl MockHttpClient {
         Ok(arc_self)
     }
 
-    /// Create a context for request method
-    pub fn request_context(
-        &self,
-    ) -> MockGuard<
-        '_,
-        dyn Fn(
-            HttpMethod,
-            &str,
-            Option<HashMap<String, String>>,
-            Option<Vec<u8>>,
-        ) -> HttpResult<HttpResponse>,
-    > {
-        self.expect_request()
-    }
-
-    /// Create a context for get method
-    pub fn get_context(
-        &self,
-    ) -> MockGuard<'_, dyn Fn(&str, Option<HashMap<String, String>>) -> HttpResult<HttpResponse>>
-    {
-        self.expect_get()
-    }
-
-    /// Create a context for post method
-    pub fn post_context(
-        &self,
-    ) -> MockGuard<
-        '_,
-        dyn Fn(&str, Option<HashMap<String, String>>, Option<Vec<u8>>) -> HttpResult<HttpResponse>,
-    > {
-        self.expect_post()
-    }
-
-    /// Create a context for put method
-    pub fn put_context(
-        &self,
-    ) -> MockGuard<
-        '_,
-        dyn Fn(&str, Option<HashMap<String, String>>, Option<Vec<u8>>) -> HttpResult<HttpResponse>,
-    > {
-        self.expect_put()
-    }
-
-    /// Create a context for delete method
-    pub fn delete_context(
-        &self,
-    ) -> MockGuard<'_, dyn Fn(&str, Option<HashMap<String, String>>) -> HttpResult<HttpResponse>>
-    {
-        self.expect_delete()
-    }
-
-    /// Create a context for patch method
-    pub fn patch_context(
-        &self,
-    ) -> MockGuard<
-        '_,
-        dyn Fn(&str, Option<HashMap<String, String>>, Option<Vec<u8>>) -> HttpResult<HttpResponse>,
-    > {
-        self.expect_patch()
-    }
-
-    /// Set up expectation for a request operation
+    /// Expect request to be called with specific parameters
     pub fn expect_request(
         &self,
-        method: HttpMethod,
-        url: &str,
-        headers: Option<HashMap<String, String>>,
-        body: Option<Vec<u8>>,
-        result: HttpResult<HttpResponse>,
+        _method: HttpMethod,
+        _url: &str,
+        _headers: Option<HashMap<String, String>>,
+        _body: Option<String>,
+        result: Result<HttpResponse, MockHttpError>,
     ) {
-        let _url_clone = url.to_string();
-        let _headers_clone = headers.clone();
-        let _body_clone = body.clone();
-
-        // No-op implementation for mock
+        self.request_results.lock().unwrap().push(result);
     }
 
-    /// Set up expectation for a GET request
+    /// Expect GET request to be called with a specific URL
     pub fn expect_get(
         &self,
-        url: &str,
-        headers: Option<HashMap<String, String>>,
-        result: HttpResult<HttpResponse>,
+        _url: &str,
+        _headers: Option<HashMap<String, String>>,
+        result: Result<HttpResponse, MockHttpError>,
     ) {
-        self.expect_request(HttpMethod::Get, url, headers, None, result);
+        self.get_results.lock().unwrap().push(result);
     }
 
-    /// Set up expectation for a POST request
+    /// Expect POST request to be called with a specific URL and body
     pub fn expect_post(
         &self,
-        url: &str,
-        headers: Option<HashMap<String, String>>,
-        body: Option<Vec<u8>>,
-        result: HttpResult<HttpResponse>,
+        _url: &str,
+        _headers: Option<HashMap<String, String>>,
+        _body: Option<String>,
+        result: Result<HttpResponse, MockHttpError>,
     ) {
-        self.expect_request(HttpMethod::Post, url, headers, body, result);
+        self.post_results.lock().unwrap().push(result);
     }
 
-    /// Set up expectation for a PUT request
+    /// Expect PUT request to be called with a specific URL and body
     pub fn expect_put(
         &self,
-        url: &str,
-        headers: Option<HashMap<String, String>>,
-        body: Option<Vec<u8>>,
-        result: HttpResult<HttpResponse>,
+        _url: &str,
+        _headers: Option<HashMap<String, String>>,
+        _body: Option<String>,
+        result: Result<HttpResponse, MockHttpError>,
     ) {
-        self.expect_request(HttpMethod::Put, url, headers, body, result);
+        self.put_results.lock().unwrap().push(result);
     }
 
-    /// Set up expectation for a DELETE request
+    /// Expect DELETE request to be called with a specific URL
     pub fn expect_delete(
         &self,
-        url: &str,
-        headers: Option<HashMap<String, String>>,
-        result: HttpResult<HttpResponse>,
+        _url: &str,
+        _headers: Option<HashMap<String, String>>,
+        result: Result<HttpResponse, MockHttpError>,
     ) {
-        self.expect_request(HttpMethod::Delete, url, headers, None, result);
+        self.delete_results.lock().unwrap().push(result);
     }
 
-    /// Set up expectation for a PATCH request
+    /// Expect PATCH request to be called with a specific URL and body
     pub fn expect_patch(
         &self,
-        url: &str,
-        headers: Option<HashMap<String, String>>,
-        body: Option<Vec<u8>>,
-        result: HttpResult<HttpResponse>,
+        _url: &str,
+        _headers: Option<HashMap<String, String>>,
+        _body: Option<String>,
+        result: Result<HttpResponse, MockHttpError>,
     ) {
-        self.expect_request(HttpMethod::Patch, url, headers, body, result);
+        self.patch_results.lock().unwrap().push(result);
     }
 }
 
@@ -436,52 +382,76 @@ impl HttpClient for MockHttpClient {
         _method: HttpMethod,
         _url: &str,
         _headers: Option<HashMap<String, String>>,
-        _body: Option<Vec<u8>>,
-    ) -> HttpResult<HttpResponse> {
-        Err(MockHttpError::NotImplemented.into())
+        _body: Option<String>,
+    ) -> Result<HttpResponse, MockHttpError> {
+        if let Some(result) = self.request_results.lock().unwrap().pop() {
+            result
+        } else {
+            Err(MockHttpError::NotImplemented)
+        }
     }
 
     fn get(
         &self,
         _url: &str,
         _headers: Option<HashMap<String, String>>,
-    ) -> HttpResult<HttpResponse> {
-        Err(MockHttpError::NotImplemented.into())
+    ) -> Result<HttpResponse, MockHttpError> {
+        if let Some(result) = self.get_results.lock().unwrap().pop() {
+            result
+        } else {
+            Err(MockHttpError::NotImplemented)
+        }
     }
 
     fn post(
         &self,
         _url: &str,
         _headers: Option<HashMap<String, String>>,
-        _body: Option<Vec<u8>>,
-    ) -> HttpResult<HttpResponse> {
-        Err(MockHttpError::NotImplemented.into())
+        _body: Option<String>,
+    ) -> Result<HttpResponse, MockHttpError> {
+        if let Some(result) = self.post_results.lock().unwrap().pop() {
+            result
+        } else {
+            Err(MockHttpError::NotImplemented)
+        }
     }
 
     fn put(
         &self,
         _url: &str,
         _headers: Option<HashMap<String, String>>,
-        _body: Option<Vec<u8>>,
-    ) -> HttpResult<HttpResponse> {
-        Err(MockHttpError::NotImplemented.into())
+        _body: Option<String>,
+    ) -> Result<HttpResponse, MockHttpError> {
+        if let Some(result) = self.put_results.lock().unwrap().pop() {
+            result
+        } else {
+            Err(MockHttpError::NotImplemented)
+        }
     }
 
     fn delete(
         &self,
         _url: &str,
         _headers: Option<HashMap<String, String>>,
-    ) -> HttpResult<HttpResponse> {
-        Err(MockHttpError::NotImplemented.into())
+    ) -> Result<HttpResponse, MockHttpError> {
+        if let Some(result) = self.delete_results.lock().unwrap().pop() {
+            result
+        } else {
+            Err(MockHttpError::NotImplemented)
+        }
     }
 
     fn patch(
         &self,
         _url: &str,
         _headers: Option<HashMap<String, String>>,
-        _body: Option<Vec<u8>>,
-    ) -> HttpResult<HttpResponse> {
-        Err(MockHttpError::NotImplemented.into())
+        _body: Option<String>,
+    ) -> Result<HttpResponse, MockHttpError> {
+        if let Some(result) = self.patch_results.lock().unwrap().pop() {
+            result
+        } else {
+            Err(MockHttpError::NotImplemented)
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 use std::any::Any;
-use std::fmt;
+use std::collections::HashMap;
+use std::fmt::{self, Debug};
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
 
@@ -98,6 +99,39 @@ pub enum ReturnValue<T> {
 
     /// Type marker
     _Phantom(PhantomData<T>),
+}
+
+/// Types of configuration values
+#[derive(Clone)]
+pub enum ConfigValue {
+    /// String value
+    String(String),
+    /// Integer value
+    Integer(i64),
+    /// Float value
+    Float(f64),
+    /// Boolean value
+    Boolean(bool),
+    /// Array of values
+    Array(Vec<ConfigValue>),
+    /// Object (map) of values
+    Object(HashMap<String, ConfigValue>),
+    /// A function that returns a value
+    Function(Box<dyn Fn(&[String]) -> Box<dyn Any + Send + Sync> + Send + Sync>),
+}
+
+impl Debug for ConfigValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConfigValue::String(s) => write!(f, "String({:?})", s),
+            ConfigValue::Integer(i) => write!(f, "Integer({})", i),
+            ConfigValue::Float(fl) => write!(f, "Float({})", fl),
+            ConfigValue::Boolean(b) => write!(f, "Boolean({})", b),
+            ConfigValue::Array(a) => write!(f, "Array({:?})", a),
+            ConfigValue::Object(o) => write!(f, "Object({:?})", o),
+            ConfigValue::Function(_) => write!(f, "Function(<fn>)"),
+        }
+    }
 }
 
 impl<T> MockConfigImpl<T> {
