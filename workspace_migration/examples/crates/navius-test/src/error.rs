@@ -40,6 +40,36 @@ pub enum TestError {
 
     /// A generic error occurred
     Other(Box<dyn std::error::Error + Send + Sync>),
+
+    /// Create a validation error with a message
+    ValidationError(String),
+
+    /// Create an assertion error with a message
+    AssertionError(String),
+
+    /// Setup error with message
+    ExecutionError(String),
+
+    /// Teardown error with message
+    MissingComponent(String),
+
+    /// Missing resource error
+    MissingResource(String),
+
+    /// Invalid configuration error
+    InvalidConfiguration(String),
+
+    /// Conversion error
+    ConversionError(String),
+
+    /// Configuration error
+    ConfigurationError(String),
+
+    /// Concurrency error
+    ConcurrencyError(String),
+
+    /// Timeout error
+    TimeoutError(String),
 }
 
 impl TestError {
@@ -93,6 +123,36 @@ impl TestError {
     pub fn error_context_error<S: Into<String>>(message: S) -> Self {
         TestError::ErrorContextError(message.into())
     }
+
+    /// Create a validation error with a message
+    pub fn validation_error<S: Into<String>>(message: S) -> Self {
+        Self::ValidationError(message.into())
+    }
+
+    /// Create an assertion error with a message
+    pub fn assertion_error<S: Into<String>>(message: S) -> Self {
+        Self::AssertionError(message.into())
+    }
+
+    /// Create a conversion error with a message
+    pub fn conversion_error<S: Into<String>>(message: S) -> Self {
+        Self::ConversionError(message.into())
+    }
+
+    /// Create a configuration error with a message
+    pub fn configuration_error<S: Into<String>>(message: S) -> Self {
+        Self::ConfigurationError(message.into())
+    }
+
+    /// Create a concurrency error with a message
+    pub fn concurrency_error<S: Into<String>>(message: S) -> Self {
+        Self::ConcurrencyError(message.into())
+    }
+
+    /// Create a timeout error with a message
+    pub fn timeout_error<S: Into<String>>(message: S) -> Self {
+        Self::TimeoutError(message.into())
+    }
 }
 
 impl fmt::Display for TestError {
@@ -109,6 +169,18 @@ impl fmt::Display for TestError {
             TestError::MockError(msg) => write!(f, "Mock error: {}", msg),
             TestError::IoError(err) => write!(f, "IO error: {}", err),
             TestError::Other(err) => write!(f, "Error: {}", err),
+            TestError::ValidationError(msg) => write!(f, "Validation error: {}", msg),
+            TestError::AssertionError(msg) => write!(f, "Assertion error: {}", msg),
+            TestError::ExecutionError(msg) => write!(f, "Execution error: {}", msg),
+            TestError::MissingComponent(msg) => write!(f, "Missing component error: {}", msg),
+            TestError::MissingResource(msg) => write!(f, "Missing resource error: {}", msg),
+            TestError::InvalidConfiguration(msg) => {
+                write!(f, "Invalid configuration error: {}", msg)
+            }
+            TestError::ConversionError(msg) => write!(f, "Conversion error: {}", msg),
+            TestError::ConfigurationError(msg) => write!(f, "Configuration error: {}", msg),
+            TestError::ConcurrencyError(msg) => write!(f, "Concurrency error: {}", msg),
+            TestError::TimeoutError(msg) => write!(f, "Timeout error: {}", msg),
         }
     }
 }

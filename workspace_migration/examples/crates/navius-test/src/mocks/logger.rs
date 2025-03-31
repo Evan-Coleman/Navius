@@ -181,7 +181,7 @@ impl MockLogger {
                 return Ok(());
             }
         }
-        Err(crate::error::TestError::AssertionFailed(format!(
+        Err(crate::error::TestError::execution_error(format!(
             "No log entry with level {:?} and message '{}' was found",
             level, message
         )))
@@ -202,14 +202,14 @@ impl MockLogger {
                     if ctx_val == context_value {
                         return Ok(());
                     }
-                    return Err(crate::error::TestError::AssertionFailed(format!(
+                    return Err(crate::error::TestError::execution_error(format!(
                         "Log entry with level {:?} and message '{}' has context key '{}' but value is '{}', expected '{}'",
                         level, message, context_key, ctx_val, context_value
                     )));
                 }
             }
         }
-        Err(crate::error::TestError::AssertionFailed(format!(
+        Err(crate::error::TestError::execution_error(format!(
             "No log entry with level {:?}, message '{}', and context key '{}' was found",
             level, message, context_key
         )))
@@ -223,7 +223,7 @@ impl MockLogger {
                 return Ok(());
             }
         }
-        Err(crate::error::TestError::AssertionFailed(format!(
+        Err(crate::error::TestError::execution_error(format!(
             "No log entry containing '{}' was found",
             substring
         )))
@@ -236,7 +236,7 @@ impl MockLogger {
             .iter()
             .any(|log| log.level == level && log.message.contains(message))
         {
-            return Err(TestError::AssertionFailed(format!(
+            return Err(TestError::execution_error(format!(
                 "Log with level {:?} and message containing '{}' was found but should not be present",
                 level, message
             )));
@@ -245,23 +245,19 @@ impl MockLogger {
     }
 
     /// Assert that a context key was logged
-    pub fn assert_context_logged(&self, key: &str) -> crate::error::TestResult<()> {
+    pub fn assert_context_logged(&self, key: &str) -> TestResult<()> {
         let logs = self.captured_logs.lock().unwrap();
         if logs.iter().any(|log| log.context.contains_key(key)) {
             return Ok(());
         }
-        Err(crate::error::TestError::assertion_failed(format!(
+        Err(crate::error::TestError::execution_error(format!(
             "Expected context key '{}' not found in logs",
             key
         )))
     }
 
     /// Assert that a context key with a specific value was logged
-    pub fn assert_context_value_logged(
-        &self,
-        key: &str,
-        value: &str,
-    ) -> crate::error::TestResult<()> {
+    pub fn assert_context_value_logged(&self, key: &str, value: &str) -> TestResult<()> {
         let logs = self.captured_logs.lock().unwrap();
         if logs.iter().any(|log| match log.context.get(key) {
             Some(v) => v == value,
@@ -269,35 +265,77 @@ impl MockLogger {
         }) {
             return Ok(());
         }
-        Err(crate::error::TestError::assertion_failed(format!(
+        Err(crate::error::TestError::execution_error(format!(
             "Expected context key '{}' with value '{}' not found in logs",
             key, value
         )))
     }
 
     /// Assert that logs at a specific level are present
-    pub fn assert_level(&self, level: LogLevel, count: usize) -> TestResult<()> {
+    pub fn assert_level(&self, level: LogLevel, expected_count: usize) -> TestResult<()> {
         let logs = self.captured_logs.lock().unwrap();
         let actual_count = logs.iter().filter(|log| log.level == level).count();
-        if actual_count == count {
+        if actual_count == expected_count {
             return Ok(());
         }
-        Err(TestError::AssertionFailed(format!(
+        Err(crate::error::TestError::execution_error(format!(
             "Expected {} log entries with level {:?}, but found {}",
-            count, level, actual_count
+            expected_count, level, actual_count
         )))
     }
 
     /// Assert that the count of logs matches the expected count
-    pub fn assert_log_count(&self, expected: usize) -> TestResult<()> {
+    pub fn assert_log_count(&self, expected_count: usize) -> TestResult<()> {
         let logs = self.captured_logs.lock().unwrap();
-        if logs.len() == expected {
+        if logs.len() == expected_count {
             return Ok(());
         }
-        Err(TestError::AssertionFailed(format!(
+        Err(crate::error::TestError::execution_error(format!(
             "Expected {} log entries, but found {}",
-            expected,
+            expected_count,
             logs.len()
+        )))
+    }
+
+    /// Asserts that logs contain a specific message
+    pub fn assert_contains_message(&self, message: &str) -> TestResult<()> {
+        let logs = self.captured_logs.lock().unwrap();
+        if logs.iter().any(|log| log.message.contains(message)) {
+            return Ok(());
+        }
+        Err(crate::error::TestError::execution_error(format!(
+            "No log entry contains message: {}",
+            message
+        )))
+    }
+
+    /// Asserts that logs contain a specific key in the context
+    pub fn assert_contains_context_key(&self, key: &str) -> TestResult<()> {
+        let logs = self.captured_logs.lock().unwrap();
+        if logs.iter().any(|log| log.context.contains_key(key)) {
+            return Ok(());
+        }
+        Err(crate::error::TestError::execution_error(format!(
+            "Expected context key '{}' not found in logs",
+            key
+        )))
+    }
+
+    /// Asserts that logs contain a specific key-value pair in the context
+    pub fn assert_contains_context_value(&self, key: &str, value: &str) -> TestResult<()> {
+        let logs = self.captured_logs.lock().unwrap();
+        if logs.iter().any(|log| {
+            if let Some(v) = log.context.get(key) {
+                v == value
+            } else {
+                false
+            }
+        }) {
+            return Ok(());
+        }
+        Err(crate::error::TestError::execution_error(format!(
+            "Expected context key '{}' with value '{}' not found in logs",
+            key, value
         )))
     }
 

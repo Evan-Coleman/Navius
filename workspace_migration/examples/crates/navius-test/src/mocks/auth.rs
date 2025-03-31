@@ -235,35 +235,35 @@ impl MockAuthProvider {
     /// Register the mock with the registry
     pub fn register(self, registry: &MockRegistry) -> TestResult<Arc<Self>> {
         let arc_self = Arc::new(self);
-        registry.register::<dyn AuthProvider, Self>(arc_self.clone())?;
+        registry.register_mock::<dyn AuthProvider>(arc_self.clone());
         Ok(arc_self)
     }
 
-    /// Expect authenticate to be called with specific credentials
-    pub fn expect_authenticate(
+    /// Expect login to be called with specific credentials
+    pub fn expect_login(
         &self,
         username: &str,
         password: &str,
-        result: Result<(UserIdentity, AuthToken), MockAuthError>,
+        result: Result<UserToken, MockAuthError>,
     ) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let username_clone = username.to_string();
         let password_clone = password.to_string();
 
-        self_mut
-            .expect_authenticate()
-            .with(predicate::eq(username), predicate::eq(password))
+        let mut expectations = self.AuthProvider_expectations.lock().unwrap();
+        expectations
+            .expect_login()
+            .with(predicate::eq(username_clone), predicate::eq(password_clone))
             .return_once(move |_, _| result);
     }
 
     /// Expect verify_token to be called with a specific token
     pub fn expect_verify_token(&self, token: &str, result: Result<UserIdentity, MockAuthError>) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let token_clone = token.to_string();
 
-        self_mut
+        let mut expectations = self.AuthProvider_expectations.lock().unwrap();
+        expectations
             .expect_verify_token()
-            .with(predicate::eq(token))
+            .with(predicate::eq(token_clone))
             .return_once(move |_| result);
     }
 
@@ -271,74 +271,70 @@ impl MockAuthProvider {
     pub fn expect_refresh_token(
         &self,
         refresh_token: &str,
-        result: Result<AuthToken, MockAuthError>,
+        result: Result<UserToken, MockAuthError>,
     ) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let refresh_token_clone = refresh_token.to_string();
 
-        self_mut
+        let mut expectations = self.AuthProvider_expectations.lock().unwrap();
+        expectations
             .expect_refresh_token()
-            .with(predicate::eq(refresh_token))
+            .with(predicate::eq(refresh_token_clone))
             .return_once(move |_| result);
     }
 
     /// Expect get_user to be called with a specific user ID
     pub fn expect_get_user(&self, user_id: &str, result: Result<UserIdentity, MockAuthError>) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let user_id_clone = user_id.to_string();
 
-        self_mut
+        let mut expectations = self.AuthProvider_expectations.lock().unwrap();
+        expectations
             .expect_get_user()
-            .with(predicate::eq(user_id))
+            .with(predicate::eq(user_id_clone))
             .return_once(move |_| result);
     }
 
-    /// Expect has_permission to be called with specific parameters
-    pub fn expect_has_permission(
+    /// Expect check_permission to be called with specific parameters
+    pub fn expect_check_permission(
         &self,
         user_id: &str,
         resource: &str,
         action: &str,
         result: Result<bool, MockAuthError>,
     ) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let user_id_clone = user_id.to_string();
         let resource_clone = resource.to_string();
         let action_clone = action.to_string();
 
-        self_mut
-            .expect_has_permission()
+        let mut expectations = self.AuthProvider_expectations.lock().unwrap();
+        expectations
+            .expect_check_permission()
             .with(
-                predicate::eq(user_id),
-                predicate::eq(resource),
-                predicate::eq(action),
+                predicate::eq(user_id_clone),
+                predicate::eq(resource_clone),
+                predicate::eq(action_clone),
             )
             .return_once(move |_, _, _| result);
     }
 
-    /// Expect get_permissions to be called with a specific user ID
-    pub fn expect_get_permissions(
-        &self,
-        user_id: &str,
-        result: Result<Vec<Permission>, MockAuthError>,
-    ) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
+    /// Expect get_roles to be called with a specific user ID
+    pub fn expect_get_roles(&self, user_id: &str, result: Result<Vec<String>, MockAuthError>) {
         let user_id_clone = user_id.to_string();
 
-        self_mut
-            .expect_get_permissions()
-            .with(predicate::eq(user_id))
+        let mut expectations = self.AuthProvider_expectations.lock().unwrap();
+        expectations
+            .expect_get_roles()
+            .with(predicate::eq(user_id_clone))
             .return_once(move |_| result);
     }
 
     /// Expect logout to be called with a specific token
     pub fn expect_logout(&self, token: &str, result: Result<(), MockAuthError>) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let token_clone = token.to_string();
 
-        self_mut
+        let mut expectations = self.AuthProvider_expectations.lock().unwrap();
+        expectations
             .expect_logout()
-            .with(predicate::eq(token))
+            .with(predicate::eq(token_clone))
             .return_once(move |_| result);
     }
 }
@@ -397,29 +393,29 @@ impl MockRbacProvider {
     /// Register the mock with the registry
     pub fn register(self, registry: &MockRegistry) -> TestResult<Arc<Self>> {
         let arc_self = Arc::new(self);
-        registry.register::<dyn RbacProvider, Self>(arc_self.clone())?;
+        registry.register_mock::<dyn RbacProvider>(arc_self.clone());
         Ok(arc_self)
     }
 
-    /// Expect role_has_permission to be called with specific parameters
-    pub fn expect_role_has_permission(
+    /// Expect check_role_permission to be called with specific parameters
+    pub fn expect_check_role_permission(
         &self,
         role: &str,
         resource: &str,
         action: &str,
         result: Result<bool, MockAuthError>,
     ) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let role_clone = role.to_string();
         let resource_clone = resource.to_string();
         let action_clone = action.to_string();
 
-        self_mut
-            .expect_role_has_permission()
+        let mut expectations = self.RbacProvider_expectations.lock().unwrap();
+        expectations
+            .expect_check_role_permission()
             .with(
-                predicate::eq(role),
-                predicate::eq(resource),
-                predicate::eq(action),
+                predicate::eq(role_clone),
+                predicate::eq(resource_clone),
+                predicate::eq(action_clone),
             )
             .return_once(move |_, _, _| result);
     }
@@ -430,12 +426,12 @@ impl MockRbacProvider {
         role: &str,
         result: Result<Vec<Permission>, MockAuthError>,
     ) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let role_clone = role.to_string();
 
-        self_mut
+        let mut expectations = self.RbacProvider_expectations.lock().unwrap();
+        expectations
             .expect_get_role_permissions()
-            .with(predicate::eq(role))
+            .with(predicate::eq(role_clone))
             .return_once(move |_| result);
     }
 }
@@ -462,7 +458,7 @@ mod tests {
 
         let token = AuthToken::new("test-token", "Bearer", 3600);
 
-        auth.expect_authenticate("testuser", "password", Ok((user.clone(), token.clone())));
+        auth.expect_login("testuser", "password", Ok((user.clone(), token.clone())));
 
         auth.expect_verify_token("test-token", Ok(user.clone()));
 

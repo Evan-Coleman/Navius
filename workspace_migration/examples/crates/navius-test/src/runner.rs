@@ -27,6 +27,9 @@ pub trait IntegrationTest: Send + Sync {
 
     /// Clean up the test environment
     fn cleanup(&self, context: &IntegrationContext) -> TestResult<()>;
+
+    /// Box the test to create an owned version we can move into the thread
+    fn box_clone(&self) -> Box<dyn IntegrationTest + Send>;
 }
 
 /// Test result report
@@ -159,81 +162,58 @@ impl TestRunner {
     /// Run a single test and return a test report
     pub fn run_test(&self, test: &dyn IntegrationTest) -> TestResult<TestReport> {
         let start_time = Instant::now();
+        let test_name = test.name().to_string();
 
+        // Use the correct timeout from the config
+        let timeout = Duration::from_secs(self.config.timeouts.test_timeout_secs);
+
+        // Use the integration test config from the TestConfig
         let integration_config = IntegrationTestConfig {
             name: test.name().to_string(),
             test_dir: self.config.resources.base_dir.clone(),
             env_vars: self.config.environment.variables.clone(),
-            timeout: Some(Duration::from_secs(self.config.timeouts.test_timeout_secs)),
+            timeout: Some(timeout),
             verify_mocks: self.config.mocks.verify_expectations,
             cleanup_resources: self.config.resources.cleanup,
         };
 
-        let mut context = IntegrationContext::new(integration_config)?;
+        // Create the context here
+        let context = IntegrationContext::new(integration_config)?;
 
-        // Set up the test
-        if let Err(e) = test.setup(&mut context) {
-            let duration = start_time.elapsed();
-            return Ok(TestReport::failure(
-                test.name(),
-                format!("Test setup failed: {}", e),
-                duration,
-            ));
-        }
+        // Box clone the test to create an owned version
+        let boxed_test = test.box_clone();
+
+        let (tx, rx) = std::sync::mpsc::channel::<TestResult<()>>();
+
+        let handle = std::thread::spawn(move || {
+            let result = boxed_test.run(&context);
+            let _ = tx.send(result);
+        });
 
         // Run the test
-        let run_result = if let Some(timeout) =
-            Some(Duration::from_secs(self.config.timeouts.test_timeout_secs))
-        {
-            let (tx, rx) = std::sync::mpsc::channel();
-
-            let test_ref = test;
-            let context_ref = &context;
-
-            let handle = std::thread::spawn(move || {
-                let result = test_ref.run(context_ref);
-                let _ = tx.send(result);
-            });
-
-            match rx.recv_timeout(timeout) {
-                Ok(result) => result,
-                Err(_) => {
-                    let _ = handle.join();
-                    Err(TestError::execution_error(format!(
-                        "Test '{}' timed out after {} seconds",
-                        test.name(),
-                        timeout.as_secs()
-                    )))
-                }
+        let run_result = match rx.recv_timeout(timeout) {
+            Ok(result) => result,
+            Err(_) => {
+                let _ = handle.join();
+                Err(TestError::execution_error(format!(
+                    "Test '{}' timed out after {:?}",
+                    test_name, timeout
+                )))
             }
-        } else {
-            test.run(&context)
         };
 
-        // Clean up the test
-        let cleanup_result = test.cleanup(&context);
+        // Create the report
+        let end_time = Instant::now();
+        let duration = end_time.duration_since(start_time);
 
-        let duration = start_time.elapsed();
+        let report = TestReport {
+            name: test_name,
+            passed: run_result.is_ok(),
+            info: run_result.err().map(|e| format!("{}", e)),
+            duration,
+        };
 
-        // Create the test report
-        match run_result {
-            Ok(_) => {
-                if let Err(e) = cleanup_result {
-                    Ok(TestReport::failure(
-                        test.name(),
-                        format!("Test cleanup failed: {}", e),
-                        duration,
-                    ))
-                } else {
-                    Ok(TestReport::success(test.name(), duration))
-                }
-            }
-            Err(e) => Ok(TestReport::failure(
-                test.name(),
-                format!("Test failed: {}", e),
-                duration,
-            )),
-        }
+        Ok(report)
     }
 
     /// Print a test report to stdout
@@ -316,6 +296,16 @@ impl IntegrationTest for ClosureTest {
 
     fn cleanup(&self, context: &IntegrationContext) -> TestResult<()> {
         (self.cleanup)(context)
+    }
+
+    /// Box the test to create an owned version we can move into the thread
+    fn box_clone(&self) -> Box<dyn IntegrationTest + Send> {
+        Box::new(ClosureTest {
+            name: self.name.clone(),
+            setup: self.setup.clone(),
+            test: self.test.clone(),
+            cleanup: self.cleanup.clone(),
+        })
     }
 }
 

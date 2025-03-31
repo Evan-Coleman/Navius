@@ -9,7 +9,7 @@ use crate::error::{TestError, TestResult};
 use crate::mock::MockRegistry;
 
 /// Error type for HTTP operations
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Clone)]
 pub enum MockHttpError {
     /// Network error
     #[error("Network error: {0}")]
@@ -286,18 +286,21 @@ pub trait HttpClient: Send + Sync {
 impl MockHttpClient {
     /// Create a new mock HTTP client
     pub fn new() -> Self {
-        let mock = Self::default();
-        mock
+        Self {
+            HttpClient_expectations: std::sync::Mutex::new(Box::new(
+                MockHttpClient_HttpClient::__mock_new(),
+            )),
+        }
     }
 
-    /// Register the mock with the registry
+    /// Register the mock with the mock registry
     pub fn register(self, registry: &MockRegistry) -> TestResult<Arc<Self>> {
-        let arc_self = Arc::new(self);
-        registry.register::<dyn HttpClient, Self>(arc_self.clone())?;
-        Ok(arc_self)
+        let arc = Arc::new(self);
+        registry.register_mock::<dyn HttpClient>(arc.clone());
+        Ok(arc)
     }
 
-    /// Expect a request with the specified method, URL, and headers
+    /// Set an expectation for a request with a specific method, URL, headers, and body
     pub fn expect_request(
         &self,
         method: HttpMethod,
@@ -306,62 +309,58 @@ impl MockHttpClient {
         body: Option<RequestBody>,
         response: Result<HttpResponse, MockHttpError>,
     ) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
-
-        let method_clone = method.clone();
         let url_clone = url.to_string();
         let headers_clone = headers.clone();
         let body_clone = body.clone();
+        let method_clone = method.clone();
+        let response_clone = response.clone();
 
-        self_mut
+        let mut expectations = self.HttpClient_expectations.lock().unwrap();
+        expectations
             .expect_request()
-            .with(predicate::function(move |m: &HttpMethod| {
-                *m == method_clone
-            }))
-            .with(predicate::function(move |u: &str| u == url_clone))
-            .with(predicate::function(
-                move |h: &Option<HashMap<String, String>>| match (&headers_clone, h) {
-                    (None, None) => true,
-                    (Some(expected), Some(actual)) => expected == actual,
-                    _ => false,
-                },
-            ))
-            .with(predicate::function(move |b: &Option<RequestBody>| {
-                match (&body_clone, b) {
-                    (None, None) => true,
-                    (Some(expected), Some(actual)) => expected == actual,
-                    _ => false,
-                }
-            }))
-            .return_once(move |_, _, _, _| response);
+            .withf(move |m, u, h, b| {
+                m == &method_clone
+                    && u == &url_clone
+                    && match (&headers_clone, h) {
+                        (None, None) => true,
+                        (Some(expected), Some(actual)) => expected == actual,
+                        _ => false,
+                    }
+                    && match (&body_clone, b) {
+                        (None, None) => true,
+                        (Some(expected), Some(actual)) => expected == actual,
+                        _ => false,
+                    }
+            })
+            .return_once(move |_, _, _, _| response_clone.clone());
     }
 
-    /// Expect a GET request
+    /// Set an expectation for a GET request with a specific URL and headers
     pub fn expect_get(
         &self,
         url: &str,
         headers: Option<HashMap<String, String>>,
         response: Result<HttpResponse, MockHttpError>,
     ) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
-
         let url_clone = url.to_string();
         let headers_clone = headers.clone();
+        let response_clone = response.clone();
 
-        self_mut
+        let mut expectations = self.HttpClient_expectations.lock().unwrap();
+        expectations
             .expect_get()
-            .with(predicate::function(move |u: &str| u == url_clone))
-            .with(predicate::function(
-                move |h: &Option<HashMap<String, String>>| match (&headers_clone, h) {
-                    (None, None) => true,
-                    (Some(expected), Some(actual)) => expected == actual,
-                    _ => false,
-                },
-            ))
-            .return_once(move |_, _| response);
+            .withf(move |u, h| {
+                u == &url_clone
+                    && match (&headers_clone, h) {
+                        (None, None) => true,
+                        (Some(expected), Some(actual)) => expected == actual,
+                        _ => false,
+                    }
+            })
+            .return_once(move |_, _| response_clone.clone());
     }
 
-    /// Expect a POST request
+    /// Set an expectation for a POST request with a specific URL, headers, and body
     pub fn expect_post(
         &self,
         url: &str,
@@ -369,33 +368,31 @@ impl MockHttpClient {
         body: Option<RequestBody>,
         response: Result<HttpResponse, MockHttpError>,
     ) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
-
         let url_clone = url.to_string();
         let headers_clone = headers.clone();
         let body_clone = body.clone();
+        let response_clone = response.clone();
 
-        self_mut
+        let mut expectations = self.HttpClient_expectations.lock().unwrap();
+        expectations
             .expect_post()
-            .with(predicate::function(move |u: &str| u == url_clone))
-            .with(predicate::function(
-                move |h: &Option<HashMap<String, String>>| match (&headers_clone, h) {
-                    (None, None) => true,
-                    (Some(expected), Some(actual)) => expected == actual,
-                    _ => false,
-                },
-            ))
-            .with(predicate::function(move |b: &Option<RequestBody>| {
-                match (&body_clone, b) {
-                    (None, None) => true,
-                    (Some(expected), Some(actual)) => expected == actual,
-                    _ => false,
-                }
-            }))
-            .return_once(move |_, _, _| response);
+            .withf(move |u, h, b| {
+                u == &url_clone
+                    && match (&headers_clone, h) {
+                        (None, None) => true,
+                        (Some(expected), Some(actual)) => expected == actual,
+                        _ => false,
+                    }
+                    && match (&body_clone, b) {
+                        (None, None) => true,
+                        (Some(expected), Some(actual)) => expected == actual,
+                        _ => false,
+                    }
+            })
+            .return_once(move |_, _, _| response_clone.clone());
     }
 
-    /// Expect a PUT request
+    /// Set an expectation for a PUT request with a specific URL, headers, and body
     pub fn expect_put(
         &self,
         url: &str,
@@ -403,58 +400,56 @@ impl MockHttpClient {
         body: Option<RequestBody>,
         response: Result<HttpResponse, MockHttpError>,
     ) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
-
         let url_clone = url.to_string();
         let headers_clone = headers.clone();
         let body_clone = body.clone();
+        let response_clone = response.clone();
 
-        self_mut
+        let mut expectations = self.HttpClient_expectations.lock().unwrap();
+        expectations
             .expect_put()
-            .with(predicate::function(move |u: &str| u == url_clone))
-            .with(predicate::function(
-                move |h: &Option<HashMap<String, String>>| match (&headers_clone, h) {
-                    (None, None) => true,
-                    (Some(expected), Some(actual)) => expected == actual,
-                    _ => false,
-                },
-            ))
-            .with(predicate::function(move |b: &Option<RequestBody>| {
-                match (&body_clone, b) {
-                    (None, None) => true,
-                    (Some(expected), Some(actual)) => expected == actual,
-                    _ => false,
-                }
-            }))
-            .return_once(move |_, _, _| response);
+            .withf(move |u, h, b| {
+                u == &url_clone
+                    && match (&headers_clone, h) {
+                        (None, None) => true,
+                        (Some(expected), Some(actual)) => expected == actual,
+                        _ => false,
+                    }
+                    && match (&body_clone, b) {
+                        (None, None) => true,
+                        (Some(expected), Some(actual)) => expected == actual,
+                        _ => false,
+                    }
+            })
+            .return_once(move |_, _, _| response_clone.clone());
     }
 
-    /// Expect a DELETE request
+    /// Set an expectation for a DELETE request with a specific URL and headers
     pub fn expect_delete(
         &self,
         url: &str,
         headers: Option<HashMap<String, String>>,
         response: Result<HttpResponse, MockHttpError>,
     ) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
-
         let url_clone = url.to_string();
         let headers_clone = headers.clone();
+        let response_clone = response.clone();
 
-        self_mut
+        let mut expectations = self.HttpClient_expectations.lock().unwrap();
+        expectations
             .expect_delete()
-            .with(predicate::function(move |u: &str| u == url_clone))
-            .with(predicate::function(
-                move |h: &Option<HashMap<String, String>>| match (&headers_clone, h) {
-                    (None, None) => true,
-                    (Some(expected), Some(actual)) => expected == actual,
-                    _ => false,
-                },
-            ))
-            .return_once(move |_, _| response);
+            .withf(move |u, h| {
+                u == &url_clone
+                    && match (&headers_clone, h) {
+                        (None, None) => true,
+                        (Some(expected), Some(actual)) => expected == actual,
+                        _ => false,
+                    }
+            })
+            .return_once(move |_, _| response_clone.clone());
     }
 
-    /// Expect a PATCH request
+    /// Set an expectation for a PATCH request with a specific URL, headers, and body
     pub fn expect_patch(
         &self,
         url: &str,
@@ -462,30 +457,28 @@ impl MockHttpClient {
         body: Option<RequestBody>,
         response: Result<HttpResponse, MockHttpError>,
     ) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
-
         let url_clone = url.to_string();
         let headers_clone = headers.clone();
         let body_clone = body.clone();
+        let response_clone = response.clone();
 
-        self_mut
+        let mut expectations = self.HttpClient_expectations.lock().unwrap();
+        expectations
             .expect_patch()
-            .with(predicate::function(move |u: &str| u == url_clone))
-            .with(predicate::function(
-                move |h: &Option<HashMap<String, String>>| match (&headers_clone, h) {
-                    (None, None) => true,
-                    (Some(expected), Some(actual)) => expected == actual,
-                    _ => false,
-                },
-            ))
-            .with(predicate::function(move |b: &Option<RequestBody>| {
-                match (&body_clone, b) {
-                    (None, None) => true,
-                    (Some(expected), Some(actual)) => expected == actual,
-                    _ => false,
-                }
-            }))
-            .return_once(move |_, _, _| response);
+            .withf(move |u, h, b| {
+                u == &url_clone
+                    && match (&headers_clone, h) {
+                        (None, None) => true,
+                        (Some(expected), Some(actual)) => expected == actual,
+                        _ => false,
+                    }
+                    && match (&body_clone, b) {
+                        (None, None) => true,
+                        (Some(expected), Some(actual)) => expected == actual,
+                        _ => false,
+                    }
+            })
+            .return_once(move |_, _, _| response_clone.clone());
     }
 }
 

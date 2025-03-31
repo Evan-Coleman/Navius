@@ -219,125 +219,121 @@ impl MockConfigurationProvider {
     /// Register the mock with the registry
     pub fn register(self, registry: &MockRegistry) -> TestResult<Arc<Self>> {
         let arc_self = Arc::new(self);
-        registry.register::<dyn ConfigurationProvider, Self>(arc_self.clone())?;
+        registry.register_mock::<dyn ConfigurationProvider>(arc_self.clone());
         Ok(arc_self)
     }
 
-    /// Set up the mock to expect a get operation for a string value
+    /// Set up the mock to expect a get_string operation
     pub fn expect_get_string(&self, key: &str, result: Result<String, MockConfigError>) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let key_clone = key.to_string();
 
-        self_mut
+        let mut expectations = self.ConfigurationProvider_expectations.lock().unwrap();
+        expectations
             .expect_get_string()
-            .with(predicate::eq(key))
+            .with(predicate::eq(key_clone))
             .return_once(move |_| result);
     }
 
-    /// Set up the mock to expect a get operation for an integer value
+    /// Set up the mock to expect a get_integer operation
     pub fn expect_get_integer(&self, key: &str, result: Result<i64, MockConfigError>) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let key_clone = key.to_string();
 
-        self_mut
+        let mut expectations = self.ConfigurationProvider_expectations.lock().unwrap();
+        expectations
             .expect_get_integer()
-            .with(predicate::eq(key))
+            .with(predicate::eq(key_clone))
             .return_once(move |_| result);
     }
 
-    /// Set up the mock to expect a get operation for a float value
+    /// Set up the mock to expect a get_float operation
     pub fn expect_get_float(&self, key: &str, result: Result<f64, MockConfigError>) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let key_clone = key.to_string();
 
-        self_mut
+        let mut expectations = self.ConfigurationProvider_expectations.lock().unwrap();
+        expectations
             .expect_get_float()
-            .with(predicate::eq(key))
+            .with(predicate::eq(key_clone))
             .return_once(move |_| result);
     }
 
-    /// Set up the mock to expect a get operation for a boolean value
+    /// Set up the mock to expect a get_boolean operation
     pub fn expect_get_boolean(&self, key: &str, result: Result<bool, MockConfigError>) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let key_clone = key.to_string();
 
-        self_mut
+        let mut expectations = self.ConfigurationProvider_expectations.lock().unwrap();
+        expectations
             .expect_get_boolean()
-            .with(predicate::eq(key))
+            .with(predicate::eq(key_clone))
             .return_once(move |_| result);
     }
 
-    /// Set up the mock to expect a get operation for an array value
+    /// Set up the mock to expect a get_array operation
     pub fn expect_get_array(&self, key: &str, result: Result<Vec<ConfigValue>, MockConfigError>) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let key_clone = key.to_string();
 
-        self_mut
+        let mut expectations = self.ConfigurationProvider_expectations.lock().unwrap();
+        expectations
             .expect_get_array()
-            .with(predicate::eq(key))
+            .with(predicate::eq(key_clone))
             .return_once(move |_| result);
     }
 
-    /// Set up the mock to expect a get operation for an object value
+    /// Set up the mock to expect a get_object operation
     pub fn expect_get_object(
         &self,
         key: &str,
         result: Result<HashMap<String, ConfigValue>, MockConfigError>,
     ) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let key_clone = key.to_string();
 
-        self_mut
+        let mut expectations = self.ConfigurationProvider_expectations.lock().unwrap();
+        expectations
             .expect_get_object()
-            .with(predicate::eq(key))
+            .with(predicate::eq(key_clone))
             .return_once(move |_| result);
     }
 
     /// Set up the mock to expect a has operation
     pub fn expect_has(&self, key: &str, result: Result<bool, MockConfigError>) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let key_clone = key.to_string();
 
-        self_mut
+        let mut expectations = self.ConfigurationProvider_expectations.lock().unwrap();
+        expectations
             .expect_has()
-            .with(predicate::eq(key))
+            .with(predicate::eq(key_clone))
             .return_once(move |_| result);
     }
 
     /// Set up the mock to expect a set operation
     pub fn expect_set(&self, key: &str, value: ConfigValue, result: Result<(), MockConfigError>) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let key_clone = key.to_string();
-        let value_clone = value;
 
-        self_mut
+        let mut expectations = self.ConfigurationProvider_expectations.lock().unwrap();
+        expectations
             .expect_set()
-            .with(
-                predicate::eq(key),
-                predicate::function(move |v: &ConfigValue| *v == value_clone),
-            )
+            .with(predicate::eq(key_clone), predicate::eq(value))
             .return_once(move |_, _| result);
     }
 
     /// Set up the mock to expect a load_from_file operation
     pub fn expect_load_from_file(&self, path: &str, result: Result<(), MockConfigError>) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let path_clone = path.to_string();
 
-        self_mut
+        let mut expectations = self.ConfigurationProvider_expectations.lock().unwrap();
+        expectations
             .expect_load_from_file()
-            .with(predicate::eq(path))
+            .with(predicate::eq(path_clone))
             .return_once(move |_| result);
     }
 
     /// Set up the mock to expect a save_to_file operation
     pub fn expect_save_to_file(&self, path: &str, result: Result<(), MockConfigError>) {
-        let self_mut = unsafe { &mut *(self as *const Self as *mut Self) };
         let path_clone = path.to_string();
 
-        self_mut
+        let mut expectations = self.ConfigurationProvider_expectations.lock().unwrap();
+        expectations
             .expect_save_to_file()
-            .with(predicate::eq(path))
+            .with(predicate::eq(path_clone))
             .return_once(move |_| result);
     }
 }
