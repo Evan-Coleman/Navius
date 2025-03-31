@@ -86,8 +86,11 @@ pub enum TestError {
     /// Mock not registered error
     MockNotRegistered(String),
 
-    /// IO error
-    IoError(std::io::Error),
+    /// Network error
+    NetworkError(String),
+
+    /// Resource error
+    ResourceError(String),
 }
 
 impl TestError {
@@ -192,7 +195,7 @@ impl fmt::Display for TestError {
             TestError::ValidationError(msg) => write!(f, "Validation error: {}", msg),
             TestError::AssertionError(msg) => write!(f, "Assertion error: {}", msg),
             TestError::ExecutionError(msg) => write!(f, "Execution error: {}", msg),
-            TestError::MissingComponent(msg) => write!(f, "Missing component error: {}", msg),
+            TestError::MissingComponent(msg) => write!(f, "Missing component: {}", msg),
             TestError::MissingResource(msg) => write!(f, "Missing resource error: {}", msg),
             TestError::InvalidConfiguration(msg) => {
                 write!(f, "Invalid configuration error: {}", msg)
@@ -206,6 +209,8 @@ impl fmt::Display for TestError {
             TestError::ErrorPropagationError(msg) => write!(f, "Error propagation error: {}", msg),
             TestError::ErrorContextError(msg) => write!(f, "Error context error: {}", msg),
             TestError::MockNotRegistered(msg) => write!(f, "Mock not registered: {}", msg),
+            TestError::NetworkError(msg) => write!(f, "Network error: {}", msg),
+            TestError::ResourceError(msg) => write!(f, "Resource error: {}", msg),
         }
     }
 }

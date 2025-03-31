@@ -37,6 +37,12 @@ pub enum MockConfigError {
     OtherError(String),
 }
 
+impl From<std::io::Error> for MockConfigError {
+    fn from(err: std::io::Error) -> Self {
+        MockConfigError::IoError(err.to_string())
+    }
+}
+
 /// Configuration value type
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConfigValue {

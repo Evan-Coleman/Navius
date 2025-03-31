@@ -179,7 +179,8 @@ impl<'a, T> MockExpectBuilder<'a, T> {
 
     /// Set up an expectation for a method call
     pub fn method<S: Into<String>>(&self, method: S) -> MethodExpectBuilder<'a, T> {
-        MethodExpectBuilder::new(self.registry, &self.mock_name, method)
+        let method_str = method.into();
+        MethodExpectBuilder::new(self.registry, &self.mock_name, &method_str)
     }
 }
 

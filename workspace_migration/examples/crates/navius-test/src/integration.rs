@@ -110,9 +110,10 @@ impl IntegrationContext {
 
     /// Set an environment variable for the test
     pub fn set_env_var(&self, key: &str, value: &str) -> TestResult<()> {
-        let mut env_vars = self.env_vars.lock().map_err(|_| {
-            TestError::concurrency_error("Failed to acquire lock for env vars".into())
-        })?;
+        let mut env_vars = self
+            .env_vars
+            .lock()
+            .map_err(|_| TestError::concurrency_error("Failed to acquire lock for env vars"))?;
         env_vars.insert(key.to_string(), value.to_string());
         unsafe {
             std::env::set_var(key, value);
@@ -123,7 +124,7 @@ impl IntegrationContext {
     /// Get an environment variable set for the test
     pub fn get_env_var(&self, key: &str) -> TestResult<Option<String>> {
         let env_vars = self.env_vars.lock().map_err(|_| {
-            TestError::concurrency_error("Failed to acquire read lock for env vars".into())
+            TestError::concurrency_error("Failed to acquire read lock for env vars")
         })?;
         Ok(env_vars.get(key).cloned())
     }
