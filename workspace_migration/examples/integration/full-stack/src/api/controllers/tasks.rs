@@ -15,88 +15,149 @@ use crate::domain::{Priority, TaskStatus};
 use crate::infrastructure::ServiceRegistry;
 
 /// Task listing query parameters
+///
+/// Used for filtering, sorting, and paginating task list requests.
 #[derive(Debug, Deserialize)]
 pub struct TaskListParams {
+    /// Pagination parameters (page number and items per page)
     #[serde(flatten)]
     pub pagination: PaginationParams,
+    /// Sorting parameters (field to sort by and sort order)
     #[serde(flatten)]
     pub sort: SortParams,
+    /// Filter by task status (Todo, InProgress, Review, Done)
     pub status: Option<String>,
+    /// Filter by task priority (High, Medium, Low)
     pub priority: Option<String>,
+    /// Filter by assigned user ID
     pub assigned_to: Option<String>,
+    /// Filter by creator user ID
     pub created_by: Option<String>,
+    /// Filter by category ID
     pub category_id: Option<String>,
-    pub tag_ids: Option<String>, // Comma-separated list of tag IDs
+    /// Filter by tag IDs (comma-separated list of UUID strings)
+    pub tag_ids: Option<String>,
+    /// Filter tasks with due date before this date (RFC3339 format)
     pub due_before: Option<String>,
+    /// Filter tasks with due date after this date (RFC3339 format)
     pub due_after: Option<String>,
 }
 
-/// Task response
+/// Task response data
+///
+/// Contains all task information returned by the API.
 #[derive(Debug, Serialize)]
 pub struct TaskResponse {
+    /// Unique task identifier
     pub id: String,
+    /// Task title
     pub title: String,
+    /// Detailed task description (optional)
     pub description: Option<String>,
+    /// Current task status (Todo, InProgress, Review, Done)
     pub status: String,
+    /// Task priority (High, Medium, Low)
     pub priority: String,
+    /// Task due date in RFC3339 format (optional)
     pub due_date: Option<String>,
+    /// User ID of person assigned to the task (optional)
     pub assigned_to: Option<String>,
+    /// User ID of person who created the task
     pub created_by: String,
+    /// Category ID the task belongs to (optional)
     pub category_id: Option<String>,
+    /// List of tags associated with the task
     pub tags: Vec<String>,
+    /// Task creation timestamp in RFC3339 format
     pub created_at: String,
+    /// Task last update timestamp in RFC3339 format
     pub updated_at: String,
 }
 
-/// Comment response
+/// Comment response data
+///
+/// Contains comment information returned by the API.
 #[derive(Debug, Serialize)]
 pub struct CommentResponse {
+    /// Unique comment identifier
     pub id: String,
+    /// Task ID this comment belongs to
     pub task_id: String,
+    /// User ID of comment author
     pub user_id: String,
+    /// Comment text content
     pub content: String,
+    /// Comment creation timestamp in RFC3339 format
     pub created_at: String,
+    /// Comment last update timestamp in RFC3339 format
     pub updated_at: String,
 }
 
 /// Create task request
+///
+/// Contains information needed to create a new task.
 #[derive(Debug, Deserialize)]
 pub struct CreateTaskRequest {
+    /// Task title
     pub title: String,
+    /// Detailed task description (optional)
     pub description: Option<String>,
+    /// Task priority (High, Medium, Low) - defaults to Medium if not specified
     pub priority: Option<String>,
+    /// Task due date in RFC3339 format (optional)
     pub due_date: Option<String>,
+    /// User ID to assign the task to (optional)
     pub assigned_to: Option<String>,
+    /// Category ID to associate with the task (optional)
     pub category_id: Option<String>,
+    /// List of tags to associate with the task (optional)
     pub tags: Option<Vec<String>>,
 }
 
 /// Update task request
+///
+/// Contains information that can be updated for an existing task.
 #[derive(Debug, Deserialize)]
 pub struct UpdateTaskRequest {
+    /// New task title (optional)
     pub title: Option<String>,
+    /// New task description (optional)
     pub description: Option<String>,
+    /// New task status (optional)
     pub status: Option<String>,
+    /// New task priority (optional)
     pub priority: Option<String>,
+    /// New due date in RFC3339 format (optional)
     pub due_date: Option<String>,
+    /// New assigned user ID (optional)
     pub assigned_to: Option<String>,
+    /// New category ID (optional)
     pub category_id: Option<String>,
+    /// New list of tags (optional)
     pub tags: Option<Vec<String>>,
 }
 
 /// Add comment request
+///
+/// Contains information needed to add a new comment to a task.
 #[derive(Debug, Deserialize)]
 pub struct AddCommentRequest {
+    /// Comment text content
     pub content: String,
 }
 
 /// Update comment request
+///
+/// Contains information that can be updated for an existing comment.
 #[derive(Debug, Deserialize)]
 pub struct UpdateCommentRequest {
+    /// New comment text content
     pub content: String,
 }
 
 /// Convert a domain Task to a TaskResponse
+///
+/// Converts an internal Task domain object to the API response format.
 fn map_task_to_response(task: &crate::domain::Task) -> TaskResponse {
     TaskResponse {
         id: task.id.to_string(),
@@ -115,6 +176,8 @@ fn map_task_to_response(task: &crate::domain::Task) -> TaskResponse {
 }
 
 /// Convert a domain Comment to a CommentResponse
+///
+/// Converts an internal Comment domain object to the API response format.
 fn map_comment_to_response(task_id: Uuid, comment: &crate::domain::Comment) -> CommentResponse {
     CommentResponse {
         id: comment.id.to_string(),
@@ -127,6 +190,9 @@ fn map_comment_to_response(task_id: Uuid, comment: &crate::domain::Comment) -> C
 }
 
 /// Parse a priority string to the domain Priority enum
+///
+/// Converts a user-provided priority string to the internal enum representation.
+/// Returns a validation error if the priority is invalid.
 fn parse_priority(priority_str: &str) -> Result<Priority> {
     match priority_str.to_lowercase().as_str() {
         "high" => Ok(Priority::High),
@@ -140,6 +206,9 @@ fn parse_priority(priority_str: &str) -> Result<Priority> {
 }
 
 /// Parse a status string to the domain TaskStatus enum
+///
+/// Converts a user-provided status string to the internal enum representation.
+/// Returns a validation error if the status is invalid.
 fn parse_status(status_str: &str) -> Result<TaskStatus> {
     match status_str.to_lowercase().as_str() {
         "todo" => Ok(TaskStatus::Todo),
@@ -154,13 +223,23 @@ fn parse_status(status_str: &str) -> Result<TaskStatus> {
 }
 
 /// Parse a date string to DateTime<Utc>
+///
+/// Converts an RFC3339 date string to UTC DateTime.
+/// Returns a validation error if the date format is invalid.
 fn parse_date(date_str: &str) -> Result<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(date_str)
         .map(|dt| dt.with_timezone(&Utc))
         .map_err(|e| Error::validation_error(format!("Invalid date format: {}", e)))
 }
 
-/// Get all tasks
+/// Get all tasks with filtering and pagination
+///
+/// Returns a paginated list of tasks based on the provided filters.
+/// Requires authentication.
+///
+/// # Errors
+/// - Returns `ValidationError` if filter parameters are invalid
+/// - Returns `InternalServerError` if there's an issue retrieving tasks
 pub async fn get_tasks(
     State(registry): State<Arc<ServiceRegistry>>,
     Query(params): Query<TaskListParams>,
@@ -253,6 +332,14 @@ pub async fn get_tasks(
 }
 
 /// Get task by ID
+///
+/// Returns a specific task by its ID.
+/// Requires authentication.
+///
+/// # Errors
+/// - Returns `ValidationError` if the task ID is invalid
+/// - Returns `NotFound` if the task doesn't exist
+/// - Returns `InternalServerError` if there's an issue retrieving the task
 pub async fn get_task(
     State(registry): State<Arc<ServiceRegistry>>,
     Path(id_str): Path<String>,
@@ -273,7 +360,15 @@ pub async fn get_task(
     Ok(Json(map_task_to_response(&task)))
 }
 
-/// Create task
+/// Create a new task
+///
+/// Creates a new task with the provided details.
+/// The task is created with a default status of "Todo".
+/// Requires authentication. The authenticated user becomes the task creator.
+///
+/// # Errors
+/// - Returns `ValidationError` if the request data is invalid
+/// - Returns `InternalServerError` if there's an issue creating the task
 pub async fn create_task(
     State(registry): State<Arc<ServiceRegistry>>,
     Json(request): Json<CreateTaskRequest>,
@@ -335,7 +430,17 @@ pub async fn create_task(
     Ok(Json(map_task_to_response(&task)))
 }
 
-/// Update task
+/// Update an existing task
+///
+/// Updates the specified task with the provided details.
+/// All fields are optional - only the provided fields will be updated.
+/// Requires authentication and appropriate permissions to modify the task.
+///
+/// # Errors
+/// - Returns `ValidationError` if the request data is invalid
+/// - Returns `NotFound` if the task doesn't exist
+/// - Returns `Forbidden` if the current user doesn't have permission
+/// - Returns `InternalServerError` if there's an issue updating the task
 pub async fn update_task(
     State(registry): State<Arc<ServiceRegistry>>,
     Path(id_str): Path<String>,
@@ -415,7 +520,16 @@ pub async fn update_task(
     Ok(Json(map_task_to_response(&task)))
 }
 
-/// Delete task
+/// Delete a task
+///
+/// Deletes the specified task.
+/// Requires authentication and appropriate permissions to delete the task.
+///
+/// # Errors
+/// - Returns `ValidationError` if the task ID is invalid
+/// - Returns `NotFound` if the task doesn't exist
+/// - Returns `Forbidden` if the current user doesn't have permission
+/// - Returns `InternalServerError` if there's an issue deleting the task
 pub async fn delete_task(
     State(registry): State<Arc<ServiceRegistry>>,
     Path(id_str): Path<String>,
@@ -447,7 +561,16 @@ pub async fn delete_task(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Assign task to user
+/// Assign task to a user
+///
+/// Assigns the specified task to a specific user.
+/// Requires authentication and manager role.
+///
+/// # Errors
+/// - Returns `ValidationError` if the task ID or user ID is invalid
+/// - Returns `NotFound` if the task doesn't exist
+/// - Returns `Forbidden` if the current user doesn't have permission
+/// - Returns `InternalServerError` if there's an issue assigning the task
 pub async fn assign_task(
     State(registry): State<Arc<ServiceRegistry>>,
     Path((id_str, user_id_str)): Path<(String, String)>,
@@ -501,6 +624,15 @@ pub async fn assign_task(
 }
 
 /// Unassign task
+///
+/// Removes any user assignment from the specified task.
+/// Requires authentication and manager role.
+///
+/// # Errors
+/// - Returns `ValidationError` if the task ID is invalid
+/// - Returns `NotFound` if the task doesn't exist
+/// - Returns `Forbidden` if the current user doesn't have permission
+/// - Returns `InternalServerError` if there's an issue unassigning the task
 pub async fn unassign_task(
     State(registry): State<Arc<ServiceRegistry>>,
     Path(id_str): Path<String>,
@@ -550,6 +682,14 @@ pub async fn unassign_task(
 }
 
 /// Get task comments
+///
+/// Returns all comments for a specific task.
+/// Requires authentication.
+///
+/// # Errors
+/// - Returns `ValidationError` if the task ID is invalid
+/// - Returns `NotFound` if the task doesn't exist
+/// - Returns `InternalServerError` if there's an issue retrieving the comments
 pub async fn get_task_comments(
     State(registry): State<Arc<ServiceRegistry>>,
     Path(id_str): Path<String>,
@@ -578,6 +718,14 @@ pub async fn get_task_comments(
 }
 
 /// Add comment to task
+///
+/// Adds a new comment to the specified task.
+/// Requires authentication. The authenticated user becomes the comment author.
+///
+/// # Errors
+/// - Returns `ValidationError` if the task ID is invalid or the comment content is empty
+/// - Returns `NotFound` if the task doesn't exist
+/// - Returns `InternalServerError` if there's an issue adding the comment
 pub async fn add_comment(
     State(registry): State<Arc<ServiceRegistry>>,
     Path(id_str): Path<String>,
@@ -610,7 +758,16 @@ pub async fn add_comment(
     Ok(Json(map_comment_to_response(id, &comment)))
 }
 
-/// Update comment
+/// Update task comment
+///
+/// Updates the content of an existing comment.
+/// Requires authentication and permission to modify the comment (usually author or admin).
+///
+/// # Errors
+/// - Returns `ValidationError` if the task ID or comment ID is invalid, or content is empty
+/// - Returns `NotFound` if the comment doesn't exist
+/// - Returns `Forbidden` if the current user doesn't have permission
+/// - Returns `InternalServerError` if there's an issue updating the comment
 pub async fn update_comment(
     State(registry): State<Arc<ServiceRegistry>>,
     Path((task_id_str, comment_id_str)): Path<(String, String)>,
@@ -649,7 +806,16 @@ pub async fn update_comment(
     Ok(Json(map_comment_to_response(task_id, &comment)))
 }
 
-/// Delete comment
+/// Delete task comment
+///
+/// Deletes an existing comment from a task.
+/// Requires authentication and permission to delete the comment (usually author or admin).
+///
+/// # Errors
+/// - Returns `ValidationError` if the task ID or comment ID is invalid
+/// - Returns `NotFound` if the comment doesn't exist
+/// - Returns `Forbidden` if the current user doesn't have permission
+/// - Returns `InternalServerError` if there's an issue deleting the comment
 pub async fn delete_comment(
     State(registry): State<Arc<ServiceRegistry>>,
     Path((task_id_str, comment_id_str)): Path<(String, String)>,

@@ -14,68 +14,112 @@ use crate::domain::{Role, UserProfile, UserStatus};
 use crate::infrastructure::ServiceRegistry;
 
 /// User listing query parameters
+///
+/// Used for filtering, sorting, and paginating user list requests.
 #[derive(Debug, Deserialize)]
 pub struct UserListParams {
+    /// Pagination parameters (page number and items per page)
     #[serde(flatten)]
     pub pagination: PaginationParams,
+    /// Sorting parameters (field to sort by and sort order)
     #[serde(flatten)]
     pub sort: SortParams,
+    /// Filter users by role (Admin, Manager, User)
     pub role: Option<String>,
+    /// Filter users by status (Active, Inactive, Locked)
     pub status: Option<String>,
 }
 
-/// User response
+/// User response data
+///
+/// Contains all user information returned by the API.
 #[derive(Debug, Serialize)]
 pub struct UserResponse {
+    /// Unique user identifier
     pub id: String,
+    /// Unique username
     pub username: String,
+    /// User email address
     pub email: String,
+    /// User role (Admin, Manager, User)
     pub role: String,
+    /// User status (Active, Inactive, Locked)
     pub status: String,
+    /// User profile information
     pub profile: UserProfileResponse,
+    /// User creation timestamp (RFC3339 format)
     pub created_at: String,
+    /// Last login timestamp (RFC3339 format) if available
     pub last_login_at: Option<String>,
 }
 
-/// User profile response
+/// User profile response data
+///
+/// Contains user profile information returned by the API.
 #[derive(Debug, Serialize)]
 pub struct UserProfileResponse {
+    /// User's display name
     pub display_name: String,
+    /// URL to user's avatar image
     pub avatar_url: Option<String>,
+    /// User biography or description
     pub bio: Option<String>,
+    /// User location information
     pub location: Option<String>,
+    /// User website URL
     pub website: Option<String>,
 }
 
 /// Create user request
+///
+/// Contains information needed to create a new user.
 #[derive(Debug, Deserialize)]
 pub struct CreateUserRequest {
+    /// Unique username for the new user
     pub username: String,
+    /// Email address for the new user
     pub email: String,
+    /// Password for the new user
     pub password: String,
+    /// Role for the new user (Optional, defaults to User)
     pub role: Option<String>,
 }
 
 /// Update user request
+///
+/// Contains information that can be updated for an existing user.
 #[derive(Debug, Deserialize)]
 pub struct UpdateUserRequest {
+    /// New username (Optional)
     pub username: Option<String>,
+    /// New email address (Optional)
     pub email: Option<String>,
+    /// New role (Optional)
     pub role: Option<String>,
+    /// New status (Optional)
     pub status: Option<String>,
 }
 
 /// Update profile request
+///
+/// Contains information that can be updated in a user's profile.
 #[derive(Debug, Deserialize)]
 pub struct UpdateProfileRequest {
+    /// New display name (Optional)
     pub display_name: Option<String>,
+    /// New avatar URL (Optional)
     pub avatar_url: Option<String>,
+    /// New biography (Optional)
     pub bio: Option<String>,
+    /// New location (Optional)
     pub location: Option<String>,
+    /// New website URL (Optional)
     pub website: Option<String>,
 }
 
 /// Convert a domain Role enum to string
+///
+/// Provides a consistent string representation of user roles.
 fn role_to_string(role: &Role) -> String {
     match role {
         Role::Admin => "Admin".to_string(),
@@ -85,6 +129,9 @@ fn role_to_string(role: &Role) -> String {
 }
 
 /// Parse a role string to the domain Role enum
+///
+/// Converts a user-provided role string to the internal enum representation.
+/// Returns a validation error if the role is invalid.
 fn parse_role(role_str: &str) -> Result<Role> {
     match role_str.to_lowercase().as_str() {
         "admin" => Ok(Role::Admin),
@@ -98,6 +145,8 @@ fn parse_role(role_str: &str) -> Result<Role> {
 }
 
 /// Convert a domain UserStatus enum to string
+///
+/// Provides a consistent string representation of user statuses.
 fn status_to_string(status: &UserStatus) -> String {
     match status {
         UserStatus::Active => "Active".to_string(),
@@ -107,6 +156,9 @@ fn status_to_string(status: &UserStatus) -> String {
 }
 
 /// Parse a status string to the domain UserStatus enum
+///
+/// Converts a user-provided status string to the internal enum representation.
+/// Returns a validation error if the status is invalid.
 fn parse_status(status_str: &str) -> Result<UserStatus> {
     match status_str.to_lowercase().as_str() {
         "active" => Ok(UserStatus::Active),
@@ -120,6 +172,8 @@ fn parse_status(status_str: &str) -> Result<UserStatus> {
 }
 
 /// Map domain User to UserResponse
+///
+/// Converts an internal User domain object to the API response format.
 fn map_user_to_response(user: &crate::domain::User) -> UserResponse {
     UserResponse {
         id: user.id.to_string(),
@@ -139,7 +193,13 @@ fn map_user_to_response(user: &crate::domain::User) -> UserResponse {
     }
 }
 
-/// Get all users
+/// Get all users with filtering and pagination
+///
+/// Returns a paginated list of users based on the provided filters.
+/// Requires authentication.
+///
+/// # Errors
+/// - Returns `InternalServerError` if there's an issue retrieving users
 pub async fn get_users(
     State(registry): State<Arc<ServiceRegistry>>,
     Query(params): Query<UserListParams>,
@@ -185,6 +245,14 @@ pub async fn get_users(
 }
 
 /// Get user by ID
+///
+/// Returns a specific user by their ID.
+/// Requires authentication.
+///
+/// # Errors
+/// - Returns `ValidationError` if the user ID is invalid
+/// - Returns `NotFound` if the user doesn't exist
+/// - Returns `InternalServerError` if there's an issue retrieving the user
 pub async fn get_user(
     State(registry): State<Arc<ServiceRegistry>>,
     Path(id_str): Path<String>,
@@ -205,7 +273,15 @@ pub async fn get_user(
     Ok(Json(map_user_to_response(&user)))
 }
 
-/// Create user (admin only)
+/// Create a new user
+///
+/// Creates a new user with the provided details.
+/// Requires authentication and admin privileges.
+///
+/// # Errors
+/// - Returns `ValidationError` if the request data is invalid
+/// - Returns `Conflict` if the username or email already exists
+/// - Returns `InternalServerError` if there's an issue creating the user
 pub async fn create_user(
     State(registry): State<Arc<ServiceRegistry>>,
     Json(request): Json<CreateUserRequest>,
@@ -239,7 +315,17 @@ pub async fn create_user(
     Ok(Json(map_user_to_response(&user)))
 }
 
-/// Update user (admin or own user)
+/// Update an existing user
+///
+/// Updates the specified user with the provided details.
+/// Requires authentication and either admin privileges or self-access.
+///
+/// # Errors
+/// - Returns `ValidationError` if the request data is invalid
+/// - Returns `NotFound` if the user doesn't exist
+/// - Returns `Conflict` if the username or email already exists
+/// - Returns `Forbidden` if the current user doesn't have permission
+/// - Returns `InternalServerError` if there's an issue updating the user
 pub async fn update_user(
     State(registry): State<Arc<ServiceRegistry>>,
     Path(id_str): Path<String>,
@@ -294,7 +380,16 @@ pub async fn update_user(
     Ok(Json(map_user_to_response(&user)))
 }
 
-/// Delete user (admin only)
+/// Delete a user
+///
+/// Deletes the specified user.
+/// Requires authentication and admin privileges.
+///
+/// # Errors
+/// - Returns `ValidationError` if the user ID is invalid
+/// - Returns `NotFound` if the user doesn't exist
+/// - Returns `Forbidden` if the current user doesn't have permission
+/// - Returns `InternalServerError` if there's an issue deleting the user
 pub async fn delete_user(
     State(registry): State<Arc<ServiceRegistry>>,
     Path(id_str): Path<String>,
@@ -323,7 +418,16 @@ pub async fn delete_user(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Update user profile (own user only)
+/// Update a user's profile
+///
+/// Updates the profile information for the specified user.
+/// Requires authentication and self-access.
+///
+/// # Errors
+/// - Returns `ValidationError` if the user ID is invalid
+/// - Returns `NotFound` if the user doesn't exist
+/// - Returns `Forbidden` if the current user doesn't have permission
+/// - Returns `InternalServerError` if there's an issue updating the profile
 pub async fn update_profile(
     State(registry): State<Arc<ServiceRegistry>>,
     Path(id_str): Path<String>,

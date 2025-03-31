@@ -40,6 +40,10 @@ rand_core = { version = "0.9.3", features = ["std"] }
 # For validating incoming requests
 validator = { version = "0.20.0", features = ["derive"] }
 
+# For OpenAPI specification generation
+utoipa = { version = "5.3.1", features = ["axum_extras", "uuid", "chrono"] }
+utoipa-swagger-ui = { version = "9.0.0", features = ["axum"] }
+
 [dev-dependencies]
 tokio-test = "0.4.4"
 mock_instant = "0.5.3"
