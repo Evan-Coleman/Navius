@@ -147,6 +147,10 @@ pub enum TestError {
     /// TOML error
     #[error("TOML error: {0}")]
     TomlError(String),
+
+    /// Serialization error
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
 }
 
 impl TestError {
@@ -318,6 +322,7 @@ impl fmt::Display for TestError {
             TestError::IntegrationError(msg) => write!(f, "Integration error: {}", msg),
             TestError::JsonError(err) => write!(f, "JSON error: {}", err),
             TestError::TomlError(msg) => write!(f, "TOML error: {}", msg),
+            TestError::SerializationError(msg) => write!(f, "Serialization error: {}", msg),
             TestError::GenericError(msg) => write!(f, "Generic error: {}", msg),
         }
     }
@@ -348,6 +353,12 @@ impl From<String> for TestError {
 impl From<&str> for TestError {
     fn from(err: &str) -> Self {
         TestError::GenericError(err.to_string())
+    }
+}
+
+impl From<serde_json::Error> for TestError {
+    fn from(err: serde_json::Error) -> Self {
+        TestError::SerializationError(err.to_string())
     }
 }
 
