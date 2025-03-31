@@ -44,7 +44,7 @@ pub fn get_request_id(headers: &HeaderMap) -> String {
         .get(navius_core::constants::headers::REQUEST_ID)
         .and_then(|h| h.to_str().ok())
         .map(|s| s.to_string())
-        .unwrap_or_else(|| navius_core::util::random_id().to_string())
+        .unwrap_or_else(|| navius_core::util::random_id("req").to_string())
 }
 
 /// HTTP methods as an enum for easier manipulation.

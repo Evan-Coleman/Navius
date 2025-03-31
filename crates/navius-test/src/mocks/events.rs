@@ -341,302 +341,91 @@ impl MockEventBroker {
     }
 }
 
-/// Trait for an event broker
-#[async_trait]
-pub trait EventBroker: Send + Sync {
-    /// Get information about the broker
-    async fn get_info(&self) -> Result<BrokerInfo>;
-
-    /// List all topics
-    async fn list_topics(&self) -> Result<Vec<TopicInfo>>;
-
-    /// Check if a topic exists
-    async fn topic_exists(&self, topic: &str) -> Result<bool>;
-
-    /// Create a new topic
-    async fn create_topic(&self, topic: &str) -> Result<()>;
-
-    /// Delete a topic
-    async fn delete_topic(&self, topic: &str) -> Result<()>;
-
-    /// Publish an event
-    async fn publish<T: Serialize + Send + Sync + 'static>(
+pub trait EventPublisher: Send + Sync {
+    fn publish_raw(
         &self,
-        event: Event<T>,
-    ) -> Result<DeliveryStatus>;
-
-    /// Subscribe to events
-    async fn subscribe<T: DeserializeOwned + Send + Sync + 'static>(
-        &self,
-        topic: &str,
-    ) -> Result<(String, EventStream<T>)>;
-
-    /// Unsubscribe from events
-    async fn unsubscribe(&self, subscription_id: &str) -> Result<bool>;
-
-    /// Get information about a subscription
-    async fn get_subscription_info(&self, subscription_id: &str) -> Result<SubscriptionInfo>;
-
-    /// List all subscriptions
-    async fn list_subscriptions(&self) -> Result<Vec<SubscriptionInfo>>;
-
-    /// Get recent events for a topic
-    async fn get_recent_events(&self, topic: &str, limit: usize) -> Result<Vec<EventEnvelope>>;
+        event_type: &str,
+        payload: serde_json::Value,
+    ) -> BoxFuture<'_, Result<(), MockEventError>>;
 }
 
-/// Information about the broker
-#[derive(Debug, Clone)]
-pub struct BrokerInfo {
-    /// Unique identifier
-    pub id: String,
-    /// Number of topics
-    pub topic_count: usize,
-    /// Number of subscriptions
-    pub subscription_count: usize,
+pub trait EventSubscriber: Send + Sync {
+    fn subscribe_raw(
+        &self,
+        event_type: &str,
+    ) -> BoxFuture<
+        '_,
+        Result<BoxStream<'_, Result<serde_json::Value, MockEventError>>, MockEventError>,
+    >;
+}
+
+pub trait EventBroker: EventPublisher + EventSubscriber {
+    fn id(&self) -> &str;
+    fn version(&self) -> &str;
 }
 
 #[async_trait]
+impl EventPublisher for MockEventBroker {
+    fn publish_raw(
+        &self,
+        event_type: &str,
+        payload: serde_json::Value,
+    ) -> BoxFuture<'_, Result<(), MockEventError>> {
+        Box::pin(async move { self.publish_raw(event_type, payload).await })
+    }
+}
+
+#[async_trait]
+impl EventSubscriber for MockEventBroker {
+    fn subscribe_raw(
+        &self,
+        event_type: &str,
+    ) -> BoxFuture<
+        '_,
+        Result<BoxStream<'_, Result<serde_json::Value, MockEventError>>, MockEventError>,
+    > {
+        Box::pin(async move { self.subscribe_raw(event_type).await })
+    }
+}
+
 impl EventBroker for MockEventBroker {
-    async fn get_info(&self) -> Result<BrokerInfo> {
-        let topics = self.topics.lock().unwrap();
-        let subscriptions = self.subscriptions.lock().unwrap();
-
-        Ok(BrokerInfo {
-            id: self.id.clone(),
-            topic_count: topics.len(),
-            subscription_count: subscriptions.len(),
-        })
+    fn id(&self) -> &str {
+        "mock_event_broker"
     }
 
-    async fn list_topics(&self) -> Result<Vec<TopicInfo>> {
-        let topics = self.topics.lock().unwrap();
-        let events = self.events.lock().unwrap();
-        let subscriptions = self.subscriptions.lock().unwrap();
-
-        let mut topic_infos = Vec::new();
-        for topic_name in topics.iter() {
-            let event_count = events.iter().filter(|e| e.topic == *topic_name).count();
-            let subscriber_count = subscriptions
-                .iter()
-                .filter(|s| s.topic == *topic_name)
-                .count();
-
-            topic_infos.push(TopicInfo {
-                name: topic_name.clone(),
-                subscriber_count,
-                event_count,
-            });
-        }
-
-        Ok(topic_infos)
+    fn version(&self) -> &str {
+        "1.0.0"
     }
+}
 
-    async fn topic_exists(&self, topic: &str) -> Result<bool> {
-        let topics = self.topics.lock().unwrap();
-        Ok(topics.contains(topic))
-    }
-
-    async fn create_topic(&self, topic: &str) -> Result<()> {
-        // Check if topic creation should fail
-        if *self.fail_topic_creation.lock().unwrap() {
-            return Err(MockEventError::TopicError(format!(
-                "Failed to create topic '{}'",
-                topic
-            )));
-        }
-
-        let mut topics = self.topics.lock().unwrap();
-        topics.insert(topic.to_string());
-        Ok(())
-    }
-
-    async fn delete_topic(&self, topic: &str) -> Result<()> {
-        let mut topics = self.topics.lock().unwrap();
-        if topics.remove(topic) {
-            // Remove all events for this topic
-            let mut events = self.events.lock().unwrap();
-            events.retain(|e| e.topic != topic);
-
-            // Remove all subscriptions for this topic
-            let mut subscriptions = self.subscriptions.lock().unwrap();
-            subscriptions.retain(|s| s.topic != topic);
-
-            Ok(())
-        } else {
-            Err(MockEventError::TopicError(format!(
-                "Topic '{}' not found",
-                topic
-            )))
-        }
-    }
-
-    async fn publish<T: Serialize + Send + Sync + 'static>(
+// Helper methods for type-safe publishing and subscribing
+impl MockEventBroker {
+    pub async fn publish<T: Serialize + Send + Sync + 'static>(
         &self,
-        event: Event<T>,
-    ) -> Result<DeliveryStatus> {
-        // Check if publishing should fail
-        if *self.fail_publishing.lock().unwrap() {
-            return Err(MockEventError::PublishError(format!(
-                "Failed to publish event of type '{}'",
-                event.event_type
-            )));
-        }
-
-        // Check if topic exists, create it if not
-        let topic_exists = {
-            let topics = self.topics.lock().unwrap();
-            topics.contains(&event.topic)
-        };
-
-        if !topic_exists {
-            self.create_topic(&event.topic).await?;
-        }
-
-        // Convert to envelope
-        let payload = match serde_json::to_value(&event.payload) {
-            Ok(value) => value,
-            Err(e) => return Err(MockEventError::SerializationError(e.to_string())),
-        };
-
-        let envelope = EventEnvelope {
-            id: event.id,
-            event_type: event.event_type,
-            topic: event.topic,
-            created_at: event.created_at,
-            priority: event.priority,
-            source: event.source,
-            correlation_id: event.correlation_id,
-            metadata: event.metadata,
-            payload,
-        };
-
-        // Store the event
-        let mut events = self.events.lock().unwrap();
-        events.push(envelope);
-
-        Ok(DeliveryStatus::Delivered)
+        event_type: &str,
+        payload: T,
+    ) -> Result<(), MockEventError> {
+        let json = serde_json::to_value(payload)?;
+        self.publish_raw(event_type, json).await
     }
 
-    async fn subscribe<T: DeserializeOwned + Send + Sync + 'static>(
+    pub async fn subscribe<T: DeserializeOwned + Send + Sync + 'static>(
         &self,
-        topic: &str,
-    ) -> Result<(String, EventStream<T>)> {
-        // Check if subscribing should fail
-        if *self.fail_subscribing.lock().unwrap() {
-            return Err(MockEventError::SubscribeError(format!(
-                "Failed to subscribe to topic '{}'",
-                topic
-            )));
-        }
-
-        // Check if topic exists
-        let topic_exists = {
-            let topics = self.topics.lock().unwrap();
-            topics.contains(topic)
-        };
-
-        if !topic_exists {
-            return Err(MockEventError::TopicError(format!(
-                "Topic '{}' not found",
-                topic
-            )));
-        }
-
-        // Create subscription
-        let subscription_id = Uuid::new_v4().to_string();
-
-        let mut subscriptions = self.subscriptions.lock().unwrap();
-        subscriptions.push(SubscriptionInfo {
-            id: subscription_id.clone(),
-            topic: topic.to_string(),
-            created_at: Utc::now(),
-            events_delivered: 0,
-        });
-
-        // Clone relevant data for the stream
-        let events = self.events.clone();
-        let topic_name = topic.to_string();
-
-        // Create a stream of existing events
-        let stream = futures::stream::unfold((0, topic_name), move |(index, topic)| {
-            let events_clone = events.clone();
-            async move {
-                let events = events_clone.lock().unwrap();
-                let filtered_events: Vec<_> = events.iter().filter(|e| e.topic == topic).collect();
-
-                if index < filtered_events.len() {
-                    let envelope = &filtered_events[index];
-
-                    // Convert envelope to typed event
-                    let result = match serde_json::from_value(envelope.payload.clone()) {
-                        Ok(payload) => Ok(Event {
-                            id: envelope.id,
-                            event_type: envelope.event_type.clone(),
-                            topic: envelope.topic.clone(),
-                            created_at: envelope.created_at,
-                            priority: envelope.priority,
-                            source: envelope.source.clone(),
-                            correlation_id: envelope.correlation_id.clone(),
-                            metadata: envelope.metadata.clone(),
-                            payload,
-                        }),
-                        Err(e) => Err(MockEventError::SerializationError(e.to_string())),
-                    };
-
-                    Some((result, (index + 1, topic)))
-                } else {
-                    None
-                }
-            }
-        });
-
-        Ok((subscription_id, Box::pin(stream)))
-    }
-
-    async fn unsubscribe(&self, subscription_id: &str) -> Result<bool> {
-        let mut subscriptions = self.subscriptions.lock().unwrap();
-        let initial_len = subscriptions.len();
-        subscriptions.retain(|s| s.id != subscription_id);
-
-        Ok(subscriptions.len() < initial_len)
-    }
-
-    async fn get_subscription_info(&self, subscription_id: &str) -> Result<SubscriptionInfo> {
-        let subscriptions = self.subscriptions.lock().unwrap();
-        subscriptions
-            .iter()
-            .find(|s| s.id == subscription_id)
-            .cloned()
-            .ok_or_else(|| {
-                MockEventError::SubscriptionError(format!(
-                    "Subscription '{}' not found",
-                    subscription_id
-                ))
+        event_type: &str,
+    ) -> Result<BoxStream<'_, Result<T, MockEventError>>, MockEventError> {
+        let raw_stream = self.subscribe_raw(event_type).await?;
+        Ok(Box::pin(raw_stream.map(|result| {
+            result.and_then(|value| {
+                serde_json::from_value(value)
+                    .map_err(|e| MockEventError::SerializationError(e.to_string()))
             })
+        })))
     }
+}
 
-    async fn list_subscriptions(&self) -> Result<Vec<SubscriptionInfo>> {
-        let subscriptions = self.subscriptions.lock().unwrap();
-        Ok(subscriptions.clone())
-    }
-
-    async fn get_recent_events(&self, topic: &str, limit: usize) -> Result<Vec<EventEnvelope>> {
-        let events = self.events.lock().unwrap();
-        let mut filtered: Vec<_> = events
-            .iter()
-            .filter(|e| e.topic == topic)
-            .cloned()
-            .collect();
-
-        // Sort by created_at (newest first)
-        filtered.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-
-        // Apply limit
-        if filtered.len() > limit {
-            filtered.truncate(limit);
-        }
-
-        Ok(filtered)
+impl From<serde_json::Error> for MockEventError {
+    fn from(err: serde_json::Error) -> Self {
+        MockEventError::SerializationError(err.to_string())
     }
 }
 

@@ -132,23 +132,18 @@ impl BasePlugin {
 }
 
 #[async_trait]
-impl Plugin for BasePlugin {
-    fn id(&self) -> &str {
-        &self.id
+impl MessageHandler for BasePlugin {
+    async fn handle_message(
+        &mut self,
+        _message: serde_json::Value,
+    ) -> PluginResult<Option<serde_json::Value>> {
+        // Default implementation does nothing and returns None
+        Ok(None)
     }
+}
 
-    fn version(&self) -> &str {
-        &self.version
-    }
-
-    fn metadata(&self) -> &PluginMetadata {
-        &self.metadata
-    }
-
-    fn lifecycle_stage(&self) -> PluginLifecycleStage {
-        *self.lifecycle_stage.read().unwrap()
-    }
-
+#[async_trait]
+impl PluginLifecycle for BasePlugin {
     async fn initialize(&mut self, config: PluginConfig) -> PluginResult<()> {
         // Store configuration
         if let Ok(mut current_config) = self.config.write() {
@@ -184,6 +179,25 @@ impl Plugin for BasePlugin {
     async fn health_check(&self) -> PluginHealth {
         *self.health.read().unwrap()
     }
+}
+
+#[async_trait]
+impl Plugin for BasePlugin {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn version(&self) -> &str {
+        &self.version
+    }
+
+    fn metadata(&self) -> &PluginMetadata {
+        &self.metadata
+    }
+
+    fn lifecycle_stage(&self) -> PluginLifecycleStage {
+        *self.lifecycle_stage.read().unwrap()
+    }
 
     fn dependencies(&self) -> Vec<PluginDependency> {
         self.dependencies.clone()
@@ -199,14 +213,6 @@ impl Plugin for BasePlugin {
             .unwrap()
             .get(capability_id)
             .cloned()
-    }
-}
-
-#[async_trait]
-impl MessageHandler for BasePlugin {
-    async fn handle_message(&self, _message: Value) -> PluginResult<Option<Value>> {
-        // Default implementation does nothing
-        Ok(None)
     }
 }
 

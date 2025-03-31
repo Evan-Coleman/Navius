@@ -467,3 +467,59 @@ mod tests {
         fixture.verify().unwrap();
     }
 }
+
+pub fn register_default_mocks(
+    registry: &mut crate::mock::MockRegistry,
+) -> crate::error::TestResult<()> {
+    let event_broker = Arc::new(MockEventBroker::new());
+    let message_broker = Arc::new(MockMessageBroker::new());
+    let cache = Arc::new(MockCacheConnection::new());
+    let db = Arc::new(MockDatabaseClient::new());
+    let fs = Arc::new(MockFileSystem::new());
+    let logger = Arc::new(MockLogger::new());
+    let metrics = Arc::new(MockMetrics::new());
+
+    let _ = registry.register::<dyn events::EventPublisher, _>(event_broker.clone());
+    let _ = registry.register::<dyn events::EventSubscriber, _>(event_broker.clone());
+    let _ = registry.register::<dyn events::EventBroker, _>(event_broker);
+
+    let _ = registry.register::<dyn messaging::MessagePublisher, _>(message_broker.clone());
+    let _ = registry.register::<dyn messaging::MessageConsumer, _>(message_broker.clone());
+    let _ = registry.register::<dyn messaging::MessageBroker, _>(message_broker);
+
+    let _ = registry.register::<dyn cache::Cache, _>(cache);
+    let _ = registry.register::<dyn database::DatabaseClient, _>(db);
+    let _ = registry.register::<dyn filesystem::FileSystem, _>(fs);
+    let _ = registry.register::<dyn logger::Logger, _>(logger);
+    let _ = registry.register::<dyn metrics::Metrics, _>(metrics);
+
+    Ok(())
+}
+
+pub fn register_default_mocks_with_config(
+    registry: &mut crate::mock::MockRegistry,
+    config: &TestConfig,
+) -> crate::error::TestResult<()> {
+    let event_broker = Arc::new(MockEventBroker::new());
+    let message_broker = Arc::new(MockMessageBroker::new());
+    let cache = Arc::new(MockCacheConnection::new());
+    let db = Arc::new(MockDatabaseClient::new());
+    let fs = Arc::new(MockFileSystem::new());
+    let logger = Arc::new(MockLogger::new());
+    let metrics = Arc::new(MockMetrics::new());
+
+    registry
+        .register::<dyn events::EventPublisher, _>(event_broker.clone())
+        .register::<dyn events::EventSubscriber, _>(event_broker.clone())
+        .register::<dyn events::EventBroker, _>(event_broker.clone())
+        .register::<dyn messaging::MessagePublisher, _>(message_broker.clone())
+        .register::<dyn messaging::MessageConsumer, _>(message_broker.clone())
+        .register::<dyn messaging::MessageBroker, _>(message_broker.clone())
+        .register::<dyn cache::Cache, _>(cache)
+        .register::<dyn database::DatabaseClient, _>(db)
+        .register::<dyn filesystem::FileSystem, _>(fs)
+        .register::<dyn logger::Logger, _>(logger)
+        .register::<dyn metrics::Metrics, _>(metrics);
+
+    Ok(())
+}

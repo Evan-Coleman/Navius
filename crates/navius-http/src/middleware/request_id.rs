@@ -43,7 +43,7 @@ where
             existing_id.to_owned()
         } else {
             // Generate a new request ID
-            let id = util::random_id().to_string();
+            let id = util::random_id("req").to_string();
             HeaderValue::from_str(&id).unwrap_or_else(|_| {
                 // This should never happen, but just in case
                 HeaderValue::from_static("invalid-id")
@@ -120,7 +120,7 @@ where
         existing_id.to_owned()
     } else {
         // Generate a new request ID
-        let id = util::random_id().to_string();
+        let id = util::random_id("req").to_string();
         HeaderValue::from_str(&id).unwrap_or_else(|_| {
             // This should never happen, but just in case
             HeaderValue::from_static("invalid-id")

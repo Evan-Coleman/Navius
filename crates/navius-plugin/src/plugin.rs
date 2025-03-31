@@ -216,21 +216,9 @@ pub trait MessageHandler: Send + Sync {
     async fn handle_message(&self, message: Value) -> PluginResult<Option<Value>>;
 }
 
-/// Represents a plugin in the system
+/// Trait for handling plugin lifecycle operations asynchronously
 #[async_trait::async_trait]
-pub trait Plugin: Send + Sync + Debug + MessageHandler {
-    /// Get the plugin ID
-    fn id(&self) -> &str;
-
-    /// Get the plugin version
-    fn version(&self) -> &str;
-
-    /// Get the plugin's metadata
-    fn metadata(&self) -> &PluginMetadata;
-
-    /// Get the plugin's current lifecycle stage
-    fn lifecycle_stage(&self) -> PluginLifecycleStage;
-
+pub trait PluginLifecycle: Send + Sync {
     /// Initialize the plugin with the provided configuration
     async fn initialize(&mut self, config: PluginConfig) -> PluginResult<()>;
 
@@ -242,6 +230,21 @@ pub trait Plugin: Send + Sync + Debug + MessageHandler {
 
     /// Check the health of the plugin
     async fn health_check(&self) -> PluginHealth;
+}
+
+/// Represents a plugin in the system
+pub trait Plugin: Send + Sync + Debug + MessageHandler + PluginLifecycle {
+    /// Get the plugin ID
+    fn id(&self) -> &str;
+
+    /// Get the plugin version
+    fn version(&self) -> &str;
+
+    /// Get the plugin's metadata
+    fn metadata(&self) -> &PluginMetadata;
+
+    /// Get the plugin's current lifecycle stage
+    fn lifecycle_stage(&self) -> PluginLifecycleStage;
 
     /// Get plugin dependencies
     fn dependencies(&self) -> Vec<PluginDependency> {

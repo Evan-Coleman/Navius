@@ -445,68 +445,54 @@ impl MockMessageBroker {
     }
 }
 
-/// Trait for message brokers
-#[async_trait]
-pub trait MessageBroker: Send + Sync {
-    /// Get broker ID
+pub trait MessagePublisher: Send + Sync {
+    fn publish_raw(
+        &self,
+        queue: &str,
+        payload: serde_json::Value,
+    ) -> BoxFuture<'_, Result<(), MockMessagingError>>;
+}
+
+pub trait MessageConsumer: Send + Sync {
+    fn consume_raw(
+        &self,
+        queue: &str,
+    ) -> BoxFuture<
+        '_,
+        Result<BoxStream<'_, Result<serde_json::Value, MockMessagingError>>, MockMessagingError>,
+    >;
+}
+
+pub trait MessageBroker: MessagePublisher + MessageConsumer {
     fn id(&self) -> &str;
-
-    /// Get broker name
     fn name(&self) -> &str;
-
-    /// Connect to broker
-    async fn connect(&self) -> Result<()>;
-
-    /// Disconnect from broker
-    async fn disconnect(&self) -> Result<()>;
-
-    /// Check if connected
-    async fn is_connected(&self) -> bool;
-
-    /// Get broker metrics
-    async fn metrics(&self) -> BrokerMetrics;
-
-    /// Declare a queue
-    async fn declare_queue(&self, queue: &Queue) -> Result<Queue>;
-
-    /// Delete a queue
-    async fn delete_queue(&self, name: &str) -> Result<()>;
-
-    /// Declare an exchange
-    async fn declare_exchange(&self, exchange: &Exchange) -> Result<Exchange>;
-
-    /// Delete an exchange
-    async fn delete_exchange(&self, name: &str) -> Result<()>;
-
-    /// Bind a queue to an exchange
-    async fn bind_queue(&self, binding: &Binding) -> Result<()>;
-
-    /// Unbind a queue from an exchange
-    async fn unbind_queue(&self, binding: &Binding) -> Result<()>;
-
-    /// Publish a message
-    async fn publish<T: Serialize + Send + Sync>(
-        &self,
-        message: &Message<T>,
-    ) -> Result<PublishStatus>;
-
-    /// Consume messages from a queue
-    async fn consume<T: DeserializeOwned + Send + Sync + 'static>(
-        &self,
-        queue_name: &str,
-    ) -> Result<(ConsumerHandle, MessageStream<T>)>;
-
-    /// Acknowledge a message
-    async fn ack(&self, delivery_tag: u64) -> Result<()>;
-
-    /// Reject a message
-    async fn reject(&self, delivery_tag: u64, requeue: bool) -> Result<()>;
-
-    /// Get message count for a queue
-    async fn message_count(&self, queue_name: &str) -> Result<u32>;
+    fn version(&self) -> &str;
 }
 
 #[async_trait]
+impl MessagePublisher for MockMessageBroker {
+    fn publish_raw(
+        &self,
+        queue: &str,
+        payload: serde_json::Value,
+    ) -> BoxFuture<'_, Result<(), MockMessagingError>> {
+        Box::pin(async move { self.publish_raw(queue, payload).await })
+    }
+}
+
+#[async_trait]
+impl MessageConsumer for MockMessageBroker {
+    fn consume_raw(
+        &self,
+        queue: &str,
+    ) -> BoxFuture<
+        '_,
+        Result<BoxStream<'_, Result<serde_json::Value, MockMessagingError>>, MockMessagingError>,
+    > {
+        Box::pin(async move { self.consume_raw(queue).await })
+    }
+}
+
 impl MessageBroker for MockMessageBroker {
     fn id(&self) -> &str {
         &self.id
@@ -516,6 +502,38 @@ impl MessageBroker for MockMessageBroker {
         &self.name
     }
 
+    fn version(&self) -> &str {
+        "1.0.0"
+    }
+}
+
+// Helper methods for type-safe publishing and consuming
+impl MockMessageBroker {
+    pub async fn publish<T: Serialize + Send + Sync>(
+        &self,
+        queue: &str,
+        payload: T,
+    ) -> Result<(), MockMessagingError> {
+        let json = serde_json::to_value(payload)?;
+        self.publish_raw(queue, json).await
+    }
+
+    pub async fn consume<T: DeserializeOwned + Send + Sync + 'static>(
+        &self,
+        queue: &str,
+    ) -> Result<BoxStream<'_, Result<T, MockMessagingError>>, MockMessagingError> {
+        let raw_stream = self.consume_raw(queue).await?;
+        Ok(Box::pin(raw_stream.map(|result| {
+            result.and_then(|value| {
+                serde_json::from_value(value)
+                    .map_err(|e| MockMessagingError::SerializationError(e.to_string()))
+            })
+        })))
+    }
+}
+
+#[async_trait]
+impl MessageBroker for MockMessageBroker {
     async fn connect(&self) -> Result<()> {
         // Check if connect should fail
         if *self.fail_connect.lock().unwrap() {
