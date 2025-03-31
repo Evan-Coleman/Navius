@@ -175,9 +175,8 @@ impl MockDatabaseClient {
     /// Register the mock database client with the registry
     pub fn register(self, registry: &MockRegistry) -> TestResult<Arc<Self>> {
         let mock = Arc::new(self);
-
-        // Just return the mock without trying to register it with the trait
-        // Since DatabaseClient is no longer object safe due to generic methods
+        // Now DatabaseClient is object-safe, so we can register it
+        registry.register::<dyn DatabaseClient, Self>(Arc::clone(&mock))?;
         Ok(mock)
     }
 
@@ -284,18 +283,6 @@ pub trait DatabaseClient: Send + Sync {
 
     /// Execute a statement and return the number of affected rows
     fn execute(&self, statement: &str) -> Result<u64, Box<dyn std::error::Error>>;
-
-    /// Get a transaction handler that can run transactions
-    fn transaction_handler(&self) -> Box<dyn DatabaseTransactionHandler>;
-}
-
-/// Transaction handler trait (object-safe)
-pub trait DatabaseTransactionHandler: Send + Sync {
-    /// Execute a transaction with a closure
-    fn run<T>(
-        &self,
-        f: Box<dyn FnOnce() -> Result<T, Box<dyn std::error::Error>> + Send>,
-    ) -> Result<T, Box<dyn std::error::Error>>;
 }
 
 /// Trait extension to provide a more ergonomic transaction API
@@ -303,44 +290,10 @@ pub trait DatabaseClientExt: DatabaseClient {
     /// Execute a transaction
     fn transaction<F, T>(&self, f: F) -> Result<T, Box<dyn std::error::Error>>
     where
-        F: FnOnce() -> Result<T, Box<dyn std::error::Error>> + Send + 'static,
-    {
-        let handler = self.transaction_handler();
-        handler.run(Box::new(f))
-    }
+        F: FnOnce() -> Result<T, Box<dyn std::error::Error>>;
 }
 
-// Implement the extension trait for any type that implements DatabaseClient
-impl<T: DatabaseClient> DatabaseClientExt for T {}
-
-// Add a transaction handler implementation for the mock
-struct MockDatabaseTransactionHandler {
-    client: Arc<MockDatabaseClient>,
-}
-
-impl DatabaseTransactionHandler for MockDatabaseTransactionHandler {
-    fn run<T>(
-        &self,
-        f: Box<dyn FnOnce() -> Result<T, Box<dyn std::error::Error>> + Send>,
-    ) -> Result<T, Box<dyn std::error::Error>> {
-        // Get a clone of the client to use in the wrapper
-        let client = Arc::clone(&self.client);
-
-        // Create a wrapper that converts the error type
-        let wrapper = || {
-            f().map_err(|e| {
-                let db_error = MockDatabaseError::new(e.to_string());
-                db_error as Box<dyn std::error::Error>
-            })
-        };
-
-        // Use the internal transaction implementation
-        match client.transaction(wrapper) {
-            Ok(result) => Ok(result),
-            Err(err) => Err(Box::new(err) as Box<dyn std::error::Error>),
-        }
-    }
-}
+// We won't implement this for all types since we need specific transaction functionality
 
 impl DatabaseClient for MockDatabaseClient {
     fn query(&self, query: &str) -> Result<Box<dyn QueryResult>, Box<dyn std::error::Error>> {
@@ -356,11 +309,22 @@ impl DatabaseClient for MockDatabaseClient {
             Err(err) => Err(Box::new(err) as Box<dyn std::error::Error>),
         }
     }
+}
 
-    fn transaction_handler(&self) -> Box<dyn DatabaseTransactionHandler> {
-        Box::new(MockDatabaseTransactionHandler {
-            client: Arc::new(self.clone()),
-        })
+// Add an implementation of DatabaseClientExt for MockDatabaseClient
+impl DatabaseClientExt for MockDatabaseClient {
+    fn transaction<F, T>(&self, f: F) -> Result<T, Box<dyn std::error::Error>>
+    where
+        F: FnOnce() -> Result<T, Box<dyn std::error::Error>>,
+    {
+        // Convert the function to use our error type
+        let adapter = || f().map_err(|e| MockDatabaseError::new(e.to_string()));
+
+        // Call our internal transaction method
+        match self.transaction(adapter) {
+            Ok(result) => Ok(result),
+            Err(err) => Err(Box::new(err) as Box<dyn std::error::Error>),
+        }
     }
 }
 
