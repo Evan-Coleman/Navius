@@ -1,16 +1,17 @@
 [package]
 name = "navius-cache"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "Caching functionality for the Navius framework"
 repository = "https://github.com/navius/navius"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 
 [dependencies]
 navius-core = { path = "../../crates/navius-core" }
 async-trait = "0.1.88"
 thiserror = "2.0.12"
 serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
 tracing = "0.1.41"
 futures = "0.3.31"
 tokio = { version = "1.44.1", features = ["rt", "macros"] }

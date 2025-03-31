@@ -1,6 +1,6 @@
 use crate::error::CacheResult;
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Display;
 use std::time::Duration;
 
@@ -20,7 +20,7 @@ impl CacheKey for String {
 // Implement CacheKey for &str
 impl CacheKey for &str {
     fn to_string(&self) -> String {
-        self.to_string()
+        Display::to_string(self)
     }
 }
 
