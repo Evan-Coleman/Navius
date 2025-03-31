@@ -201,13 +201,39 @@ impl PgPool {
 
                 #[async_trait]
                 impl DatabaseTransaction for MockTransaction {
+                    async fn execute<'a>(
+                        &mut self,
+                        query: &str,
+                        params: &[&'a (dyn sqlx::Encode<'a, sqlx::Postgres> + Sync)],
+                    ) -> DatabaseResult<u64> {
+                        self.conn.execute(query, params).await
+                    }
+
+                    async fn query<'a>(
+                        &mut self,
+                        query: &str,
+                        params: &[&'a (dyn sqlx::Encode<'a, sqlx::Postgres> + Sync)],
+                    ) -> DatabaseResult<Box<dyn DatabaseRowSet>> {
+                        self.conn.query(query, params).await
+                    }
+
                     async fn commit(self: Box<Self>) -> DatabaseResult<()> {
-                        // Mock successful commit
                         Ok(())
                     }
 
                     async fn rollback(self: Box<Self>) -> DatabaseResult<()> {
-                        // Mock successful rollback
+                        Ok(())
+                    }
+
+                    async fn savepoint(&mut self, name: &str) -> DatabaseResult<()> {
+                        Ok(())
+                    }
+
+                    async fn rollback_to_savepoint(&mut self, name: &str) -> DatabaseResult<()> {
+                        Ok(())
+                    }
+
+                    async fn release_savepoint(&mut self, name: &str) -> DatabaseResult<()> {
                         Ok(())
                     }
                 }
@@ -297,43 +323,64 @@ pub trait DatabaseConnection: Send + Sync + std::fmt::Debug + 'static {
 /// Database rows trait for iterating over result sets
 pub trait DatabaseRowSet: Send + Sync + std::fmt::Debug + 'static {
     /// Fetch the next row
-    fn next(&mut self) -> DatabaseResult<Option<PgRow>>;
+    fn next(&mut self) -> Option<Box<dyn DatabaseRow>>;
 }
 
-/// Database row structure
-#[cfg(feature = "postgres")]
-#[derive(Debug)]
+/// A PostgreSQL row set
+pub struct PgRowSet {
+    rows: Vec<sqlx::postgres::PgRow>,
+    current_index: usize,
+}
+
+impl PgRowSet {
+    fn new(rows: Vec<sqlx::postgres::PgRow>) -> Self {
+        Self {
+            rows,
+            current_index: 0,
+        }
+    }
+}
+
+impl DatabaseRowSet for PgRowSet {
+    fn next(&mut self) -> Option<Box<dyn DatabaseRow>> {
+        if self.current_index < self.rows.len() {
+            let row = self.rows[self.current_index].clone();
+            self.current_index += 1;
+            Some(Box::new(PgRow::new(row)))
+        } else {
+            None
+        }
+    }
+}
+
+/// A PostgreSQL row
 pub struct PgRow {
-    inner: sqlx::postgres::PgRow,
+    row: sqlx::postgres::PgRow,
 }
 
-#[cfg(feature = "postgres")]
 impl PgRow {
-    /// Create a new PgRow
-    pub fn new(row: sqlx::postgres::PgRow) -> Self {
-        Self { inner: row }
+    fn new(row: sqlx::postgres::PgRow) -> Self {
+        Self { row }
+    }
+}
+
+impl DatabaseRow for PgRow {
+    fn get_column_value(&self, column: &str) -> DatabaseResult<Option<serde_json::Value>> {
+        match self.row.try_get::<Option<serde_json::Value>, _>(column) {
+            Ok(value) => Ok(value),
+            Err(e) => Err(DatabaseError::query_error(format!(
+                "Failed to get column value: {}",
+                e
+            ))),
+        }
     }
 
-    /// Get a value from the row by column name
-    pub fn get<T>(&self, name: &str) -> DatabaseResult<T>
-    where
-        T: for<'a> sqlx::decode::Decode<'a, sqlx::Postgres> + sqlx::Type<sqlx::Postgres>,
-    {
-        self.inner.try_get(name).map_err(|e| {
-            error!("Failed to get column {}: {}", name, e);
-            DatabaseError::QueryError(format!("Failed to get column {}: {}", name, e))
-        })
-    }
-
-    /// Get a value from the row by column index
-    pub fn get_by_index<T>(&self, index: usize) -> DatabaseResult<T>
-    where
-        T: for<'a> sqlx::decode::Decode<'a, sqlx::Postgres> + sqlx::Type<sqlx::Postgres>,
-    {
-        self.inner.try_get(index).map_err(|e| {
-            error!("Failed to get column at index {}: {}", index, e);
-            DatabaseError::QueryError(format!("Failed to get column at index {}: {}", index, e))
-        })
+    fn get_column_names(&self) -> Vec<String> {
+        self.row
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect()
     }
 }
 
@@ -402,6 +449,7 @@ impl PgTransaction {
     }
 }
 
+#[cfg(feature = "postgres")]
 #[async_trait]
 impl DatabaseTransaction for PgTransaction {
     async fn execute<'a>(
@@ -409,11 +457,11 @@ impl DatabaseTransaction for PgTransaction {
         query: &str,
         params: &[&'a (dyn sqlx::Encode<'a, sqlx::Postgres> + Sync)],
     ) -> DatabaseResult<u64> {
-        let mut query = sqlx::query(query);
+        let mut query_builder = sqlx::query(query);
         for param in params.iter() {
-            query = query.bind(param);
+            query_builder = query_builder.bind(param);
         }
-        let result = query
+        let result = query_builder
             .execute(&mut self.tx)
             .await
             .map_err(|e| DatabaseError::query_error(format!("Query execution error: {}", e)))?;
@@ -426,16 +474,16 @@ impl DatabaseTransaction for PgTransaction {
         query: &str,
         params: &[&'a (dyn sqlx::Encode<'a, sqlx::Postgres> + Sync)],
     ) -> DatabaseResult<Box<dyn DatabaseRowSet>> {
-        let mut query = sqlx::query(query);
+        let mut query_builder = sqlx::query(query);
         for param in params.iter() {
-            query = query.bind(param);
+            query_builder = query_builder.bind(param);
         }
-        let result = query
+        let rows = query_builder
             .fetch_all(&mut self.tx)
             .await
             .map_err(|e| DatabaseError::query_error(format!("Query execution error: {}", e)))?;
 
-        Ok(Box::new(PgRowSet::new(result)))
+        Ok(Box::new(PgRowSet::new(rows)))
     }
 
     async fn commit(self: Box<Self>) -> DatabaseResult<()> {
@@ -452,29 +500,38 @@ impl DatabaseTransaction for PgTransaction {
 
     async fn savepoint(&mut self, name: &str) -> DatabaseResult<()> {
         self.validate_savepoint_name(name)?;
-
         let query = format!("SAVEPOINT {}", name);
-        self.execute(&query, &[]).await.map(|_| ()).map_err(|e| {
-            DatabaseError::savepoint_error(format!("Failed to create savepoint: {}", e))
-        })
+        sqlx::query(&query)
+            .execute(&mut self.tx)
+            .await
+            .map_err(|e| {
+                DatabaseError::savepoint_error(format!("Failed to create savepoint: {}", e))
+            })?;
+        Ok(())
     }
 
     async fn rollback_to_savepoint(&mut self, name: &str) -> DatabaseResult<()> {
         self.validate_savepoint_name(name)?;
-
         let query = format!("ROLLBACK TO SAVEPOINT {}", name);
-        self.execute(&query, &[]).await.map(|_| ()).map_err(|e| {
-            DatabaseError::savepoint_error(format!("Failed to rollback to savepoint: {}", e))
-        })
+        sqlx::query(&query)
+            .execute(&mut self.tx)
+            .await
+            .map_err(|e| {
+                DatabaseError::savepoint_error(format!("Failed to rollback to savepoint: {}", e))
+            })?;
+        Ok(())
     }
 
     async fn release_savepoint(&mut self, name: &str) -> DatabaseResult<()> {
         self.validate_savepoint_name(name)?;
-
         let query = format!("RELEASE SAVEPOINT {}", name);
-        self.execute(&query, &[]).await.map(|_| ()).map_err(|e| {
-            DatabaseError::savepoint_error(format!("Failed to release savepoint: {}", e))
-        })
+        sqlx::query(&query)
+            .execute(&mut self.tx)
+            .await
+            .map_err(|e| {
+                DatabaseError::savepoint_error(format!("Failed to release savepoint: {}", e))
+            })?;
+        Ok(())
     }
 }
 
@@ -523,95 +580,6 @@ pub struct PgConnection {
 impl PgConnection {
     fn new(conn: sqlx::pool::PoolConnection<sqlx::Postgres>) -> Self {
         Self { conn }
-    }
-}
-
-/// PostgreSQL transaction
-#[cfg(feature = "postgres")]
-#[derive(Debug)]
-pub struct PgTransaction {
-    tx: sqlx::Transaction<'static, sqlx::Postgres>,
-}
-
-#[cfg(feature = "postgres")]
-impl PgTransaction {
-    /// Create a new PostgreSQL transaction
-    pub fn new(tx: sqlx::Transaction<'static, sqlx::Postgres>) -> Self {
-        Self { tx }
-    }
-}
-
-#[cfg(feature = "postgres")]
-#[async_trait]
-impl DatabaseConnection for PgConnection {
-    async fn execute(
-        &mut self,
-        query: &str,
-        params: &[&(dyn sqlx::Encode<'_, sqlx::Postgres> + Sync)],
-    ) -> DatabaseResult<u64> {
-        let mut query = sqlx::query(query);
-        for param in params.iter() {
-            query = query.bind(param);
-        }
-        let result = query
-            .execute(&mut self.conn)
-            .await
-            .map_err(|e| DatabaseError::QueryError(format!("Query execution failed: {}", e)))?;
-
-        Ok(result.rows_affected())
-    }
-
-    async fn query(
-        &mut self,
-        query: &str,
-        params: &[&(dyn sqlx::Encode<'_, sqlx::Postgres> + Sync)],
-    ) -> DatabaseResult<Box<dyn DatabaseRowSet>> {
-        struct PgRowSet {
-            rows: Vec<sqlx::postgres::PgRow>,
-            pos: usize,
-        }
-
-        impl DatabaseRowSet for PgRowSet {
-            fn next(&mut self) -> DatabaseResult<Option<PgRow>> {
-                if self.pos >= self.rows.len() {
-                    return Ok(None);
-                }
-
-                let row = self.rows.remove(self.pos);
-                Ok(Some(PgRow::new(row)))
-            }
-        }
-
-        impl std::fmt::Debug for PgRowSet {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.debug_struct("PgRowSet")
-                    .field("rows", &self.rows.len())
-                    .field("pos", &self.pos)
-                    .finish()
-            }
-        }
-
-        let mut query = sqlx::query(query);
-        for param in params.iter() {
-            query = query.bind(param);
-        }
-        let rows = query
-            .fetch_all(&mut self.conn)
-            .await
-            .map_err(|e| DatabaseError::QueryError(format!("Query execution failed: {}", e)))?;
-
-        Ok(Box::new(PgRowSet { rows, pos: 0 }))
-    }
-
-    async fn begin(&mut self) -> DatabaseResult<Box<dyn DatabaseTransaction>> {
-        let tx = self.conn.begin().await.map_err(|e| {
-            DatabaseError::TransactionError(format!("Failed to begin transaction: {}", e))
-        })?;
-
-        // Convert the transaction to a 'static lifetime
-        let tx: sqlx::Transaction<'static, sqlx::Postgres> = unsafe { std::mem::transmute(tx) };
-
-        Ok(Box::new(PgTransaction::new(tx)))
     }
 }
 
