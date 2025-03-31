@@ -327,6 +327,7 @@ pub trait DatabaseRowSet: Send + Sync + std::fmt::Debug + 'static {
 }
 
 /// A PostgreSQL row set
+#[derive(Debug)]
 pub struct PgRowSet {
     rows: Vec<sqlx::postgres::PgRow>,
     current_index: usize,
