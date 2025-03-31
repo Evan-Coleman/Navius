@@ -3,9 +3,23 @@ use async_trait::async_trait;
 use serde::Serialize;
 use std::sync::Arc;
 
+/// Trait for rendering templates with custom contexts
+#[async_trait]
+pub trait TemplateRenderer: Send + Sync {
+    /// Render a template with the given context
+    async fn render<T>(&self, name: &str, context: &T) -> TemplateResult<String>
+    where
+        T: Serialize + Send + Sync;
+
+    /// Render a template string with the given context
+    async fn render_string<T>(&self, template: &str, context: &T) -> TemplateResult<String>
+    where
+        T: Serialize + Send + Sync;
+}
+
 /// Represents a template engine
 #[async_trait]
-pub trait TemplateEngine: Send + Sync {
+pub trait TemplateEngine: TemplateRenderer + Send + Sync {
     /// Register a template from a string
     async fn register_template_string(&mut self, name: &str, template: &str) -> TemplateResult<()>;
 
@@ -17,16 +31,6 @@ pub trait TemplateEngine: Send + Sync {
 
     /// Check if a template exists
     async fn has_template(&self, name: &str) -> bool;
-
-    /// Render a template with the given context
-    async fn render<T>(&self, name: &str, context: &T) -> TemplateResult<String>
-    where
-        T: Serialize + Send + Sync;
-
-    /// Render a template string with the given context
-    async fn render_string<T>(&self, template: &str, context: &T) -> TemplateResult<String>
-    where
-        T: Serialize + Send + Sync;
 
     /// Get the name of the template engine
     fn engine_name(&self) -> &str;
@@ -109,39 +113,7 @@ impl MetricsTemplateEngine {
 }
 
 #[async_trait]
-impl TemplateEngine for MetricsTemplateEngine {
-    async fn register_template_string(&mut self, name: &str, template: &str) -> TemplateResult<()> {
-        let result = self.engine.register_template_string(name, template).await;
-
-        if let Some(metrics) = &self.metrics {
-            if result.is_ok() {
-                metrics.record_template_registration(name).await;
-            }
-        }
-
-        result
-    }
-
-    async fn register_template_file(&mut self, name: &str, path: &str) -> TemplateResult<()> {
-        let result = self.engine.register_template_file(name, path).await;
-
-        if let Some(metrics) = &self.metrics {
-            if result.is_ok() {
-                metrics.record_template_registration(name).await;
-            }
-        }
-
-        result
-    }
-
-    async fn register_templates_directory(&mut self, dir: &str, ext: &str) -> TemplateResult<()> {
-        self.engine.register_templates_directory(dir, ext).await
-    }
-
-    async fn has_template(&self, name: &str) -> bool {
-        self.engine.has_template(name).await
-    }
-
+impl TemplateRenderer for MetricsTemplateEngine {
     async fn render<T>(&self, name: &str, context: &T) -> TemplateResult<String>
     where
         T: Serialize + Send + Sync,
@@ -199,6 +171,41 @@ impl TemplateEngine for MetricsTemplateEngine {
             self.engine.render_string(template, context).await
         }
     }
+}
+
+#[async_trait]
+impl TemplateEngine for MetricsTemplateEngine {
+    async fn register_template_string(&mut self, name: &str, template: &str) -> TemplateResult<()> {
+        let result = self.engine.register_template_string(name, template).await;
+
+        if let Some(metrics) = &self.metrics {
+            if result.is_ok() {
+                metrics.record_template_registration(name).await;
+            }
+        }
+
+        result
+    }
+
+    async fn register_template_file(&mut self, name: &str, path: &str) -> TemplateResult<()> {
+        let result = self.engine.register_template_file(name, path).await;
+
+        if let Some(metrics) = &self.metrics {
+            if result.is_ok() {
+                metrics.record_template_registration(name).await;
+            }
+        }
+
+        result
+    }
+
+    async fn register_templates_directory(&mut self, dir: &str, ext: &str) -> TemplateResult<()> {
+        self.engine.register_templates_directory(dir, ext).await
+    }
+
+    async fn has_template(&self, name: &str) -> bool {
+        self.engine.has_template(name).await
+    }
 
     fn engine_name(&self) -> &str {
         self.engine.engine_name()
@@ -224,6 +231,30 @@ mod tests {
     struct MockTemplateEngine {
         name: String,
         templates: HashMap<String, String>,
+    }
+
+    #[async_trait]
+    impl TemplateRenderer for MockTemplateEngine {
+        async fn render<T>(&self, name: &str, context: &T) -> TemplateResult<String>
+        where
+            T: Serialize + Send + Sync,
+        {
+            if let Some(template) = self.templates.get(name) {
+                // In a real implementation, this would apply the context to the template
+                // Here we just return the template as-is
+                Ok(template.clone())
+            } else {
+                Err(TemplateError::template_not_found(name))
+            }
+        }
+
+        async fn render_string<T>(&self, template: &str, _context: &T) -> TemplateResult<String>
+        where
+            T: Serialize + Send + Sync,
+        {
+            // Just return the template string as-is
+            Ok(template.to_string())
+        }
     }
 
     #[async_trait]
@@ -254,29 +285,6 @@ mod tests {
 
         async fn has_template(&self, name: &str) -> bool {
             self.templates.contains_key(name)
-        }
-
-        async fn render<T>(&self, name: &str, context: &T) -> TemplateResult<String>
-        where
-            T: Serialize + Send + Sync,
-        {
-            match self.templates.get(name) {
-                Some(template) => {
-                    let _ctx = serde_json::to_value(context)
-                        .map_err(|e| TemplateError::serialization_error(e.to_string()))?;
-
-                    // Simple mock rendering - just return the template
-                    Ok(template.clone())
-                }
-                None => Err(TemplateError::template_not_found(name)),
-            }
-        }
-
-        async fn render_string<T>(&self, template: &str, _context: &T) -> TemplateResult<String>
-        where
-            T: Serialize + Send + Sync,
-        {
-            Ok(template.to_string())
         }
 
         fn engine_name(&self) -> &str {

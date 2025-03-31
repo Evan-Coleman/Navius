@@ -126,16 +126,16 @@ impl TemplateEngineFactory for FallbackTemplateEngineFactory {
 
 /// Template engine that delegates to another engine based on template name prefix
 pub struct DelegatingTemplateEngine {
-    /// Default engine to use
-    default_engine: Box<dyn TemplateEngine>,
-    /// Engines to delegate to based on template name prefix
-    engines: HashMap<String, Box<dyn TemplateEngine>>,
+    name: String,
+    default_engine: Box<dyn TemplateEngine + Send + Sync>,
+    engines: HashMap<String, Box<dyn TemplateEngine + Send + Sync>>,
 }
 
 impl DelegatingTemplateEngine {
     /// Create a new delegating template engine
-    pub fn new(default_engine: Box<dyn TemplateEngine>) -> Self {
+    pub fn new(default_engine: Box<dyn TemplateEngine + Send + Sync>) -> Self {
         Self {
+            name: "delegating".to_string(),
             default_engine,
             engines: HashMap::new(),
         }
@@ -145,63 +145,87 @@ impl DelegatingTemplateEngine {
     pub fn with_delegate(
         mut self,
         prefix: impl Into<String>,
-        engine: Box<dyn TemplateEngine>,
+        engine: Box<dyn TemplateEngine + Send + Sync>,
     ) -> Self {
         self.engines.insert(prefix.into(), engine);
         self
     }
 
     /// Get the engine for a template name
-    fn get_engine_for_template(&self, name: &str) -> &Box<dyn TemplateEngine> {
-        // Find the first matching prefix
+    fn get_engine_for_template(&self, name: &str) -> &Box<dyn TemplateEngine + Send + Sync> {
         for (prefix, engine) in &self.engines {
             if name.starts_with(prefix) {
                 return engine;
             }
         }
 
-        // Use default engine if no prefix matches
         &self.default_engine
     }
 
-    /// Get a mutable reference to the engine for a template name
-    fn get_engine_for_template_mut(&mut self, name: &str) -> &mut Box<dyn TemplateEngine> {
-        // Find the first matching prefix
-        for (prefix, engine) in &mut self.engines {
+    /// Get the mutable engine for a template name
+    fn get_engine_for_template_mut(
+        &mut self,
+        name: &str,
+    ) -> &mut Box<dyn TemplateEngine + Send + Sync> {
+        // First check if any prefix matches
+        for (prefix, _) in &self.engines {
             if name.starts_with(prefix) {
-                return engine;
+                let prefix = prefix.clone();
+                return self.engines.get_mut(&prefix).unwrap();
             }
         }
 
-        // Use default engine if no prefix matches
+        // If no prefix matches, use the default engine
         &mut self.default_engine
+    }
+}
+
+#[async_trait::async_trait]
+impl TemplateRenderer for DelegatingTemplateEngine {
+    async fn render<T>(&self, name: &str, context: &T) -> TemplateResult<String>
+    where
+        T: serde::Serialize + Send + Sync,
+    {
+        // Find the right engine and delegate the render call
+        let engine = self.get_engine_for_template(name);
+        engine.render(name, context).await
+    }
+
+    async fn render_string<T>(&self, template: &str, context: &T) -> TemplateResult<String>
+    where
+        T: serde::Serialize + Send + Sync,
+    {
+        // Always use the default engine for string templates
+        self.default_engine.render_string(template, context).await
     }
 }
 
 #[async_trait::async_trait]
 impl TemplateEngine for DelegatingTemplateEngine {
     async fn register_template_string(&mut self, name: &str, template: &str) -> TemplateResult<()> {
+        // Delegate to the right engine
         self.get_engine_for_template_mut(name)
             .register_template_string(name, template)
             .await
     }
 
     async fn register_template_file(&mut self, name: &str, path: &str) -> TemplateResult<()> {
+        // Delegate to the right engine
         self.get_engine_for_template_mut(name)
             .register_template_file(name, path)
             .await
     }
 
     async fn register_templates_directory(&mut self, dir: &str, ext: &str) -> TemplateResult<()> {
-        // Register with all engines
-        for engine in self.engines.values_mut() {
-            engine.register_templates_directory(dir, ext).await?;
-        }
-
-        // Register with default engine
+        // First register with default engine
         self.default_engine
             .register_templates_directory(dir, ext)
             .await?;
+
+        // Then register with all delegate engines
+        for engine in self.engines.values_mut() {
+            engine.register_templates_directory(dir, ext).await?;
+        }
 
         Ok(())
     }
@@ -210,25 +234,8 @@ impl TemplateEngine for DelegatingTemplateEngine {
         self.get_engine_for_template(name).has_template(name).await
     }
 
-    async fn render<T>(&self, name: &str, context: &T) -> TemplateResult<String>
-    where
-        T: serde::Serialize + Send + Sync,
-    {
-        self.get_engine_for_template(name)
-            .render(name, context)
-            .await
-    }
-
-    async fn render_string<T>(&self, template: &str, context: &T) -> TemplateResult<String>
-    where
-        T: serde::Serialize + Send + Sync,
-    {
-        // For render_string, use the default engine
-        self.default_engine.render_string(template, context).await
-    }
-
     fn engine_name(&self) -> &str {
-        "delegating"
+        &self.name
     }
 
     async fn clear_templates(&mut self) -> TemplateResult<()> {
@@ -269,17 +276,38 @@ mod tests {
     use serde::Serialize;
     use std::collections::HashMap;
 
+    #[derive(Default)]
     struct MockTemplateEngine {
         name: String,
-        templates: HashMap<String, String>,
+        templates: std::collections::HashMap<String, String>,
     }
 
     impl MockTemplateEngine {
         fn new(name: impl Into<String>) -> Self {
             Self {
                 name: name.into(),
-                templates: HashMap::new(),
+                templates: std::collections::HashMap::new(),
             }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl TemplateRenderer for MockTemplateEngine {
+        async fn render<T>(&self, name: &str, _context: &T) -> TemplateResult<String>
+        where
+            T: serde::Serialize + Send + Sync,
+        {
+            self.templates
+                .get(name)
+                .cloned()
+                .ok_or_else(|| TemplateError::TemplateNotFound(name.to_string()))
+        }
+
+        async fn render_string<T>(&self, template: &str, _context: &T) -> TemplateResult<String>
+        where
+            T: serde::Serialize + Send + Sync,
+        {
+            Ok(template.to_string())
         }
     }
 
@@ -297,7 +325,7 @@ mod tests {
 
         async fn register_template_file(&mut self, name: &str, _path: &str) -> TemplateResult<()> {
             self.templates
-                .insert(name.to_string(), "Mock file template".to_string());
+                .insert(name.to_string(), format!("mock file template: {}", name));
             Ok(())
         }
 
@@ -311,23 +339,6 @@ mod tests {
 
         async fn has_template(&self, name: &str) -> bool {
             self.templates.contains_key(name)
-        }
-
-        async fn render<T>(&self, name: &str, _context: &T) -> TemplateResult<String>
-        where
-            T: Serialize + Send + Sync,
-        {
-            match self.templates.get(name) {
-                Some(template) => Ok(template.clone()),
-                None => Err(TemplateError::template_not_found(name)),
-            }
-        }
-
-        async fn render_string<T>(&self, template: &str, _context: &T) -> TemplateResult<String>
-        where
-            T: Serialize + Send + Sync,
-        {
-            Ok(template.to_string())
         }
 
         fn engine_name(&self) -> &str {
@@ -371,7 +382,7 @@ mod tests {
                     "Failed to create engine".to_string(),
                 ))
             } else {
-                Ok(Box::new(MockTemplateEngine::new(&self.name)))
+                Ok(Box::new(MockTemplateEngine::new(self.name.clone())))
             }
         }
     }

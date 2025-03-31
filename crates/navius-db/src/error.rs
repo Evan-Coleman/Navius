@@ -1,9 +1,10 @@
 use navius_core::error::Error as AppError;
+use navius_core::error::ErrorCode;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
 /// Database errors that can occur during database operations
-#[derive(Debug, Error, Clone)]
+#[derive(Debug, Error)]
 pub enum DatabaseError {
     /// Connection errors
     #[error("Failed to connect to database: {0}")]
@@ -95,6 +96,60 @@ pub enum DatabaseError {
         /// Error chain (previous errors that led to this one)
         chain: Vec<Box<DatabaseError>>,
     },
+}
+
+impl Clone for DatabaseError {
+    fn clone(&self) -> Self {
+        match self {
+            Self::ConnectionError(s) => Self::ConnectionError(s.clone()),
+            Self::QueryError(s) => Self::QueryError(s.clone()),
+            Self::TransactionError(s) => Self::TransactionError(s.clone()),
+            Self::TransactionFinished => Self::TransactionFinished,
+            Self::SavepointError(s) => Self::SavepointError(s.clone()),
+            Self::PoolError(s) => Self::PoolError(s.clone()),
+            Self::MigrationError(s) => Self::MigrationError(s.clone()),
+            Self::ConfigurationError(s) => Self::ConfigurationError(s.clone()),
+            Self::NotFoundError(s) => Self::NotFoundError(s.clone()),
+            Self::ValidationError(s) => Self::ValidationError(s.clone()),
+            Self::UnexpectedStateError(s) => Self::UnexpectedStateError(s.clone()),
+            Self::WithContext { context, source } => Self::WithContext {
+                context: context.clone(),
+                source: source.clone(),
+            },
+            Self::ParameterError(s) => Self::ParameterError(s.clone()),
+            Self::RowAccessError(s) => Self::RowAccessError(s.clone()),
+            Self::SQLXError(_) => Self::QueryError("Database error (clone of SQLXError)".into()),
+            Self::IOError(_) => Self::QueryError("IO error (clone of IOError)".into()),
+            Self::DetailedDatabaseError {
+                db_operation,
+                table_name,
+                message,
+                source,
+            } => Self::DetailedDatabaseError {
+                db_operation: db_operation.clone(),
+                table_name: table_name.clone(),
+                message: message.clone(),
+                source: source.clone(),
+            },
+            Self::ChainedError {
+                message,
+                context,
+                chain: ref_chain,
+            } => {
+                // Create a new chain
+                let new_chain = ref_chain
+                    .iter()
+                    .map(|err| Box::new((**err).clone()))
+                    .collect();
+
+                Self::ChainedError {
+                    message: message.clone(),
+                    context: context.clone(),
+                    chain: new_chain,
+                }
+            }
+        }
+    }
 }
 
 /// Error context information to enrich error messages
