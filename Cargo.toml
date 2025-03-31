@@ -11,42 +11,43 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-authors = ["Navius Contributors"]
+authors = ["Navius Team"]
 license = "Apache-2.0"
 repository = "https://github.com/navius/navius"
 documentation = "https://docs.navius.io"
 readme = "README.md"
 
 [workspace.dependencies]
-# Core crates
-navius-core = { path = "crates/navius-core" }
-navius-http = { path = "crates/navius-http" }
-navius-auth = { path = "crates/navius-auth" }
-navius-auth-entra = { path = "crates/navius-auth-entra" }
-navius-db = { path = "crates/navius-db" }
-navius-db-postgres = { path = "crates/navius-db-postgres" }
-navius-cache = { path = "crates/navius-cache" }
-navius-cache-redis = { path = "crates/navius-cache-redis" }
-navius-di = { path = "crates/navius-di" }
-navius-plugin = { path = "crates/navius-plugin" }
-navius-event = { path = "crates/navius-event" }
-navius-job = { path = "crates/navius-job" }
-navius-messaging = { path = "crates/navius-messaging" }
-navius-metrics = { path = "crates/navius-metrics" }
-navius-metrics-prometheus = { path = "crates/navius-metrics-prometheus" }
-navius-test = { path = "crates/navius-test" }
-navius-test-utils = { path = "crates/navius-test-utils" }
-navius-template = { path = "crates/navius-template" }
-navius-cli = { path = "crates/navius-cli" }
-
-# External dependencies
+# Core dependencies
 tokio = { version = "1.44.1", features = ["full"] }
-axum = "0.8.3"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-thiserror = "2.0.12"
+async-trait = "0.1.88"
 tracing = "0.1.41"
-tracing-subscriber = "0.3.19"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+thiserror = "2.0.12"
+uuid = { version = "1.16.0", features = ["v4", "serde"] }
+chrono = { version = "0.4.40", features = ["serde"] }
+
+# Web framework
+axum = "0.8.3"
+tower = { version = "0.5.2", features = ["limit"] }
+tower-http = { version = "0.6.2", features = ["trace", "cors", "compression-br", "compression-gzip", "timeout", "limit"] }
+
+# Database
+sqlx = { version = "0.8.3", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json"] }
+
+# Cache
+redis = { version = "0.29.2", features = ["tokio-comp", "connection-manager"] }
+
+# Configuration
+config = "0.15.11"
+dotenvy = "0.15.7"
+
+# Testing
+tokio-test = "0.4.4"
+mockall = "0.13.1"
+proptest = "1.6.0"
 
 [profile.dev]
 opt-level = 0
