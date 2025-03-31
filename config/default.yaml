@@ -1,116 +1,62 @@
-# Default configuration file
-# These settings can be overridden by environment-specific files or environment variables
-# 
-# Environment variable overrides follow these patterns:
-# - SERVER_* for server settings
-# - API_* for API settings
-# - APP_* for app settings
-# - AUTH_* for auth settings
-# - NAVIUS_* for Entra ID specific settings
+# Default configuration for Navius application
+# This file contains the default configuration values that will be used
+# unless overridden by environment-specific files or environment variables
 
-server:
-  host: "0.0.0.0"
-  port: 3000
-  timeout_seconds: 10
-  max_retries: 3
-  protocol: "http"
+# Application metadata
+app_name: navius
+log_level: info
 
-api:
-  petstore_url: "https://petstore3.swagger.io/api/v3"
-  api_key: null
+# HTTP server configuration
+http:
+  host: 127.0.0.1
+  port: 8080
+  cors_allowed_origins:
+    - "http://localhost:3000"
+    - "http://localhost:8080"
+  request_timeout_secs: 30
 
-app:
-  name: "Petstore API Server"
-  version: "1.0.0"
-  log_level: "info"
-
-# Authentication settings
+# Authentication configuration
 auth:
-  # Enable/disable authentication (override with AUTH_ENABLED)
-  enabled: true
-  # Enable/disable debug mode (override with AUTH_DEBUG or DEBUG_AUTH)
-  debug: false
-  # Entra ID (Azure AD) settings
-  # The following values must be set through environment variables:
-  # - NAVIUS_TENANT_ID
-  # - NAVIUS_CLIENT_ID
-  # - NAVIUS_CLIENT_SECRET
-  default_provider: "entra"
-  providers:
-    entra:
-      enabled: true
-      client_id: "${NAVIUS_CLIENT_ID}"
-      jwks_uri: "https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys"
-      # Audience and issuer are derived automatically
-      role_mappings:
-        admin: ["admin"]
-        read_only: ["read"]
-        full_access: ["full"]
-      provider_specific:
-        entra_tenant_id: "${NAVIUS_TENANT_ID}"
-        entra_token_version: "2.0"
-      refresh_rate_limit:
-        max_requests: 5
-        per_seconds: 60
-      circuit_breaker:
-        reset_timeout_seconds: 60
+  enabled: false
+  provider: entra
+  entra:
+    tenant_id: ""
+    client_id: ""
+    client_secret: ""
+    issuer: ""
+    jwks_uri: ""
 
-    google:
-      enabled: false
-      client_id: "${GOOGLE_CLIENT_ID}"
-      jwks_uri: "https://www.googleapis.com/oauth2/v3/certs"
-      issuer_url: "https://accounts.google.com"
-      audience: "${GOOGLE_CLIENT_ID}.apps.googleusercontent.com"
+# Database configuration
+database:
+  enabled: false
+  url: postgresql://postgres:postgres@localhost:5432/navius
+  max_connections: 10
+  min_connections: 5
 
+# Cache configuration
 cache:
-  enabled: true
-  ttl_seconds: 30
-  max_capacity: 1000
-  reconnect_interval_seconds: 30
+  enabled: false
+  url: redis://localhost:6379/0
+  ttl_seconds: 3600
 
-# Reference to reliability settings
-# Detailed configuration in reliability.yaml
-reliability:
-  enabled: true
-
-# OpenAPI configuration
-openapi:
-  spec_file: "navius-swagger.yaml"
-
-logging:
-  level: "info"
-  format: "json"
-
-# Feature configuration
-# Controls which optional features are enabled
-features:
-  # List of features to enable by default
-  enabled: 
-    - "core"           # Required core functionality
-    - "error_handling" # Error handling system
-    - "config"         # Configuration system
-    - "auth"           # Authentication system
-    - "metrics"        # Basic metrics
-    - "caching"        # Caching functionality
-    - "reliability"    # Reliability features
-  
-  # Feature-specific configuration
-  config:
-    # Advanced metrics configuration (when enabled)
-    advanced_metrics:
-      histogram_buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0]
-      export_interval_seconds: 15
-      enable_process_metrics: true
-
-# Date format configuration
-# These settings control how dates are displayed throughout the application
+# Date formatting configuration
 date_formats:
-  # Format for simple dates in technical documentation (MM/DD/YYYY)
   simple: "%m/%d/%Y"
-  
-  # Format for user-facing content and formal documentation (Month DD, YYYY)
   formal: "%B %d, %Y"
-  
-  # Format for database storage and API responses (ISO 8601)
-  # This is the most precise format and should be used for all data storage
   verbose: "%Y-%m-%dT%H:%M:%S%.3fZ"
+
+# Metrics configuration
+metrics:
+  enabled: false
+  endpoint: /actuator/metrics
+  prometheus_endpoint: /actuator/prometheus
+  
+# Feature flags
+features:
+  web: true
+  auth: true
+  database: true
+  cache: true
+  metrics: true
+  events: true
+  plugins: true
