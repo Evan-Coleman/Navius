@@ -1,9 +1,11 @@
 use crate::error::{PluginHealth, PluginResult};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
+use std::path::PathBuf;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -207,11 +209,20 @@ impl PluginDependency {
     }
 }
 
-/// Defines the core functionality of a Navius plugin
-#[async_trait]
-pub trait Plugin: Send + Sync + Debug {
-    /// Get the plugin's unique identifier
+/// Trait for handling plugin messages asynchronously
+#[async_trait::async_trait]
+pub trait MessageHandler: Send + Sync {
+    /// Handle a message sent to the plugin
+    async fn handle_message(&self, message: Value) -> PluginResult<Option<Value>>;
+}
+
+/// Represents a plugin in the system
+pub trait Plugin: Send + Sync + Debug + MessageHandler {
+    /// Get the plugin ID
     fn id(&self) -> &str;
+
+    /// Get the plugin version
+    fn version(&self) -> &str;
 
     /// Get the plugin's metadata
     fn metadata(&self) -> &PluginMetadata;
@@ -244,15 +255,6 @@ pub trait Plugin: Send + Sync + Debug {
     /// Get a specific capability by ID
     fn get_capability(&self, capability_id: &str) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
         self.capabilities().get(capability_id).cloned()
-    }
-
-    /// Handle a message sent to the plugin
-    async fn handle_message(
-        &self,
-        message: serde_json::Value,
-    ) -> PluginResult<Option<serde_json::Value>> {
-        // Default implementation ignores messages
-        Ok(None)
     }
 }
 

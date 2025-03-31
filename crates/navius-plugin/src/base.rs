@@ -6,6 +6,7 @@ use std::fmt::Debug;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
+use crate::MessageHandler;
 use crate::capability::Capability;
 use crate::error::{PluginError, PluginHealth, PluginResult};
 use crate::plugin::{Plugin, PluginConfig, PluginDependency, PluginLifecycleStage, PluginMetadata};
@@ -26,10 +27,16 @@ pub struct BasePlugin {
     dependencies: Vec<PluginDependency>,
 
     /// Plugin capabilities mapped by capability ID
-    capabilities: RwLock<HashMap<String, Arc<dyn std::any::Any + Send + Sync>>>,
+    capabilities: RwLock<HashMap<String, Box<dyn Any + Send + Sync>>>,
 
     /// Current health status
     health: RwLock<PluginHealth>,
+
+    /// Plugin ID
+    id: String,
+
+    /// Plugin version
+    version: String,
 }
 
 impl BasePlugin {
@@ -42,6 +49,8 @@ impl BasePlugin {
             dependencies: Vec::new(),
             capabilities: RwLock::new(HashMap::new()),
             health: RwLock::new(PluginHealth::Healthy),
+            id: metadata.id.clone(),
+            version: metadata.version.clone(),
         }
     }
 
@@ -86,12 +95,50 @@ impl BasePlugin {
             *health_guard = health;
         }
     }
+
+    /// Get the plugin's metadata
+    pub fn metadata(&self) -> &PluginMetadata {
+        &self.metadata
+    }
+
+    /// Get the plugin's configuration
+    pub fn config(&self) -> &PluginConfig {
+        &self.config
+    }
+
+    /// Get the plugin's dependencies
+    pub fn dependencies(&self) -> &[PluginDependency] {
+        &self.metadata.dependencies
+    }
+
+    /// Get the plugin's capabilities
+    pub fn capabilities(&self) -> &RwLock<HashMap<String, Box<dyn Any + Send + Sync>>> {
+        &self.capabilities
+    }
+
+    /// Get the plugin's health status
+    pub fn health(&self) -> &RwLock<PluginHealth> {
+        &self.health
+    }
+
+    /// Get a capability by ID
+    pub fn get_capability<T: Any + Send + Sync>(&self, capability_id: &str) -> Option<Box<T>> {
+        self.capabilities()
+            .read()
+            .unwrap()
+            .get(capability_id)
+            .and_then(|cap| cap.downcast_ref::<T>().cloned())
+    }
 }
 
 #[async_trait]
 impl Plugin for BasePlugin {
     fn id(&self) -> &str {
-        &self.metadata.id
+        &self.id
+    }
+
+    fn version(&self) -> &str {
+        &self.version
     }
 
     fn metadata(&self) -> &PluginMetadata {
@@ -103,27 +150,13 @@ impl Plugin for BasePlugin {
     }
 
     async fn initialize(&mut self, config: PluginConfig) -> PluginResult<()> {
-        // Check if we're in the right stage
-        {
-            let stage = *self.lifecycle_stage.read().unwrap();
-            if stage != PluginLifecycleStage::Created {
-                return Err(PluginError::InvalidState {
-                    plugin_id: self.id().to_string(),
-                    current_state: format!("{:?}", stage),
-                    required_state: format!("{:?}", PluginLifecycleStage::Created),
-                });
-            }
-        }
-
-        // Update configuration
-        {
-            let mut plugin_config = self.config.write().unwrap();
-            *plugin_config = config;
+        // Store configuration
+        if let Ok(mut current_config) = self.config.write() {
+            *current_config = config;
         }
 
         // Update lifecycle stage
-        {
-            let mut stage = self.lifecycle_stage.write().unwrap();
+        if let Ok(mut stage) = self.lifecycle_stage.write() {
             *stage = PluginLifecycleStage::Initialized;
         }
 
@@ -131,43 +164,17 @@ impl Plugin for BasePlugin {
     }
 
     async fn start(&mut self) -> PluginResult<()> {
-        // Check if we're in the right stage
-        {
-            let stage = *self.lifecycle_stage.read().unwrap();
-            if stage != PluginLifecycleStage::Initialized {
-                return Err(PluginError::InvalidState {
-                    plugin_id: self.id().to_string(),
-                    current_state: format!("{:?}", stage),
-                    required_state: format!("{:?}", PluginLifecycleStage::Initialized),
-                });
-            }
-        }
-
         // Update lifecycle stage
-        {
-            let mut stage = self.lifecycle_stage.write().unwrap();
-            *stage = PluginLifecycleStage::Started;
+        if let Ok(mut stage) = self.lifecycle_stage.write() {
+            *stage = PluginLifecycleStage::Running;
         }
 
         Ok(())
     }
 
     async fn stop(&mut self) -> PluginResult<()> {
-        // Check if we're in the right stage
-        {
-            let stage = *self.lifecycle_stage.read().unwrap();
-            if stage != PluginLifecycleStage::Started {
-                return Err(PluginError::InvalidState {
-                    plugin_id: self.id().to_string(),
-                    current_state: format!("{:?}", stage),
-                    required_state: format!("{:?}", PluginLifecycleStage::Started),
-                });
-            }
-        }
-
         // Update lifecycle stage
-        {
-            let mut stage = self.lifecycle_stage.write().unwrap();
+        if let Ok(mut stage) = self.lifecycle_stage.write() {
             *stage = PluginLifecycleStage::Stopped;
         }
 
@@ -175,7 +182,7 @@ impl Plugin for BasePlugin {
     }
 
     async fn health_check(&self) -> PluginHealth {
-        self.health.read().unwrap().clone()
+        *self.health.read().unwrap()
     }
 
     fn dependencies(&self) -> Vec<PluginDependency> {
@@ -193,9 +200,12 @@ impl Plugin for BasePlugin {
             .get(capability_id)
             .cloned()
     }
+}
 
-    async fn handle_message(&self, message: Value) -> PluginResult<Option<Value>> {
-        // Default implementation - no message handling
+#[async_trait]
+impl MessageHandler for BasePlugin {
+    async fn handle_message(&self, _message: Value) -> PluginResult<Option<Value>> {
+        // Default implementation does nothing
         Ok(None)
     }
 }

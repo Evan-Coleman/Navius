@@ -61,7 +61,7 @@ pub enum PluginError {
         required_state: String,
     },
 
-    /// IO error
+    /// IO error occurred during plugin operation
     IoError(io::Error),
 
     /// Dynamic library loading error
@@ -77,10 +77,55 @@ pub enum PluginError {
     RuntimeError(String),
 
     /// Incompatible API version
-    IncompatibleApiVersion { required: String, found: String },
+    IncompatibleApiVersion {
+        /// The required API version
+        required: String,
+        /// The actual API version found
+        found: String,
+    },
 
     /// Other error
     Other(String),
+
+    /// Missing plugin dependency
+    MissingDependency {
+        /// The ID of the plugin that requires the dependency
+        plugin_id: String,
+        /// The ID of the missing dependency
+        dependency_id: String,
+        /// The required version of the dependency
+        version: String,
+    },
+
+    /// Incompatible plugin dependency version
+    IncompatibleDependency {
+        /// The ID of the plugin with the incompatible dependency
+        plugin_id: String,
+        /// The ID of the dependency with version mismatch
+        dependency_id: String,
+        /// The required version of the dependency
+        required: String,
+        /// The actual version found
+        found: String,
+    },
+
+    /// Missing plugin capability
+    MissingCapability {
+        /// The ID of the plugin requiring the capability
+        plugin_id: String,
+        /// The ID of the missing capability
+        capability_id: String,
+    },
+
+    /// Invalid plugin lifecycle state transition
+    InvalidStateTransition {
+        /// The ID of the plugin with invalid state transition
+        plugin_id: String,
+        /// The current state of the plugin
+        current_state: String,
+        /// The state that was attempted to transition to
+        required_state: String,
+    },
 }
 
 impl fmt::Display for PluginError {
@@ -136,17 +181,53 @@ impl fmt::Display for PluginError {
                 "Plugin '{}' is in state '{}' but requires state '{}'",
                 plugin_id, current_state, required_state
             ),
-            PluginError::IoError(err) => write!(f, "IO error: {}", err),
+            PluginError::IoError(err) => write!(f, "Plugin IO error: {}", err),
             PluginError::LibraryError(msg) => write!(f, "Dynamic library error: {}", msg),
             PluginError::ConfigurationError(msg) => write!(f, "Configuration error: {}", msg),
             PluginError::ValidationError(msg) => write!(f, "Validation error: {}", msg),
             PluginError::RuntimeError(msg) => write!(f, "Runtime error: {}", msg),
             PluginError::IncompatibleApiVersion { required, found } => write!(
                 f,
-                "Incompatible API version: required '{}', found '{}'",
+                "API version mismatch: required '{}', found '{}'",
                 required, found
             ),
             PluginError::Other(msg) => write!(f, "Plugin error: {}", msg),
+            PluginError::MissingDependency {
+                plugin_id,
+                dependency_id,
+                version,
+            } => write!(
+                f,
+                "Plugin '{}' requires dependency '{}' version '{}' which was not found",
+                plugin_id, dependency_id, version
+            ),
+            PluginError::IncompatibleDependency {
+                plugin_id,
+                dependency_id,
+                required,
+                found,
+            } => write!(
+                f,
+                "Plugin '{}' dependency '{}' version mismatch: required '{}', found '{}'",
+                plugin_id, dependency_id, required, found
+            ),
+            PluginError::MissingCapability {
+                plugin_id,
+                capability_id,
+            } => write!(
+                f,
+                "Plugin '{}' requires capability '{}' which was not found",
+                plugin_id, capability_id
+            ),
+            PluginError::InvalidStateTransition {
+                plugin_id,
+                current_state,
+                required_state,
+            } => write!(
+                f,
+                "Plugin '{}' invalid state transition from '{}' to '{}'",
+                plugin_id, current_state, required_state
+            ),
         }
     }
 }
