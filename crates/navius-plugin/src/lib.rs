@@ -28,8 +28,8 @@ pub mod base;
 pub use base::{BasePlugin, PluginBuilder};
 pub use capability::{
     Capability, ConfigurationCapability, EventCapability, HealthCheckCapability, HttpCapability,
-    LoggingCapability, RouteHandler, RouteInfo, RouteResponse, RoutingCapability,
-    StorageCapability, downcast_capability, downcast_capability_mut,
+    HttpRequest, HttpResponse, LoggingCapability, RoutingCapability, StorageCapability,
+    downcast_capability, downcast_capability_mut,
 };
 pub use error::{PluginError, PluginHealth, PluginResult};
 pub use loader::{InMemoryPluginProvider, PluginLoader};

@@ -256,15 +256,4 @@ pub trait Plugin: Send + Sync + Debug {
     }
 }
 
-/// Create a convenient macro for creating a plugin builder
-#[macro_export]
-macro_rules! plugin {
-    ($id:expr, $version:expr, $description:expr, $author:expr) => {{
-        use $crate::base::PluginBuilder;
-        PluginBuilder::new($id, $version, $id, $description, $author)
-    }};
-    ($id:expr, $version:expr, $name:expr, $description:expr, $author:expr) => {{
-        use $crate::base::PluginBuilder;
-        PluginBuilder::new($id, $version, $name, $description, $author)
-    }};
-}
+// The plugin macro has been moved to lib.rs to avoid redefinition

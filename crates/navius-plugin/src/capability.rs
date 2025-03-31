@@ -28,26 +28,6 @@ pub trait Capability: Any + Send + Sync + Debug {
     fn clone_capability(&self) -> Box<dyn Capability>;
 }
 
-/// Convenience macro for implementing the Capability trait
-#[macro_export]
-macro_rules! impl_capability {
-    ($type:ty, $capability_type:expr) => {
-        impl Capability for $type {
-            fn capability_type(&self) -> &'static str {
-                $capability_type
-            }
-
-            fn id(&self) -> &str {
-                $capability_type
-            }
-
-            fn clone_capability(&self) -> Box<dyn Capability> {
-                Box::new(self.clone())
-            }
-        }
-    };
-}
-
 /// Helper function to downcast a capability to a specific type
 pub fn downcast_capability<T: Capability + 'static>(capability: &dyn Capability) -> Option<&T> {
     capability.as_any().downcast_ref::<T>()
