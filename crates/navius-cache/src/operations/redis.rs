@@ -4,8 +4,8 @@ use crate::error::{CacheError, CacheResult};
 use crate::metrics::{CacheOperation, CacheTimer};
 use crate::operations::{Cache, CacheKey, CacheOperations, CacheOptions};
 use async_trait::async_trait;
-use redis::{aio::ConnectionManager, Client, RedisResult};
-use serde::{de::DeserializeOwned, Serialize};
+use redis::{Client, RedisResult, aio::ConnectionManager};
+use serde::{Serialize, de::DeserializeOwned};
 use serde_json;
 use std::sync::Arc;
 use std::time::Duration;
@@ -36,12 +36,20 @@ impl From<&CacheConfig> for RedisConfig {
 }
 
 /// Redis cache implementation
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RedisCache {
     /// Redis connection manager
     connection: ConnectionManager,
     /// Cache configuration
     config: Arc<CacheConfig>,
+}
+
+impl std::fmt::Debug for RedisCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RedisCache")
+            .field("config", &self.config)
+            .finish()
+    }
 }
 
 impl RedisCache {
@@ -203,12 +211,13 @@ impl CacheOperations for RedisCache {
         let serialized = self.serialize(value)?;
         let ttl = self.get_ttl(options);
 
-        let result = match ttl {
+        let result: RedisResult<()> = match ttl {
             Some(ttl) => {
-                redis::cmd("SETEX")
+                redis::cmd("SET")
                     .arg(&prefixed_key)
-                    .arg(ttl.as_secs())
                     .arg(serialized)
+                    .arg("PX")
+                    .arg(ttl.as_millis() as u64)
                     .query_async(&mut self.connection.clone())
                     .await
             }

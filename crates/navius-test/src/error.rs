@@ -272,6 +272,11 @@ impl TestError {
     pub fn generic_error(message: impl Into<String>) -> Self {
         Self::GenericError(message.into())
     }
+
+    /// Create a new IO error
+    pub fn io_error(err: std::io::Error) -> Self {
+        Self::IoError(err)
+    }
 }
 
 impl fmt::Display for TestError {
