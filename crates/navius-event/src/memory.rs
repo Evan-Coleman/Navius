@@ -1,3 +1,4 @@
+use super::broker::{EventBrokerConfig, EventBrokerFactory};
 use crate::broker::{BrokerInfo, EventBroker, EventBrokerConfig, TopicInfo};
 use crate::error::{DeliveryStatus, EventError, EventResult};
 use crate::event::{
@@ -612,9 +613,19 @@ impl EventBroker for InMemoryEventBroker {
 pub struct InMemoryEventBrokerFactory {}
 
 impl InMemoryEventBrokerFactory {
-    /// Create a new in-memory event broker factory
+    /// Create a new memory broker factory
     pub fn new() -> Self {
         Self {}
+    }
+
+    /// Create a memory broker with the given configuration
+    pub async fn create_memory_broker(
+        &self,
+        config: EventBrokerConfig,
+    ) -> EventResult<Arc<InMemoryEventBroker>> {
+        let broker = InMemoryEventBroker::new(config);
+        let _cleanup_task = broker.start_cleanup_task();
+        Ok(Arc::new(broker))
     }
 }
 
@@ -624,11 +635,12 @@ impl Default for InMemoryEventBrokerFactory {
     }
 }
 
-#[async_trait]
-impl super::broker::EventBrokerFactory for InMemoryEventBrokerFactory {
-    async fn create_broker(&self, config: EventBrokerConfig) -> EventResult<Arc<dyn EventBroker>> {
-        let broker = InMemoryEventBroker::new(config);
-        let _cleanup_task = broker.start_cleanup_task();
-        Ok(Arc::new(broker))
+impl EventBrokerFactory for InMemoryEventBrokerFactory {
+    /// Create a new event broker implementation
+    async fn create_broker(
+        &self,
+        config: EventBrokerConfig,
+    ) -> EventResult<Arc<InMemoryEventBroker>> {
+        self.create_memory_broker(config).await
     }
 }

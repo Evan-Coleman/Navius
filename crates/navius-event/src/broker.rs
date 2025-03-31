@@ -2,6 +2,7 @@ use crate::error::{DeliveryStatus, EventResult};
 use crate::event::{
     Event, EventEnvelope, EventFilterConfig, SubscriptionInfo, SubscriptionOptions,
 };
+use crate::memory::InMemoryEventBroker;
 use async_trait::async_trait;
 use futures::Stream;
 use serde::{Serialize, de::DeserializeOwned};
@@ -212,5 +213,8 @@ pub trait EventBroker: Send + Sync {
 #[async_trait]
 pub trait EventBrokerFactory: Send + Sync {
     /// Create a new event broker
-    async fn create_broker(&self, config: EventBrokerConfig) -> EventResult<Arc<dyn EventBroker>>;
+    async fn create_broker(
+        &self,
+        config: EventBrokerConfig,
+    ) -> EventResult<Arc<InMemoryEventBroker>>;
 }
