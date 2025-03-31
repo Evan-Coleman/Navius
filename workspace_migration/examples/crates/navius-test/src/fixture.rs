@@ -47,7 +47,7 @@ impl Default for FixtureConfig {
 }
 
 /// A resource that needs cleanup
-pub trait Resource {
+pub trait Resource: std::fmt::Debug {
     /// Clean up the resource
     fn cleanup(&self) -> TestResult<()>;
     /// Description of the resource
@@ -57,26 +57,25 @@ pub trait Resource {
 /// A test fixture that provides dependencies for tests
 #[derive(Debug)]
 pub struct TestFixture {
-    /// A registry of components for the fixture
-    components: RwLock<HashMap<TypeId, Box<dyn Any + Send + Sync>>>,
-
-    /// Resources that need cleanup when the fixture is dropped
-    resources: Mutex<Vec<Box<dyn Resource + Send + Sync>>>,
+    /// Components registered with the fixture
+    components: Mutex<HashMap<TypeId, Box<dyn Any + Send + Sync>>>,
+    /// Resources managed by the fixture
+    resources: Mutex<Vec<Box<dyn Resource + Send + Sync + 'static>>>,
 }
 
 impl TestFixture {
     /// Create a new test fixture
     pub fn new() -> Self {
         Self {
-            components: RwLock::new(HashMap::new()),
+            components: Mutex::new(HashMap::new()),
             resources: Mutex::new(Vec::new()),
         }
     }
 
     /// Register a component with the fixture
     pub fn register<T: Any + Send + Sync>(&self, component: T) -> TestResult<()> {
-        let mut components = self.components.write().map_err(|_| {
-            TestError::FixtureError("Failed to acquire write lock on components".to_string())
+        let mut components = self.components.lock().map_err(|_| {
+            TestError::FixtureError("Failed to acquire lock on components".to_string())
         })?;
 
         let type_id = TypeId::of::<T>();
@@ -85,29 +84,41 @@ impl TestFixture {
         Ok(())
     }
 
-    /// Get a component by type
-    pub fn get_component<T: Any + ?Sized>(&self) -> TestResult<Arc<T>> {
-        let type_id = TypeId::of::<T>();
-        let components = self.components.lock().expect("Failed to lock components");
-
-        let component_any = components.get(&type_id).ok_or_else(|| {
-            TestError::FixtureError(format!("Component of type ID {:?} not found", type_id))
+    /// Register a component in an Arc with the fixture
+    pub fn register_component<T: Any + Send + Sync>(&self, component: Arc<T>) -> TestResult<()> {
+        let mut components = self.components.lock().map_err(|_| {
+            TestError::FixtureError("Failed to acquire lock on components".to_string())
         })?;
 
-        // Clone the Arc before returning it
-        let component_arc = Arc::clone(component_any);
+        let type_id = TypeId::of::<T>();
+        components.insert(type_id, Box::new(component));
 
-        component_arc.downcast::<T>().map_err(|_| {
-            TestError::FixtureError(format!(
-                "Component for type ID {:?} is not of the expected type",
+        Ok(())
+    }
+
+    /// Get a component by its type
+    pub fn get_component<T: Any + Send + Sync>(&self) -> TestResult<Arc<T>> {
+        let components = self.components.lock().expect("Failed to lock components");
+        let type_id = TypeId::of::<T>();
+
+        let component = components.get(&type_id).ok_or_else(|| {
+            TestError::missing_component(format!("Component of type {:?} not found", type_id))
+        })?;
+
+        let component_ref = component.as_ref();
+        let component_ref_downcasted = component_ref.downcast_ref::<Arc<T>>().ok_or_else(|| {
+            TestError::missing_component(format!(
+                "Failed to downcast component to requested type {:?}",
                 type_id
             ))
-        })
+        })?;
+
+        Ok(Arc::clone(component_ref_downcasted))
     }
 
     /// Add a resource to the fixture
-    pub fn add_resource<R: Resource + 'static>(&self, resource: R) {
-        let mut resources = self.resources.lock().expect("Failed to lock resources");
+    pub fn add_resource<R: Resource + 'static + Send + Sync>(&self, resource: R) {
+        let mut resources = self.resources.lock().unwrap();
         resources.push(Box::new(resource));
     }
 
@@ -219,7 +230,7 @@ impl TestFixtureBuilder {
     }
 
     /// Add a resource to the fixture builder
-    pub fn with_resource<R: Resource + 'static>(self, resource: R) -> Self {
+    pub fn with_resource<R: Resource + 'static + Send + Sync>(self, resource: R) -> Self {
         self.fixture.add_resource(resource);
         self
     }
@@ -262,17 +273,22 @@ impl FileResource {
 }
 
 impl Resource for FileResource {
-    fn cleanup(&mut self) -> TestResult<()> {
+    fn cleanup(&self) -> TestResult<()> {
         if self.delete_on_cleanup {
-            if let Err(e) = std::fs::remove_file(&self.path) {
-                return Err(TestError::TeardownError(format!(
-                    "Failed to remove file {}: {}",
+            match std::fs::remove_file(&self.path) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(TestError::teardown_error(format!(
+                    "Failed to delete file {}: {}",
                     self.path, e
-                )));
+                ))),
             }
+        } else {
+            Ok(())
         }
+    }
 
-        Ok(())
+    fn description(&self) -> String {
+        format!("File resource: {}", self.path)
     }
 }
 
@@ -302,17 +318,22 @@ impl DirectoryResource {
 }
 
 impl Resource for DirectoryResource {
-    fn cleanup(&mut self) -> TestResult<()> {
+    fn cleanup(&self) -> TestResult<()> {
         if self.delete_on_cleanup {
-            if let Err(e) = std::fs::remove_dir_all(&self.path) {
-                return Err(TestError::TeardownError(format!(
-                    "Failed to remove directory {}: {}",
+            match std::fs::remove_dir_all(&self.path) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(TestError::teardown_error(format!(
+                    "Failed to delete directory {}: {}",
                     self.path, e
-                )));
+                ))),
             }
+        } else {
+            Ok(())
         }
+    }
 
-        Ok(())
+    fn description(&self) -> String {
+        format!("Directory resource: {}", self.path)
     }
 }
 

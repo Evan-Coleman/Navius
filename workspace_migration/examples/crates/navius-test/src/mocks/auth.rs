@@ -136,6 +136,9 @@ pub struct AuthToken {
     pub refresh_token: Option<String>,
 }
 
+/// A user token type alias for AuthToken
+pub type UserToken = AuthToken;
+
 impl AuthToken {
     /// Create a new authentication token
     pub fn new(value: impl Into<String>, token_type: impl Into<String>, expires_in: u64) -> Self {

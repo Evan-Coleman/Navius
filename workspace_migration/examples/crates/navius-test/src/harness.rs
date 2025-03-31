@@ -78,6 +78,12 @@ impl<T> TestHarness<T> {
         self
     }
 
+    /// Set the test fixture
+    pub fn with_fixture(mut self, fixture: Arc<TestFixture>) -> Self {
+        self.fixture = fixture;
+        self
+    }
+
     /// Get the mock registry
     pub fn registry(&self) -> &Arc<MockRegistry> {
         &self.registry

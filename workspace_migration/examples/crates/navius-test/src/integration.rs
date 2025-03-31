@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use crate::error::{TestError, TestResult};
@@ -54,11 +54,12 @@ impl Default for IntegrationTestConfig {
 /// - Mock implementations for interfaces
 /// - Environment variables
 /// - Test resources and cleanup
+#[derive(Clone)]
 pub struct IntegrationContext {
     config: IntegrationTestConfig,
     fixtures: Vec<Arc<TestFixture>>,
     test_dir: Option<PathBuf>,
-    env_vars: RwLock<HashMap<String, String>>,
+    env_vars: Arc<Mutex<HashMap<String, String>>>,
     registry: Arc<MockRegistry>,
     original_env: HashMap<String, Option<String>>,
 }
@@ -86,7 +87,7 @@ impl IntegrationContext {
             config,
             fixtures: Vec::new(),
             test_dir,
-            env_vars: RwLock::new(HashMap::new()),
+            env_vars: Arc::new(Mutex::new(HashMap::new())),
             registry,
             original_env,
         })
@@ -109,18 +110,20 @@ impl IntegrationContext {
 
     /// Set an environment variable for the test
     pub fn set_env_var(&self, key: &str, value: &str) -> TestResult<()> {
-        let mut env_vars = self.env_vars.write().map_err(|_| {
-            TestError::ConcurrencyError("Failed to acquire write lock for env vars".into())
+        let mut env_vars = self.env_vars.lock().map_err(|_| {
+            TestError::concurrency_error("Failed to acquire lock for env vars".into())
         })?;
         env_vars.insert(key.to_string(), value.to_string());
-        std::env::set_var(key, value);
+        unsafe {
+            std::env::set_var(key, value);
+        }
         Ok(())
     }
 
     /// Get an environment variable set for the test
     pub fn get_env_var(&self, key: &str) -> TestResult<Option<String>> {
-        let env_vars = self.env_vars.read().map_err(|_| {
-            TestError::ConcurrencyError("Failed to acquire read lock for env vars".into())
+        let env_vars = self.env_vars.lock().map_err(|_| {
+            TestError::concurrency_error("Failed to acquire read lock for env vars".into())
         })?;
         Ok(env_vars.get(key).cloned())
     }
@@ -131,7 +134,7 @@ impl IntegrationContext {
     }
 
     /// Create a test harness with this context's registry
-    pub fn create_harness(&self) -> TestHarness {
+    pub fn create_harness(&self) -> TestHarness<()> {
         let fixture = TestFixture::new();
         fixture
             .register_component(self.registry.clone())
@@ -144,7 +147,7 @@ impl IntegrationContext {
         };
 
         TestHarness::new()
-            .with_fixture(fixture)
+            .with_fixture(Arc::new(fixture))
             .with_options(options)
     }
 }
@@ -200,7 +203,9 @@ impl IntegrationRunner {
     {
         // Set up environment variables
         for (key, value) in self.context.config.env_vars.iter() {
-            std::env::set_var(key, value);
+            unsafe {
+                std::env::set_var(key, value);
+            }
         }
 
         // Run the test
@@ -225,10 +230,10 @@ impl IntegrationRunner {
             use std::time::Instant;
 
             let (tx, rx) = std::sync::mpsc::channel();
-            let context = &self.context;
+            let context_arc = Arc::new(self.context.clone());
 
             let handle = thread::spawn(move || {
-                let result = test_fn(context);
+                let result = test_fn(&context_arc);
                 let _ = tx.send(result);
             });
 

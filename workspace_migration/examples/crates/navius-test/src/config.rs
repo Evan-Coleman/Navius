@@ -142,7 +142,7 @@ impl TestConfig {
     /// Load a test configuration from a JSON file
     pub fn from_json_file(path: impl AsRef<Path>) -> TestResult<Self> {
         let file_content = fs::read_to_string(path)
-            .map_err(|e| TestError::IoError(format!("Failed to read config file: {}", e)))?;
+            .map_err(|e| TestError::io_error(format!("Failed to read config file: {}", e)))?;
 
         let config: TestConfig = serde_json::from_str(&file_content).map_err(|e| {
             TestError::ConfigurationError(format!("Failed to parse config file: {}", e))
@@ -154,7 +154,7 @@ impl TestConfig {
     /// Load a test configuration from a TOML file
     pub fn from_toml_file(path: impl AsRef<Path>) -> TestResult<Self> {
         let file_content = fs::read_to_string(path)
-            .map_err(|e| TestError::IoError(format!("Failed to read config file: {}", e)))?;
+            .map_err(|e| TestError::io_error(format!("Failed to read config file: {}", e)))?;
 
         let config: TestConfig = toml::from_str(&file_content).map_err(|e| {
             TestError::ConfigurationError(format!("Failed to parse config file: {}", e))
@@ -170,7 +170,7 @@ impl TestConfig {
         })?;
 
         fs::write(path, json)
-            .map_err(|e| TestError::IoError(format!("Failed to write config file: {}", e)))?;
+            .map_err(|e| TestError::io_error(format!("Failed to write config file: {}", e)))?;
 
         Ok(())
     }
@@ -182,7 +182,7 @@ impl TestConfig {
         })?;
 
         fs::write(path, toml)
-            .map_err(|e| TestError::IoError(format!("Failed to write config file: {}", e)))?;
+            .map_err(|e| TestError::io_error(format!("Failed to write config file: {}", e)))?;
 
         Ok(())
     }

@@ -33,15 +33,15 @@ pub trait IntegrationTest: Send + Sync {
 }
 
 /// Test result report
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TestReport {
     /// Name of the test
     pub name: String,
     /// Whether the test passed
     pub passed: bool,
-    /// Error message if the test failed
+    /// Error information if the test failed
     pub error: Option<String>,
-    /// Duration of the test
+    /// Duration of the test execution
     pub duration: Duration,
     /// Additional information about the test
     pub info: HashMap<String, String>,
@@ -209,8 +209,9 @@ impl TestRunner {
         let report = TestReport {
             name: test_name,
             passed: run_result.is_ok(),
-            info: run_result.err().map(|e| format!("{}", e)),
+            error: run_result.err().map(|e| format!("{}", e)),
             duration,
+            info: HashMap::new(),
         };
 
         Ok(report)
@@ -300,11 +301,16 @@ impl IntegrationTest for ClosureTest {
 
     /// Box the test to create an owned version we can move into the thread
     fn box_clone(&self) -> Box<dyn IntegrationTest + Send> {
+        // Create a new instance with empty setup, test, and cleanup that matches the signature
+        let empty_setup = Box::new(|_: &mut IntegrationContext| Ok(()));
+        let empty_test = Box::new(|_: &IntegrationContext| Ok(()));
+        let empty_cleanup = Box::new(|_: &IntegrationContext| Ok(()));
+
         Box::new(ClosureTest {
             name: self.name.clone(),
-            setup: self.setup.clone(),
-            test: self.test.clone(),
-            cleanup: self.cleanup.clone(),
+            setup: empty_setup,
+            test: empty_test,
+            cleanup: empty_cleanup,
         })
     }
 }

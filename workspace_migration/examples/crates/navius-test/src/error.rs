@@ -70,6 +70,24 @@ pub enum TestError {
 
     /// Timeout error
     TimeoutError(String),
+
+    /// Mock expectation error
+    MockExpectationError(String),
+
+    /// Injected error
+    InjectedError(String),
+
+    /// Error propagation error
+    ErrorPropagationError(String),
+
+    /// Error context error
+    ErrorContextError(String),
+
+    /// Mock not registered error
+    MockNotRegistered(String),
+
+    /// IO error
+    IoError(std::io::Error),
 }
 
 impl TestError {
@@ -97,11 +115,8 @@ impl TestError {
     }
 
     /// Create a new mock not registered error
-    pub fn mock_not_registered<S: Into<String>>(interface_type: S) -> Self {
-        TestError::MockNotRegistered(format!(
-            "Mock not registered for interface: {}",
-            interface_type.into()
-        ))
+    pub fn mock_not_registered<S: Into<String>>(message: S) -> Self {
+        TestError::MockNotRegistered(message.into())
     }
 
     /// Create a new mock expectation error
@@ -153,6 +168,11 @@ impl TestError {
     pub fn timeout_error<S: Into<String>>(message: S) -> Self {
         Self::TimeoutError(message.into())
     }
+
+    /// Create an IO error with a message
+    pub fn io_error<E: Into<std::io::Error>>(error: E) -> Self {
+        TestError::IoError(error.into())
+    }
 }
 
 impl fmt::Display for TestError {
@@ -181,6 +201,11 @@ impl fmt::Display for TestError {
             TestError::ConfigurationError(msg) => write!(f, "Configuration error: {}", msg),
             TestError::ConcurrencyError(msg) => write!(f, "Concurrency error: {}", msg),
             TestError::TimeoutError(msg) => write!(f, "Timeout error: {}", msg),
+            TestError::MockExpectationError(msg) => write!(f, "Mock expectation error: {}", msg),
+            TestError::InjectedError(msg) => write!(f, "Injected error: {}", msg),
+            TestError::ErrorPropagationError(msg) => write!(f, "Error propagation error: {}", msg),
+            TestError::ErrorContextError(msg) => write!(f, "Error context error: {}", msg),
+            TestError::MockNotRegistered(msg) => write!(f, "Mock not registered: {}", msg),
         }
     }
 }
