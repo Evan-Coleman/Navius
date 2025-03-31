@@ -501,4 +501,420 @@ impl CacheOperations for RedisCache {
             }
         }
     }
+
+    // List operations
+    async fn list_push_right<K, V>(&self, _key: K, _value: &V) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        unimplemented!("List operations are not implemented yet")
+    }
+
+    async fn list_push_right_many<K, V>(&self, _key: K, _values: &[V]) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        unimplemented!("List operations are not implemented yet")
+    }
+
+    async fn list_push_left<K, V>(&self, _key: K, _value: &V) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        unimplemented!("List operations are not implemented yet")
+    }
+
+    async fn list_push_left_many<K, V>(&self, _key: K, _values: &[V]) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        unimplemented!("List operations are not implemented yet")
+    }
+
+    async fn list_pop_right<K, V>(&self, _key: K) -> CacheResult<Option<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        unimplemented!("List operations are not implemented yet")
+    }
+
+    async fn list_pop_left<K, V>(&self, _key: K) -> CacheResult<Option<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        unimplemented!("List operations are not implemented yet")
+    }
+
+    async fn list_range<K, V>(&self, _key: K, _start: isize, _stop: isize) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        unimplemented!("List operations are not implemented yet")
+    }
+
+    async fn list_length<K>(&self, _key: K) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+    {
+        unimplemented!("List operations are not implemented yet")
+    }
+
+    async fn list_remove<K, V>(&self, _key: K, _count: isize, _value: &V) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        unimplemented!("List operations are not implemented yet")
+    }
+
+    async fn list_trim<K>(&self, _key: K, _start: isize, _stop: isize) -> CacheResult<()>
+    where
+        K: CacheKey + 'static,
+    {
+        unimplemented!("List operations are not implemented yet")
+    }
+
+    async fn list_set<K, V>(&self, _key: K, _index: isize, _value: &V) -> CacheResult<()>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        unimplemented!("List operations are not implemented yet")
+    }
+
+    // Hash operations
+    async fn hash_get<K, F, V>(&self, _key: K, _field: F) -> CacheResult<Option<V>>
+    where
+        K: CacheKey + 'static,
+        F: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        unimplemented!("Hash operations are not implemented yet")
+    }
+
+    async fn hash_set<K, F, V>(&self, _key: K, _field: F, _value: &V) -> CacheResult<bool>
+    where
+        K: CacheKey + 'static,
+        F: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        unimplemented!("Hash operations are not implemented yet")
+    }
+
+    async fn hash_get_many<K, F, V>(&self, _key: K, _fields: Vec<F>) -> CacheResult<Vec<Option<V>>>
+    where
+        K: CacheKey + 'static,
+        F: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        unimplemented!("Hash operations are not implemented yet")
+    }
+
+    async fn hash_set_many<K, F, V>(&self, _key: K, _entries: Vec<(F, V)>) -> CacheResult<()>
+    where
+        K: CacheKey + 'static,
+        F: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        unimplemented!("Hash operations are not implemented yet")
+    }
+
+    async fn hash_exists<K, F>(&self, _key: K, _field: F) -> CacheResult<bool>
+    where
+        K: CacheKey + 'static,
+        F: CacheKey + 'static,
+    {
+        unimplemented!("Hash operations are not implemented yet")
+    }
+
+    async fn hash_delete<K, F>(&self, _key: K, _fields: Vec<F>) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        F: CacheKey + 'static,
+    {
+        unimplemented!("Hash operations are not implemented yet")
+    }
+
+    async fn hash_get_all<K, V>(&self, _key: K) -> CacheResult<Vec<(String, V)>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        unimplemented!("Hash operations are not implemented yet")
+    }
+
+    async fn hash_keys<K>(&self, _key: K) -> CacheResult<Vec<String>>
+    where
+        K: CacheKey + 'static,
+    {
+        unimplemented!("Hash operations are not implemented yet")
+    }
+
+    async fn hash_values<K, V>(&self, _key: K) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        unimplemented!("Hash operations are not implemented yet")
+    }
+
+    async fn hash_increment<K, F>(&self, _key: K, _field: F, _amount: i64) -> CacheResult<i64>
+    where
+        K: CacheKey + 'static,
+        F: CacheKey + 'static,
+    {
+        unimplemented!("Hash operations are not implemented yet")
+    }
+
+    async fn hash_length<K>(&self, _key: K) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+    {
+        unimplemented!("Hash operations are not implemented yet")
+    }
+
+    // Set operations
+    async fn set_add<K, V>(&self, _key: K, _values: Vec<V>) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        unimplemented!("Set operations are not implemented yet")
+    }
+
+    async fn set_remove<K, V>(&self, _key: K, _values: Vec<V>) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        unimplemented!("Set operations are not implemented yet")
+    }
+
+    async fn set_contains<K, V>(&self, _key: K, _value: &V) -> CacheResult<bool>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        unimplemented!("Set operations are not implemented yet")
+    }
+
+    async fn set_members<K, V>(&self, _key: K) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        unimplemented!("Set operations are not implemented yet")
+    }
+
+    async fn set_length<K>(&self, _key: K) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+    {
+        unimplemented!("Set operations are not implemented yet")
+    }
+
+    async fn set_intersection<K, V>(&self, _keys: Vec<K>) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        unimplemented!("Set operations are not implemented yet")
+    }
+
+    async fn set_intersection_store<K, D>(
+        &self,
+        _destination: D,
+        _keys: Vec<K>,
+    ) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        D: CacheKey + 'static,
+    {
+        unimplemented!("Set operations are not implemented yet")
+    }
+
+    async fn set_union<K, V>(&self, _keys: Vec<K>) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        unimplemented!("Set operations are not implemented yet")
+    }
+
+    async fn set_union_store<K, D>(&self, _destination: D, _keys: Vec<K>) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        D: CacheKey + 'static,
+    {
+        unimplemented!("Set operations are not implemented yet")
+    }
+
+    async fn set_difference<K, V>(&self, _keys: Vec<K>) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        unimplemented!("Set operations are not implemented yet")
+    }
+
+    async fn set_difference_store<K, D>(&self, _destination: D, _keys: Vec<K>) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        D: CacheKey + 'static,
+    {
+        unimplemented!("Set operations are not implemented yet")
+    }
+
+    async fn set_random_members<K, V>(&self, _key: K, _count: usize) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        unimplemented!("Set operations are not implemented yet")
+    }
+
+    // Sorted set operations
+    async fn zset_add<K, V>(&self, _key: K, _items: Vec<(f64, V)>) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        unimplemented!("Sorted set operations are not implemented yet")
+    }
+
+    async fn zset_remove<K, V>(&self, _key: K, _members: Vec<V>) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        unimplemented!("Sorted set operations are not implemented yet")
+    }
+
+    async fn zset_score<K, V>(&self, _key: K, _member: &V) -> CacheResult<Option<f64>>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        unimplemented!("Sorted set operations are not implemented yet")
+    }
+
+    async fn zset_increment_score<K, V>(
+        &self,
+        _key: K,
+        _member: &V,
+        _amount: f64,
+    ) -> CacheResult<f64>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        unimplemented!("Sorted set operations are not implemented yet")
+    }
+
+    async fn zset_range<K, V>(&self, _key: K, _start: isize, _stop: isize) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        unimplemented!("Sorted set operations are not implemented yet")
+    }
+
+    async fn zset_range_with_scores<K, V>(
+        &self,
+        _key: K,
+        _start: isize,
+        _stop: isize,
+    ) -> CacheResult<Vec<(V, f64)>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        unimplemented!("Sorted set operations are not implemented yet")
+    }
+
+    async fn zset_range_by_score<K, V>(&self, _key: K, _min: f64, _max: f64) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        unimplemented!("Sorted set operations are not implemented yet")
+    }
+
+    async fn zset_range_by_score_with_scores<K, V>(
+        &self,
+        _key: K,
+        _min: f64,
+        _max: f64,
+    ) -> CacheResult<Vec<(V, f64)>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        unimplemented!("Sorted set operations are not implemented yet")
+    }
+
+    async fn zset_rank<K, V>(&self, _key: K, _member: &V) -> CacheResult<Option<usize>>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        unimplemented!("Sorted set operations are not implemented yet")
+    }
+
+    async fn zset_reverse_rank<K, V>(&self, _key: K, _member: &V) -> CacheResult<Option<usize>>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        unimplemented!("Sorted set operations are not implemented yet")
+    }
+
+    async fn zset_length<K>(&self, _key: K) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+    {
+        unimplemented!("Sorted set operations are not implemented yet")
+    }
+
+    async fn zset_count<K>(&self, _key: K, _min: f64, _max: f64) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+    {
+        unimplemented!("Sorted set operations are not implemented yet")
+    }
+
+    async fn zset_intersection_store<K, D>(
+        &self,
+        _destination: D,
+        _keys: Vec<K>,
+        _weights: Option<Vec<f64>>,
+        _aggregate: Option<String>,
+    ) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        D: CacheKey + 'static,
+    {
+        unimplemented!("Sorted set operations are not implemented yet")
+    }
+
+    async fn zset_union_store<K, D>(
+        &self,
+        _destination: D,
+        _keys: Vec<K>,
+        _weights: Option<Vec<f64>>,
+        _aggregate: Option<String>,
+    ) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        D: CacheKey + 'static,
+    {
+        unimplemented!("Sorted set operations are not implemented yet")
+    }
 }

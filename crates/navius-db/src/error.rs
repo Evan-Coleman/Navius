@@ -660,16 +660,18 @@ impl From<DatabaseError> for AppError {
     fn from(err: DatabaseError) -> Self {
         match &err {
             DatabaseError::NotFoundError(msg) => AppError::not_found(msg),
-            DatabaseError::ValidationError(msg) => AppError::bad_request(msg),
-            DatabaseError::ConfigurationError(msg) => AppError::internal_server_error(msg),
-            DatabaseError::ConnectionError(msg) => AppError::service_unavailable(msg),
+            DatabaseError::ValidationError(msg) => AppError::validation(msg),
+            DatabaseError::ConfigurationError(msg) => AppError::internal(msg),
+            DatabaseError::ConnectionError(msg) => AppError::external(msg),
             _ => {
-                let status = err.status_code();
-                AppError::with_status_and_code(
-                    status,
-                    err.to_string(),
-                    err.error_code().to_string(),
-                )
+                let error_code = match err.status_code() {
+                    400 => ErrorCode::Validation,
+                    404 => ErrorCode::NotFound,
+                    500 => ErrorCode::Internal,
+                    _ => ErrorCode::Unknown,
+                };
+
+                AppError::new(error_code, err.to_string())
             }
         }
     }
