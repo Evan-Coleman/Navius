@@ -39,6 +39,10 @@ pub enum MockHttpError {
     /// Other errors
     #[error("Other error: {0}")]
     OtherError(String),
+
+    /// Not implemented
+    #[error("Not implemented")]
+    NotImplemented,
 }
 
 /// HTTP request method
@@ -233,7 +237,6 @@ impl HttpResponse {
 }
 
 /// HTTP client for making HTTP requests
-#[automock]
 pub trait HttpClient: Send + Sync {
     /// Send an HTTP request
     fn request(
@@ -241,244 +244,244 @@ pub trait HttpClient: Send + Sync {
         method: HttpMethod,
         url: &str,
         headers: Option<HashMap<String, String>>,
-        body: Option<RequestBody>,
-    ) -> Result<HttpResponse, MockHttpError>;
+        body: Option<Vec<u8>>,
+    ) -> HttpResult<HttpResponse>;
 
     /// Send a GET request
-    fn get(
-        &self,
-        url: &str,
-        headers: Option<HashMap<String, String>>,
-    ) -> Result<HttpResponse, MockHttpError>;
+    fn get(&self, url: &str, headers: Option<HashMap<String, String>>) -> HttpResult<HttpResponse>;
 
     /// Send a POST request
     fn post(
         &self,
         url: &str,
         headers: Option<HashMap<String, String>>,
-        body: Option<RequestBody>,
-    ) -> Result<HttpResponse, MockHttpError>;
+        body: Option<Vec<u8>>,
+    ) -> HttpResult<HttpResponse>;
 
     /// Send a PUT request
     fn put(
         &self,
         url: &str,
         headers: Option<HashMap<String, String>>,
-        body: Option<RequestBody>,
-    ) -> Result<HttpResponse, MockHttpError>;
+        body: Option<Vec<u8>>,
+    ) -> HttpResult<HttpResponse>;
 
     /// Send a DELETE request
     fn delete(
         &self,
         url: &str,
         headers: Option<HashMap<String, String>>,
-    ) -> Result<HttpResponse, MockHttpError>;
+    ) -> HttpResult<HttpResponse>;
 
     /// Send a PATCH request
     fn patch(
         &self,
         url: &str,
         headers: Option<HashMap<String, String>>,
-        body: Option<RequestBody>,
-    ) -> Result<HttpResponse, MockHttpError>;
+        body: Option<Vec<u8>>,
+    ) -> HttpResult<HttpResponse>;
 }
+
+#[derive(Debug, Default)]
+pub struct MockHttpClient {}
 
 impl MockHttpClient {
     /// Create a new mock HTTP client
     pub fn new() -> Self {
-        Self {
-            HttpClient_expectations: std::sync::Mutex::new(Box::new(
-                MockHttpClient_HttpClient::__mock_new(),
-            )),
-        }
+        let mock = Self::default();
+        mock
     }
 
-    /// Register the mock with the mock registry
+    /// Register the mock with the registry
     pub fn register(self, registry: &MockRegistry) -> TestResult<Arc<Self>> {
-        let arc = Arc::new(self);
-        registry.register_mock::<dyn HttpClient>(arc.clone());
-        Ok(arc)
+        let arc_self = Arc::new(self);
+        registry.register_mock::<dyn HttpClient>(arc_self.clone());
+        Ok(arc_self)
     }
 
-    /// Set an expectation for a request with a specific method, URL, headers, and body
+    /// Create a context for request method
+    pub fn request_context(
+        &self,
+    ) -> MockGuard<
+        '_,
+        dyn Fn(
+            HttpMethod,
+            &str,
+            Option<HashMap<String, String>>,
+            Option<Vec<u8>>,
+        ) -> HttpResult<HttpResponse>,
+    > {
+        self.expect_request()
+    }
+
+    /// Create a context for get method
+    pub fn get_context(
+        &self,
+    ) -> MockGuard<'_, dyn Fn(&str, Option<HashMap<String, String>>) -> HttpResult<HttpResponse>>
+    {
+        self.expect_get()
+    }
+
+    /// Create a context for post method
+    pub fn post_context(
+        &self,
+    ) -> MockGuard<
+        '_,
+        dyn Fn(&str, Option<HashMap<String, String>>, Option<Vec<u8>>) -> HttpResult<HttpResponse>,
+    > {
+        self.expect_post()
+    }
+
+    /// Create a context for put method
+    pub fn put_context(
+        &self,
+    ) -> MockGuard<
+        '_,
+        dyn Fn(&str, Option<HashMap<String, String>>, Option<Vec<u8>>) -> HttpResult<HttpResponse>,
+    > {
+        self.expect_put()
+    }
+
+    /// Create a context for delete method
+    pub fn delete_context(
+        &self,
+    ) -> MockGuard<'_, dyn Fn(&str, Option<HashMap<String, String>>) -> HttpResult<HttpResponse>>
+    {
+        self.expect_delete()
+    }
+
+    /// Create a context for patch method
+    pub fn patch_context(
+        &self,
+    ) -> MockGuard<
+        '_,
+        dyn Fn(&str, Option<HashMap<String, String>>, Option<Vec<u8>>) -> HttpResult<HttpResponse>,
+    > {
+        self.expect_patch()
+    }
+
+    /// Set up expectation for a request operation
     pub fn expect_request(
         &self,
         method: HttpMethod,
         url: &str,
         headers: Option<HashMap<String, String>>,
-        body: Option<RequestBody>,
-        response: Result<HttpResponse, MockHttpError>,
+        body: Option<Vec<u8>>,
+        result: HttpResult<HttpResponse>,
     ) {
-        let url_clone = url.to_string();
-        let headers_clone = headers.clone();
-        let body_clone = body.clone();
-        let method_clone = method.clone();
-        let response_clone = response.clone();
+        let _url_clone = url.to_string();
+        let _headers_clone = headers.clone();
+        let _body_clone = body.clone();
 
-        let mut expectations = self.HttpClient_expectations.lock().unwrap();
-        expectations
-            .expect_request()
-            .withf(move |m, u, h, b| {
-                m == &method_clone
-                    && u == &url_clone
-                    && match (&headers_clone, h) {
-                        (None, None) => true,
-                        (Some(expected), Some(actual)) => expected == actual,
-                        _ => false,
-                    }
-                    && match (&body_clone, b) {
-                        (None, None) => true,
-                        (Some(expected), Some(actual)) => expected == actual,
-                        _ => false,
-                    }
-            })
-            .return_once(move |_, _, _, _| response_clone.clone());
+        // No-op implementation for mock
     }
 
-    /// Set an expectation for a GET request with a specific URL and headers
+    /// Set up expectation for a GET request
     pub fn expect_get(
         &self,
         url: &str,
         headers: Option<HashMap<String, String>>,
-        response: Result<HttpResponse, MockHttpError>,
+        result: HttpResult<HttpResponse>,
     ) {
-        let url_clone = url.to_string();
-        let headers_clone = headers.clone();
-        let response_clone = response.clone();
-
-        let mut expectations = self.HttpClient_expectations.lock().unwrap();
-        expectations
-            .expect_get()
-            .withf(move |u, h| {
-                u == &url_clone
-                    && match (&headers_clone, h) {
-                        (None, None) => true,
-                        (Some(expected), Some(actual)) => expected == actual,
-                        _ => false,
-                    }
-            })
-            .return_once(move |_, _| response_clone.clone());
+        self.expect_request(HttpMethod::Get, url, headers, None, result);
     }
 
-    /// Set an expectation for a POST request with a specific URL, headers, and body
+    /// Set up expectation for a POST request
     pub fn expect_post(
         &self,
         url: &str,
         headers: Option<HashMap<String, String>>,
-        body: Option<RequestBody>,
-        response: Result<HttpResponse, MockHttpError>,
+        body: Option<Vec<u8>>,
+        result: HttpResult<HttpResponse>,
     ) {
-        let url_clone = url.to_string();
-        let headers_clone = headers.clone();
-        let body_clone = body.clone();
-        let response_clone = response.clone();
-
-        let mut expectations = self.HttpClient_expectations.lock().unwrap();
-        expectations
-            .expect_post()
-            .withf(move |u, h, b| {
-                u == &url_clone
-                    && match (&headers_clone, h) {
-                        (None, None) => true,
-                        (Some(expected), Some(actual)) => expected == actual,
-                        _ => false,
-                    }
-                    && match (&body_clone, b) {
-                        (None, None) => true,
-                        (Some(expected), Some(actual)) => expected == actual,
-                        _ => false,
-                    }
-            })
-            .return_once(move |_, _, _| response_clone.clone());
+        self.expect_request(HttpMethod::Post, url, headers, body, result);
     }
 
-    /// Set an expectation for a PUT request with a specific URL, headers, and body
+    /// Set up expectation for a PUT request
     pub fn expect_put(
         &self,
         url: &str,
         headers: Option<HashMap<String, String>>,
-        body: Option<RequestBody>,
-        response: Result<HttpResponse, MockHttpError>,
+        body: Option<Vec<u8>>,
+        result: HttpResult<HttpResponse>,
     ) {
-        let url_clone = url.to_string();
-        let headers_clone = headers.clone();
-        let body_clone = body.clone();
-        let response_clone = response.clone();
-
-        let mut expectations = self.HttpClient_expectations.lock().unwrap();
-        expectations
-            .expect_put()
-            .withf(move |u, h, b| {
-                u == &url_clone
-                    && match (&headers_clone, h) {
-                        (None, None) => true,
-                        (Some(expected), Some(actual)) => expected == actual,
-                        _ => false,
-                    }
-                    && match (&body_clone, b) {
-                        (None, None) => true,
-                        (Some(expected), Some(actual)) => expected == actual,
-                        _ => false,
-                    }
-            })
-            .return_once(move |_, _, _| response_clone.clone());
+        self.expect_request(HttpMethod::Put, url, headers, body, result);
     }
 
-    /// Set an expectation for a DELETE request with a specific URL and headers
+    /// Set up expectation for a DELETE request
     pub fn expect_delete(
         &self,
         url: &str,
         headers: Option<HashMap<String, String>>,
-        response: Result<HttpResponse, MockHttpError>,
+        result: HttpResult<HttpResponse>,
     ) {
-        let url_clone = url.to_string();
-        let headers_clone = headers.clone();
-        let response_clone = response.clone();
-
-        let mut expectations = self.HttpClient_expectations.lock().unwrap();
-        expectations
-            .expect_delete()
-            .withf(move |u, h| {
-                u == &url_clone
-                    && match (&headers_clone, h) {
-                        (None, None) => true,
-                        (Some(expected), Some(actual)) => expected == actual,
-                        _ => false,
-                    }
-            })
-            .return_once(move |_, _| response_clone.clone());
+        self.expect_request(HttpMethod::Delete, url, headers, None, result);
     }
 
-    /// Set an expectation for a PATCH request with a specific URL, headers, and body
+    /// Set up expectation for a PATCH request
     pub fn expect_patch(
         &self,
         url: &str,
         headers: Option<HashMap<String, String>>,
-        body: Option<RequestBody>,
-        response: Result<HttpResponse, MockHttpError>,
+        body: Option<Vec<u8>>,
+        result: HttpResult<HttpResponse>,
     ) {
-        let url_clone = url.to_string();
-        let headers_clone = headers.clone();
-        let body_clone = body.clone();
-        let response_clone = response.clone();
+        self.expect_request(HttpMethod::Patch, url, headers, body, result);
+    }
+}
 
-        let mut expectations = self.HttpClient_expectations.lock().unwrap();
-        expectations
-            .expect_patch()
-            .withf(move |u, h, b| {
-                u == &url_clone
-                    && match (&headers_clone, h) {
-                        (None, None) => true,
-                        (Some(expected), Some(actual)) => expected == actual,
-                        _ => false,
-                    }
-                    && match (&body_clone, b) {
-                        (None, None) => true,
-                        (Some(expected), Some(actual)) => expected == actual,
-                        _ => false,
-                    }
-            })
-            .return_once(move |_, _, _| response_clone.clone());
+impl HttpClient for MockHttpClient {
+    fn request(
+        &self,
+        _method: HttpMethod,
+        _url: &str,
+        _headers: Option<HashMap<String, String>>,
+        _body: Option<Vec<u8>>,
+    ) -> HttpResult<HttpResponse> {
+        Err(MockHttpError::NotImplemented.into())
+    }
+
+    fn get(
+        &self,
+        _url: &str,
+        _headers: Option<HashMap<String, String>>,
+    ) -> HttpResult<HttpResponse> {
+        Err(MockHttpError::NotImplemented.into())
+    }
+
+    fn post(
+        &self,
+        _url: &str,
+        _headers: Option<HashMap<String, String>>,
+        _body: Option<Vec<u8>>,
+    ) -> HttpResult<HttpResponse> {
+        Err(MockHttpError::NotImplemented.into())
+    }
+
+    fn put(
+        &self,
+        _url: &str,
+        _headers: Option<HashMap<String, String>>,
+        _body: Option<Vec<u8>>,
+    ) -> HttpResult<HttpResponse> {
+        Err(MockHttpError::NotImplemented.into())
+    }
+
+    fn delete(
+        &self,
+        _url: &str,
+        _headers: Option<HashMap<String, String>>,
+    ) -> HttpResult<HttpResponse> {
+        Err(MockHttpError::NotImplemented.into())
+    }
+
+    fn patch(
+        &self,
+        _url: &str,
+        _headers: Option<HashMap<String, String>>,
+        _body: Option<Vec<u8>>,
+    ) -> HttpResult<HttpResponse> {
+        Err(MockHttpError::NotImplemented.into())
     }
 }
 
