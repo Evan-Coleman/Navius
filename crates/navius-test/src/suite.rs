@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use futures::stream::{FuturesUnordered, StreamExt};
+use glob_match;
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime;
 

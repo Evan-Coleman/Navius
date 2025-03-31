@@ -20,7 +20,7 @@ impl CacheKey for String {
 // Implement CacheKey for &str
 impl CacheKey for &str {
     fn to_string(&self) -> String {
-        Display::to_string(self)
+        std::fmt::Display::to_string(self)
     }
 }
 
