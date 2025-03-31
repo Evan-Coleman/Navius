@@ -16,15 +16,42 @@ use crate::{
 
 /// Configuration provider trait
 pub trait ConfigProvider: Send + Sync {
-    /// Get a configuration value by key
-    fn get<T: Any + Clone + Send + Sync>(&self, key: &str) -> Result<T>;
+    /// Get a configuration value as boxed Any
+    fn get_value(&self, key: &str) -> Result<Box<dyn Any + Send + Sync>>;
 
     /// Check if a configuration key exists
     fn has(&self, key: &str) -> bool;
 
     /// Get all configuration keys with a specific prefix
     fn keys_with_prefix(&self, prefix: &str) -> Vec<String>;
+
+    /// Convert to Any for downcasting
+    fn as_any(&self) -> &dyn Any;
+
+    /// Convert to Any for downcasting (mutable)
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
+
+/// Extension trait for ConfigProvider to provide type-safe access
+pub trait ConfigProviderExt: ConfigProvider {
+    /// Get a configuration value by key with type checking
+    fn get<T: Any + Clone + Send + Sync>(&self, key: &str) -> Result<T> {
+        self.get_value(key).and_then(|value| {
+            value
+                .downcast_ref::<T>()
+                .map(|value| value.clone())
+                .ok_or_else(|| Error::ConfigBindingFailed {
+                    message: format!(
+                        "Cannot convert config value for key '{}' to requested type",
+                        key
+                    ),
+                })
+        })
+    }
+}
+
+// Implement the extension trait for all implementors of ConfigProvider
+impl<P: ConfigProvider> ConfigProviderExt for P {}
 
 /// Memory-based configuration provider
 pub struct MemoryConfigProvider {
@@ -53,12 +80,13 @@ impl Default for MemoryConfigProvider {
 }
 
 impl ConfigProvider for MemoryConfigProvider {
-    fn get<T: Any + Clone + Send + Sync>(&self, key: &str) -> Result<T> {
+    fn get_value(&self, key: &str) -> Result<Box<dyn Any + Send + Sync>> {
         self.configs
             .get(key)
-            .and_then(|value| value.downcast_ref::<T>())
             .map(|value| value.clone())
-            .ok_or_else(|| Error::ConfigNotFound(key.to_string()))
+            .ok_or_else(|| Error::ConfigNotFound {
+                key: key.to_string(),
+            })
     }
 
     fn has(&self, key: &str) -> bool {
@@ -71,6 +99,14 @@ impl ConfigProvider for MemoryConfigProvider {
             .filter(|key| key.starts_with(prefix))
             .cloned()
             .collect()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -96,7 +132,7 @@ pub trait ApplicationPlugin: Send + Sync {
 /// Application builder to configure and bootstrap applications
 pub struct ApplicationBuilder {
     registry: ComponentRegistry,
-    config_provider: Box<dyn ConfigProvider>,
+    config_provider: Arc<dyn ConfigProvider>,
     plugins: Vec<Box<dyn ApplicationPlugin>>,
 }
 
@@ -105,13 +141,13 @@ impl ApplicationBuilder {
     pub fn new() -> Self {
         Self {
             registry: ComponentRegistry::new(),
-            config_provider: Box::new(MemoryConfigProvider::new()),
+            config_provider: Arc::new(MemoryConfigProvider::new()),
             plugins: Vec::new(),
         }
     }
 
     /// Set the configuration provider
-    pub fn with_config_provider(mut self, provider: Box<dyn ConfigProvider>) -> Self {
+    pub fn with_config_provider(mut self, provider: Arc<dyn ConfigProvider>) -> Self {
         self.config_provider = provider;
         self
     }

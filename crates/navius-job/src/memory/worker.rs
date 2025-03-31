@@ -1,5 +1,6 @@
 use crate::error::{JobError, JobExecutionResult, JobResult};
 use crate::job::JobEnvelope;
+use crate::provider::JobHandlerFn;
 use std::sync::Arc;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
@@ -80,17 +81,7 @@ impl Worker {
     pub fn start(
         &mut self,
         handlers: Arc<
-            tokio::sync::RwLock<
-                std::collections::HashMap<
-                    String,
-                    Box<
-                        dyn Fn(JobEnvelope) -> JobResult<JobExecutionResult>
-                            + Send
-                            + Sync
-                            + 'static,
-                    >,
-                >,
-            >,
+            tokio::sync::RwLock<std::collections::HashMap<String, Box<dyn JobHandlerFn>>>,
         >,
         completion_tx: Sender<JobCompletionNotification>,
     ) -> JobResult<()> {
@@ -105,7 +96,7 @@ impl Worker {
         let worker_name = self.name.clone();
 
         let handle = tokio::spawn(async move {
-            Self::worker_loop(worker_id, worker_name, command_rx, handlers, completion_tx).await;
+            Self::process_jobs(worker_id, worker_name, command_rx, handlers, completion_tx).await;
         });
 
         self.join_handle = Some(handle);
@@ -134,23 +125,14 @@ impl Worker {
         Ok(())
     }
 
-    /// Worker processing loop
-    async fn worker_loop(
+    /// Process jobs
+    #[allow(clippy::too_many_arguments)]
+    pub async fn process_jobs(
         worker_id: String,
         worker_name: String,
         mut command_rx: Receiver<WorkerCommand>,
         handlers: Arc<
-            tokio::sync::RwLock<
-                std::collections::HashMap<
-                    String,
-                    Box<
-                        dyn Fn(JobEnvelope) -> JobResult<JobExecutionResult>
-                            + Send
-                            + Sync
-                            + 'static,
-                    >,
-                >,
-            >,
+            tokio::sync::RwLock<std::collections::HashMap<String, Box<dyn JobHandlerFn>>>,
         >,
         completion_tx: Sender<JobCompletionNotification>,
     ) {
@@ -160,66 +142,66 @@ impl Worker {
 
         while let Some(cmd) = command_rx.recv().await {
             match cmd {
-                WorkerCommand::ProcessJob(job) if !paused => {
-                    // Process the job
-                    let job_id = job.id;
-                    let queue = job.queue.clone();
-                    let job_type = job.job_type.clone();
+                WorkerCommand::ProcessJob(job) => {
+                    if !paused {
+                        // Process the job
+                        let job_id = job.id;
+                        let queue = job.queue.clone();
+                        let job_type = job.job_type.clone();
 
-                    tracing::debug!(
-                        worker_id = %worker_id,
-                        job_id = %job_id,
-                        job_type = %job_type,
-                        queue = %queue,
-                        "Processing job"
-                    );
-
-                    // Try to find a handler for this job type
-                    let result = {
-                        let handlers = handlers.read().await;
-                        if let Some(handler) = handlers.get(&job_type) {
-                            // Execute the handler with the job
-                            match handler(job.clone()) {
-                                Ok(result) => JobExecution::Success(result),
-                                Err(e) => JobExecution::Failure {
-                                    message: e.to_string(),
-                                    details: None,
-                                },
-                            }
-                        } else {
-                            // No handler found for this job type
-                            JobExecution::Failure {
-                                message: format!(
-                                    "No handler registered for job type: {}",
-                                    job_type
-                                ),
-                                details: None,
-                            }
-                        }
-                    };
-
-                    // Send job completion notification
-                    let notification = JobCompletionNotification {
-                        job_id,
-                        queue,
-                        result,
-                    };
-
-                    if let Err(e) = completion_tx.send(notification).await {
-                        tracing::error!(
+                        tracing::debug!(
                             worker_id = %worker_id,
-                            error = %e,
-                            "Failed to send job completion notification"
+                            job_id = %job_id,
+                            job_type = %job_type,
+                            queue = %queue,
+                            "Processing job"
+                        );
+
+                        // Try to find a handler for this job type
+                        let result = {
+                            let handlers = handlers.read().await;
+                            if let Some(handler) = handlers.get(&job_type) {
+                                // Execute the handler with the job
+                                match handler.execute(job.clone()) {
+                                    Ok(result) => JobExecution::Success(result),
+                                    Err(e) => JobExecution::Failure {
+                                        message: e.to_string(),
+                                        details: None,
+                                    },
+                                }
+                            } else {
+                                // No handler found for this job type
+                                JobExecution::Failure {
+                                    message: format!(
+                                        "No handler registered for job type: {}",
+                                        job_type
+                                    ),
+                                    details: None,
+                                }
+                            }
+                        };
+
+                        // Send job completion notification
+                        let notification = JobCompletionNotification {
+                            job_id,
+                            queue,
+                            result,
+                        };
+
+                        if let Err(e) = completion_tx.send(notification).await {
+                            tracing::error!(
+                                worker_id = %worker_id,
+                                error = %e,
+                                "Failed to send job completion notification"
+                            );
+                        }
+                    } else {
+                        // Worker is paused, do nothing
+                        tracing::debug!(
+                            worker_id = %worker_id,
+                            "Worker is paused, ignoring job"
                         );
                     }
-                }
-
-                WorkerCommand::ProcessJob(_) if paused => {
-                    // Worker is paused, do nothing
-                    tracing::debug!(
-                        worker_id = %worker_id,
-                        "Worker is paused, ignoring job"
-                    );
                 }
 
                 WorkerCommand::Stop => {

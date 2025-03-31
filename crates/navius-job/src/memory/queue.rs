@@ -1,4 +1,4 @@
-use crate::error::{JobError, JobResult, JobStatus};
+use crate::error::{JobError, JobExecutionResult, JobResult, JobStatus};
 use crate::job::{JobEnvelope, JobFilterConfig};
 use chrono::{DateTime, Utc};
 use std::collections::{HashMap, VecDeque};
@@ -9,7 +9,7 @@ use uuid::Uuid;
 /// In-memory queue for jobs
 pub struct InMemoryQueue {
     /// Queue name
-    name: String,
+    pub name: String,
 
     /// Jobs in the queue
     jobs: Mutex<HashMap<Uuid, JobEnvelope>>,

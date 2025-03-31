@@ -1,11 +1,8 @@
 use crate::error::{EventPriority, EventResult};
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::sync::Arc;
 use uuid::Uuid;
 
 /// Represents an event in the system

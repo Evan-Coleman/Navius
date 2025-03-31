@@ -17,6 +17,9 @@ pub enum PluginError {
     /// Error unloading a plugin
     UnloadError(String),
 
+    /// Generic dependency error
+    DependencyError(String),
+
     /// Plugin dependency not found
     DependencyNotFound {
         plugin_id: String,
@@ -87,6 +90,7 @@ impl fmt::Display for PluginError {
             }
             PluginError::LoadError(msg) => write!(f, "Plugin load error: {}", msg),
             PluginError::UnloadError(msg) => write!(f, "Plugin unload error: {}", msg),
+            PluginError::DependencyError(msg) => write!(f, "Plugin dependency error: {}", msg),
             PluginError::DependencyNotFound {
                 plugin_id,
                 dependency_id,

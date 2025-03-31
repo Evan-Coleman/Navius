@@ -64,6 +64,8 @@ mock-it = "0.9.0"
 mockito = "1.7.0"
 test-context = "0.4.1"
 
+num_cpus = "1.16.0"
+
 [profile.dev]
 opt-level = 0
 debug = true

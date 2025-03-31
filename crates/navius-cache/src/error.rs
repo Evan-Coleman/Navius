@@ -45,28 +45,26 @@ impl From<CacheError> for AppError {
     fn from(err: CacheError) -> Self {
         match err {
             CacheError::ConnectionError(msg) => {
-                AppError::internal_server_error(format!("Cache connection error: {}", msg))
+                AppError::internal(format!("Cache connection error: {}", msg))
             }
             CacheError::OperationError(msg) => {
-                AppError::internal_server_error(format!("Cache operation error: {}", msg))
+                AppError::internal(format!("Cache operation error: {}", msg))
             }
             CacheError::SerializationError(msg) => {
-                AppError::internal_server_error(format!("Cache serialization error: {}", msg))
+                AppError::internal(format!("Cache serialization error: {}", msg))
             }
             CacheError::NotFoundError(msg) => {
                 AppError::not_found(format!("Cache key not found: {}", msg))
             }
             CacheError::ConfigurationError(msg) => {
-                AppError::configuration_error(format!("Cache configuration error: {}", msg))
+                AppError::configuration(format!("Cache configuration error: {}", msg))
             }
-            CacheError::TimeoutError(msg) => {
-                AppError::internal_server_error(format!("Cache timeout: {}", msg))
-            }
+            CacheError::TimeoutError(msg) => AppError::internal(format!("Cache timeout: {}", msg)),
             CacheError::InvalidationError(msg) => {
-                AppError::internal_server_error(format!("Cache invalidation error: {}", msg))
+                AppError::internal(format!("Cache invalidation error: {}", msg))
             }
             CacheError::BackendError(msg) => {
-                AppError::internal_server_error(format!("Cache backend error: {}", msg))
+                AppError::internal(format!("Cache backend error: {}", msg))
             }
         }
     }

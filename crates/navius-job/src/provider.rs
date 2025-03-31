@@ -2,7 +2,8 @@ use crate::error::{JobExecutionResult, JobResult};
 use crate::job::{Job, JobEnvelope, JobFilterConfig};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -198,6 +199,21 @@ pub struct QueueInfo {
     pub recurring_job_count: usize,
 }
 
+/// Job handler function trait
+pub trait JobHandlerFn: Send + Sync + 'static {
+    /// Execute the handler
+    fn execute(&self, envelope: JobEnvelope) -> JobResult<JobExecutionResult>;
+}
+
+impl<F> JobHandlerFn for F
+where
+    F: Fn(JobEnvelope) -> JobResult<JobExecutionResult> + Send + Sync + 'static,
+{
+    fn execute(&self, envelope: JobEnvelope) -> JobResult<JobExecutionResult> {
+        self(envelope)
+    }
+}
+
 /// Job handler function
 pub type JobHandler<T> =
     Box<dyn Fn(Job<T>) -> JobResult<JobExecutionResult> + Send + Sync + 'static>;
@@ -320,53 +336,18 @@ pub trait JobProvider: Send + Sync {
     /// Get the status of the job provider
     async fn is_running(&self) -> JobResult<bool>;
 
-    /// Schedule a job
-    async fn schedule<T>(&self, job: Job<T>) -> JobResult<Uuid>
-    where
-        T: Serialize + DeserializeOwned + Send + Sync + 'static;
-
-    /// Schedule a job with options
-    async fn schedule_with_options<T>(
-        &self,
-        job_type: &str,
-        queue: &str,
-        payload: T,
-        options: SchedulingOptions,
-    ) -> JobResult<Uuid>
-    where
-        T: Serialize + DeserializeOwned + Send + Sync + 'static;
-
-    /// Schedule a job to run at a specific time
-    async fn schedule_at<T>(
-        &self,
-        job_type: &str,
-        queue: &str,
-        payload: T,
-        scheduled_time: DateTime<Utc>,
-        options: SchedulingOptions,
-    ) -> JobResult<Uuid>
-    where
-        T: Serialize + DeserializeOwned + Send + Sync + 'static;
-
-    /// Schedule a recurring job with a cron expression
-    async fn schedule_recurring<T>(
-        &self,
-        job_type: &str,
-        queue: &str,
-        payload: T,
-        cron_expression: &str,
-        options: SchedulingOptions,
-    ) -> JobResult<Uuid>
-    where
-        T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static;
+    /// Schedule a job (type-erased version)
+    async fn schedule_raw(&self, job: JobEnvelope) -> JobResult<Uuid>;
 
     /// Cancel a job
     async fn cancel(&self, job_id: &Uuid) -> JobResult<bool>;
 
-    /// Register a job handler
-    async fn register_handler<T>(&self, job_type: &str, handler: JobHandler<T>) -> JobResult<()>
-    where
-        T: DeserializeOwned + Send + Sync + 'static;
+    /// Register a job handler by type and serialized handler
+    async fn register_handler_raw(
+        &self,
+        job_type: &str,
+        handler: Box<dyn JobHandlerFn>,
+    ) -> JobResult<()>;
 
     /// Unregister a job handler
     async fn unregister_handler(&self, job_type: &str) -> JobResult<bool>;
@@ -404,11 +385,186 @@ pub trait JobProvider: Send + Sync {
     async fn health_check(&self) -> JobResult<bool>;
 }
 
+/// Type-safe extension trait for JobProvider
+#[async_trait]
+pub trait JobProviderExt: JobProvider {
+    /// Schedule a job
+    async fn schedule<T>(&self, job: Job<T>) -> JobResult<Uuid>
+    where
+        T: Serialize + DeserializeOwned + Send + Sync + 'static,
+    {
+        let envelope = JobEnvelope::from_job(&job)?;
+        self.schedule_raw(envelope).await
+    }
+
+    /// Schedule a job with options
+    async fn schedule_with_options<T>(
+        &self,
+        job_type: &str,
+        queue: &str,
+        payload: T,
+        options: SchedulingOptions,
+    ) -> JobResult<Uuid>
+    where
+        T: Serialize + DeserializeOwned + Send + Sync + 'static,
+    {
+        // Create the job
+        let mut job = Job::new(job_type, queue, "job-provider", payload);
+
+        // Apply options
+        if let Some(max_retries) = options.max_retries {
+            job.max_retries = max_retries;
+        }
+
+        if let Some(retry_backoff) = options.retry_backoff {
+            job.retry_backoff = Some(retry_backoff);
+        }
+
+        if let Some(timeout_seconds) = options.timeout_seconds {
+            job.timeout_seconds = Some(timeout_seconds);
+        }
+
+        if let Some(priority) = options.priority {
+            job.priority = priority;
+        }
+
+        if let Some(correlation_id) = options.correlation_id {
+            job.correlation_id = Some(correlation_id);
+        }
+
+        if let Some(metadata) = options.metadata {
+            job.metadata.extend(metadata);
+        }
+
+        // Schedule the job
+        self.schedule(job).await
+    }
+
+    /// Schedule a job to run at a specific time
+    async fn schedule_at<T>(
+        &self,
+        job_type: &str,
+        queue: &str,
+        payload: T,
+        scheduled_time: DateTime<Utc>,
+        options: SchedulingOptions,
+    ) -> JobResult<Uuid>
+    where
+        T: Serialize + DeserializeOwned + Send + Sync + 'static,
+    {
+        // Create the job
+        let mut job = Job::new(job_type, queue, "job-provider", payload);
+        job.scheduled_for = Some(scheduled_time);
+
+        // Apply options
+        if let Some(max_retries) = options.max_retries {
+            job.max_retries = max_retries;
+        }
+
+        if let Some(retry_backoff) = options.retry_backoff {
+            job.retry_backoff = Some(retry_backoff);
+        }
+
+        if let Some(timeout_seconds) = options.timeout_seconds {
+            job.timeout_seconds = Some(timeout_seconds);
+        }
+
+        if let Some(priority) = options.priority {
+            job.priority = priority;
+        }
+
+        if let Some(correlation_id) = options.correlation_id {
+            job.correlation_id = Some(correlation_id);
+        }
+
+        if let Some(metadata) = options.metadata {
+            job.metadata.extend(metadata);
+        }
+
+        // Schedule the job
+        self.schedule(job).await
+    }
+
+    /// Schedule a recurring job with a cron expression
+    async fn schedule_recurring<T>(
+        &self,
+        job_type: &str,
+        queue: &str,
+        payload: T,
+        cron_expression: &str,
+        options: SchedulingOptions,
+    ) -> JobResult<Uuid>
+    where
+        T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static,
+    {
+        // Create the job
+        let mut job = Job::new(job_type, queue, "job-provider", payload);
+        job.cron_expression = Some(cron_expression.to_string());
+
+        // Apply options
+        if let Some(max_retries) = options.max_retries {
+            job.max_retries = max_retries;
+        }
+
+        if let Some(retry_backoff) = options.retry_backoff {
+            job.retry_backoff = Some(retry_backoff);
+        }
+
+        if let Some(timeout_seconds) = options.timeout_seconds {
+            job.timeout_seconds = Some(timeout_seconds);
+        }
+
+        if let Some(priority) = options.priority {
+            job.priority = priority;
+        }
+
+        if let Some(correlation_id) = options.correlation_id {
+            job.correlation_id = Some(correlation_id);
+        }
+
+        if let Some(metadata) = options.metadata {
+            job.metadata.extend(metadata);
+        }
+
+        // Schedule the job
+        self.schedule(job).await
+    }
+
+    /// Register a job handler
+    async fn register_handler<T>(
+        &self,
+        job_type: &str,
+        handler: Box<
+            dyn Fn(T, JobEnvelope) -> JobResult<JobExecutionResult> + Send + Sync + 'static,
+        >,
+    ) -> JobResult<()>
+    where
+        T: DeserializeOwned + Send + Sync + 'static,
+    {
+        // Create a type-erased handler function
+        let handler_fn = Box::new(
+            move |envelope: JobEnvelope| -> JobResult<JobExecutionResult> {
+                let payload = envelope.payload.clone();
+                let payload_json = serde_json::from_value::<T>(payload)?;
+                handler(payload_json, envelope)
+            },
+        );
+
+        self.register_handler_raw(job_type, handler_fn).await
+    }
+}
+
+// Implement the extension trait for all JobProvider implementors
+impl<P: JobProvider> JobProviderExt for P {}
+
 /// Factory for creating job providers
 #[async_trait]
 pub trait JobProviderFactory: Send + Sync {
+    /// Type of job provider created by this factory
+    type Provider: JobProvider;
+
     /// Create a new job provider
-    async fn create_provider(&self, config: JobProviderConfig) -> JobResult<Arc<dyn JobProvider>>;
+    async fn create_provider(&self, config: JobProviderConfig) -> JobResult<Arc<Self::Provider>>;
 }
 
 /// Trait for types that can be used as job payloads

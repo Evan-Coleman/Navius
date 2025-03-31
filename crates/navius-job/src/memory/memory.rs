@@ -1,13 +1,15 @@
 use crate::error::{JobError, JobExecutionResult, JobPriority, JobResult, JobStatus};
 use crate::job::{Job, JobEnvelope, JobFilterConfig};
 use crate::provider::{
-    JobHandler, JobProvider, JobProviderConfig, JobProviderFactory, ProviderInfo, QueueInfo,
+    JobHandlerFn, JobProvider, JobProviderConfig, JobProviderFactory, ProviderInfo, QueueInfo,
     SchedulingOptions,
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use cron::Schedule;
-use serde::{Deserialize, Serialize};
+use navius_event::broker::EventBroker;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::collections::{HashMap, VecDeque};
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -41,14 +43,7 @@ pub struct InMemoryJobProvider {
     workers: Arc<Mutex<HashMap<String, Worker>>>,
 
     /// Type handlers by job type
-    handlers: Arc<
-        RwLock<
-            HashMap<
-                String,
-                Box<dyn Fn(JobEnvelope) -> JobResult<JobExecutionResult> + Send + Sync + 'static>,
-            >,
-        >,
-    >,
+    handlers: Arc<RwLock<HashMap<String, Box<dyn JobHandlerFn>>>>,
 
     /// Is the provider running
     running: Arc<RwLock<bool>>,
@@ -236,65 +231,28 @@ impl InMemoryJobProvider {
         Ok(())
     }
 
-    /// Process a job
+    /// Process a job by finding a worker
     async fn process_job(&self, job: JobEnvelope) -> JobResult<()> {
-        // First mark the job as running
-        let queue_name = job.queue.clone();
-        let job_id = job.id;
-
-        // Get the queue
-        let queues = self.queues.read().await;
-        let queue = queues
-            .get(&queue_name)
-            .ok_or_else(|| JobError::QueueNotFound(format!("Queue not found: {}", queue_name)))?;
-
-        // Mark the job as running
-        if !queue.mark_job_running(&job_id).await? {
-            return Err(JobError::JobNotFound(job_id.to_string()));
-        }
-
-        // Publish event
-        if let Some(job) = queue.get_job(&job_id).await? {
-            self.publish_event("job.running", &job).await?;
-        }
-
-        // Find an available worker
+        // Find a worker to handle the job
         let workers = self.workers.lock().await;
         if workers.is_empty() {
-            // No workers available, mark job as failed
-            queue
-                .mark_job_failed(&job_id, "No workers available to process job", None)
-                .await?;
-            return Err(JobError::WorkerError("No workers available".to_string()));
+            return Err(JobError::NoAvailableWorkers(
+                "No workers available".to_string(),
+            ));
         }
 
-        // Simple round-robin worker assignment
-        let worker_id = workers.keys().next().unwrap().clone(); // Safe because we checked for empty above
-        let worker = workers.get(&worker_id).unwrap(); // Safe because we just got the key
+        // Find a worker (simple round-robin for now)
+        let worker_id = workers.keys().next().unwrap().clone();
+        let worker = workers.get(&worker_id).unwrap();
 
-        // Send the job to the worker
+        // Send job to worker for processing
         if let Some(tx) = &worker.command_tx {
-            if let Err(e) = tx.send(WorkerCommand::ProcessJob(job)).await {
-                // Failed to send job to worker
-                queue
-                    .mark_job_failed(
-                        &job_id,
-                        format!("Failed to send job to worker: {}", e),
-                        None,
-                    )
-                    .await?;
-                return Err(JobError::WorkerError(format!(
-                    "Failed to send job to worker: {}",
-                    e
-                )));
-            }
+            tx.send(WorkerCommand::ProcessJob(job)).await.map_err(|e| {
+                JobError::WorkerError(format!("Failed to send job to worker: {}", e))
+            })?;
         } else {
-            // Worker has no command channel
-            queue
-                .mark_job_failed(&job_id, "Worker has no command channel", None)
-                .await?;
             return Err(JobError::WorkerError(
-                "Worker has no command channel".to_string(),
+                "Worker command channel not available".to_string(),
             ));
         }
 
@@ -362,6 +320,21 @@ impl InMemoryJobProvider {
                 }
             }
         })
+    }
+
+    /// Process job if provider is running and job is ready for execution
+    fn is_job_ready(job: &JobEnvelope) -> bool {
+        match job.status {
+            JobStatus::Pending => true,
+            JobStatus::Scheduled => {
+                if let Some(scheduled_time) = job.scheduled_for {
+                    Utc::now() >= scheduled_time
+                } else {
+                    true
+                }
+            }
+            _ => false,
+        }
     }
 }
 
@@ -550,12 +523,8 @@ impl JobProvider for InMemoryJobProvider {
         Ok(*running)
     }
 
-    async fn schedule<T>(&self, job: Job<T>) -> JobResult<Uuid>
-    where
-        T: Serialize + DeserializeOwned + Send + Sync + 'static,
-    {
-        // Convert job to envelope
-        let envelope = JobEnvelope::from_job(&job)?;
+    async fn schedule_raw(&self, envelope: JobEnvelope) -> JobResult<Uuid> {
+        // Store job ID for return
         let job_id = envelope.id;
         let queue_name = envelope.queue.clone();
 
@@ -578,7 +547,7 @@ impl JobProvider for InMemoryJobProvider {
 
         // Process job if provider is running and job is ready
         let running = self.running.read().await;
-        if *running && job.is_ready() {
+        if *running && Self::is_job_ready(&envelope) {
             // Process immediately
             self.process_job(envelope).await?;
         }
@@ -586,164 +555,19 @@ impl JobProvider for InMemoryJobProvider {
         Ok(job_id)
     }
 
-    async fn schedule_with_options<T>(
+    async fn register_handler_raw(
         &self,
         job_type: &str,
-        queue: &str,
-        payload: T,
-        options: SchedulingOptions,
-    ) -> JobResult<Uuid>
-    where
-        T: Serialize + DeserializeOwned + Send + Sync + 'static,
-    {
-        // Create the job
-        let mut job = Job::new(job_type, queue, "job-provider", payload);
-
-        // Apply options
-        if let Some(max_retries) = options.max_retries {
-            job.max_retries = max_retries;
-        } else {
-            // Use provider default
-            job.max_retries = self.config.default_max_retries;
-        }
-
-        if let Some(retry_backoff) = options.retry_backoff {
-            job.retry_backoff = Some(retry_backoff);
-        } else {
-            // Use provider default
-            job.retry_backoff = self.config.default_retry_backoff.clone();
-        }
-
-        if let Some(timeout_seconds) = options.timeout_seconds {
-            job.timeout_seconds = Some(timeout_seconds);
-        } else {
-            // Use provider default
-            job.timeout_seconds = self.config.default_timeout_seconds;
-        }
-
-        if let Some(priority) = options.priority {
-            job.priority = priority;
-        }
-
-        if let Some(correlation_id) = options.correlation_id {
-            job.correlation_id = Some(correlation_id);
-        }
-
-        if let Some(metadata) = options.metadata {
-            job.metadata.extend(metadata);
-        }
-
-        // Schedule the job
-        self.schedule(job).await
+        handler: Box<dyn JobHandlerFn>,
+    ) -> JobResult<()> {
+        let mut handlers = self.handlers.write().await;
+        handlers.insert(job_type.to_string(), handler);
+        Ok(())
     }
 
-    async fn schedule_at<T>(
-        &self,
-        job_type: &str,
-        queue: &str,
-        payload: T,
-        scheduled_time: DateTime<Utc>,
-        options: SchedulingOptions,
-    ) -> JobResult<Uuid>
-    where
-        T: Serialize + DeserializeOwned + Send + Sync + 'static,
-    {
-        // Create the job
-        let mut job = Job::scheduled(job_type, queue, "job-provider", payload, scheduled_time);
-
-        // Apply options
-        if let Some(max_retries) = options.max_retries {
-            job.max_retries = max_retries;
-        } else {
-            // Use provider default
-            job.max_retries = self.config.default_max_retries;
-        }
-
-        if let Some(retry_backoff) = options.retry_backoff {
-            job.retry_backoff = Some(retry_backoff);
-        } else {
-            // Use provider default
-            job.retry_backoff = self.config.default_retry_backoff.clone();
-        }
-
-        if let Some(timeout_seconds) = options.timeout_seconds {
-            job.timeout_seconds = Some(timeout_seconds);
-        } else {
-            // Use provider default
-            job.timeout_seconds = self.config.default_timeout_seconds;
-        }
-
-        if let Some(priority) = options.priority {
-            job.priority = priority;
-        }
-
-        if let Some(correlation_id) = options.correlation_id {
-            job.correlation_id = Some(correlation_id);
-        }
-
-        if let Some(metadata) = options.metadata {
-            job.metadata.extend(metadata);
-        }
-
-        // Schedule the job
-        self.schedule(job).await
-    }
-
-    async fn schedule_recurring<T>(
-        &self,
-        job_type: &str,
-        queue: &str,
-        payload: T,
-        cron_expression: &str,
-        options: SchedulingOptions,
-    ) -> JobResult<Uuid>
-    where
-        T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static,
-    {
-        // Validate cron expression
-        let _schedule = cron_expression
-            .parse::<Schedule>()
-            .map_err(|e| JobError::CronParseError(format!("Invalid cron expression: {}", e)))?;
-
-        // Create the job
-        let mut job = Job::recurring(job_type, queue, "job-provider", payload, cron_expression);
-
-        // Apply options
-        if let Some(max_retries) = options.max_retries {
-            job.max_retries = max_retries;
-        } else {
-            // Use provider default
-            job.max_retries = self.config.default_max_retries;
-        }
-
-        if let Some(retry_backoff) = options.retry_backoff {
-            job.retry_backoff = Some(retry_backoff);
-        } else {
-            // Use provider default
-            job.retry_backoff = self.config.default_retry_backoff.clone();
-        }
-
-        if let Some(timeout_seconds) = options.timeout_seconds {
-            job.timeout_seconds = Some(timeout_seconds);
-        } else {
-            // Use provider default
-            job.timeout_seconds = self.config.default_timeout_seconds;
-        }
-
-        if let Some(priority) = options.priority {
-            job.priority = priority;
-        }
-
-        if let Some(correlation_id) = options.correlation_id {
-            job.correlation_id = Some(correlation_id);
-        }
-
-        if let Some(metadata) = options.metadata {
-            job.metadata.extend(metadata);
-        }
-
-        // Schedule the job
-        self.schedule(job).await
+    async fn unregister_handler(&self, job_type: &str) -> JobResult<bool> {
+        let mut handlers = self.handlers.write().await;
+        Ok(handlers.remove(job_type).is_some())
     }
 
     async fn cancel(&self, job_id: &Uuid) -> JobResult<bool> {
@@ -763,32 +587,6 @@ impl JobProvider for InMemoryJobProvider {
 
         // Job not found
         Ok(false)
-    }
-
-    async fn register_handler<T>(&self, job_type: &str, handler: JobHandler<T>) -> JobResult<()>
-    where
-        T: DeserializeOwned + Send + Sync + 'static,
-    {
-        // Convert the typed handler to an envelope handler
-        let envelope_handler: Box<
-            dyn Fn(JobEnvelope) -> JobResult<JobExecutionResult> + Send + Sync + 'static,
-        > = Box::new(move |envelope: JobEnvelope| {
-            // Deserialize the envelope into the typed job
-            let job = envelope.try_into_job::<T>()?;
-            // Execute the handler
-            handler(job)
-        });
-
-        // Register the handler
-        let mut handlers = self.handlers.write().await;
-        handlers.insert(job_type.to_string(), envelope_handler);
-
-        Ok(())
-    }
-
-    async fn unregister_handler(&self, job_type: &str) -> JobResult<bool> {
-        let mut handlers = self.handlers.write().await;
-        Ok(handlers.remove(job_type).is_some())
     }
 
     async fn get_job(&self, job_id: &Uuid) -> JobResult<Option<JobEnvelope>> {
@@ -906,11 +704,12 @@ impl JobProvider for InMemoryJobProvider {
     }
 }
 
-/// Provider factory for creating in-memory job providers
+/// Implementation of the JobProviderFactory for the in-memory provider
+#[derive(Clone)]
 pub struct InMemoryJobProviderFactory {}
 
 impl InMemoryJobProviderFactory {
-    /// Create a new factory
+    /// Create a new in-memory job provider factory
     pub fn new() -> Self {
         Self {}
     }
@@ -924,8 +723,24 @@ impl Default for InMemoryJobProviderFactory {
 
 #[async_trait]
 impl JobProviderFactory for InMemoryJobProviderFactory {
-    async fn create_provider(&self, config: JobProviderConfig) -> JobResult<Arc<dyn JobProvider>> {
+    type Provider = InMemoryJobProvider;
+
+    async fn create_provider(&self, config: JobProviderConfig) -> JobResult<Arc<Self::Provider>> {
         let provider = InMemoryJobProvider::new(config);
         Ok(Arc::new(provider))
     }
+}
+
+/// Execute a job asynchronously
+async fn execute_job(
+    job: JobEnvelope,
+    handlers: &HashMap<String, Box<dyn JobHandlerFn>>,
+) -> JobResult<JobExecutionResult> {
+    // Get the handler
+    let handler = handlers.get(&job.job_type).ok_or_else(|| {
+        JobError::HandlerNotFound(format!("No handler found for job type: {}", job.job_type))
+    })?;
+
+    // Execute the handler
+    handler.execute(job)
 }

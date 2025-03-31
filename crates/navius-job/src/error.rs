@@ -64,6 +64,14 @@ pub enum JobError {
     #[error("Worker error: {0}")]
     WorkerError(String),
 
+    /// No available workers to process job
+    #[error("No available workers: {0}")]
+    NoAvailableWorkers(String),
+
+    /// Job handler not found
+    #[error("Job handler not found: {0}")]
+    HandlerNotFound(String),
+
     /// IO error
     #[error("IO error: {0}")]
     IoError(#[from] io::Error),
@@ -71,6 +79,10 @@ pub enum JobError {
     /// Error from event system
     #[error("Event system error: {0}")]
     EventError(#[from] navius_event::EventError),
+
+    /// JSON serialization error
+    #[error("JSON serialization error: {0}")]
+    JsonError(#[from] serde_json::Error),
 
     /// Other error
     #[error("Job error: {0}")]

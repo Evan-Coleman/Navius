@@ -1,6 +1,12 @@
-// Navius Event System
-//
-// This crate provides event handling and notification interfaces for the Navius framework.
+//! Navius Event System
+//!
+//! This crate provides event handling and notification interfaces for the Navius framework.
+//! It includes a flexible event broker API, in-memory implementation, and utilities
+//! for publishing and subscribing to events.
+//!
+//! The event system allows components to communicate asynchronously through a
+//! publish-subscribe pattern, with support for typed events, filtering, and
+//! prioritization.
 
 #![deny(missing_docs)]
 #![warn(clippy::all)]

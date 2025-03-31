@@ -259,3 +259,48 @@ macro_rules! export_plugin {
         }
     };
 }
+
+/// In-memory plugin provider for testing and development
+pub struct InMemoryPluginProvider {
+    /// Stored plugins
+    plugins: Vec<Box<dyn Plugin>>,
+}
+
+impl InMemoryPluginProvider {
+    /// Create a new in-memory plugin provider
+    pub fn new() -> Self {
+        Self {
+            plugins: Vec::new(),
+        }
+    }
+
+    /// Add a plugin to the provider
+    pub fn add_plugin<P: Plugin + 'static>(&mut self, plugin: P) -> &mut Self {
+        self.plugins.push(Box::new(plugin));
+        self
+    }
+
+    /// Add multiple plugins to the provider
+    pub fn add_plugins<P: Plugin + 'static>(&mut self, plugins: Vec<P>) -> &mut Self {
+        for plugin in plugins {
+            self.add_plugin(plugin);
+        }
+        self
+    }
+
+    /// Get all plugins
+    pub fn get_plugins(&self) -> &[Box<dyn Plugin>] {
+        &self.plugins
+    }
+
+    /// Take ownership of all plugins
+    pub fn take_plugins(&mut self) -> Vec<Box<dyn Plugin>> {
+        std::mem::take(&mut self.plugins)
+    }
+}
+
+impl Default for InMemoryPluginProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -21,6 +21,7 @@ tracing = "0.1.41"
 uuid = { version = "1.16.0", features = ["v4", "serde"] }
 navius-event = { path = "../navius-event" }
 navius-core = { path = "../navius-core" }
+num_cpus = { workspace = true }
 
 [dev-dependencies]
 tokio-test = "0.4.4"

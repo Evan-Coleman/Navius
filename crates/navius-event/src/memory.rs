@@ -1,4 +1,4 @@
-use super::broker::{EventBrokerConfig, EventBrokerFactory};
+use super::broker::EventBrokerFactory;
 use crate::broker::{BrokerInfo, EventBroker, EventBrokerConfig, TopicInfo};
 use crate::error::{DeliveryStatus, EventError, EventResult};
 use crate::event::{
@@ -7,13 +7,13 @@ use crate::event::{
 use async_trait::async_trait;
 use chrono::Utc;
 use futures::Stream;
-use futures::channel::mpsc::{self, Receiver, Sender};
+use futures::channel::mpsc::{self, Sender};
 use futures::stream::StreamExt;
 use serde::{Serialize, de::DeserializeOwned};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::pin::Pin;
-use std::sync::{Arc, RwLock};
-use tokio::sync::Mutex;
+use std::sync::Arc;
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::{self, Duration};
 use uuid::Uuid;
 
@@ -88,7 +88,7 @@ impl InMemoryEventBroker {
                 interval.tick().await;
 
                 // Get all topics
-                let topic_map = topics.read().unwrap();
+                let topic_map = topics.read().await;
                 let topic_keys: Vec<String> = topic_map.keys().cloned().collect();
 
                 // Process each topic
@@ -139,14 +139,14 @@ impl InMemoryEventBroker {
         T: DeserializeOwned + Send + Sync + 'static,
     {
         // Check if topic exists
-        let topics_read = self.topics.read().unwrap();
+        let topics_read = self.topics.read().await;
         let topic = if let Some(topic) = topics_read.get(topic_name) {
             topic.clone()
         } else {
             // Auto-create topic if it doesn't exist
             drop(topics_read);
             self.create_topic(topic_name).await?;
-            self.topics.read().unwrap().get(topic_name).unwrap().clone()
+            self.topics.read().await.get(topic_name).unwrap().clone()
         };
 
         // Check subscriber limit
@@ -185,7 +185,7 @@ impl InMemoryEventBroker {
 
         // Register in global subscriptions map
         {
-            let mut subs = self.subscriptions.write().unwrap();
+            let mut subs = self.subscriptions.write().await;
             subs.insert(subscription_id.clone(), subscription_info);
         }
 
@@ -194,14 +194,14 @@ impl InMemoryEventBroker {
             let topic_lock = topic.lock().await;
             for event in &topic_lock.events {
                 if options.filter.as_ref().map_or(true, |f| f.matches(event)) {
-                    if let Ok(typed_event) = event.try_into_event::<T>() {
+                    if let Ok(_typed_event) = event.try_into_event::<T>() {
                         if let Some(sender) = topic_lock
                             .subscriptions
                             .get(&subscription_id)
                             .map(|s| &s.sender)
                         {
                             // Ignore error if channel is full
-                            let _ = sender.clone().try_send(Ok(typed_event));
+                            let _ = sender.clone().try_send(Ok(event.clone()));
                         }
                     }
                 }
@@ -254,7 +254,7 @@ impl InMemoryEventBroker {
 
         // Distribute to all subscribers
         let mut delivered = 0;
-        let mut failed = 0;
+        let mut _failed = 0;
         let total_subscribers = topic_lock.subscriptions.len();
 
         for (sub_id, sub) in &topic_lock.subscriptions {
@@ -271,16 +271,14 @@ impl InMemoryEventBroker {
                     Ok(_) => {
                         // Update delivery stats
                         delivered += 1;
-                        if let Some(sub_info) = self.subscriptions.write().unwrap().get_mut(sub_id)
-                        {
+                        if let Some(sub_info) = self.subscriptions.write().await.get_mut(sub_id) {
                             sub_info.events_delivered += 1;
                         }
                     }
                     Err(_) => {
                         // Failed to deliver (likely channel full)
-                        failed += 1;
-                        if let Some(sub_info) = self.subscriptions.write().unwrap().get_mut(sub_id)
-                        {
+                        _failed += 1;
+                        if let Some(sub_info) = self.subscriptions.write().await.get_mut(sub_id) {
                             sub_info.events_dropped += 1;
                         }
                     }
@@ -304,8 +302,8 @@ impl InMemoryEventBroker {
 #[async_trait]
 impl EventBroker for InMemoryEventBroker {
     async fn get_info(&self) -> EventResult<BrokerInfo> {
-        let topics = self.topics.read().unwrap();
-        let subscriptions = self.subscriptions.read().unwrap();
+        let topics = self.topics.read().await;
+        let subscriptions = self.subscriptions.read().await;
 
         Ok(BrokerInfo {
             id: self.id.clone(),
@@ -317,7 +315,7 @@ impl EventBroker for InMemoryEventBroker {
     }
 
     async fn list_topics(&self) -> EventResult<Vec<TopicInfo>> {
-        let topics = self.topics.read().unwrap();
+        let topics = self.topics.read().await;
         let mut result = Vec::with_capacity(topics.len());
 
         for (_, topic) in topics.iter() {
@@ -334,7 +332,7 @@ impl EventBroker for InMemoryEventBroker {
     }
 
     async fn topic_exists(&self, topic: &str) -> EventResult<bool> {
-        let topics = self.topics.read().unwrap();
+        let topics = self.topics.read().await;
         Ok(topics.contains_key(topic))
     }
 
@@ -356,7 +354,7 @@ impl EventBroker for InMemoryEventBroker {
 
         // Check max topics limit
         if let Some(max_topics) = self.config.max_topics {
-            let topics = self.topics.read().unwrap();
+            let topics = self.topics.read().await;
             if topics.len() >= max_topics && !topics.contains_key(topic) {
                 return Err(EventError::BrokerError(format!(
                     "Maximum number of topics ({}) reached",
@@ -366,7 +364,7 @@ impl EventBroker for InMemoryEventBroker {
         }
 
         // Create the topic if it doesn't exist
-        let mut topics = self.topics.write().unwrap();
+        let mut topics = self.topics.write().await;
         if !topics.contains_key(topic) {
             topics.insert(
                 topic.to_string(),
@@ -385,7 +383,7 @@ impl EventBroker for InMemoryEventBroker {
     async fn delete_topic(&self, topic: &str) -> EventResult<()> {
         // Check if the topic exists
         let topic_exists = {
-            let topics = self.topics.read().unwrap();
+            let topics = self.topics.read().await;
             topics.contains_key(topic)
         };
 
@@ -395,14 +393,14 @@ impl EventBroker for InMemoryEventBroker {
 
         // Remove all subscriptions for this topic first
         {
-            let mut topics = self.topics.write().unwrap();
+            let mut topics = self.topics.write().await;
             if let Some(topic_mutex) = topics.get(topic).cloned() {
                 let topic_lock = topic_mutex.lock().await;
                 let subscription_ids: Vec<String> =
                     topic_lock.subscriptions.keys().cloned().collect();
 
                 // Remove subscriptions from global map
-                let mut subs = self.subscriptions.write().unwrap();
+                let mut subs = self.subscriptions.write().await;
                 for sub_id in subscription_ids {
                     subs.remove(&sub_id);
                 }
@@ -433,19 +431,14 @@ impl EventBroker for InMemoryEventBroker {
 
         // Get the topic or create it
         let topic = {
-            let topics_read = self.topics.read().unwrap();
+            let topics_read = self.topics.read().await;
             if let Some(topic) = topics_read.get(&topic_name) {
                 topic.clone()
             } else {
                 // Auto-create the topic
                 drop(topics_read);
                 self.create_topic(&topic_name).await?;
-                self.topics
-                    .read()
-                    .unwrap()
-                    .get(&topic_name)
-                    .unwrap()
-                    .clone()
+                self.topics.read().await.get(&topic_name).unwrap().clone()
             }
         };
 
@@ -486,7 +479,7 @@ impl EventBroker for InMemoryEventBroker {
     async fn unsubscribe(&self, subscription_id: &str) -> EventResult<bool> {
         // Check if subscription exists
         let sub_info = {
-            let subs = self.subscriptions.read().unwrap();
+            let subs = self.subscriptions.read().await;
             match subs.get(subscription_id) {
                 Some(sub) => sub.clone(),
                 None => {
@@ -498,21 +491,21 @@ impl EventBroker for InMemoryEventBroker {
         };
 
         // Remove subscription from topic
-        let topics = self.topics.read().unwrap();
+        let topics = self.topics.read().await;
         if let Some(topic) = topics.get(&sub_info.topic) {
             let mut topic_lock = topic.lock().await;
             topic_lock.subscriptions.remove(subscription_id);
         }
 
         // Remove from global subscriptions map
-        let mut subs = self.subscriptions.write().unwrap();
+        let mut subs = self.subscriptions.write().await;
         subs.remove(subscription_id);
 
         Ok(true)
     }
 
     async fn get_subscription_info(&self, subscription_id: &str) -> EventResult<SubscriptionInfo> {
-        let subs = self.subscriptions.read().unwrap();
+        let subs = self.subscriptions.read().await;
         match subs.get(subscription_id) {
             Some(sub) => Ok(sub.clone()),
             None => Err(EventError::SubscriptionNotFound(
@@ -522,7 +515,7 @@ impl EventBroker for InMemoryEventBroker {
     }
 
     async fn list_subscriptions(&self) -> EventResult<Vec<SubscriptionInfo>> {
-        let subs = self.subscriptions.read().unwrap();
+        let subs = self.subscriptions.read().await;
         Ok(subs.values().cloned().collect())
     }
 
@@ -531,7 +524,7 @@ impl EventBroker for InMemoryEventBroker {
         topic: &str,
         limit: usize,
     ) -> EventResult<Vec<EventEnvelope>> {
-        let topics = self.topics.read().unwrap();
+        let topics = self.topics.read().await;
         match topics.get(topic) {
             Some(topic) => {
                 let topic_lock = topic.lock().await;
@@ -549,7 +542,7 @@ impl EventBroker for InMemoryEventBroker {
     }
 
     async fn clear_events(&self, topic: &str) -> EventResult<usize> {
-        let topics = self.topics.read().unwrap();
+        let topics = self.topics.read().await;
         match topics.get(topic) {
             Some(topic) => {
                 let mut topic_lock = topic.lock().await;
@@ -567,7 +560,7 @@ impl EventBroker for InMemoryEventBroker {
             Err(_) => return Err(EventError::Other(format!("Invalid event ID: {}", event_id))),
         };
 
-        let topics = self.topics.read().unwrap();
+        let topics = self.topics.read().await;
         for (_, topic) in topics.iter() {
             let topic_lock = topic.lock().await;
             for event in &topic_lock.events {
@@ -586,7 +579,7 @@ impl EventBroker for InMemoryEventBroker {
         filter: EventFilterConfig,
         limit: usize,
     ) -> EventResult<Vec<EventEnvelope>> {
-        let topics = self.topics.read().unwrap();
+        let topics = self.topics.read().await;
         match topics.get(topic) {
             Some(topic) => {
                 let topic_lock = topic.lock().await;
@@ -635,6 +628,7 @@ impl Default for InMemoryEventBrokerFactory {
     }
 }
 
+#[async_trait]
 impl EventBrokerFactory for InMemoryEventBrokerFactory {
     /// Create a new event broker implementation
     async fn create_broker(

@@ -3002,6 +3002,7 @@ dependencies = [
  "futures",
  "navius-core",
  "navius-event",
+ "num_cpus",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -3105,6 +3106,7 @@ dependencies = [
  "tokio-test",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

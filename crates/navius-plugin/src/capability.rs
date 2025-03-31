@@ -48,146 +48,6 @@ macro_rules! impl_capability {
     };
 }
 
-/// Marker trait for capabilities that provide configuration
-pub trait ConfigurationCapability: Capability {
-    /// Get configuration keys supported by this capability
-    fn get_config_keys(&self) -> Vec<&'static str>;
-
-    /// Set a configuration value
-    fn set_config(&mut self, key: &str, value: &str) -> bool;
-
-    /// Get a configuration value
-    fn get_config(&self, key: &str) -> Option<String>;
-}
-
-/// Marker trait for capabilities that provide health checks
-#[async_trait]
-pub trait HealthCheckCapability: Capability {
-    /// Perform a health check
-    async fn check_health(&self) -> bool;
-
-    /// Get detailed health information
-    async fn health_details(&self) -> serde_json::Value;
-}
-
-/// Marker trait for capabilities that provide logging
-pub trait LoggingCapability: Capability {
-    /// Log a message at the debug level
-    fn debug(&self, message: &str);
-
-    /// Log a message at the info level
-    fn info(&self, message: &str);
-
-    /// Log a message at the warn level
-    fn warn(&self, message: &str);
-
-    /// Log a message at the error level
-    fn error(&self, message: &str);
-
-    /// Log a structured event
-    fn log_event(&self, event_type: &str, data: serde_json::Value);
-}
-
-/// Marker trait for capabilities that provide data storage
-#[async_trait]
-pub trait StorageCapability: Capability {
-    /// Store a value
-    async fn store(&self, key: &str, value: &str) -> Result<(), String>;
-
-    /// Retrieve a value
-    async fn retrieve(&self, key: &str) -> Result<Option<String>, String>;
-
-    /// Delete a value
-    async fn delete(&self, key: &str) -> Result<bool, String>;
-
-    /// Check if a key exists
-    async fn exists(&self, key: &str) -> Result<bool, String>;
-}
-
-/// Marker trait for capabilities that provide event publishing/subscribing
-#[async_trait]
-pub trait EventCapability: Capability {
-    /// Publish an event
-    async fn publish(&self, topic: &str, payload: serde_json::Value) -> Result<(), String>;
-
-    /// Subscribe to an event topic
-    async fn subscribe(
-        &self,
-        topic: &str,
-        callback: Box<dyn Fn(serde_json::Value) -> Result<(), String> + Send + Sync>,
-    ) -> Result<String, String>;
-
-    /// Unsubscribe from an event topic
-    async fn unsubscribe(&self, subscription_id: &str) -> Result<bool, String>;
-}
-
-/// Marker trait for capabilities that provide HTTP functionality
-#[async_trait]
-pub trait HttpCapability: Capability {
-    /// Make an HTTP GET request
-    async fn get(&self, url: &str) -> Result<String, String>;
-
-    /// Make an HTTP POST request
-    async fn post(&self, url: &str, body: &str) -> Result<String, String>;
-
-    /// Make an HTTP PUT request
-    async fn put(&self, url: &str, body: &str) -> Result<String, String>;
-
-    /// Make an HTTP DELETE request
-    async fn delete(&self, url: &str) -> Result<String, String>;
-}
-
-/// Marker trait for capabilities that can add routes to the HTTP server
-pub trait RoutingCapability: Capability {
-    /// Register a route handler
-    fn register_route(&mut self, path: &str, method: &str, handler: Box<dyn RouteHandler>);
-
-    /// Unregister a route handler
-    fn unregister_route(&mut self, path: &str, method: &str) -> bool;
-
-    /// Get all registered routes
-    fn get_routes(&self) -> Vec<RouteInfo>;
-}
-
-/// Route handler trait
-#[async_trait]
-pub trait RouteHandler: Send + Sync {
-    /// Handle an HTTP request
-    async fn handle(
-        &self,
-        path: &str,
-        method: &str,
-        headers: &[(String, String)],
-        body: &[u8],
-    ) -> RouteResponse;
-}
-
-/// Route information
-#[derive(Debug, Clone)]
-pub struct RouteInfo {
-    /// The route path
-    pub path: String,
-
-    /// The HTTP method
-    pub method: String,
-
-    /// The plugin that registered this route
-    pub plugin_name: String,
-}
-
-/// HTTP response from a route handler
-#[derive(Debug)]
-pub struct RouteResponse {
-    /// HTTP status code
-    pub status: u16,
-
-    /// Response headers
-    pub headers: Vec<(String, String)>,
-
-    /// Response body
-    pub body: Vec<u8>,
-}
-
 /// Helper function to downcast a capability to a specific type
 pub fn downcast_capability<T: Capability + 'static>(capability: &dyn Capability) -> Option<&T> {
     capability.as_any().downcast_ref::<T>()
@@ -338,7 +198,7 @@ pub struct HttpResponse {
     pub body: Vec<u8>,
 }
 
-/// HTTP routing capability for plugins
+/// Routing capability for plugins
 #[async_trait]
 pub trait RoutingCapability: Capability + Send + Sync {
     /// Register a handler for a route
@@ -356,7 +216,7 @@ pub trait RoutingCapability: Capability + Send + Sync {
     fn list_routes(&self) -> Vec<(String, String)>;
 }
 
-/// HTTP request for the routing capability
+/// HTTP request for route handlers
 #[derive(Debug, Clone)]
 pub struct HttpRequest {
     /// HTTP method

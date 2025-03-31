@@ -92,21 +92,24 @@ impl ConfigRegistry {
         }
     }
 
-    /// Get or bind a configuration
-    pub fn get_or_bind<T: Any + DeserializeOwned + Send + Sync>(&self, prefix: &str) -> Result<T> {
+    /// Get or bind a configuration for a type
+    pub fn get_or_bind<T: Any + DeserializeOwned + Clone + Send + Sync>(
+        &self,
+        prefix: &str,
+    ) -> Result<T> {
         let type_id = TypeId::of::<T>();
 
-        // Try to get from cache first
+        // Check if already bound
         {
-            let bound_configs = self.bound_configs.read().unwrap();
-            if let Some(config) = bound_configs.get(&type_id) {
+            let bound = self.bound_configs.read().unwrap();
+            if let Some(config) = bound.get(&type_id) {
                 if let Some(config) = config.downcast_ref::<T>() {
                     return Ok(config.clone());
                 }
             }
         }
 
-        // Not found in cache, bind it
+        // Not found, bind it
         let binder = Binder::new(self.provider.as_ref());
         let config = binder.bind::<T>(prefix)?;
 
@@ -172,7 +175,7 @@ pub trait ConfigPrefix {
 }
 
 /// Trait for creating a configuration from a registry
-pub trait Configurable: Sized + Send + Sync + 'static {
+pub trait Configurable: Sized + Clone + Send + Sync + 'static {
     /// Create configuration from registry
     fn create(registry: &ConfigRegistry) -> Result<Self>;
 }
