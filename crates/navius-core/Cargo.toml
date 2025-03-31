@@ -1,0 +1,47 @@
+# Cargo.toml for navius-core crate
+# This would be placed at crates/navius-core/Cargo.toml
+
+[package]
+name = "navius-core"
+version = "0.1.0"
+edition = "2024"
+description = "Core utilities and abstractions for the Navius framework"
+license = "Apache-2.0"
+repository = "https://github.com/navius/navius"
+
+# Dependencies section with explicit versions
+[dependencies]
+# Core dependencies
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = { version = "1.0.140" }
+serde_yaml = { version = "0.9.34+deprecated" }
+tokio = { version = "1.44.1", features = ["full"] }
+tracing = "0.1.41"
+uuid = { version = "1.16.0", features = ["v4", "serde"] }
+async-trait = "0.1.88"
+thiserror = { version = "2.0.12" }
+# Added regex dependency
+regex = { version = "1.11.1" } 
+# Configuration
+config = { version = "0.15.11" }
+dotenvy = { version = "0.15.7" }
+
+# Time handling
+chrono = { version = "0.4.40", features = ["serde"] }
+
+# Development dependencies
+[dev-dependencies]
+mockito = "1.7.0"
+proptest = "1.6.0"
+fake = { version = "4.2.0", features = ["derive", "chrono", "uuid"] }
+test-context = "0.4.1"
+assert_matches = "1.5.0"
+once_cell = "1.21.3"
+mockall = "0.13.1"
+tokio = { version = "1.44.1", features = ["rt", "macros", "sync", "time", "rt-multi-thread"] }
+
+# The core crate has minimal feature flags
+[features]
+default = []
+test-utils = [] # Enable test utilities when testing
+

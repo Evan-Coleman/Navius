@@ -1,0 +1,55 @@
+[package]
+name = "navius-full-stack-example"
+version = "0.1.0"
+edition = "2024"
+description = "Full-stack example application using Navius crates"
+publish = false
+
+[workspace]
+
+[dependencies]
+# Core components
+navius-core = { path = "../../crates/navius-core" }
+navius-http = { path = "../../crates/navius-http" }
+navius-auth = { path = "../../crates/navius-auth" }
+navius-db = { path = "../../crates/navius-db" }
+navius-db-postgres = { path = "../../crates/navius-db-postgres" }
+navius-cache = { path = "../../crates/navius-cache" }
+navius-cache-redis = { path = "../../crates/navius-cache-redis" }
+navius-event = { path = "../../crates/navius-event" }
+navius-plugin = { path = "../../crates/navius-plugin" }
+navius-di = { path = "../../crates/navius-di" }
+
+# Other dependencies
+tokio = { version = "1.44.1", features = ["full"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+async-trait = "0.1.88"
+uuid = { version = "1.16.0", features = ["v4", "serde"] }
+chrono = { version = "0.4.40", features = ["serde"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+thiserror = "2.0.12"
+axum = "0.8.3"
+tower = { version = "0.5.2", features = ["limit"] }
+tower-http = { version = "0.6.2", features = ["trace", "cors", "compression-br", "compression-gzip", "timeout", "limit"] }
+sqlx = { version = "0.8.3", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json"] }
+redis = { version = "0.29.2", features = ["tokio-comp", "connection-manager"] }
+argon2 = "0.5.3"
+rand_core = { version = "0.9.3", features = ["std"] }
+
+# For validating incoming requests
+validator = { version = "0.20.0", features = ["derive"] }
+
+# For OpenAPI specification generation
+utoipa = { version = "5.3.1", features = ["axum_extras", "uuid", "chrono"] }
+utoipa-swagger-ui = { version = "9.0.0", features = ["axum"] }
+
+[dev-dependencies]
+tokio-test = "0.4.4"
+mock_instant = "0.5.3"
+rand = "0.9.0"
+
+[features]
+default = []
+testing = [] 

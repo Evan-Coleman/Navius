@@ -1,0 +1,49 @@
+# Sample Cargo.toml for the navius-metrics-prometheus crate
+# This demonstrates how to set up a backend-specific implementation crate
+
+[package]
+name = "navius-metrics-prometheus"
+version = "0.1.0"
+edition = "2024"
+description = "Prometheus implementation for Navius metrics"
+license = "Apache-2.0"
+repository = "https://github.com/Evan-Coleman/Navius"
+readme = "README.md"
+
+# Dependencies section
+[dependencies]
+# Core dependencies from workspace
+tokio = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+
+# Internal dependencies
+navius-core = { path = "../navius-core", version = "0.1.0" }
+navius-metrics = { path = "../navius-metrics", version = "0.1.0" }
+
+# Prometheus-specific dependencies
+metrics-exporter-prometheus = "0.16.2"
+axum = { version = "0.8.3", features = ["macros"] }
+tower = { version = "0.5.2", features = ["full"] }
+tower-http = { version = "0.6.2", features = ["trace"] }
+
+# Development dependencies
+[dev-dependencies]
+# Shared development dependencies from workspace
+mockito = { workspace = true }
+mock-it = { workspace = true }
+proptest = { workspace = true }
+fake = { workspace = true }
+test-context = { workspace = true }
+assert_matches = { workspace = true }
+mockall = { workspace = true }
+
+# Specific test dependencies
+navius-test-utils = { path = "../navius-test-utils", version = "0.1.0" }
+
+# Feature flags - much simpler since this crate has a specific purpose
+[features]
+default = []
+http-listener = ["metrics-exporter-prometheus/http-listener"] 

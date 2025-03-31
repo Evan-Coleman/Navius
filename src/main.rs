@@ -23,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     setup_tracing(&config.log_level, "navius");
 
     // Initialize the service registry
-    let service_registry = initialize_services().await?;
+    let service_registry = initialize_services(&config).await?;
 
     // Build and start the HTTP server
     let server = HttpServerBuilder::new()
@@ -47,11 +47,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn initialize_services()
--> Result<Arc<infrastructure::ServiceRegistry>, Box<dyn std::error::Error>> {
-    // Initialize repositories and services
-    // This will be implemented based on the application's requirements
+async fn initialize_services(
+    config: &config::AppConfig,
+) -> Result<Arc<infrastructure::ServiceRegistry>, Box<dyn std::error::Error>> {
+    // Create a new service registry
+    let registry = infrastructure::ServiceRegistry::new();
 
-    // For now, return an unimplemented service registry
-    todo!("Implement service initialization")
+    // Initialize application services
+    application::init();
+
+    // Initialize database connection if configured
+    // (This would be implemented based on the application requirements)
+
+    // Initialize cache connection if configured
+    // (This would be implemented based on the application requirements)
+
+    // Return the initialized service registry
+    Ok(Arc::new(registry))
 }
