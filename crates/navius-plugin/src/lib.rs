@@ -1,7 +1,42 @@
-// Navius Plugin System
-//
-// This crate provides a plugin system for the Navius framework.
-// It allows for dynamic loading of plugins and extension of the framework.
+//! Navius Plugin System
+//!
+//! This crate provides the core plugin system for the Navius framework. It enables
+//! dynamic loading and management of plugins that extend the functionality of Navius
+//! applications. The plugin system supports:
+//!
+//! - Dynamic plugin loading and unloading
+//! - Plugin dependency management
+//! - Plugin lifecycle management
+//! - Capability-based plugin interfaces
+//! - Plugin configuration and state management
+//!
+//! # Architecture
+//!
+//! The plugin system is built around several key concepts:
+//!
+//! - **Plugins**: Modular components that implement the `Plugin` trait
+//! - **Capabilities**: Interfaces that plugins can implement to provide functionality
+//! - **Registry**: Central management of plugin lifecycle and dependencies
+//! - **Configuration**: Plugin-specific configuration management
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! use navius_plugin::{Plugin, PluginResult};
+//!
+//! #[derive(Default)]
+//! struct MyPlugin;
+//!
+//! impl Plugin for MyPlugin {
+//!     fn id(&self) -> &str {
+//!         "my_plugin"
+//!     }
+//!
+//!     fn version(&self) -> &str {
+//!         "1.0.0"
+//!     }
+//! }
+//! ```
 
 #![deny(missing_docs)]
 #![warn(clippy::all)]

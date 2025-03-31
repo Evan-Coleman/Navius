@@ -1,6 +1,7 @@
-use std::error::Error;
+use std::error::Error as StdError;
 use std::fmt;
 use std::io;
+use thiserror::Error;
 
 /// Result type for plugin operations
 pub type PluginResult<T> = Result<T, PluginError>;
@@ -150,8 +151,8 @@ impl fmt::Display for PluginError {
     }
 }
 
-impl Error for PluginError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
+impl StdError for PluginError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
             PluginError::IoError(err) => Some(err),
             _ => None,
@@ -192,4 +193,64 @@ impl fmt::Display for PluginHealth {
             PluginHealth::Unhealthy { message } => write!(f, "Unhealthy: {}", message),
         }
     }
+}
+
+/// Error indicating a missing plugin dependency
+#[derive(Debug, Error)]
+#[error("Plugin {plugin_id} requires dependency {dependency_id} version {version}")]
+pub struct MissingDependencyError {
+    /// The ID of the plugin that requires the dependency
+    pub plugin_id: String,
+    /// The ID of the missing dependency
+    pub dependency_id: String,
+    /// The required version of the dependency
+    pub version: String,
+}
+
+/// Error indicating an incompatible plugin dependency version
+#[derive(Debug, Error)]
+#[error(
+    "Plugin {plugin_id} dependency {dependency_id} version mismatch: required {required}, found {found}"
+)]
+pub struct IncompatibleDependencyError {
+    /// The ID of the plugin with the incompatible dependency
+    pub plugin_id: String,
+    /// The ID of the dependency with version mismatch
+    pub dependency_id: String,
+    /// The required version of the dependency
+    pub required: String,
+    /// The actual version found
+    pub found: String,
+}
+
+/// Error indicating a missing plugin capability
+#[derive(Debug, Error)]
+#[error("Plugin {plugin_id} requires capability {capability_id}")]
+pub struct MissingCapabilityError {
+    /// The ID of the plugin requiring the capability
+    pub plugin_id: String,
+    /// The ID of the missing capability
+    pub capability_id: String,
+}
+
+/// Error indicating an invalid plugin lifecycle state transition
+#[derive(Debug, Error)]
+#[error("Plugin {plugin_id} invalid state transition from {current_state} to {required_state}")]
+pub struct InvalidStateTransitionError {
+    /// The ID of the plugin with invalid state transition
+    pub plugin_id: String,
+    /// The current state of the plugin
+    pub current_state: String,
+    /// The state that was attempted to transition to
+    pub required_state: String,
+}
+
+/// Error indicating incompatible API versions
+#[derive(Debug, Error)]
+#[error("API version mismatch: required {required}, found {found}")]
+pub struct IncompatibleApiVersion {
+    /// The required API version
+    pub required: String,
+    /// The actual API version found
+    pub found: String,
 }
