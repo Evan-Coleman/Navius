@@ -1,78 +1,91 @@
 # Event System Integration Example
 
-This example demonstrates the integration of the event system with other components in the Navius framework. It showcases how to build event-driven applications using the publisher-subscriber pattern.
+This example demonstrates the implementation of an event-driven architecture using the Navius framework, showcasing event handling, streaming, and real-time data processing capabilities.
+
+## Key Features
+
+- **Event-driven architecture** with publishing and subscribing mechanisms
+- **HTTP integration** for triggering events and real-time updates
+- **Event persistence** in PostgreSQL database
+- **Event handling** through various event types and handlers
+- **Real-time monitoring** with metrics and status dashboards
 
 ## Crates Used
 
-- `navius-core`: For dependency injection, component registry, and configuration
-- `navius-http`: For HTTP server, routing, and request/response handling
-- `navius-event`: For event publishing and subscription
-- `navius-db`: For event persistence
-- `navius-db-postgres`: For PostgreSQL implementation
-- `navius-plugin`: For component discovery and registration
-
-## Key Features Demonstrated
-
-1. **Event-Driven Architecture**:
-   - Publishing events from different sources
-   - Subscribing to events with multiple handlers
-   - Event routing based on topics and content
-
-2. **Publish-Subscribe Pattern**:
-   - Event publishers decoupled from subscribers
-   - Topic-based subscription
-   - Content-based filtering
-
-3. **Event Persistence**:
-   - Storing events in database
-   - Event replay and recovery
-   - Audit log implementation
-
-4. **Integration with HTTP**:
-   - Triggering events via HTTP endpoints
-   - Webhook event delivery
-   - Server-sent events (SSE) for real-time updates
+- `navius_core` - Core utilities and application framework
+- `navius_event` - Event system abstractions and interfaces
+- `navius_http` - HTTP server and routing capabilities
+- `navius_db` - Database abstraction layer
+- `navius_db_postgres` - PostgreSQL implementation of database layer
 
 ## Running the Example
 
-```bash
-# Start PostgreSQL for event persistence
-docker-compose up -d
+### Prerequisites
 
-# Run the example application
-cd workspace_migration/examples/integration/event-system
-cargo run
+- PostgreSQL database running on `localhost:5433`
+- Database named `navius_events` with user `navius` and password `navius_password`
+
+You can start PostgreSQL using Docker:
+
+```bash
+docker run -d --name postgres-navius-events -p 5433:5432 \
+  -e POSTGRES_USER=navius -e POSTGRES_PASSWORD=navius_password \
+  -e POSTGRES_DB=navius_events postgres:13
 ```
 
-The server will start on `127.0.0.1:8080` with the following endpoints:
+### Starting the Application
 
-- `/health`: Returns the health status of all components
-- `/api/events/trigger`: Endpoint to trigger sample events
-- `/api/events/history`: View event history
-- `/api/events/stream`: Server-sent events endpoint for real-time updates
+```bash
+cargo run --example custom_handler
+```
 
-## Event Types Demonstrated
+or
 
-1. **OrderCreatedEvent**: Triggered when a new order is created
-2. **OrderShippedEvent**: Triggered when an order is shipped
-3. **InventoryUpdatedEvent**: Triggered when inventory is updated
-4. **SystemAlertEvent**: Used for system notifications
+```bash
+cargo run --example real_time_dashboard
+```
 
-## Event Handler Implementation
+The application will start a server on `127.0.0.1:8080` with the following endpoints:
 
-The example implements several event handlers:
+- `GET /health` - Health check
+- `POST /api/events/trigger/order-created` - Trigger an order created event
+- `POST /api/events/trigger/order-shipped` - Trigger an order shipped event
+- `POST /api/events/trigger/system-alert` - Trigger a system alert event
+- `GET /api/events/history` - View event history
+- `GET /api/events/metrics` - View event metrics
+- `GET /api/inventory` - View inventory status
+- `GET /api/events/stream` - Stream events (SSE)
 
-1. **NotificationHandler**: Sends notifications when specific events occur
-2. **AnalyticsHandler**: Records event metrics and statistics
-3. **AuditLogHandler**: Persists all events to the database for auditing
-4. **InventoryHandler**: Updates inventory based on order events
+## Examples
 
-## Key Code Concepts
+### Custom Handler Example
 
-- **Event Bus**: Central component for publishing and routing events
-- **Event Handlers**: Components that subscribe to and process events
-- **Event Persistence**: Database storage of events for replay and audit
-- **Event Streaming**: Real-time event notifications to clients
-- **Component Registration**: Automatic discovery of event handlers
+The `custom_handler.rs` example demonstrates how to create and register a custom event handler that sends SMS notifications when events occur. This example shows how to extend the event system with custom handler implementations.
 
-This example demonstrates how to create a loosely coupled, event-driven architecture using the Navius framework, enabling scalable and maintainable applications that can react to system events in real-time. 
+### Real-Time Dashboard Example
+
+The `real_time_dashboard.rs` example showcases how to implement a real-time monitoring dashboard using the Event System. It features:
+
+- Component health status tracking
+- Event metrics aggregation
+- Real-time alert monitoring with broadcast channels
+- Periodic dashboard displays
+- Random event generation for testing
+
+This example demonstrates more advanced event system concepts like:
+- Event aggregation and metrics
+- Real-time component status monitoring
+- Alert broadcasting and subscription
+- Time-based metric resets
+
+## Project Structure
+
+- `src/api.rs` - HTTP API implementation
+- `src/events.rs` - Event definitions and domain event trait
+- `src/handlers.rs` - Event handler implementations
+- `src/models.rs` - Data models
+- `src/repository.rs` - Database repository for events
+- `src/services.rs` - Event bus and service implementations
+- `src/lib.rs` - Library interface and plugin implementation
+- `src/main.rs` - Standalone application implementation
+- `examples/` - Example applications demonstrating specific features 
