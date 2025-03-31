@@ -19,7 +19,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up tracing
     setup_tracing(&config.log_level, "full-stack-example");
 
-    // Initialize repositories and services (to be implemented)
+    // Initialize repositories and services
+    // Create in-memory repositories
+    let user_repository = Arc::new(infrastructure::repository::InMemoryUserRepository::new());
+    let task_repository = Arc::new(infrastructure::repository::InMemoryTaskRepository::new());
+    let category_repository =
+        Arc::new(infrastructure::repository::InMemoryCategoryRepository::new());
+    let notification_repository =
+        Arc::new(infrastructure::repository::InMemoryNotificationRepository::new());
+
+    // Create event publisher
+    let event_publisher = Arc::new(infrastructure::events::InMemoryEventPublisher::new());
+
+    // Create service registry
+    let service_registry = Arc::new(infrastructure::ServiceRegistry::new(
+        user_repository.clone(),
+        task_repository.clone(),
+        category_repository.clone(),
+        notification_repository.clone(),
+        event_publisher.clone(),
+    ));
 
     // Build and start the HTTP server
     let server = HttpServerBuilder::new()
@@ -27,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build();
 
     // Configure routes
-    let server = api::routes::configure_routes(server);
+    let server = api::configure_routes(server, service_registry.clone());
 
     // Start the server
     let server_handle = server.start().await?;

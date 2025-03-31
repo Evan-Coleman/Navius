@@ -1,46 +1,57 @@
 use axum::routing::{delete, get, post, put};
 use navius_http::server::HttpServerBuilder;
+use std::sync::Arc;
 
 use crate::api::controllers::tasks::{
     add_comment, assign_task, create_task, delete_comment, delete_task, get_task,
     get_task_comments, get_tasks, unassign_task, update_comment, update_task,
 };
-use crate::api::middleware::auth::requires_auth;
+use crate::api::middleware::auth::{requires_auth, requires_manager};
+use crate::infrastructure::ServiceRegistry;
 
 /// Configure task routes
-pub fn configure_routes(server: HttpServerBuilder) -> HttpServerBuilder {
+pub fn configure_routes(
+    server: HttpServerBuilder,
+    registry: Arc<ServiceRegistry>,
+) -> HttpServerBuilder {
     server
         // Task management
         .route(
             "/api/tasks",
-            get(get_tasks).post(create_task).layer(requires_auth()),
+            get(get_tasks)
+                .post(create_task)
+                .layer(requires_auth(registry.clone())),
         )
         .route(
             "/api/tasks/:id",
             get(get_task)
                 .put(update_task)
                 .delete(delete_task)
-                .layer(requires_auth()),
+                .layer(requires_auth(registry.clone())),
         )
         .route(
             "/api/tasks/:id/assign/:user_id",
-            post(assign_task).layer(requires_auth()),
+            post(assign_task)
+                .layer(requires_manager())
+                .layer(requires_auth(registry.clone())),
         )
         .route(
             "/api/tasks/:id/unassign",
-            post(unassign_task).layer(requires_auth()),
+            post(unassign_task)
+                .layer(requires_manager())
+                .layer(requires_auth(registry.clone())),
         )
         // Comments
         .route(
             "/api/tasks/:id/comments",
             get(get_task_comments)
                 .post(add_comment)
-                .layer(requires_auth()),
+                .layer(requires_auth(registry.clone())),
         )
         .route(
             "/api/tasks/:task_id/comments/:comment_id",
             put(update_comment)
                 .delete(delete_comment)
-                .layer(requires_auth()),
+                .layer(requires_auth(registry.clone())),
         )
 }
