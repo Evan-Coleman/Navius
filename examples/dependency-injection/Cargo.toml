@@ -1,0 +1,20 @@
+[package]
+name = "dependency-injection-example"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+# Core dependencies
+tokio = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Project crates
+navius-core = { path = "../../crates/navius-core" }
+navius-di = { path = "../../crates/navius-di" }
+
+[[bin]]
+name = "dependency-injection-example"
+path = "main.rs" 

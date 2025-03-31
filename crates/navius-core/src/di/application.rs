@@ -3,10 +3,10 @@
 //! This module provides application initialization utilities that integrate with
 //! the component registry for dependency injection.
 
-use std::{any::Any, sync::Arc};
+use std::any::Any;
 
 use crate::config::Config;
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 use super::component::{ComponentRef, ComponentRegistry, ComponentScope, LifecyclePhase};
 
@@ -141,12 +141,12 @@ impl ApplicationBuilder {
     }
 
     /// Get a component from the registry
-    pub fn get<T: Any + Send + Sync>(&mut self) -> Result<ComponentRef<T>> {
+    pub fn get<T: Any + Send + Sync + Clone>(&self) -> Result<ComponentRef<T>> {
         self.registry.get::<T>()
     }
 
     /// Get a component from the registry with async initialization
-    pub async fn get_async<T: Any + Send + Sync>(&mut self) -> Result<ComponentRef<T>> {
+    pub async fn get_async<T: Any + Send + Sync + Clone>(&self) -> Result<ComponentRef<T>> {
         self.registry.get_async::<T>().await
     }
 
@@ -158,7 +158,7 @@ impl ApplicationBuilder {
     /// Build the application
     pub fn build(self) -> Application {
         Application {
-            registry: Arc::new(std::sync::Mutex::new(self.registry)),
+            registry: self.registry,
             config: self.config,
             environment: self.environment,
         }
@@ -174,7 +174,7 @@ impl Default for ApplicationBuilder {
 /// Application with component registry
 pub struct Application {
     /// Component registry for the application
-    registry: Arc<std::sync::Mutex<ComponentRegistry>>,
+    registry: ComponentRegistry,
     /// Application configuration
     config: Config,
     /// Application environment
@@ -188,8 +188,8 @@ impl Application {
     }
 
     /// Get a reference to the component registry
-    pub fn registry(&self) -> Arc<std::sync::Mutex<ComponentRegistry>> {
-        self.registry.clone()
+    pub fn registry(&self) -> &ComponentRegistry {
+        &self.registry
     }
 
     /// Get a reference to the configuration
@@ -203,61 +203,30 @@ impl Application {
     }
 
     /// Get a component from the registry
-    pub fn get<T: Any + Send + Sync>(&self) -> Result<ComponentRef<T>> {
-        let mut registry = self.registry.lock().map_err(|e| {
-            Error::internal(&format!(
-                "Failed to acquire lock on component registry: {}",
-                e
-            ))
-        })?;
-        registry.get::<T>()
+    pub fn get<T: Any + Send + Sync + Clone>(&self) -> Result<ComponentRef<T>> {
+        self.registry.get::<T>()
     }
 
     /// Get a component from the registry with async initialization
-    pub async fn get_async<T: Any + Send + Sync>(&self) -> Result<ComponentRef<T>> {
-        let mut registry = self.registry.lock().map_err(|e| {
-            Error::internal(&format!(
-                "Failed to acquire lock on component registry: {}",
-                e
-            ))
-        })?;
-        registry.get_async::<T>().await
+    pub async fn get_async<T: Any + Send + Sync + Clone>(&self) -> Result<ComponentRef<T>> {
+        self.registry.get_async::<T>().await
     }
 
     /// Check if a component exists in the registry
     pub fn has<T: Any + Send + Sync>(&self) -> bool {
-        if let Ok(registry) = self.registry.lock() {
-            registry.has::<T>()
-        } else {
-            false
-        }
+        self.registry.has::<T>()
     }
 
     /// Register a component with the application
-    pub fn register_component<T: 'static + Send + Sync>(&self, component: T) -> Result<()> {
-        let mut registry = self.registry.lock().map_err(|e| {
-            Error::internal(&format!(
-                "Failed to acquire lock on component registry: {}",
-                e
-            ))
-        })?;
-
-        registry.register(component);
-        Ok(())
+    pub fn register_component<T: 'static + Send + Sync>(&mut self, component: T) -> Result<()> {
+        self.registry.register(component)
     }
 
     /// Initialize the application and start the lifecycles of all registered components
     pub fn initialize(&self) -> Result<()> {
-        let registry = self.registry.lock().map_err(|e| {
-            Error::internal(&format!(
-                "Failed to acquire lock on component registry: {}",
-                e
-            ))
-        })?;
-
         // Initialize all components in the registry
-        for component in registry.values() {
-            component.initialize()?;
+        for component in self.registry.values() {
+            component.execute_lifecycle(LifecyclePhase::Initialize)?;
         }
 
         Ok(())
@@ -265,16 +234,12 @@ impl Application {
 
     /// Shut down all registered components in the application
     pub fn shutdown(&self) -> Result<()> {
-        let registry = self.registry.lock().map_err(|e| {
-            Error::internal(&format!(
-                "Failed to acquire lock on component registry during shutdown: {}",
-                e
-            ))
-        })?;
+        // Create a Vec to reverse the components (for proper shutdown order)
+        let components: Vec<_> = self.registry.values().collect();
 
         // Shut down all components in reverse initialization order
-        for component in registry.values().rev() {
-            component.shutdown()?;
+        for component in components.iter().rev() {
+            component.execute_lifecycle(LifecyclePhase::Destroy)?;
         }
 
         Ok(())
@@ -282,16 +247,14 @@ impl Application {
 
     /// Shut down all registered components asynchronously
     pub async fn shutdown_async(&self) -> Result<()> {
-        let registry = self.registry.lock().map_err(|e| {
-            Error::internal(&format!(
-                "Failed to acquire lock on component registry during async shutdown: {}",
-                e
-            ))
-        })?;
+        // Create a Vec to reverse the components (for proper shutdown order)
+        let components: Vec<_> = self.registry.values().collect();
 
         // Shut down all components asynchronously in reverse initialization order
-        for component in registry.values().rev() {
-            component.shutdown_async().await?;
+        for component in components.iter().rev() {
+            component
+                .execute_async_lifecycle(LifecyclePhase::Destroy)
+                .await?;
         }
 
         Ok(())

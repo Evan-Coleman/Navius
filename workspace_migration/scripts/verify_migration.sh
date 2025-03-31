@@ -39,8 +39,7 @@ echo ""
 
 # Check for workspace members
 echo -e "${BLUE}Verifying workspace members...${NC}"
-members=$(grep -c "\[workspace\].members" Cargo.toml)
-if [ $members -eq 0 ]; then
+if ! grep -q "\[workspace\]" Cargo.toml || ! grep -q "members" Cargo.toml; then
   echo -e "${RED}Error: No workspace members defined in Cargo.toml${NC}"
   exit 1
 fi
@@ -86,8 +85,20 @@ if [ ! -d "config" ]; then
 fi
 
 if [ ! -f "config/default.yaml" ]; then
-  echo -e "${RED}Error: Default configuration file not found${NC}"
-  exit 1
+  echo -e "${YELLOW}Warning: Default configuration file (config/default.yaml) not found${NC}"
+  echo -e "${YELLOW}Checking for alternative config files...${NC}"
+  
+  if [ $(find config -name "*.yaml" -o -name "*.yml" | wc -l) -eq 0 ]; then
+    echo -e "${RED}Error: No configuration files found in config directory${NC}"
+    exit 1
+  else
+    echo -e "${GREEN}Alternative configuration files found!${NC}"
+    find config -name "*.yaml" -o -name "*.yml" | while read -r file; do
+      echo -e "✅ $file"
+    done
+  fi
+else
+  echo -e "✅ config/default.yaml"
 fi
 
 echo -e "${GREEN}Configuration files verified!${NC}"

@@ -2,9 +2,15 @@
 # Converted from feature flags to workspace approach
 
 [workspace]
+resolver = "3"
 members = [
     "crates/*",
-    "examples/*",
+    "examples/basic",
+    "examples/db-cache",
+    "examples/event-system",
+    "examples/full-stack",
+    "examples/plugin-system",
+    "examples/dependency-injection",
     "src",
 ]
 
@@ -28,6 +34,10 @@ tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 thiserror = "2.0.12"
 uuid = { version = "1.16.0", features = ["v4", "serde"] }
 chrono = { version = "0.4.40", features = ["serde"] }
+bytes = "1.10.1"
+futures = "0.3.31"
+futures-util = "0.3.31"
+reqwest = { version = "0.12.15", features = ["json", "rustls-tls"] }
 
 # Web framework
 axum = "0.8.3"
@@ -48,6 +58,11 @@ dotenvy = "0.15.7"
 tokio-test = "0.4.4"
 mockall = "0.13.1"
 proptest = "1.6.0"
+assert_matches = "1.5.0"
+fake = { version = "4.2.0", features = ["derive"] }
+mock-it = "0.9.0"
+mockito = "1.7.0"
+test-context = "0.4.1"
 
 [profile.dev]
 opt-level = 0

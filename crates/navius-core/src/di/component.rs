@@ -120,6 +120,11 @@ impl DynComponentRef {
         self.0.downcast::<T>().ok().map(ComponentRef)
     }
 
+    /// Attempt to downcast a reference to a specific type
+    pub fn downcast_ref<T: Any + Send + Sync>(&self) -> Option<&T> {
+        self.0.downcast_ref::<T>()
+    }
+
     /// Get the TypeId of the contained component
     pub fn execute_type_id(&self) -> Option<TypeId> {
         // This is a limited implementation, but sufficient for our immediate needs
@@ -273,14 +278,17 @@ impl ComponentRegistry {
     }
 
     /// Get a component by type. Returns an error if the component is not registered.
-    pub fn get<T: Send + Sync + 'static>(&self) -> Result<ComponentRef<T>> {
+    pub fn get<T: Send + Sync + Clone + 'static>(&self) -> Result<ComponentRef<T>> {
         let type_id = TypeId::of::<T>();
+
+        // First check if we have it as a direct component
         if let Some(component) = self.components.get(&type_id) {
-            if let Some(typed_component) = component.downcast_ref::<ComponentRef<T>>() {
-                return Ok(typed_component.clone());
+            if let Some(typed_component) = component.downcast_ref::<T>() {
+                return Ok(ComponentRef::new(typed_component.clone()));
             }
         }
 
+        // If not found, create a meaningful error message
         Err(Error::component(&format!(
             "Component not found: {}",
             std::any::type_name::<T>()
@@ -288,26 +296,32 @@ impl ComponentRegistry {
     }
 
     /// Try to get a component by type. Returns None if the component is not registered.
-    pub fn try_get<T: Send + Sync + 'static>(&self) -> Result<Option<ComponentRef<T>>> {
+    pub fn try_get<T: Send + Sync + Clone + 'static>(&self) -> Result<Option<ComponentRef<T>>> {
         let type_id = TypeId::of::<T>();
+
+        // Check if we have it as a direct component
         if let Some(component) = self.components.get(&type_id) {
-            if let Some(typed_component) = component.downcast_ref::<ComponentRef<T>>() {
-                return Ok(Some(typed_component.clone()));
+            if let Some(typed_component) = component.downcast_ref::<T>() {
+                return Ok(Some(ComponentRef::new(typed_component.clone())));
             }
         }
 
+        // If not found, return None
         Ok(None)
     }
 
     /// Get a component by type with async initialization
-    pub async fn get_async<T: 'static + Send + Sync>(&self) -> Result<ComponentRef<T>> {
+    pub async fn get_async<T: 'static + Send + Sync + Clone>(&self) -> Result<ComponentRef<T>> {
         let type_id = TypeId::of::<T>();
+
+        // Try to get the component similar to the synchronous version
         if let Some(component) = self.components.get(&type_id) {
-            if let Some(typed_component) = component.downcast_ref::<ComponentRef<T>>() {
-                return Ok(typed_component.clone());
+            if let Some(typed_component) = component.downcast_ref::<T>() {
+                return Ok(ComponentRef::new(typed_component.clone()));
             }
         }
 
+        // If not found, return an error
         Err(Error::component(&format!(
             "Component not found: {}",
             std::any::type_name::<T>()
@@ -373,6 +387,11 @@ impl ComponentRegistry {
         self.components.clear();
         self.factories.clear();
         Ok(())
+    }
+
+    /// Get all component references
+    pub fn values(&self) -> impl Iterator<Item = &DynComponentRef> {
+        self.components.values()
     }
 }
 

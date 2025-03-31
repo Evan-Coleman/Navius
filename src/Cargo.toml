@@ -7,6 +7,10 @@ license.workspace = true
 repository.workspace = true
 description = "Navius - Modern, secure web framework for Rust"
 
+[[bin]]
+name = "navius"
+path = "main.rs"
+
 [dependencies]
 # Core crates
 navius-core = { path = "../crates/navius-core" }

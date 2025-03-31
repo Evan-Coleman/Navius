@@ -3,9 +3,7 @@
 //! This module provides configuration utilities for the Navius framework.
 
 use std::collections::HashMap;
-use std::fmt;
 use std::path::Path;
-use std::str::FromStr;
 
 use crate::error::{Error, Result};
 use serde::de::DeserializeOwned;

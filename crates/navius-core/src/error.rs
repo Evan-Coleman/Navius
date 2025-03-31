@@ -7,8 +7,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::error::Error as StdError;
-use std::fmt;
-use thiserror::Error;
 
 /// A specialized Result type for Navius operations.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -424,7 +422,9 @@ mod tests {
         // Test with_context
         let err = result
             .clone()
-            .with_context(ErrorCode::Authorization, || "Failed to access file")
+            .with_context(ErrorCode::Authorization, || {
+                "Failed to access file".to_string()
+            })
             .unwrap_err();
         assert_eq!(err.code, ErrorCode::Authorization);
         assert_eq!(err.message, "Failed to access file");

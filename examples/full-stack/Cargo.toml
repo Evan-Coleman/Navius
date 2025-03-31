@@ -5,8 +5,6 @@ edition = "2024"
 description = "Full-stack example application using Navius crates"
 publish = false
 
-[workspace]
-
 [dependencies]
 # Core components
 navius-core = { path = "../../crates/navius-core" }
