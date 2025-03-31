@@ -11,6 +11,7 @@ use std::{
 };
 use tracing::{error, info};
 
+use crate::broker::{BrokerConfig, MessageBrokerAdapter, MessageBrokerFactory};
 use crate::events::DomainEvent;
 use crate::models::EventRecord;
 
@@ -19,6 +20,7 @@ use crate::models::EventRecord;
 pub struct EventBusService {
     handlers: Arc<Mutex<HashMap<String, Vec<Arc<dyn EventHandler>>>>>,
     event_store: Arc<Mutex<Vec<EventRecord>>>,
+    message_brokers: Arc<Mutex<Vec<Arc<dyn MessageBrokerAdapter>>>>,
 }
 
 impl EventBusService {
@@ -26,6 +28,7 @@ impl EventBusService {
         Self {
             handlers: Arc::new(Mutex::new(HashMap::new())),
             event_store: Arc::new(Mutex::new(Vec::new())),
+            message_brokers: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -45,6 +48,177 @@ impl EventBusService {
 
         let mut store = self.event_store.lock().unwrap();
         store.push(record);
+        Ok(())
+    }
+
+    /// Register an external message broker
+    pub async fn register_message_broker(&self, config: BrokerConfig) -> Result<()> {
+        // Create the broker adapter
+        let broker = MessageBrokerFactory::create(config)?;
+
+        // Connect to the broker
+        broker.connect().await?;
+
+        // Add the broker to the list
+        {
+            let mut brokers = self.message_brokers.lock().unwrap();
+            brokers.push(broker);
+        }
+
+        info!("Registered and connected to external message broker");
+        Ok(())
+    }
+
+    /// Get all registered message brokers
+    pub fn get_message_brokers(&self) -> Vec<Arc<dyn MessageBrokerAdapter>> {
+        let brokers = self.message_brokers.lock().unwrap();
+        brokers.clone()
+    }
+
+    /// Publish an event to all connected external message brokers
+    pub async fn publish_to_external_brokers<E>(&self, event: E, topic: &str) -> Result<()>
+    where
+        E: DomainEvent + Clone + Send + Sync + 'static,
+    {
+        let brokers = self.get_message_brokers();
+
+        if brokers.is_empty() {
+            return Ok(());
+        }
+
+        info!(
+            "Publishing event to {} external message brokers",
+            brokers.len()
+        );
+
+        let mut errors = Vec::new();
+
+        for broker in brokers {
+            match broker.publish_event(event.clone(), topic).await {
+                Ok(_) => {
+                    info!(
+                        "Successfully published event to external broker: {:?}",
+                        broker.broker_type()
+                    );
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to publish event to external broker {:?}: {}",
+                        broker.broker_type(),
+                        e
+                    );
+                    errors.push(e);
+                }
+            }
+        }
+
+        if !errors.is_empty() {
+            Err(Error::new(&format!(
+                "Failed to publish to {} out of {} external brokers",
+                errors.len(),
+                brokers.len()
+            )))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Subscribe to events from an external message broker
+    pub async fn subscribe_to_external_broker(
+        &self,
+        broker_index: usize,
+        topic: &str,
+    ) -> Result<()> {
+        let broker = {
+            let brokers = self.message_brokers.lock().unwrap();
+            if broker_index >= brokers.len() {
+                return Err(Error::new("Invalid broker index"));
+            }
+            brokers[broker_index].clone()
+        };
+
+        broker.subscribe(topic, self.clone()).await
+    }
+
+    /// Process an event received from an external message broker
+    pub async fn process_external_event(&self, event_type: &str, event_data: &str) -> Result<()> {
+        info!("Processing external event: {}", event_type);
+
+        // Execute all handlers registered for this event type
+        let handlers = {
+            let handlers_map = self.handlers.lock().unwrap();
+
+            // First look for exact match
+            if let Some(exact_handlers) = handlers_map.get(event_type) {
+                exact_handlers.clone()
+            } else {
+                // Then look for wildcard handlers that might be registered for external events
+                handlers_map
+                    .get("ExternalEvent")
+                    .cloned()
+                    .unwrap_or_else(Vec::new)
+            }
+        };
+
+        if handlers.is_empty() {
+            info!("No handlers found for external event type: {}", event_type);
+            return Ok(());
+        }
+
+        info!(
+            "Executing {} handlers for external event: {}",
+            handlers.len(),
+            event_type
+        );
+
+        for handler in handlers {
+            match handler.handle(event_type, event_data).await {
+                Ok(_) => {
+                    info!("Handler processed external event successfully");
+                }
+                Err(e) => {
+                    error!("Error handling external event {}: {}", event_type, e);
+                    // Continue processing other handlers despite errors
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Check the health of all connected message brokers
+    pub async fn check_broker_health(&self) -> Result<HashMap<String, bool>> {
+        let brokers = self.get_message_brokers();
+        let mut results = HashMap::new();
+
+        for (index, broker) in brokers.iter().enumerate() {
+            let health = broker.health_check().await?;
+            results.insert(
+                format!("broker-{}-{:?}", index, broker.broker_type()),
+                health,
+            );
+        }
+
+        Ok(results)
+    }
+
+    /// Disconnect from all message brokers
+    pub async fn disconnect_all_brokers(&self) -> Result<()> {
+        let brokers = self.get_message_brokers();
+
+        for broker in brokers {
+            if let Err(e) = broker.disconnect().await {
+                error!("Error disconnecting from broker: {}", e);
+                // Continue disconnecting other brokers despite errors
+            }
+        }
+
+        // Clear the brokers list
+        {
+            let mut brokers_list = self.message_brokers.lock().unwrap();
+            brokers_list.clear();
+        }
+
         Ok(())
     }
 }
@@ -81,6 +255,13 @@ impl EventBus for EventBusService {
                 error!("Error handling event {}: {}", event_type, e);
                 // Continue processing other handlers despite errors
             }
+        }
+
+        // Attempt to publish to external brokers if available
+        // Note: we use a clone of the event to avoid ownership issues
+        if let Err(e) = self.publish_to_external_brokers(event, &event_type).await {
+            // Log but don't fail the overall publish operation if external broker publishing fails
+            error!("Error publishing to external brokers: {}", e);
         }
 
         Ok(())

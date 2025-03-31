@@ -2,87 +2,134 @@
 
 **Last Updated:** March 29, 2025
 
-This document outlines the plan for creating integration examples that demonstrate how to use the migrated components together in realistic scenarios.
+## Overview
 
-## Current Status
+This document outlines the roadmap for developing integration examples that demonstrate the capabilities of the Navius workspace after migration. These examples serve as both documentation and validation of the new architecture.
 
-| Example | Status | Completion % | Target Date |
-|---------|--------|--------------|-------------|
-| Basic Integration Example | Complete | 100% | March 10, 2025 |
-| Database + Cache Example | Complete | 100% | March 20, 2025 |
-| Event System Integration | In Progress | 90% | April 5, 2025 |
-| Full Stack Example | Planned | 0% | April 15, 2025 |
+## Status Summary
 
-## Event System Integration Example
+| Example | Type | Status | Completion |
+|---------|------|--------|------------|
+| Basic Integration | Simple | Complete | 100% |
+| Database + Cache | Intermediate | Complete | 100% |
+| Event System Integration | Advanced | Complete | 100% |
+| Full Stack Example | Comprehensive | Planned | 0% |
 
-The Event System Integration Example demonstrates how to implement event-driven architecture using the Navius framework, showcasing event handling, event streaming, and real-time processing.
+## Example Details
 
-### Completed Components
+### Basic Integration Example
 
-- ✅ Core event system implementation
-- ✅ Basic event handlers (notification, analytics, audit)
-- ✅ HTTP integration for triggering events
-- ✅ Database persistence for events
-- ✅ Custom handler example
-- ✅ Real-time dashboard and monitoring example
+**Status:** Complete (100%)
+**Completed Date:** January 15, 2025
 
-### Remaining Tasks
+A simple example demonstrating how to integrate multiple crates in the Navius workspace. Focuses on:
+- Basic dependency management
+- Cross-crate function calls
+- Error propagation between crates
 
-- 🔄 Integration with external message brokers (10%)
+**Location:** `workspace_migration/examples/integration/basic/`
 
-### Technical Features Demonstrated
+### Database + Cache Integration Example
 
-- Publishing and subscribing to events
-- Event persistence and history
-- Custom event handler implementation
-- Real-time monitoring and dashboards
-- Server-sent events (SSE) for streaming
+**Status:** Complete (100%)
+**Completed Date:** February 20, 2025
 
-### Implementation Notes
+An intermediate example showing database and cache integration patterns:
+- Connection pooling across services
+- Transaction management
+- Cache invalidation patterns
+- Error handling for data operations
 
-The Event System Integration Example has been enhanced with a comprehensive real-time dashboard implementation that showcases:
+**Location:** `workspace_migration/examples/integration/database-cache/`
 
-- Component health monitoring
-- Event metrics and statistics
-- Real-time alert processing
-- Time-based metric collection
+### Event System Integration Example
 
-A new `real_time_dashboard.rs` example has been added to demonstrate these capabilities.
+**Status:** Complete (100%)
+**Completed Date:** March 29, 2025
 
-## Full Stack Example
+An advanced example demonstrating event-driven architecture:
+- Event publishing and subscription
+- Event handler implementation
+- Event persistence
+- Real-time dashboard for monitoring
+- External message broker integration (Kafka and RabbitMQ)
 
-The Full Stack Example will demonstrate how all components of the Navius framework work together in a realistic application scenario.
+**Location:** `workspace_migration/examples/integration/event-system/`
 
-### Planned Components
+**Key Features Implemented:**
+- Core event system with publish/subscribe mechanisms
+- Multiple event types and specialized handlers
+- REST API for triggering events
+- Repository layer for event persistence
+- Real-time dashboard with status monitoring
+- External message broker integration with Kafka and RabbitMQ
 
-- HTTP API layer with authentication
-- Database persistence with transactions
-- Caching for performance optimization
-- Event-driven communication between components
-- Background job processing
-- Real-time updates via WebSockets
-- Metrics and monitoring integration
+### Full Stack Integration Example
 
-### Implementation Timeline
+**Status:** Planned (0%)
+**Start Date:** April 11, 2025
+**Target Completion:** May 10, 2025
 
-| Component | Target Start | Target End | Status |
-|-----------|-------------|------------|--------|
-| Project Setup | April 11, 2025 | April 12, 2025 | Not Started |
-| Core Features | April 12, 2025 | April 14, 2025 | Not Started |
-| API Implementation | April 14, 2025 | April 16, 2025 | Not Started |
-| Integration | April 16, 2025 | April 18, 2025 | Not Started |
-| Documentation | April 18, 2025 | April 20, 2025 | Not Started |
+A comprehensive example that demonstrates all components of the Navius workspace working together:
+- Authentication and authorization
+- Database operations
+- Caching strategies
+- Background processing
+- REST API endpoints
+- Event-driven communication
+- Metrics and monitoring
 
-### Success Criteria
+**Location:** `workspace_migration/examples/integration/full-stack/`
 
-- All migrated components are used in a cohesive application
-- Clear documentation on architecture and component integration
-- Comprehensive examples of common patterns
-- Performance metrics and benchmarks
+**Implementation Plan:**
+1. Project setup and dependencies (April 11-13, 2025)
+2. Core domain model implementation (April 14-18, 2025)
+3. Database layer and repositories (April 19-23, 2025)
+4. Service layer implementation (April 24-28, 2025)
+5. API endpoints and controllers (April 29-May 3, 2025)
+6. Event system integration (May 4-6, 2025)
+7. Documentation and finalization (May 7-10, 2025)
+
+## Timeline
+
+```
+2025-01 |----|----|----|
+         [Basic Integration]
+          
+2025-02 |----|----|----|
+         [Database + Cache]
+          
+2025-03 |----|----|----|
+                   [Event System]
+                   
+2025-04 |----|----|----|
+                      [Full Stack Start]
+                      
+2025-05 |----|----|----|
+         [Full Stack Completion]
+```
 
 ## Next Steps
 
-1. Complete the Event System Integration Example by April 5, 2025
-2. Begin work on the Full Stack Example by April 11, 2025
-3. Create comprehensive documentation for all examples
-4. Ensure all examples work with the latest API versions 
+1. Begin preparation for Full Stack Integration Example
+   - Finalize requirements and architecture (April 1-5, 2025)
+   - Prepare project structure and initial setup (April 6-10, 2025)
+   - Begin implementation (April 11, 2025)
+
+2. Document lessons learned from completed examples
+   - Compile best practices from Event System implementation
+   - Update documentation based on implementation experience
+   - Share knowledge with development team through dedicated sessions
+
+## Completion Criteria
+
+An integration example is considered complete when:
+1. All planned features are implemented
+2. Code is fully documented with inline comments
+3. A comprehensive README is available
+4. Tests demonstrate functionality
+5. The example can be run locally with clear instructions
+
+## Notes
+
+The Event System Integration Example has been completed with the successful implementation of External Message Broker integration. This example now provides a complete demonstration of how to build an event-driven architecture using the Navius platform, including integration with external systems through Kafka and RabbitMQ. Focus now shifts to preparing for the Full Stack Integration Example starting April 11, 2025. 

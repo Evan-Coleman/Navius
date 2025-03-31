@@ -4,6 +4,7 @@
 //! in the Navius framework, showcasing event-driven architecture patterns.
 
 pub mod api;
+pub mod broker;
 pub mod events;
 pub mod handlers;
 pub mod models;
