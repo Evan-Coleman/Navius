@@ -6,112 +6,168 @@ use std::result;
 pub type TestResult<T> = Result<T, TestError>;
 
 /// Errors that can occur in the navius-test crate
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum TestError {
     /// An error occurred while registering a mock object
+    #[error("Registry error: {0}")]
     RegistryError(String),
 
     /// An expected mock object was not found
+    #[error("Mock not found: {0}")]
     MockNotFound(String),
 
     /// The mock object's type does not match the expected type
+    #[error("Mock type mismatch: {0}")]
     MockTypeMismatch(String),
 
     /// An expectation was not met
+    #[error("Expectation not met: {0}")]
     ExpectationNotMet(String),
 
     /// An error occurred while setting up a test
+    #[error("Setup error: {0}")]
     SetupError(String),
 
     /// An error occurred while tearing down a test
+    #[error("Teardown error: {0}")]
     TeardownError(String),
 
     /// An assertion failed
+    #[error("Assertion failed: {0}")]
     AssertionFailed(String),
 
     /// An error occurred in a test fixture
+    #[error("Fixture error: {0}")]
     FixtureError(String),
 
     /// An error occurred in a mock object
+    #[error("Mock error: {0}")]
     MockError(String),
 
     /// An IO error occurred
-    IoError(std::io::Error),
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
 
     /// A generic error occurred
-    Other(Box<dyn std::error::Error + Send + Sync>),
+    #[error("Error: {0}")]
+    GenericError(String),
 
     /// Create a validation error with a message
+    #[error("Validation error: {0}")]
     ValidationError(String),
 
     /// Create an assertion error with a message
+    #[error("Assertion error: {0}")]
     AssertionError(String),
 
     /// Setup error with message
+    #[error("Execution error: {0}")]
     ExecutionError(String),
 
     /// Teardown error with message
+    #[error("Missing component: {0}")]
     MissingComponent(String),
 
     /// Missing resource error
+    #[error("Missing resource error: {0}")]
     MissingResource(String),
 
     /// Invalid configuration error
+    #[error("Invalid configuration error: {0}")]
     InvalidConfiguration(String),
 
     /// Conversion error
+    #[error("Conversion error: {0}")]
     ConversionError(String),
 
     /// Configuration error
+    #[error("Configuration error: {0}")]
     ConfigurationError(String),
 
     /// Concurrency error
+    #[error("Concurrency error: {0}")]
     ConcurrencyError(String),
 
     /// Timeout error
+    #[error("Timeout error: {0}")]
     TimeoutError(String),
 
     /// Mock expectation error
+    #[error("Mock expectation error: {0}")]
     MockExpectationError(String),
 
     /// Injected error
+    #[error("Injected error: {0}")]
     InjectedError(String),
 
     /// Error propagation error
+    #[error("Error propagation error: {0}")]
     ErrorPropagationError(String),
 
     /// Error context error
+    #[error("Error context error: {0}")]
     ErrorContextError(String),
 
     /// Mock not registered error
+    #[error("Mock not registered: {0}")]
     MockNotRegistered(String),
 
     /// Network error
+    #[error("Network error: {0}")]
     NetworkError(String),
 
     /// Resource error
+    #[error("Resource error: {0}")]
     ResourceError(String),
+
+    /// Dependency error for service dependency issues
+    #[error("Dependency error: {0}")]
+    DependencyError(String),
+
+    /// Error in test suite
+    #[error("Test suite error: {0}")]
+    SuiteError(String),
+
+    /// Error in test runner
+    #[error("Runner error: {0}")]
+    RunnerError(String),
+
+    /// Error in test harness
+    #[error("Harness error: {0}")]
+    HarnessError(String),
+
+    /// Error in test integration
+    #[error("Integration error: {0}")]
+    IntegrationError(String),
+
+    /// JSON error
+    #[error("JSON error: {0}")]
+    JsonError(#[from] serde_json::Error),
+
+    /// TOML error
+    #[error("TOML error: {0}")]
+    TomlError(String),
 }
 
 impl TestError {
     /// Create a new setup error
     pub fn setup_error<S: Into<String>>(message: S) -> Self {
-        TestError::SetupError(message.into())
+        Self::SetupError(message.into())
     }
 
     /// Create a new execution error
     pub fn execution_error<S: Into<String>>(message: S) -> Self {
-        TestError::ExecutionError(message.into())
+        Self::ExecutionError(message.into())
     }
 
     /// Create a new teardown error
     pub fn teardown_error<S: Into<String>>(message: S) -> Self {
-        TestError::TeardownError(message.into())
+        Self::TeardownError(message.into())
     }
 
     /// Create a new missing component error
     pub fn missing_component<S: Into<String>>(component_type: S) -> Self {
-        TestError::MissingComponent(format!(
+        Self::MissingComponent(format!(
             "Missing component of type: {}",
             component_type.into()
         ))
@@ -119,27 +175,27 @@ impl TestError {
 
     /// Create a new mock not registered error
     pub fn mock_not_registered<S: Into<String>>(message: S) -> Self {
-        TestError::MockNotRegistered(message.into())
+        Self::MockNotRegistered(message.into())
     }
 
     /// Create a new mock expectation error
     pub fn mock_expectation_error<S: Into<String>>(message: S) -> Self {
-        TestError::MockExpectationError(message.into())
+        Self::MockExpectationError(message.into())
     }
 
     /// Create a new injected error
     pub fn injected_error<S: Into<String>>(message: S) -> Self {
-        TestError::InjectedError(message.into())
+        Self::InjectedError(message.into())
     }
 
     /// Create a new error propagation error
     pub fn error_propagation_error<S: Into<String>>(message: S) -> Self {
-        TestError::ErrorPropagationError(message.into())
+        Self::ErrorPropagationError(message.into())
     }
 
     /// Create a new error context error
     pub fn error_context_error<S: Into<String>>(message: S) -> Self {
-        TestError::ErrorContextError(message.into())
+        Self::ErrorContextError(message.into())
     }
 
     /// Create a validation error with a message
@@ -172,9 +228,49 @@ impl TestError {
         Self::TimeoutError(message.into())
     }
 
-    /// Create an IO error with a message
-    pub fn io_error<E: Into<std::io::Error>>(error: E) -> Self {
-        TestError::IoError(error.into())
+    /// Create a type mismatch error with a message
+    pub fn type_mismatch<S: Into<String>>(message: S) -> Self {
+        Self::MockTypeMismatch(message.into())
+    }
+
+    /// Create a dependency error with a message
+    pub fn dependency_error<S: Into<String>>(message: S) -> Self {
+        Self::DependencyError(message.into())
+    }
+
+    /// Create a new fixture error
+    pub fn fixture_error(message: impl Into<String>) -> Self {
+        Self::FixtureError(message.into())
+    }
+
+    /// Create a new mock error
+    pub fn mock_error(message: impl Into<String>) -> Self {
+        Self::MockError(message.into())
+    }
+
+    /// Create a new runner error
+    pub fn runner_error(message: impl Into<String>) -> Self {
+        Self::RunnerError(message.into())
+    }
+
+    /// Create a new harness error
+    pub fn harness_error(message: impl Into<String>) -> Self {
+        Self::HarnessError(message.into())
+    }
+
+    /// Create a new integration error
+    pub fn integration_error(message: impl Into<String>) -> Self {
+        Self::IntegrationError(message.into())
+    }
+
+    /// Create a new suite error
+    pub fn suite_error(message: impl Into<String>) -> Self {
+        Self::SuiteError(message.into())
+    }
+
+    /// Create a new generic error
+    pub fn generic_error(message: impl Into<String>) -> Self {
+        Self::GenericError(message.into())
     }
 }
 
@@ -191,7 +287,6 @@ impl fmt::Display for TestError {
             TestError::FixtureError(msg) => write!(f, "Fixture error: {}", msg),
             TestError::MockError(msg) => write!(f, "Mock error: {}", msg),
             TestError::IoError(err) => write!(f, "IO error: {}", err),
-            TestError::Other(err) => write!(f, "Error: {}", err),
             TestError::ValidationError(msg) => write!(f, "Validation error: {}", msg),
             TestError::AssertionError(msg) => write!(f, "Assertion error: {}", msg),
             TestError::ExecutionError(msg) => write!(f, "Execution error: {}", msg),
@@ -211,6 +306,14 @@ impl fmt::Display for TestError {
             TestError::MockNotRegistered(msg) => write!(f, "Mock not registered: {}", msg),
             TestError::NetworkError(msg) => write!(f, "Network error: {}", msg),
             TestError::ResourceError(msg) => write!(f, "Resource error: {}", msg),
+            TestError::DependencyError(msg) => write!(f, "Dependency error: {}", msg),
+            TestError::SuiteError(msg) => write!(f, "Test suite error: {}", msg),
+            TestError::RunnerError(msg) => write!(f, "Runner error: {}", msg),
+            TestError::HarnessError(msg) => write!(f, "Harness error: {}", msg),
+            TestError::IntegrationError(msg) => write!(f, "Integration error: {}", msg),
+            TestError::JsonError(err) => write!(f, "JSON error: {}", err),
+            TestError::TomlError(msg) => write!(f, "TOML error: {}", msg),
+            TestError::GenericError(msg) => write!(f, "Generic error: {}", msg),
         }
     }
 }
@@ -219,7 +322,7 @@ impl StdError for TestError {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
             TestError::IoError(err) => Some(err),
-            TestError::Other(err) => Some(err.as_ref()),
+            TestError::GenericError(err) => Some(err.as_ref()),
             _ => None,
         }
     }
@@ -233,13 +336,13 @@ impl From<std::io::Error> for TestError {
 
 impl From<String> for TestError {
     fn from(err: String) -> Self {
-        TestError::Other(Box::new(SimpleError(err)))
+        TestError::GenericError(err)
     }
 }
 
 impl From<&str> for TestError {
     fn from(err: &str) -> Self {
-        TestError::Other(Box::new(SimpleError(err.to_string())))
+        TestError::GenericError(err.to_string())
     }
 }
 
@@ -562,10 +665,7 @@ pub fn assert_mock_call_internal<T>(
 
 /// Create an error for an unimplemented feature
 pub fn unimplemented<S: Into<String>>(feature: S) -> TestError {
-    TestError::Other(Box::new(SimpleError(format!(
-        "Feature not implemented: {}",
-        feature.into()
-    ))))
+    TestError::GenericError(format!("Feature not implemented: {}", feature.into()))
 }
 
 /// Create an error for a failed assertion
@@ -794,14 +894,14 @@ mod tests {
 
         let err = TestError::from("test error");
         match err {
-            TestError::Other(_) => {}
-            _ => panic!("Expected TestError::Other"),
+            TestError::GenericError(_) => {}
+            _ => panic!("Expected TestError::GenericError"),
         }
 
         let err = TestError::from("test error".to_string());
         match err {
-            TestError::Other(_) => {}
-            _ => panic!("Expected TestError::Other"),
+            TestError::GenericError(_) => {}
+            _ => panic!("Expected TestError::GenericError"),
         }
     }
 

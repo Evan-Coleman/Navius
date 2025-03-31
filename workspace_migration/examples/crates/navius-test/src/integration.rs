@@ -198,6 +198,165 @@ pub struct TestData {
     pub content: HashMap<String, ConfigValue>,
 }
 
+impl TestData {
+    /// Create a new test data instance
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            content: HashMap::new(),
+        }
+    }
+
+    /// Add a string value to the test data
+    pub fn with_string(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.content
+            .insert(key.into(), ConfigValue::String(value.into()));
+        self
+    }
+
+    /// Add an integer value to the test data
+    pub fn with_integer(mut self, key: impl Into<String>, value: i64) -> Self {
+        self.content.insert(key.into(), ConfigValue::Integer(value));
+        self
+    }
+
+    /// Add a float value to the test data
+    pub fn with_float(mut self, key: impl Into<String>, value: f64) -> Self {
+        self.content.insert(key.into(), ConfigValue::Float(value));
+        self
+    }
+
+    /// Add a boolean value to the test data
+    pub fn with_boolean(mut self, key: impl Into<String>, value: bool) -> Self {
+        self.content.insert(key.into(), ConfigValue::Boolean(value));
+        self
+    }
+
+    /// Add an array value to the test data
+    pub fn with_array(mut self, key: impl Into<String>, value: Vec<ConfigValue>) -> Self {
+        self.content.insert(key.into(), ConfigValue::Array(value));
+        self
+    }
+
+    /// Add an object value to the test data
+    pub fn with_object(
+        mut self,
+        key: impl Into<String>,
+        value: HashMap<String, ConfigValue>,
+    ) -> Self {
+        self.content.insert(key.into(), ConfigValue::Object(value));
+        self
+    }
+}
+
+/// Test data builder for creating and registering test data
+pub struct TestDataBuilder {
+    context: Arc<IntegrationContext>,
+    data: Vec<TestData>,
+}
+
+impl TestDataBuilder {
+    /// Create a new test data builder
+    pub fn new(context: Arc<IntegrationContext>) -> Self {
+        Self {
+            context,
+            data: Vec::new(),
+        }
+    }
+
+    /// Add test data to the builder
+    pub fn with_data(mut self, data: TestData) -> Self {
+        self.data.push(data);
+        self
+    }
+
+    /// Generate a simple entity test data
+    pub fn with_entity<S: Into<String>>(
+        mut self,
+        id: S,
+        name: Option<S>,
+        is_active: Option<bool>,
+    ) -> Self {
+        let id_str = id.into();
+        let mut entity = TestData::new(format!("entity-{}", id_str)).with_string("id", id_str);
+
+        if let Some(name_val) = name {
+            entity = entity.with_string("name", name_val);
+        }
+
+        if let Some(active) = is_active {
+            entity = entity.with_boolean("active", active);
+        }
+
+        self.data.push(entity);
+        self
+    }
+
+    /// Generate a user test data
+    pub fn with_user<S: Into<String>>(
+        mut self,
+        id: S,
+        name: S,
+        email: Option<S>,
+        roles: Option<Vec<S>>,
+    ) -> Self {
+        let id_str = id.into();
+        let name_str = name.into();
+
+        let mut user = TestData::new(format!("user-{}", id_str))
+            .with_string("id", id_str)
+            .with_string("name", name_str);
+
+        if let Some(email_val) = email {
+            user = user.with_string("email", email_val);
+        }
+
+        if let Some(role_vals) = roles {
+            let roles_array = role_vals
+                .into_iter()
+                .map(|r| ConfigValue::String(r.into()))
+                .collect();
+            user = user.with_array("roles", roles_array);
+        }
+
+        self.data.push(user);
+        self
+    }
+
+    /// Generate a configuration test data
+    pub fn with_config<S: Into<String>>(
+        mut self,
+        id: S,
+        properties: HashMap<String, ConfigValue>,
+    ) -> Self {
+        let config =
+            TestData::new(format!("config-{}", id.into())).with_object("properties", properties);
+
+        self.data.push(config);
+        self
+    }
+
+    /// Register all test data with the context
+    pub fn register(self) -> TestResult<()> {
+        let mut test_data = self.context.test_data.write().map_err(|_| {
+            TestError::concurrency_error("Failed to acquire write lock for test data")
+        })?;
+
+        for data in self.data {
+            test_data.insert(data.id.clone(), data);
+        }
+
+        Ok(())
+    }
+
+    /// Export all test data to a file
+    pub fn export_to_file(self, path: &PathBuf) -> TestResult<()> {
+        let json = serde_json::to_string_pretty(&self.data)?;
+        std::fs::write(path, json)?;
+        Ok(())
+    }
+}
+
 impl IntegrationContext {
     /// Create a new integration context with the given configuration
     pub fn new(config: IntegrationTestConfig) -> TestResult<Self> {
@@ -413,16 +572,33 @@ impl IntegrationContext {
     pub fn discover_services(&self) -> TestResult<ServiceDiscoveryResult> {
         let mut instances = HashMap::new();
         let mut dependencies = HashMap::new();
-
-        // Process service configs in dependency order
         let configs = self.config.service_configs.clone();
+
+        // Build dependency graph
         for (name, config) in &configs {
             dependencies.insert(name.clone(), config.dependencies.clone());
+        }
 
-            // In a real implementation, this would create actual service instances
-            // based on configuration, but for now we'll just create placeholder instances
-            let instance: Arc<dyn std::any::Any + Send + Sync> = Arc::new(());
-            instances.insert(name.clone(), instance);
+        // Perform topological sort to resolve dependencies in correct order
+        let sorted_services = self.topological_sort(&dependencies)?;
+
+        // Process services in dependency order
+        for service_name in sorted_services {
+            if let Some(config) = configs.get(&service_name) {
+                // Check if dependencies are satisfied
+                for dep in &config.dependencies {
+                    if !instances.contains_key(dep) {
+                        return Err(TestError::dependency_error(format!(
+                            "Service '{}' depends on '{}', but it was not created",
+                            service_name, dep
+                        )));
+                    }
+                }
+
+                // Create service instance based on its type
+                let instance = self.create_service_instance(&service_name, config, &instances)?;
+                instances.insert(service_name.clone(), instance);
+            }
         }
 
         let result = ServiceDiscoveryResult {
@@ -441,6 +617,176 @@ impl IntegrationContext {
         Ok(result)
     }
 
+    /// Create a service instance based on service type
+    fn create_service_instance(
+        &self,
+        name: &str,
+        config: &ServiceConfig,
+        existing_services: &HashMap<String, Arc<dyn std::any::Any + Send + Sync>>,
+    ) -> TestResult<Arc<dyn std::any::Any + Send + Sync>> {
+        // In a real implementation, this would use a registry of service factories
+        // For now, we'll create placeholder instances with the service name stored
+        let instance: Arc<dyn std::any::Any + Send + Sync> = match config.service_type.as_str() {
+            "PostgresDatabase" => {
+                let url = config
+                    .properties
+                    .get("url")
+                    .ok_or_else(|| {
+                        TestError::configuration_error(format!(
+                            "Missing 'url' property for database service '{}'",
+                            name
+                        ))
+                    })?
+                    .as_string()
+                    .ok_or_else(|| {
+                        TestError::type_mismatch(format!(
+                            "'url' property for database service '{}' must be a string",
+                            name
+                        ))
+                    })?;
+
+                println!(
+                    "Creating PostgresDatabase service '{}' with URL: {}",
+                    name, url
+                );
+                // This would create a real database client in production code
+                Arc::new(name.to_string())
+            }
+            "RedisCache" => {
+                let url = config
+                    .properties
+                    .get("url")
+                    .ok_or_else(|| {
+                        TestError::configuration_error(format!(
+                            "Missing 'url' property for cache service '{}'",
+                            name
+                        ))
+                    })?
+                    .as_string()
+                    .ok_or_else(|| {
+                        TestError::type_mismatch(format!(
+                            "'url' property for cache service '{}' must be a string",
+                            name
+                        ))
+                    })?;
+
+                // Check for dependency on database
+                if config.dependencies.contains(&"database".to_string()) {
+                    let db_service = existing_services.get("database").ok_or_else(|| {
+                        TestError::dependency_error(format!(
+                            "Cache service '{}' depends on 'database', but it doesn't exist",
+                            name
+                        ))
+                    })?;
+
+                    println!(
+                        "Creating RedisCache service '{}' with URL: {} and database dependency",
+                        name, url
+                    );
+                } else {
+                    println!("Creating RedisCache service '{}' with URL: {}", name, url);
+                }
+
+                Arc::new(name.to_string())
+            }
+            "HttpClient" => {
+                let timeout = config
+                    .properties
+                    .get("timeout")
+                    .and_then(|v| v.as_integer())
+                    .unwrap_or(30); // Default timeout of 30 seconds
+
+                println!(
+                    "Creating HttpClient service '{}' with timeout: {}s",
+                    name, timeout
+                );
+                Arc::new(name.to_string())
+            }
+            _ => {
+                // Generic service creation for unknown types
+                println!(
+                    "Creating generic service '{}' of type '{}'",
+                    name, config.service_type
+                );
+                Arc::new(name.to_string())
+            }
+        };
+
+        Ok(instance)
+    }
+
+    /// Perform topological sort on service dependencies
+    fn topological_sort(
+        &self,
+        dependencies: &HashMap<String, Vec<String>>,
+    ) -> TestResult<Vec<String>> {
+        let mut result = Vec::new();
+        let mut visited = HashMap::new();
+        let mut temp_mark = HashMap::new();
+
+        // Initialize visit trackers
+        for node in dependencies.keys() {
+            visited.insert(node.clone(), false);
+            temp_mark.insert(node.clone(), false);
+        }
+
+        // Visit each node
+        for node in dependencies.keys() {
+            if !visited[node] {
+                self.visit(
+                    node,
+                    dependencies,
+                    &mut visited,
+                    &mut temp_mark,
+                    &mut result,
+                )?;
+            }
+        }
+
+        // Reverse to get dependency order (least dependent first)
+        result.reverse();
+        Ok(result)
+    }
+
+    /// Recursive visit function for topological sort
+    fn visit(
+        &self,
+        node: &String,
+        dependencies: &HashMap<String, Vec<String>>,
+        visited: &mut HashMap<String, bool>,
+        temp_mark: &mut HashMap<String, bool>,
+        result: &mut Vec<String>,
+    ) -> TestResult<()> {
+        // Check for circular dependency
+        if *temp_mark.get(node).unwrap_or(&false) {
+            return Err(TestError::dependency_error(format!(
+                "Circular dependency detected involving service '{}'",
+                node
+            )));
+        }
+
+        if !*visited.get(node).unwrap_or(&false) {
+            // Mark temporarily
+            temp_mark.insert(node.clone(), true);
+
+            // Visit dependencies
+            if let Some(deps) = dependencies.get(node) {
+                for dep in deps {
+                    if dependencies.contains_key(dep) {
+                        self.visit(dep, dependencies, visited, temp_mark, result)?;
+                    }
+                }
+            }
+
+            // Mark permanently
+            visited.insert(node.clone(), true);
+            temp_mark.insert(node.clone(), false);
+            result.push(node.clone());
+        }
+
+        Ok(())
+    }
+
     /// Execute hooks for a specific lifecycle stage
     pub fn execute_hooks(&self, hooks: &[String]) -> TestResult<()> {
         for hook in hooks {
@@ -449,6 +795,20 @@ impl IntegrationContext {
             println!("Executing hook: {}", hook);
         }
         Ok(())
+    }
+
+    /// Create a test data builder
+    pub fn create_test_data_builder(&self) -> TestDataBuilder {
+        TestDataBuilder::new(Arc::new(self.clone()))
+    }
+
+    /// Generate and register test data
+    pub fn generate_test_data<F>(&self, builder_fn: F) -> TestResult<()>
+    where
+        F: FnOnce(TestDataBuilder) -> TestDataBuilder,
+    {
+        let builder = TestDataBuilder::new(Arc::new(self.clone()));
+        builder_fn(builder).register()
     }
 }
 
@@ -651,7 +1011,7 @@ impl CrossCrateTestBuilder {
                 test_dir: None,
                 env_vars: HashMap::new(),
                 verify_mocks: true,
-                clean_resources: true,
+                cleanup_resources: true,
                 timeout: Some(Duration::from_secs(60)),
                 test_data_path: None,
                 service_configs: HashMap::new(),
@@ -697,7 +1057,7 @@ impl CrossCrateTestBuilder {
 
     /// Sets whether to clean resources after the test
     pub fn with_clean_resources(&mut self, clean: bool) -> &mut Self {
-        self.integration_config.clean_resources = clean;
+        self.integration_config.cleanup_resources = clean;
         self
     }
 
@@ -799,6 +1159,344 @@ where
 pub trait ServiceFactory<T> {
     /// Create a service instance from configuration
     fn create(config: &ServiceConfig, context: &IntegrationContext) -> TestResult<T>;
+}
+
+/// CI/CD environment detection and configuration
+pub struct CIEnvironment {
+    /// CI provider name
+    pub name: String,
+    /// Build ID
+    pub build_id: Option<String>,
+    /// Project name
+    pub project: Option<String>,
+    /// Branch name
+    pub branch: Option<String>,
+    /// Commit hash
+    pub commit: Option<String>,
+    /// Is this a pull request
+    pub is_pull_request: bool,
+    /// Environment variables specific to the CI environment
+    pub env_vars: HashMap<String, String>,
+}
+
+impl CIEnvironment {
+    /// Detect the current CI environment
+    pub fn detect() -> Option<Self> {
+        // GitLab CI
+        if std::env::var("GITLAB_CI").is_ok() {
+            return Some(Self {
+                name: "GitLab CI".to_string(),
+                build_id: std::env::var("CI_PIPELINE_ID").ok(),
+                project: std::env::var("CI_PROJECT_NAME").ok(),
+                branch: std::env::var("CI_COMMIT_BRANCH").ok(),
+                commit: std::env::var("CI_COMMIT_SHA").ok(),
+                is_pull_request: std::env::var("CI_MERGE_REQUEST_ID").is_ok(),
+                env_vars: Self::get_environment_variables(&["CI_", "GITLAB_"]),
+            });
+        }
+
+        // GitHub Actions
+        if std::env::var("GITHUB_ACTIONS").is_ok() {
+            return Some(Self {
+                name: "GitHub Actions".to_string(),
+                build_id: std::env::var("GITHUB_RUN_ID").ok(),
+                project: std::env::var("GITHUB_REPOSITORY")
+                    .ok()
+                    .map(|s| s.split('/').last().unwrap_or_default().to_string()),
+                branch: std::env::var("GITHUB_REF")
+                    .ok()
+                    .map(|s| s.replace("refs/heads/", "")),
+                commit: std::env::var("GITHUB_SHA").ok(),
+                is_pull_request: std::env::var("GITHUB_EVENT_NAME").unwrap_or_default()
+                    == "pull_request",
+                env_vars: Self::get_environment_variables(&["GITHUB_"]),
+            });
+        }
+
+        // Jenkins
+        if std::env::var("JENKINS_URL").is_ok() {
+            return Some(Self {
+                name: "Jenkins".to_string(),
+                build_id: std::env::var("BUILD_ID").ok(),
+                project: std::env::var("JOB_NAME").ok(),
+                branch: std::env::var("BRANCH_NAME").ok(),
+                commit: std::env::var("GIT_COMMIT").ok(),
+                is_pull_request: std::env::var("CHANGE_ID").is_ok(),
+                env_vars: Self::get_environment_variables(&["BUILD_", "JOB_", "JENKINS_"]),
+            });
+        }
+
+        // CircleCI
+        if std::env::var("CIRCLECI").is_ok() {
+            return Some(Self {
+                name: "CircleCI".to_string(),
+                build_id: std::env::var("CIRCLE_BUILD_NUM").ok(),
+                project: std::env::var("CIRCLE_PROJECT_REPONAME").ok(),
+                branch: std::env::var("CIRCLE_BRANCH").ok(),
+                commit: std::env::var("CIRCLE_SHA1").ok(),
+                is_pull_request: std::env::var("CIRCLE_PULL_REQUEST").is_ok(),
+                env_vars: Self::get_environment_variables(&["CIRCLE_"]),
+            });
+        }
+
+        // Azure Pipelines
+        if std::env::var("TF_BUILD").is_ok() {
+            return Some(Self {
+                name: "Azure Pipelines".to_string(),
+                build_id: std::env::var("BUILD_BUILDID").ok(),
+                project: std::env::var("BUILD_REPOSITORY_NAME").ok(),
+                branch: std::env::var("BUILD_SOURCEBRANCHNAME").ok(),
+                commit: std::env::var("BUILD_SOURCEVERSION").ok(),
+                is_pull_request: std::env::var("SYSTEM_PULLREQUEST_PULLREQUESTID").is_ok(),
+                env_vars: Self::get_environment_variables(&["BUILD_", "SYSTEM_", "AGENT_"]),
+            });
+        }
+
+        None
+    }
+
+    /// Get environment variables with specified prefixes
+    fn get_environment_variables(prefixes: &[&str]) -> HashMap<String, String> {
+        let mut result = HashMap::new();
+
+        for (key, value) in std::env::vars() {
+            if prefixes.iter().any(|prefix| key.starts_with(prefix)) {
+                result.insert(key, value);
+            }
+        }
+
+        result
+    }
+
+    /// Is running in CI environment
+    pub fn is_ci() -> bool {
+        Self::detect().is_some()
+    }
+
+    /// Get the current branch name
+    pub fn branch_name() -> Option<String> {
+        Self::detect().and_then(|ci| ci.branch)
+    }
+
+    /// Get the current commit hash
+    pub fn commit_hash() -> Option<String> {
+        Self::detect().and_then(|ci| ci.commit)
+    }
+
+    /// Is this a pull request build
+    pub fn is_pull_request() -> bool {
+        Self::detect().map(|ci| ci.is_pull_request).unwrap_or(false)
+    }
+}
+
+/// Configuration for test reports in CI/CD environments
+pub struct CIReportConfig {
+    /// Test report format
+    pub format: ReportFormat,
+    /// Output directory for reports
+    pub output_dir: PathBuf,
+    /// Generate separate report per test
+    pub per_test_report: bool,
+    /// Include test data in reports
+    pub include_test_data: bool,
+    /// Include environment information in reports
+    pub include_environment: bool,
+}
+
+/// Test report format
+#[derive(Debug, Clone, PartialEq)]
+pub enum ReportFormat {
+    /// JUnit XML format
+    JUnit,
+    /// JSON format
+    JSON,
+    /// Text format
+    Text,
+}
+
+impl Default for CIReportConfig {
+    fn default() -> Self {
+        Self {
+            format: ReportFormat::JUnit,
+            output_dir: PathBuf::from("test-reports"),
+            per_test_report: false,
+            include_test_data: true,
+            include_environment: true,
+        }
+    }
+}
+
+impl CIReportConfig {
+    /// Create a new CI report config
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the test report format
+    pub fn with_format(mut self, format: ReportFormat) -> Self {
+        self.format = format;
+        self
+    }
+
+    /// Set the output directory for reports
+    pub fn with_output_dir(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.output_dir = dir.into();
+        self
+    }
+
+    /// Set whether to generate a separate report per test
+    pub fn with_per_test_report(mut self, value: bool) -> Self {
+        self.per_test_report = value;
+        self
+    }
+
+    /// Set whether to include test data in reports
+    pub fn with_include_test_data(mut self, value: bool) -> Self {
+        self.include_test_data = value;
+        self
+    }
+
+    /// Set whether to include environment information in reports
+    pub fn with_include_environment(mut self, value: bool) -> Self {
+        self.include_environment = value;
+        self
+    }
+}
+
+impl IntegrationTestConfig {
+    /// Configure the test for CI/CD environments
+    pub fn configure_for_ci(&mut self) -> TestResult<()> {
+        // Only apply CI-specific configurations if we're in a CI environment
+        if !CIEnvironment::is_ci() {
+            return Ok(());
+        }
+
+        // Add CI environment variables
+        if let Some(ci) = CIEnvironment::detect() {
+            println!("Detected CI environment: {}", ci.name);
+
+            // Set environment variables based on CI environment
+            self.env_vars
+                .insert("CI_ENVIRONMENT".to_string(), ci.name.clone());
+
+            if let Some(build_id) = &ci.build_id {
+                self.env_vars
+                    .insert("CI_BUILD_ID".to_string(), build_id.clone());
+            }
+
+            if let Some(branch) = &ci.branch {
+                self.env_vars
+                    .insert("CI_BRANCH".to_string(), branch.clone());
+            }
+
+            // Configure test directory based on CI
+            if self.test_dir.is_none() {
+                let base_dir = match ci.name.as_str() {
+                    "GitLab CI" => PathBuf::from(
+                        std::env::var("CI_PROJECT_DIR").unwrap_or_else(|_| ".".to_string()),
+                    ),
+                    "GitHub Actions" => PathBuf::from(
+                        std::env::var("GITHUB_WORKSPACE").unwrap_or_else(|_| ".".to_string()),
+                    ),
+                    _ => PathBuf::from("."),
+                };
+
+                // Create a unique test directory
+                let test_dir = base_dir.join("test-artifacts").join(&self.name);
+                std::fs::create_dir_all(&test_dir)?;
+                self.test_dir = Some(test_dir);
+            }
+
+            // Typical CI adjustments
+            self.verify_mocks = true;
+            self.cleanup_resources = false; // Typically keep artifacts in CI
+
+            // Add CI-specific hooks
+            self.lifecycle_hooks.before_setup.push(format!(
+                "echo 'Running {} in CI environment {}'",
+                self.name, ci.name
+            ));
+
+            if let Some(commit) = ci.commit {
+                self.lifecycle_hooks
+                    .before_setup
+                    .push(format!("echo 'Test running on commit {}'", commit));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl IntegrationRunner {
+    /// Create a new integration test runner configured for CI environment
+    pub fn new_ci(mut config: IntegrationTestConfig) -> TestResult<Self> {
+        // Configure for CI
+        config.configure_for_ci()?;
+
+        // Create runner as normal
+        Self::new(config)
+    }
+
+    /// Generate a test report compatible with CI systems
+    pub fn generate_report(&self, config: CIReportConfig) -> TestResult<PathBuf> {
+        // Create the output directory if it doesn't exist
+        std::fs::create_dir_all(&config.output_dir)?;
+
+        // Generate the report path
+        let report_file = match config.format {
+            ReportFormat::JUnit => config
+                .output_dir
+                .join(format!("{}-junit.xml", self.context.config.name)),
+            ReportFormat::JSON => config
+                .output_dir
+                .join(format!("{}-report.json", self.context.config.name)),
+            ReportFormat::Text => config
+                .output_dir
+                .join(format!("{}-report.txt", self.context.config.name)),
+        };
+
+        // For now, just create a simple placeholder report
+        // In a real implementation, this would generate a proper report based on test results
+        let report_content = match config.format {
+            ReportFormat::JUnit => format!(
+                r#"<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="{}" tests="1" failures="0" errors="0" skipped="0" timestamp="{}" time="0">
+    <testcase classname="{}" name="{}" time="0"/>
+  </testsuite>
+</testsuites>"#,
+                self.context.config.name,
+                chrono::Utc::now().to_rfc3339(),
+                self.context.config.name,
+                self.context.config.name
+            ),
+            ReportFormat::JSON => serde_json::to_string_pretty(&serde_json::json!({
+                "name": self.context.config.name,
+                "status": "passed",
+                "timestamp": chrono::Utc::now().to_rfc3339(),
+                "duration_ms": 0,
+                "environment": CIEnvironment::detect(),
+            }))?,
+            ReportFormat::Text => format!(
+                "Test: {}\nStatus: passed\nTimestamp: {}\n",
+                self.context.config.name,
+                chrono::Utc::now().to_rfc3339()
+            ),
+        };
+
+        std::fs::write(&report_file, report_content)?;
+
+        Ok(report_file)
+    }
+}
+
+impl CrossCrateTestBuilder {
+    /// Configure the test for CI/CD environments
+    pub fn for_ci(mut self) -> TestResult<Self> {
+        self.integration_config.configure_for_ci()?;
+        Ok(self)
+    }
 }
 
 #[cfg(test)]

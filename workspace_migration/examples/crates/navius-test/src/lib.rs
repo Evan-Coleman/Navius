@@ -120,12 +120,14 @@ pub mod integration;
 pub mod mock;
 pub mod mocks;
 pub mod runner;
+pub mod suite;
 
 // Re-export common types for easier usage
 pub use error::{TestError, TestResult};
 pub use fixture::TestFixture;
 pub use harness::TestHarness;
 pub use mock::MockRegistry;
+pub use suite::{TestFilter, TestSuite, TestSuiteBuilder, TestSuiteMetadata, TestSuiteOptions};
 
 // Re-export common mocks types for convenience
 pub use mocks::{
