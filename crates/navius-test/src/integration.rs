@@ -1164,21 +1164,12 @@ pub trait ServiceFactory<T> {
 }
 
 /// CI/CD environment detection and configuration
-pub struct CIEnvironment {
-    /// CI provider name
-    pub name: String,
-    /// Build ID
-    pub build_id: Option<String>,
-    /// Project name
-    pub project: Option<String>,
-    /// Branch name
-    pub branch: Option<String>,
-    /// Commit hash
-    pub commit: Option<String>,
-    /// Is this a pull request
-    pub is_pull_request: bool,
-    /// Environment variables specific to the CI environment
-    pub env_vars: HashMap<String, String>,
+#[derive(Debug, Clone, Serialize)]
+pub enum CIEnvironment {
+    GitHub,
+    GitLab,
+    Jenkins,
+    Local,
 }
 
 impl CIEnvironment {
@@ -1186,108 +1177,35 @@ impl CIEnvironment {
     pub fn detect() -> Option<Self> {
         // GitLab CI
         if std::env::var("GITLAB_CI").is_ok() {
-            return Some(Self {
-                name: "GitLab CI".to_string(),
-                build_id: std::env::var("CI_PIPELINE_ID").ok(),
-                project: std::env::var("CI_PROJECT_NAME").ok(),
-                branch: std::env::var("CI_COMMIT_BRANCH").ok(),
-                commit: std::env::var("CI_COMMIT_SHA").ok(),
-                is_pull_request: std::env::var("CI_MERGE_REQUEST_ID").is_ok(),
-                env_vars: Self::get_environment_variables(&["CI_", "GITLAB_"]),
-            });
+            return Some(Self::GitLab);
         }
 
         // GitHub Actions
         if std::env::var("GITHUB_ACTIONS").is_ok() {
-            return Some(Self {
-                name: "GitHub Actions".to_string(),
-                build_id: std::env::var("GITHUB_RUN_ID").ok(),
-                project: std::env::var("GITHUB_REPOSITORY")
-                    .ok()
-                    .map(|s| s.split('/').last().unwrap_or_default().to_string()),
-                branch: std::env::var("GITHUB_REF")
-                    .ok()
-                    .map(|s| s.replace("refs/heads/", "")),
-                commit: std::env::var("GITHUB_SHA").ok(),
-                is_pull_request: std::env::var("GITHUB_EVENT_NAME").unwrap_or_default()
-                    == "pull_request",
-                env_vars: Self::get_environment_variables(&["GITHUB_"]),
-            });
+            return Some(Self::GitHub);
         }
 
         // Jenkins
         if std::env::var("JENKINS_URL").is_ok() {
-            return Some(Self {
-                name: "Jenkins".to_string(),
-                build_id: std::env::var("BUILD_ID").ok(),
-                project: std::env::var("JOB_NAME").ok(),
-                branch: std::env::var("BRANCH_NAME").ok(),
-                commit: std::env::var("GIT_COMMIT").ok(),
-                is_pull_request: std::env::var("CHANGE_ID").is_ok(),
-                env_vars: Self::get_environment_variables(&["BUILD_", "JOB_", "JENKINS_"]),
-            });
+            return Some(Self::Jenkins);
         }
 
         // CircleCI
         if std::env::var("CIRCLECI").is_ok() {
-            return Some(Self {
-                name: "CircleCI".to_string(),
-                build_id: std::env::var("CIRCLE_BUILD_NUM").ok(),
-                project: std::env::var("CIRCLE_PROJECT_REPONAME").ok(),
-                branch: std::env::var("CIRCLE_BRANCH").ok(),
-                commit: std::env::var("CIRCLE_SHA1").ok(),
-                is_pull_request: std::env::var("CIRCLE_PULL_REQUEST").is_ok(),
-                env_vars: Self::get_environment_variables(&["CIRCLE_"]),
-            });
+            return Some(Self::Local);
         }
 
         // Azure Pipelines
         if std::env::var("TF_BUILD").is_ok() {
-            return Some(Self {
-                name: "Azure Pipelines".to_string(),
-                build_id: std::env::var("BUILD_BUILDID").ok(),
-                project: std::env::var("BUILD_REPOSITORY_NAME").ok(),
-                branch: std::env::var("BUILD_SOURCEBRANCHNAME").ok(),
-                commit: std::env::var("BUILD_SOURCEVERSION").ok(),
-                is_pull_request: std::env::var("SYSTEM_PULLREQUEST_PULLREQUESTID").is_ok(),
-                env_vars: Self::get_environment_variables(&["BUILD_", "SYSTEM_", "AGENT_"]),
-            });
+            return Some(Self::Local);
         }
 
         None
     }
 
-    /// Get environment variables with specified prefixes
-    fn get_environment_variables(prefixes: &[&str]) -> HashMap<String, String> {
-        let mut result = HashMap::new();
-
-        for (key, value) in std::env::vars() {
-            if prefixes.iter().any(|prefix| key.starts_with(prefix)) {
-                result.insert(key, value);
-            }
-        }
-
-        result
-    }
-
     /// Is running in CI environment
     pub fn is_ci() -> bool {
         Self::detect().is_some()
-    }
-
-    /// Get the current branch name
-    pub fn branch_name() -> Option<String> {
-        Self::detect().and_then(|ci| ci.branch)
-    }
-
-    /// Get the current commit hash
-    pub fn commit_hash() -> Option<String> {
-        Self::detect().and_then(|ci| ci.commit)
-    }
-
-    /// Is this a pull request build
-    pub fn is_pull_request() -> bool {
-        Self::detect().map(|ci| ci.is_pull_request).unwrap_or(false)
     }
 }
 
@@ -1375,25 +1293,15 @@ impl IntegrationTestConfig {
 
         // Add CI environment variables
         if let Some(ci) = CIEnvironment::detect() {
-            println!("Detected CI environment: {}", ci.name);
+            println!("Detected CI environment: {:?}", ci);
 
             // Set environment variables based on CI environment
             self.env_vars
-                .insert("CI_ENVIRONMENT".to_string(), ci.name.clone());
-
-            if let Some(build_id) = &ci.build_id {
-                self.env_vars
-                    .insert("CI_BUILD_ID".to_string(), build_id.clone());
-            }
-
-            if let Some(branch) = &ci.branch {
-                self.env_vars
-                    .insert("CI_BRANCH".to_string(), branch.clone());
-            }
+                .insert("CI_ENVIRONMENT".to_string(), ci.to_string());
 
             // Configure test directory based on CI
             if self.test_dir.is_none() {
-                let base_dir = match ci.name.as_str() {
+                let base_dir = match ci.as_str() {
                     "GitLab CI" => PathBuf::from(
                         std::env::var("CI_PROJECT_DIR").unwrap_or_else(|_| ".".to_string()),
                     ),
@@ -1416,10 +1324,10 @@ impl IntegrationTestConfig {
             // Add CI-specific hooks
             self.lifecycle_hooks.before_setup.push(format!(
                 "echo 'Running {} in CI environment {}'",
-                self.name, ci.name
+                self.name, ci
             ));
 
-            if let Some(commit) = ci.commit {
+            if let Some(commit) = CIEnvironment::detect().and_then(|ci| ci.commit) {
                 self.lifecycle_hooks
                     .before_setup
                     .push(format!("echo 'Test running on commit {}'", commit));

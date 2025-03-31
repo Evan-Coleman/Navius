@@ -331,7 +331,7 @@ impl ErrorContext {
                 db_info.schema = pg_err.schema().map(|s| s.to_string());
                 db_info.table = pg_err.table().map(|s| s.to_string());
                 db_info.column = pg_err.column().map(|s| s.to_string());
-                db_info.severity = Some(pg_err.severity().to_string());
+                db_info.severity = Some(severity_to_string(&pg_err.severity()));
 
                 if let Some(hint) = pg_err.hint() {
                     context = context.with_additional_info(format!("hint: {}", hint));
@@ -579,7 +579,7 @@ impl DatabaseError {
                         info.schema = pg_err.schema().map(|s| s.to_string());
                         info.table = pg_err.table().map(|s| s.to_string());
                         info.column = pg_err.column().map(|s| s.to_string());
-                        info.severity = Some(pg_err.severity().to_string());
+                        info.severity = Some(severity_to_string(&pg_err.severity()));
                     }
 
                     Some(info)
@@ -889,5 +889,18 @@ mod tests {
 
         let root = chained_error.root_cause();
         assert!(matches!(root, DatabaseError::QueryError(_)));
+    }
+}
+
+fn severity_to_string(severity: &sqlx::postgres::PgSeverity) -> String {
+    match severity {
+        sqlx::postgres::PgSeverity::Error => "ERROR".to_string(),
+        sqlx::postgres::PgSeverity::Fatal => "FATAL".to_string(),
+        sqlx::postgres::PgSeverity::Panic => "PANIC".to_string(),
+        sqlx::postgres::PgSeverity::Warning => "WARNING".to_string(),
+        sqlx::postgres::PgSeverity::Notice => "NOTICE".to_string(),
+        sqlx::postgres::PgSeverity::Debug => "DEBUG".to_string(),
+        sqlx::postgres::PgSeverity::Info => "INFO".to_string(),
+        sqlx::postgres::PgSeverity::Log => "LOG".to_string(),
     }
 }
