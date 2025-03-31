@@ -12,24 +12,40 @@ use crate::mock::MockRegistry;
 pub struct Expectation {
     /// The name of the method
     pub method: String,
-    // Other fields to be implemented
+    /// The expected arguments
+    pub args: Vec<String>,
+    /// The number of times the method is expected to be called
+    pub times: ExpectedTimes,
+    /// The return value
+    pub return_value: Option<Box<dyn Any + Send + Sync>>,
 }
 
 impl Expectation {
     /// Create a new expectation for a method
-    pub fn new(method: String) -> Self {
-        Self { method }
+    pub fn new<S: Into<String>>(method: S) -> Self {
+        Self {
+            method: method.into(),
+            args: Vec::new(),
+            times: ExpectedTimes::Any,
+            return_value: None,
+        }
     }
 
     /// Set the arguments for this expectation
-    pub fn with_args<S: Into<String>>(self, _args: Vec<S>) -> Self {
-        // Implementation to be added
+    pub fn with_args<S: Into<String>>(mut self, args: Vec<S>) -> Self {
+        self.args = args.into_iter().map(|a| a.into()).collect();
         self
     }
 
     /// Set the number of times this method is expected to be called
-    pub fn times(self, _times: ExpectedTimes) -> Self {
-        // Implementation to be added
+    pub fn times(mut self, times: ExpectedTimes) -> Self {
+        self.times = times;
+        self
+    }
+
+    /// Set the return value for this expectation
+    pub fn with_return(mut self, value: Box<dyn Any + Send + Sync>) -> Self {
+        self.return_value = Some(value);
         self
     }
 }
@@ -45,6 +61,18 @@ pub enum ExpectedTimes {
     AtMost(usize),
     /// The method is expected to be called any number of times
     Any,
+}
+
+impl ExpectedTimes {
+    /// Check if the actual number of calls satisfies this expectation
+    pub fn is_satisfied(&self, actual: usize) -> bool {
+        match self {
+            ExpectedTimes::Exact(expected) => actual == *expected,
+            ExpectedTimes::AtLeast(min) => actual >= *min,
+            ExpectedTimes::AtMost(max) => actual <= *max,
+            ExpectedTimes::Any => true,
+        }
+    }
 }
 
 /// Configuration for a mock object

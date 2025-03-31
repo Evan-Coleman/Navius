@@ -47,45 +47,45 @@ use std::sync::Arc;
 pub fn setup_common_mocks() -> Arc<crate::mock::MockRegistry> {
     let registry = Arc::new(crate::mock::MockRegistry::new());
 
-    // Register database mock
-    let db = database::MockDatabaseClient::new();
-    // let _ = db.register(&registry);
+    // Create and register database mock
+    let db = Arc::new(database::MockDatabaseClient::new());
+    let _ = registry.register::<dyn database::DatabaseClient, _>(db);
 
-    // Register filesystem mock
-    let fs = filesystem::MockFileSystem::new();
-    // let _ = fs.register(&registry);
+    // Create and register filesystem mock
+    let fs = Arc::new(filesystem::MockFileSystem::new());
+    let _ = registry.register::<dyn filesystem::FileSystem, _>(fs);
 
-    // Register HTTP client mock
-    let http = http::MockHttpClient::default();
-    // let _ = http.register(&registry);
+    // Create and register HTTP client mock
+    let http = Arc::new(http::MockHttpClient::default());
+    let _ = registry.register::<dyn http::HttpClient, _>(http);
 
-    // Register configuration mock
-    let config = config::MockConfigurationProvider::default();
-    // let _ = config.register(&registry);
+    // Create and register configuration mock
+    let config = Arc::new(config::MockConfigurationProvider::default());
+    let _ = registry.register::<dyn config::ConfigurationProvider, _>(config);
 
-    // Register authentication mock
-    let auth = auth::MockAuthProvider::default();
-    // let _ = auth.register(&registry);
+    // Create and register authentication mock
+    let auth = Arc::new(auth::MockAuthProvider::default());
+    let _ = registry.register::<dyn auth::AuthProvider, _>(auth);
 
-    // Register RBAC mock
-    let rbac = auth::MockRbacProvider::default();
-    // let _ = rbac.register(&registry);
+    // Create and register RBAC mock
+    let rbac = Arc::new(auth::MockRbacProvider::default());
+    let _ = registry.register::<dyn auth::RbacProvider, _>(rbac);
 
-    // Register logger mock
-    let logger = logger::MockLogger::new();
-    // let _ = logger.register(&registry);
+    // Create and register logger mock
+    let logger = Arc::new(logger::MockLogger::new());
+    let _ = registry.register::<dyn logger::Logger, _>(logger);
 
-    // Register metrics mock
-    let metrics = metrics::MockMetrics::new();
-    // let _ = metrics.register(&registry);
+    // Create and register metrics mock
+    let metrics = Arc::new(metrics::MockMetrics::new());
+    let _ = registry.register::<dyn metrics::MetricsCollector, _>(metrics);
 
-    // Register event broker mock
-    let event_broker = events::MockEventBroker::new();
-    // let _ = event_broker.register(&registry);
+    // Create and register event broker mock
+    let event_broker = Arc::new(events::MockEventBroker::new());
+    let _ = registry.register::<dyn events::EventBroker, _>(event_broker);
 
-    // Register message broker mock
-    let message_broker = messaging::MockMessageBroker::new();
-    // let _ = message_broker.register(&registry);
+    // Create and register message broker mock
+    let message_broker = Arc::new(messaging::MockMessageBroker::new());
+    let _ = registry.register::<dyn messaging::MessageBroker, _>(message_broker);
 
     registry
 }
@@ -203,11 +203,11 @@ pub struct MockFixture {
 }
 
 impl MockFixture {
-    /// Create a new mock fixture with all common mocks
+    /// Create a new mock fixture
     pub fn new() -> Self {
         let registry = Arc::new(crate::mock::MockRegistry::new());
 
-        // Create mock instances
+        // Create all mock components
         let database = Arc::new(database::MockDatabaseClient::new());
         let filesystem = Arc::new(filesystem::MockFileSystem::new());
         let http_client = Arc::new(http::MockHttpClient::default());
@@ -219,17 +219,46 @@ impl MockFixture {
         let event_broker = Arc::new(events::MockEventBroker::new());
         let message_broker = Arc::new(messaging::MockMessageBroker::new());
 
-        // Register with the registry
-        // let _ = database.register(&registry);
-        // let _ = filesystem.register(&registry);
-        // let _ = http_client.register(&registry);
-        // let _ = configuration.register(&registry);
-        // let _ = auth_provider.register(&registry);
-        // let _ = rbac_provider.register(&registry);
-        // let _ = logger.register(&registry);
-        // let _ = metrics.register(&registry);
-        // let _ = event_broker.register(&registry);
-        // let _ = message_broker.register(&registry);
+        // Register components with the registry
+        registry
+            .register::<dyn database::DatabaseClient, _>(database.clone())
+            .expect("Failed to register database client");
+
+        registry
+            .register::<dyn filesystem::FileSystem, _>(filesystem.clone())
+            .expect("Failed to register filesystem");
+
+        registry
+            .register::<dyn http::HttpClient, _>(http_client.clone())
+            .expect("Failed to register HTTP client");
+
+        registry
+            .register::<dyn config::ConfigurationProvider, _>(configuration.clone())
+            .expect("Failed to register configuration provider");
+
+        registry
+            .register::<dyn auth::AuthProvider, _>(auth_provider.clone())
+            .expect("Failed to register auth provider");
+
+        registry
+            .register::<dyn auth::RbacProvider, _>(rbac_provider.clone())
+            .expect("Failed to register RBAC provider");
+
+        registry
+            .register::<dyn logger::Logger, _>(logger.clone())
+            .expect("Failed to register logger");
+
+        registry
+            .register::<dyn metrics::MetricsCollector, _>(metrics.clone())
+            .expect("Failed to register metrics");
+
+        registry
+            .register::<dyn events::EventBroker, _>(event_broker.clone())
+            .expect("Failed to register event broker");
+
+        registry
+            .register::<dyn messaging::MessageBroker, _>(message_broker.clone())
+            .expect("Failed to register message broker");
 
         Self {
             registry,
@@ -253,14 +282,12 @@ impl MockFixture {
 
     /// Verify all mock expectations
     pub fn verify(&self) -> crate::error::TestResult<()> {
-        // self.registry.verify()
-        Ok(())
+        self.registry.verify()
     }
 
     /// Reset all mock expectations
     pub fn reset(&self) -> crate::error::TestResult<()> {
-        // self.registry.reset()
-        Ok(())
+        self.registry.reset()
     }
 }
 

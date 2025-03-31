@@ -149,8 +149,17 @@ impl<'a, T> MethodExpectBuilder<'a, T> {
             .with_args(self.args)
             .times(self.times);
 
-        // Note: Removed the expect method call as MockRegistry doesn't implement it yet
-        Ok(())
+        self.registry.add_expectation(&self.mock_name, expectation)
+    }
+
+    /// Set the return value for the method and build the expectation
+    pub fn returns<R: 'static + Clone + Send + Sync>(self, return_value: R) -> TestResult<()> {
+        let expectation = Expectation::new(self.method)
+            .with_args(self.args)
+            .times(self.times)
+            .with_return(Box::new(return_value));
+
+        self.registry.add_expectation(&self.mock_name, expectation)
     }
 }
 
