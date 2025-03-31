@@ -8,6 +8,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::api::middleware::CurrentUser;
+use crate::api::models::{PaginatedResponse, PaginationParams, SortParams};
 use crate::application::{UserFilter, UserService};
 use crate::domain::{Role, UserProfile, UserStatus};
 use crate::infrastructure::ServiceRegistry;
@@ -15,8 +16,10 @@ use crate::infrastructure::ServiceRegistry;
 /// User listing query parameters
 #[derive(Debug, Deserialize)]
 pub struct UserListParams {
-    pub page: Option<u32>,
-    pub limit: Option<u32>,
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
+    #[serde(flatten)]
+    pub sort: SortParams,
     pub role: Option<String>,
     pub status: Option<String>,
 }
@@ -141,7 +144,7 @@ pub async fn get_users(
     State(registry): State<Arc<ServiceRegistry>>,
     Query(params): Query<UserListParams>,
     _current_user: CurrentUser, // Ensure user is authenticated
-) -> Result<Json<Vec<UserResponse>>> {
+) -> Result<Json<PaginatedResponse<UserResponse>>> {
     let user_service = registry.user_service();
 
     // Create filter
@@ -157,19 +160,28 @@ pub async fn get_users(
     }
 
     // Set pagination
-    filter.page = params.page;
-    filter.limit = params.limit;
+    filter.page = params.pagination.page;
+    filter.limit = params.pagination.per_page;
 
-    // Get users with filter
-    let users = user_service
-        .get_users(filter)
+    // Set sorting
+    if let Some(sort_field) = &params.sort.sort {
+        filter.sort_by = Some(sort_field.clone());
+        filter.sort_direction = params.sort.order.clone();
+    }
+
+    // Get users with filter and total count
+    let (users, total_count) = user_service
+        .get_users_with_count(filter)
         .await
         .map_err(|e| Error::internal_server_error(format!("Failed to get users: {}", e.message)))?;
 
     // Convert to response format
     let user_responses = users.iter().map(map_user_to_response).collect();
 
-    Ok(Json(user_responses))
+    // Create paginated response
+    let response = PaginatedResponse::from_params(user_responses, &params.pagination, total_count);
+
+    Ok(Json(response))
 }
 
 /// Get user by ID

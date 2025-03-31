@@ -9,6 +9,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::api::middleware::CurrentUser;
+use crate::api::models::{PaginatedResponse, PaginationParams, SortParams};
 use crate::application::{TaskFilter, TaskService};
 use crate::domain::{Priority, TaskStatus};
 use crate::infrastructure::ServiceRegistry;
@@ -16,8 +17,10 @@ use crate::infrastructure::ServiceRegistry;
 /// Task listing query parameters
 #[derive(Debug, Deserialize)]
 pub struct TaskListParams {
-    pub page: Option<u32>,
-    pub limit: Option<u32>,
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
+    #[serde(flatten)]
+    pub sort: SortParams,
     pub status: Option<String>,
     pub priority: Option<String>,
     pub assigned_to: Option<String>,
@@ -162,7 +165,7 @@ pub async fn get_tasks(
     State(registry): State<Arc<ServiceRegistry>>,
     Query(params): Query<TaskListParams>,
     _current_user: CurrentUser, // Ensure user is authenticated
-) -> Result<Json<Vec<TaskResponse>>> {
+) -> Result<Json<PaginatedResponse<TaskResponse>>> {
     // Parse query parameters
     let task_service = registry.task_service();
 
@@ -199,28 +202,54 @@ pub async fn get_tasks(
         );
     }
 
+    if let Some(tag_ids_str) = &params.tag_ids {
+        let tag_ids: HashSet<Uuid> = tag_ids_str
+            .split(',')
+            .filter_map(|id_str| {
+                Uuid::parse_str(id_str.trim())
+                    .map_err(|_| {
+                        Error::validation_error(format!("Invalid tag ID format: {}", id_str))
+                    })
+                    .ok()
+            })
+            .collect();
+
+        if !tag_ids.is_empty() {
+            filter.tag_ids = Some(tag_ids);
+        }
+    }
+
     if let Some(due_before_str) = &params.due_before {
-        filter.due_date_before = Some(parse_date(due_before_str)?);
+        filter.due_before = Some(parse_date(due_before_str)?);
     }
 
     if let Some(due_after_str) = &params.due_after {
-        filter.due_date_after = Some(parse_date(due_after_str)?);
+        filter.due_after = Some(parse_date(due_after_str)?);
     }
 
-    if let Some(tags_str) = &params.tag_ids {
-        filter.tags = Some(tags_str.split(',').map(|s| s.trim().to_string()).collect());
+    // Set pagination
+    filter.page = params.pagination.page;
+    filter.limit = params.pagination.per_page;
+
+    // Set sorting
+    if let Some(sort_field) = &params.sort.sort {
+        filter.sort_by = Some(sort_field.clone());
+        filter.sort_direction = params.sort.order.clone();
     }
 
-    // Get tasks with filter
-    let tasks = task_service
-        .get_tasks(filter)
+    // Get tasks with filter and total count
+    let (tasks, total_count) = task_service
+        .get_tasks_with_count(filter)
         .await
         .map_err(|e| Error::internal_server_error(format!("Failed to get tasks: {}", e.message)))?;
 
     // Convert to response format
     let task_responses = tasks.iter().map(map_task_to_response).collect();
 
-    Ok(Json(task_responses))
+    // Create paginated response
+    let response = PaginatedResponse::from_params(task_responses, &params.pagination, total_count);
+
+    Ok(Json(response))
 }
 
 /// Get task by ID
