@@ -31,6 +31,10 @@ tempfile = "3.19.1"
 mockall = "0.13.1"
 regex = "1.11.1"
 
+# Additional dependencies
+num_cpus = { workspace = true }
+glob-match = "0.2.1"
+
 [dev-dependencies]
 pretty_assertions = "1.4.1"
 

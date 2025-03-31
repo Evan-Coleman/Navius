@@ -428,7 +428,9 @@ impl IntegrationContext {
             .lock()
             .map_err(|_| TestError::concurrency_error("Failed to acquire lock for env vars"))?;
         env_vars.insert(key.to_string(), value.to_string());
-        std::env::set_var(key, value);
+        unsafe {
+            std::env::set_var(key, value);
+        }
         Ok(())
     }
 
@@ -818,10 +820,10 @@ impl Drop for IntegrationContext {
         let _ = self.execute_hooks(&self.config.lifecycle_hooks.before_teardown);
 
         // Restore original environment variables
-        for (key, value) in &self.original_env {
-            match value {
-                Some(val) => std::env::set_var(key, val),
-                None => std::env::remove_var(key),
+        for (key, val) in &self.original_env {
+            match val {
+                Some(val) => unsafe { std::env::set_var(key, val) },
+                None => unsafe { std::env::remove_var(key) },
             }
         }
 
