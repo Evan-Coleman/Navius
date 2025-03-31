@@ -1,53 +1,77 @@
 [package]
 name = "navius"
-version = "0.1.0"
-edition = "2024"
-authors = ["Navius Contributors"]
-license = "Apache-2.0"
-repository = "https://github.com/navius/navius"
-description = "Enterprise-grade web application framework built in Rust"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Navius - Modern, secure web framework for Rust"
 
 [dependencies]
 # Core crates
-navius-core = { workspace = true }
-navius-http = { workspace = true }
-navius-auth = { workspace = true }
-navius-auth-entra = { workspace = true }
-navius-db = { workspace = true }
-navius-db-postgres = { workspace = true }
-navius-cache = { workspace = true }
-navius-cache-redis = { workspace = true }
-navius-di = { workspace = true }
-navius-plugin = { workspace = true }
-navius-event = { workspace = true }
-navius-job = { workspace = true }
-navius-messaging = { workspace = true }
-navius-metrics = { workspace = true }
-navius-metrics-prometheus = { workspace = true }
+navius-core = { path = "../crates/navius-core" }
+navius-http = { path = "../crates/navius-http" }
+navius-auth = { path = "../crates/navius-auth" }
+navius-auth-entra = { path = "../crates/navius-auth-entra", optional = true }
+navius-db = { path = "../crates/navius-db", optional = true }
+navius-db-postgres = { path = "../crates/navius-db-postgres", optional = true }
+navius-cache = { path = "../crates/navius-cache", optional = true }
+navius-cache-redis = { path = "../crates/navius-cache-redis", optional = true }
+navius-di = { path = "../crates/navius-di" }
+navius-plugin = { path = "../crates/navius-plugin", optional = true }
+navius-event = { path = "../crates/navius-event", optional = true }
+navius-job = { path = "../crates/navius-job", optional = true }
+navius-messaging = { path = "../crates/navius-messaging", optional = true }
+navius-metrics = { path = "../crates/navius-metrics", optional = true }
+navius-metrics-prometheus = { path = "../crates/navius-metrics-prometheus", optional = true }
 
 # External dependencies
-tokio = { workspace = true }
-axum = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
+tokio.workspace = true
+axum.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+sqlx = { workspace = true, optional = true }
+redis = { workspace = true, optional = true }
+config.workspace = true
+dotenvy.workspace = true
+
+# For OpenAPI specification
+utoipa = { version = "5.3.1", features = ["axum_extras", "uuid", "chrono"], optional = true }
+utoipa-swagger-ui = { version = "9.0.0", features = ["axum"], optional = true }
+
+[dev-dependencies]
+tokio-test.workspace = true
+mockall.workspace = true
 
 [features]
 default = ["full"]
 full = [
-    "web", 
-    "auth", 
-    "db", 
-    "cache", 
-    "metrics",
-    "events",
-    "plugins"
+  "database",
+  "cache",
+  "entra-auth",
+  "plugin",
+  "event",
+  "job",
+  "messaging",
+  "metrics",
+  "openapi"
 ]
-web = []
-auth = []
-db = []
-cache = []
-metrics = []
-events = []
-plugins = [] 
+database = ["navius-db", "navius-db-postgres", "sqlx"]
+cache = ["navius-cache", "navius-cache-redis", "redis"]
+entra-auth = ["navius-auth-entra"]
+plugin = ["navius-plugin"]
+event = ["navius-event"]
+job = ["navius-job"]
+messaging = ["navius-messaging"]
+metrics = ["navius-metrics", "navius-metrics-prometheus"]
+openapi = ["utoipa", "utoipa-swagger-ui"]
+production = []
+test = [] 
