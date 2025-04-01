@@ -289,16 +289,19 @@ impl Pipeline for RedisPipelineImpl {
     #[instrument(skip(self), level = "debug")]
     pub async fn execute(&self) -> RedisCacheResult<()> {
         let key = self.key.clone();
-        let prefixed_key = self.connection_manager.prefixed_key(&key);
         let pipeline = self.pipeline.clone();
+        let timer = metrics::TimedOperation::new(metrics::names::PIPELINE_EXECUTE);
 
-        self.cache
+        let result = self
             .connection_manager
-            .execute_command(&prefixed_key, "PIPELINE_EXECUTE", |mut conn| async move {
+            .execute_command(&key, "PIPELINE_EXECUTE", |mut conn| async move {
                 pipeline.query_async(&mut conn).await?;
                 Ok(())
             })
-            .await
+            .await;
+
+        timer.record(&result);
+        result
     }
 }
 
