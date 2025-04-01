@@ -19,13 +19,16 @@ pub trait Capability: Any + Send + Sync + Debug {
     fn as_any_mut(&mut self) -> &mut dyn Any;
 
     /// Get the capability type ID
-    fn capability_type(&self) -> &'static str;
+    fn capability_type(&self) -> &'static str {
+        // Default implementation returns the name as the type
+        self.name()
+    }
 
     /// Get the capability ID
-    fn id(&self) -> &str;
-
-    /// Clone the capability as a boxed dyn Capability
-    fn clone_capability(&self) -> Box<dyn Capability>;
+    fn id(&self) -> &str {
+        // Default implementation returns the name as the ID
+        self.name()
+    }
 }
 
 /// Helper function to downcast a capability to a specific type

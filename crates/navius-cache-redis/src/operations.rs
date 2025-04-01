@@ -1,652 +1,860 @@
-use async_trait::async_trait;
-use redis::{AsyncCommands, FromRedisValue, cmd};
-use serde::{Serialize, de::DeserializeOwned};
-use std::sync::Arc;
-use std::time::Duration;
+use redis::{aio::ConnectionManager, AsyncCommands, RedisError};
+use std::{fmt::Debug, marker::PhantomData, sync::Arc, time::Duration};
+use tokio::time::timeout;
 use tracing::{debug, error, instrument};
 
-use navius_cache::{
-    error::{CacheError, CacheResult},
-    operations::Cache,
-    serialization::{CacheSerializer, JsonSerializer},
-};
+use crate::{connection::RedisConnectionManager, error::RedisCacheError, metrics};
+use navius_cache::{error::CacheError, CacheKey, CacheOperations, CacheOptions};
+use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{
-    config::RedisCacheConfig,
-    connection::RedisConnectionManager,
-    error::{RedisCacheError, RedisCacheResult},
-    lua::{RedisLuaManager, initialize_common_scripts},
-    metrics,
-};
+pub type CacheResult<T> = Result<T, RedisCacheError>;
 
-/// Redis cache implementation
-pub struct RedisCache {
-    /// Connection manager for Redis
-    connection_manager: Arc<RedisConnectionManager>,
-    /// Serializer for cache values
-    serializer: Box<dyn CacheSerializer + Send + Sync>,
-    /// Lua script manager
-    lua_manager: Option<Arc<RedisLuaManager>>,
+pub struct RedisOperations<K, V>
+where
+    K: CacheKey + 'static + std::fmt::Debug,
+    V: Serialize + Send + Sync + 'static + std::fmt::Debug,
+{
+    pub(crate) connection_manager: Arc<RedisConnectionManager>,
+    _phantom: PhantomData<(K, V)>,
 }
 
-impl RedisCache {
-    /// Create a new Redis cache with default configuration
+impl<K, V> RedisOperations<K, V>
+where
+    K: CacheKey + 'static + std::fmt::Debug,
+    V: Serialize + Send + Sync + 'static + std::fmt::Debug,
+{
     pub fn new(connection_manager: Arc<RedisConnectionManager>) -> Self {
-        Self::with_serializer(connection_manager, JsonSerializer)
-    }
-
-    /// Create a new Redis cache with custom serializer
-    pub fn with_serializer<S: CacheSerializer + Send + Sync + 'static>(
-        connection_manager: Arc<RedisConnectionManager>,
-        serializer: S,
-    ) -> Self {
-        // Create the Redis cache instance
-        let mut cache = Self {
+        Self {
             connection_manager,
-            serializer: Box::new(serializer),
-            lua_manager: None,
-        };
-
-        // Initialize the Lua manager
-        let lua_manager = Arc::new(RedisLuaManager::new(cache.connection_manager().clone()));
-        cache.lua_manager = Some(lua_manager);
-
-        cache
+            _phantom: PhantomData,
+        }
     }
 
-    /// Get the connection manager
-    pub fn connection_manager(&self) -> &Arc<RedisConnectionManager> {
+    pub fn get_connection_manager(&self) -> &RedisConnectionManager {
         &self.connection_manager
     }
 
-    /// Get the serializer
-    pub fn serializer(&self) -> &dyn CacheSerializer {
-        self.serializer.as_ref()
-    }
-
-    /// Get the Lua manager
-    pub fn lua_manager(&self) -> Option<&Arc<RedisLuaManager>> {
-        self.lua_manager.as_ref()
-    }
-
-    /// Enable Lua scripting support
-    pub fn with_lua_scripting(mut self) -> Self {
-        if self.lua_manager.is_none() {
-            let lua_manager = Arc::new(RedisLuaManager::new(self.connection_manager().clone()));
-            self.lua_manager = Some(lua_manager);
-        }
-        self
-    }
-
-    /// Execute a raw Lua script with the given arguments
-    #[instrument(skip(self, script, keys, args), level = "debug")]
-    pub async fn execute_raw_script<T: FromRedisValue + Send + Sync>(
-        &self,
-        script: &str,
-        keys: &[&str],
-        args: &[&str],
-    ) -> RedisCacheResult<T> {
-        if let Some(lua_manager) = &self.lua_manager {
-            match lua_manager.execute_script("raw", keys, args).await {
-                Ok(result) => Ok(result),
-                Err(err) => Err(RedisCacheError::ScriptError(err.to_string())),
+    pub fn into_cache_error(err: RedisCacheError) -> CacheError {
+        match err {
+            RedisCacheError::ConnectionError(msg) => CacheError::ConnectionError(msg),
+            RedisCacheError::OperationError(msg) => CacheError::OperationError(msg),
+            RedisCacheError::SerializationError(msg) => CacheError::SerializationError(msg),
+            RedisCacheError::DeserializationError(msg) => CacheError::SerializationError(msg),
+            RedisCacheError::Timeout => {
+                CacheError::TimeoutError("Redis operation timed out".to_string())
             }
-        } else {
-            Err(RedisCacheError::ScriptError(
-                "Lua scripting not enabled".to_string(),
-            ))
+            RedisCacheError::Redis(err) => CacheError::BackendError(err.to_string()),
         }
     }
 
-    /// Register a script for later execution
-    #[instrument(skip(self, name, script), level = "debug")]
-    pub async fn register_script(&self, name: &str, script: &str) -> RedisCacheResult<()> {
-        if let Some(lua_manager) = &self.lua_manager {
-            match lua_manager.register_script(name, script).await {
-                Ok(_) => Ok(()),
-                Err(err) => Err(RedisCacheError::ScriptError(err.to_string())),
-            }
-        } else {
-            Err(RedisCacheError::ScriptError(
-                "Lua scripting not enabled".to_string(),
-            ))
-        }
-    }
+    #[instrument(skip(self, value), level = "debug")]
+    pub async fn set<K, V>(&self, key: K, value: V, ttl: Option<Duration>) -> CacheResult<()>
+    where
+        K: CacheKey + 'static + std::fmt::Debug,
+        V: Serialize + Send + Sync + 'static + std::fmt::Debug,
+    {
+        let mut conn = self.connection_manager.get_connection().await?;
+        let key = self.connection_manager.prefix_key(&key.to_string());
+        let serialized =
+            serde_json::to_string(&value).map_err(|e| RedisCacheError::SerializationError(e))?;
 
-    /// Check and increment a counter atomically with a maximum value.
-    /// Returns true if the counter was incremented successfully, false if it reached the maximum.
-    #[instrument(skip(self), level = "debug")]
-    pub async fn check_and_increment_counter(
-        &self,
-        key: &str,
-        max_value: i64,
-        ttl: Option<Duration>,
-    ) -> RedisCacheResult<bool> {
-        if let Some(lua_manager) = &self.lua_manager {
-            let script = r#"
-            local current = tonumber(redis.call('GET', KEYS[1])) or 0
-            if current < tonumber(ARGV[1]) then
-                redis.call('INCR', KEYS[1])
-                if ARGV[2] ~= '' then
-                    redis.call('EXPIRE', KEYS[1], ARGV[2])
-                end
-                return 1
-            else
-                return 0
-            end
-            "#;
+        let result = timeout(
+            self.connection_manager.command_timeout,
+            conn.set(&key, &serialized),
+        )
+        .await;
 
-            // Register the script if not already registered
-            if !lua_manager.script_exists("check_and_increment") {
-                match lua_manager
-                    .register_script("check_and_increment", script)
-                    .await
-                {
-                    Ok(_) => {}
-                    Err(err) => return Err(RedisCacheError::ScriptError(err.to_string())),
+        match result {
+            Ok(Ok(_)) => {
+                if let Some(ttl) = ttl {
+                    let ttl_secs: i64 = ttl.as_secs().try_into().map_err(|_| {
+                        RedisCacheError::OperationError(ToString::to_string("TTL value too large"))
+                    })?;
+                    let result = timeout(
+                        self.connection_manager.command_timeout,
+                        conn.expire(&key, ttl_secs),
+                    )
+                    .await;
+
+                    match result {
+                        Ok(Ok(_)) => Ok(()),
+                        Ok(Err(e)) => Err(RedisCacheError::OperationError(ToString::to_string(&e))),
+                        Err(_) => Err(RedisCacheError::Timeout(ToString::to_string(
+                            "Operation timed out",
+                        ))),
+                    }
+                } else {
+                    Ok(())
                 }
             }
-
-            let prefixed_key = self.connection_manager.prefixed_key(key);
-            let ttl_seconds = ttl.map(|t| t.as_secs().to_string()).unwrap_or_default();
-
-            match lua_manager
-                .execute_script::<i64>(
-                    "check_and_increment",
-                    &[&prefixed_key],
-                    &[&max_value.to_string(), &ttl_seconds],
-                )
-                .await
-            {
-                Ok(result) => Ok(result == 1),
-                Err(err) => Err(RedisCacheError::ScriptError(err.to_string())),
-            }
-        } else {
-            Err(RedisCacheError::ScriptError(
-                "Lua scripting not enabled".to_string(),
-            ))
+            Ok(Err(e)) => Err(RedisCacheError::OperationError(ToString::to_string(&e))),
+            Err(_) => Err(RedisCacheError::Timeout(ToString::to_string(
+                "Operation timed out",
+            ))),
         }
     }
 
-    /// Set a value only if the key doesn't exist (atomic SETNX with TTL)
-    #[instrument(skip(self, value), level = "debug")]
-    pub async fn set_if_not_exists<T: Serialize + Send + Sync>(
-        &self,
-        key: &str,
-        value: &T,
-        ttl: Option<Duration>,
-    ) -> RedisCacheResult<bool> {
-        if let Some(lua_manager) = &self.lua_manager {
-            let serialized = self
-                .serializer
-                .serialize(value)
-                .await
-                .map_err(|e| RedisCacheError::Serialization(e.to_string()))?;
+    #[instrument(skip(self), level = "debug")]
+    pub async fn get<K, V>(&self, key: K) -> CacheResult<Option<V>>
+    where
+        K: CacheKey + 'static + std::fmt::Debug,
+        V: DeserializeOwned + Send + Sync + 'static + std::fmt::Debug,
+    {
+        let mut conn = self.connection_manager.get_connection().await?;
+        let key = self.connection_manager.prefix_key(&key.to_string());
 
-            match lua_manager
-                .atomic_set_nx(
-                    key,
-                    &value,
-                    ttl.unwrap_or(Duration::from_secs(3600)), // Default 1 hour TTL
-                )
-                .await
-            {
-                Ok(result) => Ok(result),
-                Err(err) => Err(RedisCacheError::ScriptError(err.to_string())),
+        let result = timeout(
+            self.connection_manager.command_timeout,
+            conn.get::<_, Option<String>>(&key),
+        )
+        .await;
+
+        match result {
+            Ok(Ok(Some(value))) => {
+                let deserialized = serde_json::from_str(&value)
+                    .map_err(|e| RedisCacheError::SerializationError(e))?;
+                Ok(Some(deserialized))
             }
-        } else {
-            Err(RedisCacheError::ScriptError(
-                "Lua scripting not enabled".to_string(),
-            ))
+            Ok(Ok(None)) => Ok(None),
+            Ok(Err(e)) => Err(RedisCacheError::OperationError(ToString::to_string(&e))),
+            Err(_) => Err(RedisCacheError::Timeout(ToString::to_string(
+                "Operation timed out",
+            ))),
         }
     }
 
-    /// Get a raw Redis value by key
     #[instrument(skip(self), level = "debug")]
-    pub async fn get_raw(&self, key: &str) -> RedisCacheResult<Option<Vec<u8>>> {
-        let timer = metrics::TimedOperation::new(metrics::names::GET);
-        let result = self
-            .connection_manager
-            .execute_command(key, "GET", |mut conn| conn.get(key))
-            .await;
+    pub async fn delete<K>(&self, key: K) -> CacheResult<bool>
+    where
+        K: CacheKey + std::fmt::Debug,
+    {
+        let mut conn = self.connection_manager.get_connection().await?;
+        let key = self.connection_manager.prefix_key(&key.to_string());
 
-        timer.record(&result);
-        result
+        let result = timeout(
+            self.connection_manager.command_timeout,
+            conn.del::<_, i64>(&key),
+        )
+        .await;
+
+        match result {
+            Ok(Ok(deleted)) => Ok(deleted > 0),
+            Ok(Err(e)) => Err(RedisCacheError::OperationError(ToString::to_string(&e))),
+            Err(_) => Err(RedisCacheError::Timeout(ToString::to_string(
+                "Operation timed out",
+            ))),
+        }
     }
 
-    /// Set a raw Redis value by key
-    #[instrument(skip(self, value), level = "debug")]
-    pub async fn set_raw(&self, key: &str, value: Vec<u8>) -> RedisCacheResult<()> {
-        let timer = metrics::TimedOperation::new(metrics::names::SET);
-        let result = self
-            .connection_manager
-            .execute_command(key, "SET", |mut conn| conn.set(key, value))
-            .await;
-
-        timer.record(&result);
-        result
-    }
-
-    /// Check if a key exists in Redis
     #[instrument(skip(self), level = "debug")]
-    pub async fn exists(&self, key: &str) -> RedisCacheResult<bool> {
-        let timer = metrics::TimedOperation::new(metrics::names::EXISTS);
-        let result = self
-            .connection_manager
-            .execute_command(key, "EXISTS", |mut conn| conn.exists(key))
-            .await;
+    pub async fn exists<K>(&self, key: K) -> CacheResult<bool>
+    where
+        K: CacheKey + std::fmt::Debug,
+    {
+        let mut conn = self.connection_manager.get_connection().await?;
+        let key = self.connection_manager.prefix_key(&key.to_string());
 
-        timer.record(&result);
-        result
+        let result = timeout(
+            self.connection_manager.command_timeout,
+            conn.exists::<_, bool>(&key),
+        )
+        .await;
+
+        match result {
+            Ok(Ok(exists)) => Ok(exists),
+            Ok(Err(e)) => Err(RedisCacheError::OperationError(ToString::to_string(&e))),
+            Err(_) => Err(RedisCacheError::Timeout(ToString::to_string(
+                "Operation timed out",
+            ))),
+        }
     }
 
-    /// Delete a key from Redis
     #[instrument(skip(self), level = "debug")]
-    pub async fn delete(&self, key: &str) -> RedisCacheResult<bool> {
-        let timer = metrics::TimedOperation::new(metrics::names::DELETE);
-        let result = self
-            .connection_manager
-            .execute_command(key, "DEL", |mut conn| {
-                let res: i32 = redis::cmd("DEL").arg(key).query(&mut conn)?;
-                Ok(res > 0)
-            })
-            .await;
+    pub async fn expire<K>(&self, key: K, ttl: Duration) -> CacheResult<bool>
+    where
+        K: CacheKey + std::fmt::Debug,
+    {
+        let mut conn = self.connection_manager.get_connection().await?;
+        let key = self.connection_manager.prefix_key(&key.to_string());
 
-        timer.record(&result);
-        result
+        let result = timeout(
+            self.connection_manager.command_timeout,
+            conn.expire::<_, bool>(&key, ttl.as_secs() as i64),
+        )
+        .await;
+
+        match result {
+            Ok(Ok(set)) => Ok(set),
+            Ok(Err(e)) => Err(RedisCacheError::OperationError(ToString::to_string(&e))),
+            Err(_) => Err(RedisCacheError::Timeout(ToString::to_string(
+                "Operation timed out",
+            ))),
+        }
     }
 
-    /// Set the expiration time for a key
     #[instrument(skip(self), level = "debug")]
-    pub async fn expire(&self, key: &str, seconds: usize) -> RedisCacheResult<bool> {
-        let timer = metrics::TimedOperation::new(metrics::names::EXPIRE);
-        let result = self
-            .connection_manager
-            .execute_command(key, "EXPIRE", |mut conn| {
-                let res: i32 = redis::cmd("EXPIRE")
-                    .arg(key)
-                    .arg(seconds)
-                    .query(&mut conn)?;
-                Ok(res > 0)
-            })
-            .await;
+    pub async fn increment<K>(&self, key: K, amount: i64) -> CacheResult<i64>
+    where
+        K: CacheKey + std::fmt::Debug,
+    {
+        let mut conn = self.connection_manager.get_connection().await?;
+        let key = self.connection_manager.prefix_key(&key.to_string());
 
-        timer.record(&result);
-        result
+        let result = timeout(
+            self.connection_manager.command_timeout,
+            conn.incr::<_, _, i64>(&key, amount),
+        )
+        .await;
+
+        match result {
+            Ok(Ok(value)) => Ok(value),
+            Ok(Err(e)) => Err(RedisCacheError::OperationError(ToString::to_string(&e))),
+            Err(_) => Err(RedisCacheError::Timeout(ToString::to_string(
+                "Operation timed out",
+            ))),
+        }
     }
 
-    /// Get the time-to-live for a key in seconds
     #[instrument(skip(self), level = "debug")]
-    pub async fn ttl(&self, key: &str) -> RedisCacheResult<i64> {
-        let timer = metrics::TimedOperation::new(metrics::names::TTL);
-        let result = self
-            .connection_manager
-            .execute_command(key, "TTL", |mut conn| {
-                let res: i64 = redis::cmd("TTL").arg(key).query(&mut conn)?;
-                Ok(res)
-            })
-            .await;
+    pub async fn flush(&self) -> CacheResult<()> {
+        let mut conn = self.connection_manager.get_connection().await?;
 
-        timer.record(&result);
-        result
+        timeout(
+            self.connection_manager.get_command_timeout(),
+            redis::cmd("FLUSHDB").query_async(&mut conn),
+        )
+        .await
+        .map_err(|_| RedisCacheError::Timeout(ToString::to_string("Flush operation timeout")))?
+        .map_err(|e| RedisCacheError::OperationError(ToString::to_string(&e)))?;
+
+        Ok(())
     }
 
-    // === List operations ===
-
-    /// Push a value to the end of a list
-    #[instrument(skip(self, value), level = "debug")]
-    pub async fn list_push(&self, key: &str, value: Vec<u8>) -> RedisCacheResult<usize> {
-        let timer = metrics::TimedOperation::new(metrics::names::LIST_PUSH);
-        let result = self
-            .connection_manager
-            .execute_command(key, "RPUSH", |mut conn| {
-                let len: usize = redis::cmd("RPUSH").arg(key).arg(value).query(&mut conn)?;
-                Ok(len)
-            })
-            .await;
-
-        timer.record(&result);
-        result
-    }
-
-    /// Pop a value from the end of a list
+    /// Get multiple values by keys
     #[instrument(skip(self), level = "debug")]
-    pub async fn list_pop(&self, key: &str) -> RedisCacheResult<Option<Vec<u8>>> {
-        let timer = metrics::TimedOperation::new(metrics::names::LIST_POP);
-        let result = self
-            .connection_manager
-            .execute_command(key, "RPOP", |mut conn| {
-                let res: Option<Vec<u8>> = redis::cmd("RPOP").arg(key).query(&mut conn)?;
-                Ok(res)
-            })
-            .await;
+    pub async fn get_many<T>(&self, keys: &[&str]) -> CacheResult<Vec<Option<T>>>
+    where
+        T: DeserializeOwned + Send + 'static,
+    {
+        if keys.is_empty() {
+            return Ok(Vec::new());
+        }
 
-        timer.record(&result);
-        result
+        let prefixed_keys: Vec<String> = keys
+            .iter()
+            .map(|&k| self.connection_manager.prefix_key(k))
+            .collect();
+
+        let key_refs: Vec<&str> = prefixed_keys.iter().map(|k| k.as_str()).collect();
+
+        let operation = metrics::names::GET_MANY;
+
+        self.connection_manager
+            .execute_command(&key_refs.join(","), operation, |conn| async move {
+                let results: Vec<Option<Vec<u8>>> = conn.get(key_refs.as_slice()).await?;
+
+                Ok(results)
+            })
+            .await?
+            .into_iter()
+            .map(|value| match value {
+                Some(bytes) => match serde_json::from_slice(&bytes) {
+                    Ok(value) => Ok(Some(value)),
+                    Err(e) => Err(RedisCacheError::DeserializationError(e)),
+                },
+                None => Ok(None),
+            })
+            .collect()
     }
 
-    /// Get a range of values from a list
     #[instrument(skip(self), level = "debug")]
-    pub async fn list_range(
-        &self,
-        key: &str,
-        start: isize,
-        stop: isize,
-    ) -> RedisCacheResult<Vec<Vec<u8>>> {
-        let timer = metrics::TimedOperation::new(metrics::names::LIST_RANGE);
-        let result = self
-            .connection_manager
-            .execute_command(key, "LRANGE", |mut conn| {
-                let res: Vec<Vec<u8>> = redis::cmd("LRANGE")
-                    .arg(key)
-                    .arg(start)
-                    .arg(stop)
-                    .query(&mut conn)?;
-                Ok(res)
-            })
-            .await;
+    pub async fn set_many<T>(&self, pairs: &[(&str, &T)], ttl: Option<Duration>) -> CacheResult<()>
+    where
+        T: Serialize + Send + Sync + 'static + Debug,
+    {
+        if pairs.is_empty() {
+            return Ok(());
+        }
 
-        timer.record(&result);
-        result
+        let operation = metrics::names::SET_MANY;
+        let mut serialized_pairs = Vec::with_capacity(pairs.len());
+
+        for (key, value) in pairs {
+            let prefixed_key = self
+                .connection_manager
+                .prefix_key(&ToString::to_string(key));
+            let serialized = self.connection_manager.serialize(value).await?;
+            serialized_pairs.push((prefixed_key, serialized));
+        }
+
+        self.connection_manager
+            .execute_command("multiple_keys", operation, |conn| async move {
+                conn.mset(&serialized_pairs).await?;
+
+                if let Some(ttl) = ttl {
+                    for (key, _) in &serialized_pairs {
+                        conn.expire(key, ttl.as_secs() as i64).await?;
+                    }
+                }
+
+                Ok(())
+            })
+            .await
     }
 
-    /// Get the length of a list
     #[instrument(skip(self), level = "debug")]
-    pub async fn list_len(&self, key: &str) -> RedisCacheResult<usize> {
-        let timer = metrics::TimedOperation::new(metrics::names::LIST_LENGTH);
-        let result = self
-            .connection_manager
-            .execute_command(key, "LLEN", |mut conn| {
-                let len: usize = redis::cmd("LLEN").arg(key).query(&mut conn)?;
-                Ok(len)
-            })
-            .await;
+    pub async fn delete_many(&self, keys: &[&str]) -> CacheResult<u64> {
+        if keys.is_empty() {
+            return Ok(0);
+        }
 
-        timer.record(&result);
-        result
+        let prefixed_keys: Vec<String> = keys
+            .iter()
+            .map(|k| self.connection_manager.prefix_key(&ToString::to_string(k)))
+            .collect();
+        let operation = metrics::names::DELETE_MANY;
+
+        self.connection_manager
+            .execute_command(&prefixed_keys.join(","), operation, |conn| async move {
+                let result: i64 = conn.del(prefixed_keys.as_slice()).await?;
+                Ok(result as u64)
+            })
+            .await
     }
 
-    // === Set operations ===
-
-    /// Add a member to a set
-    #[instrument(skip(self, member), level = "debug")]
-    pub async fn set_add(&self, key: &str, member: Vec<u8>) -> RedisCacheResult<bool> {
-        let timer = metrics::TimedOperation::new(metrics::names::SET_ADD);
-        let result = self
-            .connection_manager
-            .execute_command(key, "SADD", |mut conn| {
-                let added: i32 = redis::cmd("SADD").arg(key).arg(member).query(&mut conn)?;
-                Ok(added > 0)
-            })
-            .await;
-
-        timer.record(&result);
-        result
-    }
-
-    /// Remove a member from a set
-    #[instrument(skip(self, member), level = "debug")]
-    pub async fn set_remove(&self, key: &str, member: Vec<u8>) -> RedisCacheResult<bool> {
-        let timer = metrics::TimedOperation::new(metrics::names::SET_REMOVE);
-        let result = self
-            .connection_manager
-            .execute_command(key, "SREM", |mut conn| {
-                let removed: i32 = redis::cmd("SREM").arg(key).arg(member).query(&mut conn)?;
-                Ok(removed > 0)
-            })
-            .await;
-
-        timer.record(&result);
-        result
-    }
-
-    /// Get all members of a set
     #[instrument(skip(self), level = "debug")]
-    pub async fn set_members(&self, key: &str) -> RedisCacheResult<Vec<Vec<u8>>> {
-        let timer = metrics::TimedOperation::new(metrics::names::SET_MEMBERS);
-        let result = self
-            .connection_manager
-            .execute_command(key, "SMEMBERS", |mut conn| {
-                let members: Vec<Vec<u8>> = redis::cmd("SMEMBERS").arg(key).query(&mut conn)?;
-                Ok(members)
-            })
-            .await;
+    pub async fn set_with_ttl(&self, key: &str, value: &str, ttl: Duration) -> CacheResult<()> {
+        let mut conn = self.connection_manager.get_connection().await?;
+        let result = timeout(self.connection_manager.command_timeout, async {
+            conn.set(key, value).await?;
+            let ttl_secs: i64 = ttl.as_secs().try_into().map_err(|_| {
+                RedisCacheError::OperationError(ToString::to_string("TTL value too large"))
+            })?;
+            conn.expire(key, ttl_secs).await
+        })
+        .await;
 
-        timer.record(&result);
-        result
+        match result {
+            Ok(Ok(_)) => Ok(()),
+            Ok(Err(e)) => Err(RedisCacheError::OperationError(ToString::to_string(&e))),
+            Err(_) => Err(RedisCacheError::Timeout(ToString::to_string(
+                "Operation timed out",
+            ))),
+        }
     }
 
-    // === Hash operations ===
-
-    /// Set a field in a hash
-    #[instrument(skip(self, field, value), level = "debug")]
-    pub async fn hash_set(&self, key: &str, field: &str, value: Vec<u8>) -> RedisCacheResult<bool> {
-        let timer = metrics::TimedOperation::new(metrics::names::HASH_SET);
-        let result = self
-            .connection_manager
-            .execute_command(key, "HSET", |mut conn| {
-                let res: i32 = redis::cmd("HSET")
-                    .arg(key)
-                    .arg(field)
-                    .arg(value)
-                    .query(&mut conn)?;
-                Ok(res > 0)
-            })
-            .await;
-
-        timer.record(&result);
-        result
-    }
-
-    /// Get a field from a hash
     #[instrument(skip(self), level = "debug")]
-    pub async fn hash_get(&self, key: &str, field: &str) -> RedisCacheResult<Option<Vec<u8>>> {
-        let timer = metrics::TimedOperation::new(metrics::names::HASH_GET);
-        let result = self
-            .connection_manager
-            .execute_command(key, "HGET", |mut conn| {
-                let res: Option<Vec<u8>> =
-                    redis::cmd("HGET").arg(key).arg(field).query(&mut conn)?;
-                Ok(res)
-            })
-            .await;
-
-        timer.record(&result);
-        result
+    pub async fn check_health(&self) -> CacheResult<()> {
+        self.connection_manager.check_health().await
     }
 
-    /// Delete a field from a hash
-    #[instrument(skip(self), level = "debug")]
-    pub async fn hash_delete(&self, key: &str, field: &str) -> RedisCacheResult<bool> {
-        let timer = metrics::TimedOperation::new(metrics::names::HASH_DELETE);
-        let result = self
+    pub async fn zset_length<K>(&self, key: K) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+    {
+        let mut conn = self.connection_manager.get_connection().await?;
+        let key = self
             .connection_manager
-            .execute_command(key, "HDEL", |mut conn| {
-                let res: i32 = redis::cmd("HDEL").arg(key).arg(field).query(&mut conn)?;
-                Ok(res > 0)
-            })
-            .await;
+            .prefix_key(&ToString::to_string(key.to_string()));
 
-        timer.record(&result);
-        result
+        let result: i64 = timeout(
+            self.connection_manager.get_command_timeout(),
+            conn.zcard(&key),
+        )
+        .await
+        .map_err(|_| {
+            RedisCacheError::Timeout(ToString::to_string("Sorted set length operation timeout"))
+        })?
+        .map_err(|e| RedisCacheError::OperationError(ToString::to_string(&e)))?;
+
+        Ok(result as usize)
     }
 }
 
-#[async_trait]
-impl Cache for RedisCache {
-    #[instrument(skip(self), level = "debug")]
-    async fn get<T: DeserializeOwned + Send + Sync>(&self, key: &str) -> CacheResult<Option<T>> {
-        let prefixed_key = self.connection_manager.prefixed_key(key);
-        debug!("Getting value for key: {}", prefixed_key);
-
-        let result: Option<Vec<u8>> = self
-            .connection_manager
-            .execute_command(&prefixed_key, "GET", |mut conn| {
-                redis::cmd("GET").arg(&prefixed_key).query_async(&mut conn)
-            })
-            .await
-            .map_err(|e| CacheError::from(e))?;
-
-        match result {
-            Some(data) => {
-                debug!("Found value for key: {}", prefixed_key);
-                match self.serializer.deserialize(&data).await {
-                    Ok(value) => Ok(Some(value)),
-                    Err(e) => {
-                        error!(
-                            "Failed to deserialize value for key {}: {:?}",
-                            prefixed_key, e
-                        );
-                        Err(e)
-                    }
-                }
-            }
-            None => {
-                debug!("No value found for key: {}", prefixed_key);
-                Ok(None)
-            }
-        }
+#[async_trait::async_trait]
+impl CacheOperations for RedisOperations<String, Vec<u8>> {
+    async fn get<K, V>(&self, key: K) -> navius_cache::error::CacheResult<Option<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        self.get(key).await.map_err(Self::into_cache_error)
     }
 
-    #[instrument(skip(self, value), level = "debug")]
-    async fn set<T: Serialize + Send + Sync>(
+    async fn get_many<K, V>(&self, keys: Vec<K>) -> navius_cache::error::CacheResult<Vec<Option<V>>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        if keys.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Create a vector of Strings first
+        let key_strings: Vec<String> = keys.iter().map(|k| k.to_string()).collect();
+
+        // Then collect string slices from those strings
+        let key_strs: Vec<&str> = key_strings.iter().map(AsRef::as_ref).collect();
+
+        // Call our internal implementation with the string slices
+        self.get_many(&key_strs)
+            .await
+            .map_err(|e| Self::into_cache_error(e))
+    }
+
+    async fn set<K, V>(
         &self,
-        key: &str,
-        value: &T,
-        ttl: Option<Duration>,
-    ) -> CacheResult<()> {
-        let prefixed_key = self.connection_manager.prefixed_key(key);
-        debug!("Setting value for key: {}", prefixed_key);
+        key: K,
+        value: &V,
+        options: Option<navius_cache::CacheOptions>,
+    ) -> navius_cache::error::CacheResult<()>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        let ttl = options.as_ref().and_then(|opts| opts.ttl);
+        self.set(key, value, ttl)
+            .await
+            .map_err(Self::into_cache_error)
+    }
 
-        let serialized = self.serializer.serialize(value).await?;
-
-        match ttl {
-            Some(ttl) => self
-                .connection_manager
-                .execute_command(&prefixed_key, "SETEX", |mut conn| {
-                    redis::cmd("SETEX")
-                        .arg(&prefixed_key)
-                        .arg(ttl.as_secs())
-                        .arg(&serialized)
-                        .query_async(&mut conn)
-                })
-                .await
-                .map_err(|e| CacheError::from(e)),
-            None => self
-                .connection_manager
-                .execute_command(&prefixed_key, "SET", |mut conn| {
-                    redis::cmd("SET")
-                        .arg(&prefixed_key)
-                        .arg(&serialized)
-                        .query_async(&mut conn)
-                })
-                .await
-                .map_err(|e| CacheError::from(e)),
+    async fn set_many<K, V>(
+        &self,
+        entries: Vec<(K, V)>,
+        options: Option<navius_cache::CacheOptions>,
+    ) -> navius_cache::error::CacheResult<()>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        if entries.is_empty() {
+            return Ok(());
         }
+
+        let ttl = options.as_ref().and_then(|opts| opts.ttl);
+
+        // Convert entries to the format expected by set_many
+        let pairs: Vec<(&str, &V)> = entries
+            .iter()
+            .map(|(k, v)| (k.to_string().as_str(), v))
+            .collect();
+
+        self.set_many(&pairs, ttl)
+            .await
+            .map_err(Self::into_cache_error)
     }
 
-    #[instrument(skip(self), level = "debug")]
-    async fn delete(&self, key: &str) -> CacheResult<bool> {
-        let prefixed_key = self.connection_manager.prefixed_key(key);
-        debug!("Deleting key: {}", prefixed_key);
+    async fn delete<K>(&self, key: K) -> navius_cache::error::CacheResult<bool>
+    where
+        K: CacheKey + 'static,
+    {
+        self.delete(key).await.map_err(Self::into_cache_error)
+    }
 
-        let result: i64 = self
+    async fn delete_many<K>(&self, keys: Vec<K>) -> navius_cache::error::CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+    {
+        if keys.is_empty() {
+            return Ok(0);
+        }
+
+        // Create a vector of Strings first
+        let key_strings: Vec<String> = keys.iter().map(|k| k.to_string()).collect();
+
+        // Then collect string slices from those strings
+        let key_strs: Vec<&str> = key_strings.iter().map(AsRef::as_ref).collect();
+
+        self.delete_many(&key_strs)
+            .await
+            .map(|count| count as usize)
+            .map_err(|e| Self::into_cache_error(e))
+    }
+
+    async fn exists<K>(&self, key: K) -> navius_cache::error::CacheResult<bool>
+    where
+        K: CacheKey + 'static,
+    {
+        self.exists(key).await.map_err(Self::into_cache_error)
+    }
+
+    async fn increment<K>(&self, key: K, amount: i64) -> navius_cache::error::CacheResult<i64>
+    where
+        K: CacheKey + 'static,
+    {
+        self.increment(key, amount)
+            .await
+            .map_err(Self::into_cache_error)
+    }
+
+    async fn expire<K>(&self, key: K, ttl: Duration) -> navius_cache::error::CacheResult<bool>
+    where
+        K: CacheKey + 'static,
+    {
+        self.expire(key, ttl).await.map_err(Self::into_cache_error)
+    }
+
+    async fn clear(&self) -> navius_cache::error::CacheResult<()> {
+        self.flush().await.map_err(Self::into_cache_error)
+    }
+
+    async fn health_check(&self) -> navius_cache::error::CacheResult<()> {
+        self.check_health().await.map_err(Self::into_cache_error)
+    }
+
+    // List Operations
+    async fn list_push_right<K, V>(
+        &self,
+        key: K,
+        value: &V,
+    ) -> navius_cache::error::CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        let mut conn = self
             .connection_manager
-            .execute_command(&prefixed_key, "DEL", |mut conn| {
-                redis::cmd("DEL").arg(&prefixed_key).query_async(&mut conn)
-            })
+            .get_connection()
             .await
-            .map_err(|e| CacheError::from(e))?;
+            .map_err(Self::into_cache_error)?;
 
-        Ok(result > 0)
+        let key = self.connection_manager.prefix_key(&key.to_string());
+        let serialized = serde_json::to_string(value)
+            .map_err(|e| navius_cache::error::CacheError::SerializationError(e.to_string()))?;
+
+        let result: i64 = redis::cmd("RPUSH")
+            .arg(&key)
+            .arg(&serialized)
+            .query_async(&mut conn)
+            .await
+            .map_err(|e: RedisError| {
+                navius_cache::error::CacheError::OperationError(e.to_string())
+            })?;
+
+        Ok(result as usize)
     }
 
-    #[instrument(skip(self), level = "debug")]
-    async fn exists(&self, key: &str) -> CacheResult<bool> {
-        let prefixed_key = self.connection_manager.prefixed_key(key);
-        debug!("Checking if key exists: {}", prefixed_key);
+    async fn list_push_right_many<K, V>(
+        &self,
+        key: K,
+        values: &[V],
+    ) -> navius_cache::error::CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        if values.is_empty() {
+            return Ok(0);
+        }
 
-        let result: i64 = self
+        let mut conn = self
             .connection_manager
-            .execute_command(&prefixed_key, "EXISTS", |mut conn| {
-                redis::cmd("EXISTS")
-                    .arg(&prefixed_key)
-                    .query_async(&mut conn)
-            })
+            .get_connection()
             .await
-            .map_err(|e| CacheError::from(e))?;
+            .map_err(Self::into_cache_error)?;
 
-        Ok(result > 0)
+        let key = self.connection_manager.prefix_key(&key.to_string());
+        let mut cmd = redis::cmd("RPUSH");
+        cmd.arg(&key);
+
+        for value in values {
+            let serialized = serde_json::to_string(value)
+                .map_err(|e| navius_cache::error::CacheError::SerializationError(e.to_string()))?;
+            cmd.arg(&serialized);
+        }
+
+        let result: i64 = cmd.query_async(&mut conn).await.map_err(|e: RedisError| {
+            navius_cache::error::CacheError::OperationError(e.to_string())
+        })?;
+
+        Ok(result as usize)
     }
 
-    #[instrument(skip(self), level = "debug")]
-    async fn increment(&self, key: &str, amount: i64) -> CacheResult<i64> {
-        let prefixed_key = self.connection_manager.prefixed_key(key);
-        debug!("Incrementing key: {} by {}", prefixed_key, amount);
-
-        self.connection_manager
-            .execute_command(&prefixed_key, "INCRBY", |mut conn| {
-                redis::cmd("INCRBY")
-                    .arg(&prefixed_key)
-                    .arg(amount)
-                    .query_async(&mut conn)
-            })
-            .await
-            .map_err(|e| CacheError::from(e))
-    }
-
-    #[instrument(skip(self), level = "debug")]
-    async fn decrement(&self, key: &str, amount: i64) -> CacheResult<i64> {
-        let prefixed_key = self.connection_manager.prefixed_key(key);
-        debug!("Decrementing key: {} by {}", prefixed_key, amount);
-
-        self.connection_manager
-            .execute_command(&prefixed_key, "DECRBY", |mut conn| {
-                redis::cmd("DECRBY")
-                    .arg(&prefixed_key)
-                    .arg(amount)
-                    .query_async(&mut conn)
-            })
-            .await
-            .map_err(|e| CacheError::from(e))
-    }
-
-    #[instrument(skip(self), level = "debug")]
-    async fn ttl(&self, key: &str) -> CacheResult<Option<Duration>> {
-        let prefixed_key = self.connection_manager.prefixed_key(key);
-        debug!("Getting TTL for key: {}", prefixed_key);
-
-        let result: i64 = self
+    async fn list_push_left<K, V>(
+        &self,
+        key: K,
+        value: &V,
+    ) -> navius_cache::error::CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        let mut conn = self
             .connection_manager
-            .execute_command(&prefixed_key, "TTL", |mut conn| {
-                redis::cmd("TTL").arg(&prefixed_key).query_async(&mut conn)
-            })
+            .get_connection()
             .await
-            .map_err(|e| CacheError::from(e))?;
+            .map_err(Self::into_cache_error)?;
+
+        let key = self.connection_manager.prefix_key(&key.to_string());
+        let serialized = serde_json::to_string(value)
+            .map_err(|e| navius_cache::error::CacheError::SerializationError(e.to_string()))?;
+
+        let result: i64 = redis::cmd("LPUSH")
+            .arg(&key)
+            .arg(&serialized)
+            .query_async(&mut conn)
+            .await
+            .map_err(|e: RedisError| {
+                navius_cache::error::CacheError::OperationError(e.to_string())
+            })?;
+
+        Ok(result as usize)
+    }
+
+    async fn list_push_left_many<K, V>(
+        &self,
+        key: K,
+        values: &[V],
+    ) -> navius_cache::error::CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        if values.is_empty() {
+            return Ok(0);
+        }
+
+        let mut conn = self
+            .connection_manager
+            .get_connection()
+            .await
+            .map_err(Self::into_cache_error)?;
+
+        let key = self.connection_manager.prefix_key(&key.to_string());
+        let mut cmd = redis::cmd("LPUSH");
+        cmd.arg(&key);
+
+        for value in values {
+            let serialized = serde_json::to_string(value)
+                .map_err(|e| navius_cache::error::CacheError::SerializationError(e.to_string()))?;
+            cmd.arg(&serialized);
+        }
+
+        let result: i64 = cmd.query_async(&mut conn).await.map_err(|e: RedisError| {
+            navius_cache::error::CacheError::OperationError(e.to_string())
+        })?;
+
+        Ok(result as usize)
+    }
+
+    async fn list_pop_right<K, V>(&self, key: K) -> navius_cache::error::CacheResult<Option<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        let mut conn = self
+            .connection_manager
+            .get_connection()
+            .await
+            .map_err(Self::into_cache_error)?;
+
+        let key = self.connection_manager.prefix_key(&key.to_string());
+
+        let result: Option<String> = redis::cmd("RPOP")
+            .arg(&key)
+            .query_async(&mut conn)
+            .await
+            .map_err(|e: RedisError| {
+                navius_cache::error::CacheError::OperationError(e.to_string())
+            })?;
 
         match result {
-            -2 => Ok(None), // Key does not exist
-            -1 => Ok(None), // Key exists but has no TTL
-            ttl => Ok(Some(Duration::from_secs(ttl as u64))),
+            Some(serialized) => {
+                let deserialized = serde_json::from_str(&serialized).map_err(|e| {
+                    navius_cache::error::CacheError::SerializationError(e.to_string())
+                })?;
+                Ok(Some(deserialized))
+            }
+            None => Ok(None),
         }
     }
 
-    #[instrument(skip(self), level = "debug")]
-    async fn set_ttl(&self, key: &str, ttl: Duration) -> CacheResult<bool> {
-        let prefixed_key = self.connection_manager.prefixed_key(key);
-        debug!("Setting TTL for key: {} to {:?}", prefixed_key, ttl);
-
-        let result: i64 = self
+    async fn list_pop_left<K, V>(&self, key: K) -> navius_cache::error::CacheResult<Option<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        let mut conn = self
             .connection_manager
-            .execute_command(&prefixed_key, "EXPIRE", |mut conn| {
-                redis::cmd("EXPIRE")
-                    .arg(&prefixed_key)
-                    .arg(ttl.as_secs())
-                    .query_async(&mut conn)
-            })
+            .get_connection()
             .await
-            .map_err(|e| CacheError::from(e))?;
+            .map_err(Self::into_cache_error)?;
 
-        Ok(result > 0)
+        let key = self.connection_manager.prefix_key(&key.to_string());
+
+        let result: Option<String> = redis::cmd("LPOP")
+            .arg(&key)
+            .query_async(&mut conn)
+            .await
+            .map_err(|e: RedisError| {
+                navius_cache::error::CacheError::OperationError(e.to_string())
+            })?;
+
+        match result {
+            Some(serialized) => {
+                let deserialized = serde_json::from_str(&serialized).map_err(|e| {
+                    navius_cache::error::CacheError::SerializationError(e.to_string())
+                })?;
+                Ok(Some(deserialized))
+            }
+            None => Ok(None),
+        }
+    }
+
+    async fn list_range<K, V>(
+        &self,
+        key: K,
+        start: isize,
+        stop: isize,
+    ) -> navius_cache::error::CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        let mut conn = self
+            .connection_manager
+            .get_connection()
+            .await
+            .map_err(Self::into_cache_error)?;
+
+        let key = self.connection_manager.prefix_key(&key.to_string());
+
+        let result: Vec<String> = redis::cmd("LRANGE")
+            .arg(&key)
+            .arg(start)
+            .arg(stop)
+            .query_async(&mut conn)
+            .await
+            .map_err(|e: RedisError| {
+                navius_cache::error::CacheError::OperationError(e.to_string())
+            })?;
+
+        let mut deserialized = Vec::with_capacity(result.len());
+        for item in result {
+            let value = serde_json::from_str(&item)
+                .map_err(|e| navius_cache::error::CacheError::SerializationError(e.to_string()))?;
+            deserialized.push(value);
+        }
+
+        Ok(deserialized)
+    }
+
+    async fn list_length<K>(&self, key: K) -> navius_cache::error::CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+    {
+        let mut conn = self
+            .connection_manager
+            .get_connection()
+            .await
+            .map_err(Self::into_cache_error)?;
+
+        let key = self.connection_manager.prefix_key(&key.to_string());
+
+        let result: i64 = redis::cmd("LLEN")
+            .arg(&key)
+            .query_async(&mut conn)
+            .await
+            .map_err(|e: RedisError| {
+                navius_cache::error::CacheError::OperationError(e.to_string())
+            })?;
+
+        Ok(result as usize)
+    }
+
+    async fn list_remove<K, V>(
+        &self,
+        key: K,
+        count: isize,
+        value: &V,
+    ) -> navius_cache::error::CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        let mut conn = self
+            .connection_manager
+            .get_connection()
+            .await
+            .map_err(Self::into_cache_error)?;
+
+        let key = self.connection_manager.prefix_key(&key.to_string());
+        let serialized = serde_json::to_string(value)
+            .map_err(|e| navius_cache::error::CacheError::SerializationError(e.to_string()))?;
+
+        let result: i64 = redis::cmd("LREM")
+            .arg(&key)
+            .arg(count)
+            .arg(&serialized)
+            .query_async(&mut conn)
+            .await
+            .map_err(|e: RedisError| {
+                navius_cache::error::CacheError::OperationError(e.to_string())
+            })?;
+
+        Ok(result as usize)
+    }
+
+    async fn list_trim<K>(
+        &self,
+        key: K,
+        start: isize,
+        stop: isize,
+    ) -> navius_cache::error::CacheResult<()>
+    where
+        K: CacheKey + 'static,
+    {
+        let mut conn = self
+            .connection_manager
+            .get_connection()
+            .await
+            .map_err(Self::into_cache_error)?;
+
+        let key = self.connection_manager.prefix_key(&key.to_string());
+
+        redis::cmd("LTRIM")
+            .arg(&key)
+            .arg(start)
+            .arg(stop)
+            .query_async(&mut conn)
+            .await
+            .map_err(|e: RedisError| {
+                navius_cache::error::CacheError::OperationError(e.to_string())
+            })?;
+
+        Ok(())
+    }
+
+    async fn list_set<K, V>(
+        &self,
+        key: K,
+        index: isize,
+        value: &V,
+    ) -> navius_cache::error::CacheResult<()>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        let mut conn = self
+            .connection_manager
+            .get_connection()
+            .await
+            .map_err(Self::into_cache_error)?;
+
+        let key = self.connection_manager.prefix_key(&key.to_string());
+        let serialized = serde_json::to_string(value)
+            .map_err(|e| navius_cache::error::CacheError::SerializationError(e.to_string()))?;
+
+        redis::cmd("LSET")
+            .arg(&key)
+            .arg(index)
+            .arg(&serialized)
+            .query_async(&mut conn)
+            .await
+            .map_err(|e: RedisError| {
+                navius_cache::error::CacheError::OperationError(e.to_string())
+            })?;
+
+        Ok(())
     }
 }

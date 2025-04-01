@@ -7,7 +7,7 @@
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
-    fmt,
+    fmt::{self, Debug},
     marker::PhantomData,
     sync::{Arc, RwLock},
 };

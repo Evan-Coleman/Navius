@@ -253,6 +253,13 @@ impl MockDatabaseClient {
             .unwrap_or(Ok(0))
     }
 
+    /// Execute a script (multiple statements) and return the number of affected rows
+    pub fn execute_script<S: Into<String>>(&self, script: S) -> Result<u64, MockDatabaseError> {
+        // For simplicity, we'll just reuse execute, but in a real implementation
+        // this would handle multiple statements and execute them as a batch
+        self.execute(script)
+    }
+
     /// Execute a transaction
     pub fn transaction<F, T>(&self, f: F) -> Result<T, MockDatabaseError>
     where

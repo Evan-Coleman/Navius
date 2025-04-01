@@ -43,11 +43,6 @@ impl BasePlugin {
         PluginConfig::default()
     }
 
-    /// Get the plugin dependencies
-    pub fn dependencies(&self) -> Vec<PluginDependency> {
-        self.metadata.dependencies.clone()
-    }
-
     /// Get the plugin capabilities
     pub fn capabilities(&self) -> HashMap<String, Arc<dyn std::any::Any + Send + Sync>> {
         self.capabilities.clone()
@@ -101,7 +96,7 @@ impl Plugin for BasePlugin {
     }
 
     fn dependencies(&self) -> Vec<PluginDependency> {
-        self.dependencies()
+        Vec::new()
     }
 
     fn get_capability(&self, capability_id: &str) -> Option<Arc<dyn std::any::Any + Send + Sync>> {

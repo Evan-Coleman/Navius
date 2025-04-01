@@ -61,7 +61,7 @@ async fn setup_database() -> DatabaseResult<Arc<DatabaseConnectionManager>> {
 
 /// Create test tables for the examples
 async fn create_test_tables(db: &DatabaseConnectionManager) -> DatabaseResult<()> {
-    let conn = db.connection().await?;
+    let conn = db.get_connection().await?;
 
     println!("Creating test tables...");
 
@@ -78,7 +78,6 @@ async fn create_test_tables(db: &DatabaseConnectionManager) -> DatabaseResult<()
          ('A001', 1000.00),
          ('A002', 500.00),
          ('A003', 250.00);",
-        &[],
     )
     .await?;
 
@@ -93,7 +92,6 @@ async fn create_test_tables(db: &DatabaseConnectionManager) -> DatabaseResult<()
              timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
              status VARCHAR(20) NOT NULL
          );",
-        &[],
     )
     .await?;
 
@@ -111,7 +109,6 @@ async fn create_test_tables(db: &DatabaseConnectionManager) -> DatabaseResult<()
          ('ITEM001', 100, 0),
          ('ITEM002', 50, 0),
          ('ITEM003', 25, 0);",
-        &[],
     )
     .await?;
 
@@ -133,19 +130,13 @@ async fn basic_savepoint_example(db: &DatabaseConnectionManager) -> DatabaseResu
 
         // Update account A001
         println!("Updating account A001...");
-        tx.execute(
-            "UPDATE accounts SET balance = balance + 100 WHERE account_number = 'A001'",
-            &[],
-        )
-        .await?;
+        tx.execute("UPDATE accounts SET balance = balance + 100 WHERE account_number = 'A001'")
+            .await?;
 
         // Update account A002
         println!("Updating account A002...");
-        tx.execute(
-            "UPDATE accounts SET balance = balance - 50 WHERE account_number = 'A002'",
-            &[],
-        )
-        .await?;
+        tx.execute("UPDATE accounts SET balance = balance - 50 WHERE account_number = 'A002'")
+            .await?;
 
         // Show balances after updates
         println!("Account balances after updates:");
@@ -161,11 +152,8 @@ async fn basic_savepoint_example(db: &DatabaseConnectionManager) -> DatabaseResu
 
         // Make different updates
         println!("Making different updates...");
-        tx.execute(
-            "UPDATE accounts SET balance = balance + 200 WHERE account_number = 'A003'",
-            &[],
-        )
-        .await?;
+        tx.execute("UPDATE accounts SET balance = balance + 200 WHERE account_number = 'A003'")
+            .await?;
 
         // Show final balances
         println!("Final account balances:");
@@ -193,11 +181,8 @@ async fn nested_transaction_example(db: &DatabaseConnectionManager) -> DatabaseR
 
         // Update item in parent transaction
         println!("Updating ITEM001 in parent transaction...");
-        tx.execute(
-            "UPDATE inventory SET quantity = quantity + 10 WHERE item_code = 'ITEM001'",
-            &[],
-        )
-        .await?;
+        tx.execute("UPDATE inventory SET quantity = quantity + 10 WHERE item_code = 'ITEM001'")
+            .await?;
 
         // Start a nested transaction
         println!("Starting nested transaction...");
@@ -207,7 +192,6 @@ async fn nested_transaction_example(db: &DatabaseConnectionManager) -> DatabaseR
                 println!("Updating ITEM002 in nested transaction...");
                 tx.execute(
                     "UPDATE inventory SET quantity = quantity + 5 WHERE item_code = 'ITEM002'",
-                    &[],
                 )
                 .await?;
 
@@ -224,7 +208,6 @@ async fn nested_transaction_example(db: &DatabaseConnectionManager) -> DatabaseR
                 println!("Updating ITEM003 in nested transaction...");
                 tx.execute(
                     "UPDATE inventory SET quantity = quantity + 3 WHERE item_code = 'ITEM003'",
-                    &[],
                 )
                 .await?;
 
@@ -245,11 +228,8 @@ async fn nested_transaction_example(db: &DatabaseConnectionManager) -> DatabaseR
 
         // Continue with parent transaction
         println!("Continuing with parent transaction...");
-        tx.execute(
-            "UPDATE inventory SET reserved = 5 WHERE item_code = 'ITEM001'",
-            &[],
-        )
-        .await?;
+        tx.execute("UPDATE inventory SET reserved = 5 WHERE item_code = 'ITEM001'")
+            .await?;
 
         // Show final inventory
         println!("Final inventory:");
@@ -304,7 +284,6 @@ async fn retry_logic_example(db: &DatabaseConnectionManager) -> DatabaseResult<(
                 println!("Attempt {} succeeded!", current_attempt);
                 tx.execute(
                     "UPDATE inventory SET quantity = quantity + 1 WHERE item_code = 'ITEM003'",
-                    &[],
                 )
                 .await?;
 
@@ -457,13 +436,10 @@ async fn fund_transfer_example(db: &DatabaseConnectionManager) -> DatabaseResult
     }
 
     // Print initial account balances
-    let conn = db.connection().await?;
+    let conn = db.get_connection().await?;
     println!("Initial account balances:");
     let rows = conn
-        .query(
-            "SELECT account_number, balance FROM accounts ORDER BY account_number",
-            &[],
-        )
+        .query("SELECT account_number, balance FROM accounts ORDER BY account_number")
         .await?;
     for row in rows.iter() {
         let account: &str = row.get("account_number");
@@ -492,10 +468,7 @@ async fn fund_transfer_example(db: &DatabaseConnectionManager) -> DatabaseResult
     // Print final account balances
     println!("\nFinal account balances:");
     let rows = conn
-        .query(
-            "SELECT account_number, balance FROM accounts ORDER BY account_number",
-            &[],
-        )
+        .query("SELECT account_number, balance FROM accounts ORDER BY account_number")
         .await?;
     for row in rows.iter() {
         let account: &str = row.get("account_number");
@@ -510,7 +483,6 @@ async fn fund_transfer_example(db: &DatabaseConnectionManager) -> DatabaseResult
             "SELECT from_account, to_account, amount, status, timestamp 
          FROM transfer_logs 
          ORDER BY timestamp",
-            &[],
         )
         .await?;
 
@@ -537,16 +509,20 @@ async fn fund_transfer_example(db: &DatabaseConnectionManager) -> DatabaseResult
 /// Helper function to print account balances
 async fn print_account_balances(tx: &mut navius_db::Transaction<'_>) -> DatabaseResult<()> {
     let rows = tx
-        .query(
-            "SELECT account_number, balance FROM accounts ORDER BY account_number",
-            &[],
-        )
+        .query("SELECT account_number, balance FROM accounts ORDER BY account_number")
         .await?;
 
-    for i in 0..rows.len() {
-        let account: &str = rows.get(i).get("account_number");
-        let balance: f64 = rows.get(i).get("balance");
-        println!("  {} = ${:.2}", account, balance);
+    // We need to implement a way to iterate through rows
+    let mut result_rows = Vec::new();
+    let mut row_set = rows;
+    while let Some(row) = row_set.next().await? {
+        result_rows.push(row);
+    }
+
+    for row in result_rows {
+        let account = row.get_column_value("account_number")?.unwrap();
+        let balance = row.get_column_value("balance")?.unwrap();
+        println!("Account: {}, Balance: {}", account, balance);
     }
 
     Ok(())
@@ -555,17 +531,24 @@ async fn print_account_balances(tx: &mut navius_db::Transaction<'_>) -> Database
 /// Helper function to print inventory
 async fn print_inventory(tx: &mut navius_db::Transaction<'_>) -> DatabaseResult<()> {
     let rows = tx
-        .query(
-            "SELECT item_code, quantity, reserved FROM inventory ORDER BY item_code",
-            &[],
-        )
+        .query("SELECT item_code, quantity, reserved FROM inventory ORDER BY item_code")
         .await?;
 
-    for i in 0..rows.len() {
-        let item: &str = rows.get(i).get("item_code");
-        let quantity: i32 = rows.get(i).get("quantity");
-        let reserved: i32 = rows.get(i).get("reserved");
-        println!("  {} = {} (reserved: {})", item, quantity, reserved);
+    // We need to implement a way to iterate through rows
+    let mut result_rows = Vec::new();
+    let mut row_set = rows;
+    while let Some(row) = row_set.next().await? {
+        result_rows.push(row);
+    }
+
+    for row in result_rows {
+        let item = row.get_column_value("item_code")?.unwrap();
+        let quantity = row.get_column_value("quantity")?.unwrap();
+        let reserved = row.get_column_value("reserved")?.unwrap();
+        println!(
+            "Item: {}, Quantity: {}, Reserved: {}",
+            item, quantity, reserved
+        );
     }
 
     Ok(())

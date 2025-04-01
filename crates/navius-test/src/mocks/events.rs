@@ -1,5 +1,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use futures::future::BoxFuture;
+use futures::stream::BoxStream;
 use futures::stream::StreamExt;
 use futures::{Stream, StreamExt as _};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -346,7 +348,7 @@ pub trait EventPublisher: Send + Sync {
         &self,
         event_type: &str,
         payload: serde_json::Value,
-    ) -> BoxFuture<'_, Result<(), MockEventError>>;
+    ) -> BoxFuture<'static, std::result::Result<(), MockEventError>>;
 }
 
 pub trait EventSubscriber: Send + Sync {
@@ -354,8 +356,11 @@ pub trait EventSubscriber: Send + Sync {
         &self,
         event_type: &str,
     ) -> BoxFuture<
-        '_,
-        Result<BoxStream<'_, Result<serde_json::Value, MockEventError>>, MockEventError>,
+        'static,
+        std::result::Result<
+            BoxStream<'static, std::result::Result<serde_json::Value, MockEventError>>,
+            MockEventError,
+        >,
     >;
 }
 
@@ -370,8 +375,15 @@ impl EventPublisher for MockEventBroker {
         &self,
         event_type: &str,
         payload: serde_json::Value,
-    ) -> BoxFuture<'_, Result<(), MockEventError>> {
-        Box::pin(async move { self.publish_raw(event_type, payload).await })
+    ) -> BoxFuture<'static, std::result::Result<(), MockEventError>> {
+        // Clone all needed values to avoid lifetime issues
+        let event_type = event_type.to_owned();
+        let clone = self.clone();
+
+        Box::pin(async move {
+            // Now use the cloned self and owned strings
+            clone.publish_raw(&event_type, payload).await
+        })
     }
 }
 
@@ -381,10 +393,20 @@ impl EventSubscriber for MockEventBroker {
         &self,
         event_type: &str,
     ) -> BoxFuture<
-        '_,
-        Result<BoxStream<'_, Result<serde_json::Value, MockEventError>>, MockEventError>,
+        'static,
+        std::result::Result<
+            BoxStream<'static, std::result::Result<serde_json::Value, MockEventError>>,
+            MockEventError,
+        >,
     > {
-        Box::pin(async move { self.subscribe_raw(event_type).await })
+        // Clone all needed values to avoid lifetime issues
+        let event_type = event_type.to_owned();
+        let clone = self.clone();
+
+        Box::pin(async move {
+            // Now use the cloned self and owned strings
+            clone.subscribe_raw(&event_type).await
+        })
     }
 }
 
@@ -404,7 +426,7 @@ impl MockEventBroker {
         &self,
         event_type: &str,
         payload: T,
-    ) -> Result<(), MockEventError> {
+    ) -> std::result::Result<(), MockEventError> {
         let json = serde_json::to_value(payload)?;
         self.publish_raw(event_type, json).await
     }
@@ -412,7 +434,8 @@ impl MockEventBroker {
     pub async fn subscribe<T: DeserializeOwned + Send + Sync + 'static>(
         &self,
         event_type: &str,
-    ) -> Result<BoxStream<'_, Result<T, MockEventError>>, MockEventError> {
+    ) -> std::result::Result<BoxStream<'_, std::result::Result<T, MockEventError>>, MockEventError>
+    {
         let raw_stream = self.subscribe_raw(event_type).await?;
         Ok(Box::pin(raw_stream.map(|result| {
             result.and_then(|value| {
@@ -466,7 +489,7 @@ mod tests {
         );
 
         // Publish event
-        let status = broker.publish(event).await.unwrap();
+        let status = broker.publish("test-event", event.payload).await.unwrap();
         assert_eq!(status, DeliveryStatus::Delivered);
 
         // Check that event was stored
@@ -489,15 +512,13 @@ mod tests {
 
         // Publish event
         broker
-            .publish(Event::new(
+            .publish(
                 "test-event",
-                "test-topic",
-                "test-source",
                 TestEvent {
                     message: "Hello, subscriber!".to_string(),
                     count: 1,
                 },
-            ))
+            )
             .await
             .unwrap();
 
@@ -534,15 +555,10 @@ mod tests {
         broker.set_publishing_failure(true);
 
         // Publishing should fail
-        let event = Event::new(
-            "test-event",
-            "test-topic",
-            "test-source",
-            TestEvent {
-                message: "This should fail".to_string(),
-                count: 0,
-            },
-        );
-        assert!(broker.publish(event).await.is_err());
+        let payload = TestEvent {
+            message: "This should fail".to_string(),
+            count: 0,
+        };
+        assert!(broker.publish("test-event", payload).await.is_err());
     }
 }

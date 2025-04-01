@@ -96,6 +96,10 @@ pub enum DatabaseError {
         /// Error chain (previous errors that led to this one)
         chain: Vec<Box<DatabaseError>>,
     },
+
+    /// Context error
+    #[error("{0}")]
+    ContextError(String),
 }
 
 impl Clone for DatabaseError {
@@ -114,12 +118,12 @@ impl Clone for DatabaseError {
             Self::UnexpectedStateError(s) => Self::UnexpectedStateError(s.clone()),
             Self::WithContext { context, source } => Self::WithContext {
                 context: context.clone(),
-                source: source.clone(),
+                source: Box::new((**source).clone()),
             },
             Self::ParameterError(s) => Self::ParameterError(s.clone()),
             Self::RowAccessError(s) => Self::RowAccessError(s.clone()),
             Self::SQLXError(_) => Self::QueryError("Database error (clone of SQLXError)".into()),
-            Self::IOError(_) => Self::QueryError("IO error (clone of IOError)".into()),
+            Self::IOError(e) => Self::IOError(std::io::Error::new(e.kind(), e.to_string())),
             Self::DetailedDatabaseError {
                 db_operation,
                 table_name,
@@ -129,25 +133,18 @@ impl Clone for DatabaseError {
                 db_operation: db_operation.clone(),
                 table_name: table_name.clone(),
                 message: message.clone(),
-                source: source.clone(),
+                source: source.clone().map(|s| Box::new((*s).clone())),
             },
             Self::ChainedError {
                 message,
                 context,
-                chain: ref_chain,
-            } => {
-                // Create a new chain
-                let new_chain = ref_chain
-                    .iter()
-                    .map(|err| Box::new((**err).clone()))
-                    .collect();
-
-                Self::ChainedError {
-                    message: message.clone(),
-                    context: context.clone(),
-                    chain: new_chain,
-                }
-            }
+                chain,
+            } => Self::ChainedError {
+                message: message.clone(),
+                context: context.clone(),
+                chain: chain.iter().map(|e| Box::new((**e).clone())).collect(),
+            },
+            Self::ContextError(s) => Self::ContextError(s.clone()),
         }
     }
 }
@@ -379,19 +376,30 @@ impl DatabaseError {
         match self {
             // If already a chained error, add to the chain
             DatabaseError::ChainedError {
-                message,
-                context: existing_context,
-                mut chain,
+                ref message,
+                context: ref existing_context,
+                ref chain,
             } => {
                 // Combine contexts if possible
-                let combined_context = Self::combine_contexts(existing_context, context);
-                // Add the original error to the chain
-                chain.push(Box::new(self.clone()));
+                let combined_context = Self::combine_contexts(existing_context.clone(), context);
+                // Create a new chain including the original one
+                let mut new_chain = chain.clone();
+                // We can clone self as a whole since we haven't moved parts out yet
+                new_chain.push(Box::new(self.clone()));
 
                 DatabaseError::ChainedError {
-                    message,
+                    message: message.clone(),
                     context: combined_context,
-                    chain,
+                    chain: new_chain,
+                }
+            }
+            // Handle SqlxError specifically to avoid partial move issues
+            DatabaseError::SQLXError(sqlx_err) => {
+                // Create a new chained error from the SqlxError
+                DatabaseError::ChainedError {
+                    message: format!("{}", sqlx_err),
+                    context,
+                    chain: vec![Box::new(DatabaseError::SQLXError(sqlx_err))],
                 }
             }
             // Otherwise create a new chained error
@@ -418,26 +426,29 @@ impl DatabaseError {
         }
     }
 
-    /// Chain a new error with this one
+    /// Chains the current error with a new message and context.
+    /// The current error becomes the first element in the new ChainedError's chain.
     pub fn chain_error<M: Into<String>>(self, message: M, context: ErrorContext) -> Self {
-        match self {
-            // If already a chained error, add to the chain
-            DatabaseError::ChainedError { mut chain, .. } => {
-                // Add the original error to the chain
-                chain.push(Box::new(self.clone()));
+        DatabaseError::ChainedError {
+            message: message.into(),
+            context,
+            chain: vec![Box::new(self)], // Put the original `self` into the chain
+        }
+    }
 
-                DatabaseError::ChainedError {
-                    message: message.into(),
-                    context,
-                    chain,
-                }
-            }
-            // Otherwise create a new chained error
-            _ => DatabaseError::ChainedError {
-                message: message.into(),
-                context,
-                chain: vec![Box::new(self)],
-            },
+    /// Static method to create a chained error
+    pub fn create_chain_error(
+        chain: Vec<Box<DatabaseError>>,
+        message: Option<String>,
+        context: Option<ErrorContext>,
+    ) -> DatabaseError {
+        let msg = message.unwrap_or_else(|| "Database error chain".to_string());
+        let ctx = context.unwrap_or_else(ErrorContext::new);
+
+        DatabaseError::ChainedError {
+            message: msg,
+            context: ctx,
+            chain,
         }
     }
 
@@ -487,6 +498,7 @@ impl DatabaseError {
             Self::ChainedError { chain, .. } => {
                 chain.first().map_or("DB_CHAINED_ERROR", |s| s.error_code())
             }
+            Self::ContextError(_) => "DB_CONTEXT_ERROR",
         }
     }
 
@@ -506,6 +518,7 @@ impl DatabaseError {
             Self::RowAccessError(_) => 500,
             Self::SQLXError(_) => 500,
             Self::IOError(_) => 500,
+            Self::ContextError(_) => 500,
             _ => 500,
         }
     }
@@ -541,6 +554,7 @@ impl DatabaseError {
                 }
                 result
             }
+            Self::ContextError(_) => vec![self],
             _ => vec![self],
         }
     }
@@ -553,6 +567,7 @@ impl DatabaseError {
             Self::DetailedDatabaseError { source, .. } => {
                 source.as_ref().map_or(self, |s| s.root_cause())
             }
+            Self::ContextError(_) => self,
             _ => self,
         }
     }
@@ -597,6 +612,7 @@ impl DatabaseError {
             }),
             Self::ChainedError { context, .. } => context.db_specific.clone(),
             Self::WithContext { source, .. } => source.db_specific_info(),
+            Self::ContextError(_) => None,
             _ => None,
         }
     }
@@ -669,6 +685,7 @@ impl DatabaseError {
                 source.as_ref().map_or(false, |s| s.is_transient())
             }
             Self::ChainedError { chain, .. } => chain.iter().any(|err| err.is_transient()),
+            Self::ContextError(_) => false,
             _ => false,
         }
     }
@@ -699,6 +716,93 @@ impl DatabaseError {
             DatabaseError::QueryError(msg) => msg,
             _ => panic!("Expected QueryError, got {:?}", self),
         }
+    }
+
+    pub fn add_context<S: Into<String>>(self, context: S) -> Self {
+        match self {
+            DatabaseError::ChainedError {
+                chain,
+                message,
+                context: existing_context,
+            } => {
+                let mut new_chain = chain;
+                new_chain.push(Box::new(DatabaseError::ContextError(context.into())));
+                DatabaseError::ChainedError {
+                    message,
+                    context: existing_context,
+                    chain: new_chain,
+                }
+            }
+            _ => {
+                let mut chain = Vec::new();
+                chain.push(Box::new(self.clone()));
+                chain.push(Box::new(DatabaseError::ContextError(context.into())));
+                DatabaseError::ChainedError {
+                    message: "Error with context".to_string(),
+                    context: ErrorContext::new(),
+                    chain,
+                }
+            }
+        }
+    }
+
+    pub fn chain_errors(&self, mut chain: Vec<Box<DatabaseError>>) -> DatabaseError {
+        chain.push(Box::new(self.clone()));
+        DatabaseError::ChainedError {
+            message: "Database error chain".to_string(),
+            context: ErrorContext::new(),
+            chain,
+        }
+    }
+
+    pub fn chain_empty() -> DatabaseError {
+        DatabaseError::ChainedError {
+            message: "No errors in chain".to_string(),
+            context: ErrorContext::new(),
+            chain: Vec::new(),
+        }
+    }
+
+    pub fn chained(chain: Vec<Box<DatabaseError>>) -> Self {
+        DatabaseError::ChainedError {
+            message: "Database error chain".to_string(),
+            context: ErrorContext::new(),
+            chain,
+        }
+    }
+
+    #[deprecated(
+        since = "1.0.0",
+        note = "Use create_chain_error with appropriate parameters instead"
+    )]
+    pub fn chain_error_with_message(
+        chain: Vec<Box<DatabaseError>>,
+        message: String,
+    ) -> DatabaseError {
+        Self::create_chain_error(chain, Some(message), None)
+    }
+
+    #[deprecated(
+        since = "1.0.0",
+        note = "Use create_chain_error with appropriate parameters instead"
+    )]
+    pub fn chain_error_with_context(
+        chain: Vec<Box<DatabaseError>>,
+        context: ErrorContext,
+    ) -> DatabaseError {
+        Self::create_chain_error(chain, None, Some(context))
+    }
+
+    #[deprecated(
+        since = "1.0.0",
+        note = "Use create_chain_error with appropriate parameters instead"
+    )]
+    pub fn chain_error_with_all(
+        chain: Vec<Box<DatabaseError>>,
+        message: String,
+        context: ErrorContext,
+    ) -> DatabaseError {
+        Self::create_chain_error(chain, Some(message), Some(context))
     }
 }
 
@@ -734,6 +838,20 @@ impl From<DatabaseError> for AppError {
 
 /// Type alias for database results
 pub type DatabaseResult<T> = std::result::Result<T, DatabaseError>;
+
+impl From<Vec<Box<DatabaseError>>> for DatabaseError {
+    fn from(chain: Vec<Box<DatabaseError>>) -> Self {
+        if chain.is_empty() {
+            DatabaseError::ChainedError {
+                chain,
+                context: ErrorContext::new(),
+                message: "No errors in chain".to_string(),
+            }
+        } else {
+            DatabaseError::chained(chain)
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -889,6 +1007,171 @@ mod tests {
 
         let root = chained_error.root_cause();
         assert!(matches!(root, DatabaseError::QueryError(_)));
+    }
+
+    #[test]
+    fn test_chain_errors() {
+        let chain = vec![Box::new(DatabaseError::ChainedError {
+            message: "Test error".to_string(),
+            context: ErrorContext::new(),
+            chain: Vec::new(),
+        })];
+
+        let error = DatabaseError::ChainedError {
+            message: "Another error".to_string(),
+            context: ErrorContext::new(),
+            chain,
+        };
+
+        assert!(matches!(error, DatabaseError::ChainedError { .. }));
+    }
+
+    #[test]
+    fn test_chain_empty() {
+        let empty = DatabaseError::chain_empty();
+        assert!(matches!(empty, DatabaseError::ChainedError { .. }));
+    }
+
+    #[test]
+    fn test_chained() {
+        let chain = vec![Box::new(DatabaseError::ChainedError {
+            message: "Test error".to_string(),
+            context: ErrorContext::new(),
+            chain: Vec::new(),
+        })];
+
+        let chained = DatabaseError::chained(chain);
+        assert!(matches!(chained, DatabaseError::ChainedError { .. }));
+    }
+
+    #[test]
+    fn test_chain_error() {
+        let chain = vec![Box::new(DatabaseError::ChainedError {
+            message: "Test error".to_string(),
+            context: ErrorContext::new(),
+            chain: Vec::new(),
+        })];
+
+        let error = DatabaseError::chain_error_with_all(
+            chain,
+            "Test chain error".to_string(),
+            ErrorContext::new(),
+        );
+        assert!(matches!(error, DatabaseError::ChainedError { .. }));
+    }
+
+    #[test]
+    fn test_chain_error_with_message() {
+        let chain = vec![Box::new(DatabaseError::ChainedError {
+            message: "Test error".to_string(),
+            context: ErrorContext::new(),
+            chain: Vec::new(),
+        })];
+
+        let error = DatabaseError::chain_error_with_message(chain, "Test chain error".to_string());
+        assert!(matches!(error, DatabaseError::ChainedError { .. }));
+    }
+
+    #[test]
+    fn test_chain_error_with_context() {
+        let chain = vec![Box::new(DatabaseError::ChainedError {
+            message: "Test error".to_string(),
+            context: ErrorContext::new(),
+            chain: Vec::new(),
+        })];
+
+        let error = DatabaseError::chain_error_with_context(chain, ErrorContext::new());
+        assert!(matches!(error, DatabaseError::ChainedError { .. }));
+    }
+
+    #[test]
+    fn test_chain_error_empty() {
+        let chain = Vec::new();
+        let error = DatabaseError::chain_error_with_all(
+            chain,
+            "Empty chain error".to_string(),
+            ErrorContext::new(),
+        );
+        assert!(matches!(error, DatabaseError::ChainedError { .. }));
+    }
+
+    #[test]
+    fn test_chain_error_with_fields() {
+        let chain = vec![Box::new(DatabaseError::ChainedError {
+            message: "Test error".to_string(),
+            context: ErrorContext::new(),
+            chain: Vec::new(),
+        })];
+
+        let error = DatabaseError::chain_error_with_all(
+            chain,
+            "Test chain error".to_string(),
+            ErrorContext::new(),
+        );
+        assert!(matches!(error, DatabaseError::ChainedError { .. }));
+    }
+
+    #[test]
+    fn test_chain_error_with_all_fields() {
+        let chain = vec![Box::new(DatabaseError::ChainedError {
+            message: "Test error".to_string(),
+            context: ErrorContext::new(),
+            chain: Vec::new(),
+        })];
+
+        let error = DatabaseError::chain_error_with_all(
+            chain,
+            "Test chain error".to_string(),
+            ErrorContext::new(),
+        );
+        assert!(matches!(error, DatabaseError::ChainedError { .. }));
+    }
+
+    #[test]
+    fn test_chain_error_with_empty_chain() {
+        let chain = Vec::new();
+        let error = DatabaseError::chain_error_with_all(
+            chain,
+            "Empty chain error".to_string(),
+            ErrorContext::new(),
+        );
+        assert!(matches!(error, DatabaseError::ChainedError { .. }));
+    }
+
+    #[test]
+    fn test_chain_error_with_empty_context() {
+        let chain = Vec::new();
+        let error = DatabaseError::chain_error_with_all(
+            chain,
+            "Empty chain error".to_string(),
+            ErrorContext::new(),
+        );
+        assert!(matches!(error, DatabaseError::ChainedError { .. }));
+    }
+
+    #[test]
+    fn test_chain_error_with_empty_message() {
+        let chain = Vec::new();
+        let error = DatabaseError::chain_error_with_all(chain, String::new(), ErrorContext::new());
+        assert!(matches!(error, DatabaseError::ChainedError { .. }));
+    }
+
+    #[test]
+    fn test_chain_error_with_empty_all() {
+        let chain = Vec::new();
+        let error = DatabaseError::chain_error_with_all(chain, String::new(), ErrorContext::new());
+        assert!(matches!(error, DatabaseError::ChainedError { .. }));
+    }
+
+    #[test]
+    fn test_chain_error_with_empty_fields() {
+        let chain = Vec::new();
+        let error = DatabaseError::ChainedError {
+            message: String::new(),
+            context: ErrorContext::new(),
+            chain,
+        };
+        assert!(matches!(error, DatabaseError::ChainedError { .. }));
     }
 }
 

@@ -9,9 +9,7 @@ use async_trait::async_trait;
 
 use crate::{
     error::{Error, Result},
-    registry::{
-        ComponentFactory, ComponentRef, ComponentRegistry, ComponentScope, DynComponentRef,
-    },
+    registry::{ComponentRef, ComponentRegistry, ComponentScope},
 };
 
 /// Configuration provider trait
@@ -51,7 +49,7 @@ pub trait ConfigProviderExt: ConfigProvider {
 }
 
 // Implement the extension trait for all implementors of ConfigProvider
-impl<P: ConfigProvider> ConfigProviderExt for P {}
+impl<P: ?Sized + ConfigProvider> ConfigProviderExt for P {}
 
 /// Memory-based configuration provider
 pub struct MemoryConfigProvider {
@@ -73,6 +71,15 @@ impl MemoryConfigProvider {
     }
 }
 
+impl Clone for MemoryConfigProvider {
+    fn clone(&self) -> Self {
+        // We can't directly clone the boxed values, so we create a new empty provider
+        // This is a limitation - in practice, this provider should only be cloned before values are set
+        log::warn!("Cloning MemoryConfigProvider - config values will not be copied");
+        Self::new()
+    }
+}
+
 impl Default for MemoryConfigProvider {
     fn default() -> Self {
         Self::new()
@@ -81,12 +88,36 @@ impl Default for MemoryConfigProvider {
 
 impl ConfigProvider for MemoryConfigProvider {
     fn get_value(&self, key: &str) -> Result<Box<dyn Any + Send + Sync>> {
-        self.configs
-            .get(key)
-            .map(|value| value.clone())
-            .ok_or_else(|| Error::ConfigNotFound {
+        match self.configs.get(key) {
+            Some(boxed_value) => {
+                // Clone the boxed value - this is a limitation as we can't directly clone
+                // a Box<dyn Any>, but we need to return a new Box with the same content
+                let any_ref = boxed_value.as_ref();
+
+                // Try to downcast to common types and clone
+                if let Some(s) = any_ref.downcast_ref::<String>() {
+                    return Ok(Box::new(s.clone()));
+                } else if let Some(i) = any_ref.downcast_ref::<i32>() {
+                    return Ok(Box::new(*i));
+                } else if let Some(i) = any_ref.downcast_ref::<i64>() {
+                    return Ok(Box::new(*i));
+                } else if let Some(f) = any_ref.downcast_ref::<f64>() {
+                    return Ok(Box::new(*f));
+                } else if let Some(b) = any_ref.downcast_ref::<bool>() {
+                    return Ok(Box::new(*b));
+                } else if let Some(v) = any_ref.downcast_ref::<Vec<String>>() {
+                    return Ok(Box::new(v.clone()));
+                }
+
+                // If we can't handle the type, return an error
+                Err(Error::ConfigBindingFailed {
+                    message: format!("Unable to clone config value for key '{}'", key),
+                })
+            }
+            None => Err(Error::ConfigNotFound {
                 key: key.to_string(),
-            })
+            }),
+        }
     }
 
     fn has(&self, key: &str) -> bool {
@@ -212,22 +243,24 @@ impl ApplicationBuilder {
 
     /// Set a configuration value
     pub fn with_config<T: Any + Clone + Send + Sync>(mut self, key: &str, value: T) -> Self {
-        if let Some(provider) = self
-            .config_provider
-            .as_mut()
-            .downcast_mut::<MemoryConfigProvider>()
-        {
-            provider.set(key, value);
+        if let Some(provider) = Arc::get_mut(&mut self.config_provider) {
+            if let Some(memory_provider) =
+                provider.as_any_mut().downcast_mut::<MemoryConfigProvider>()
+            {
+                memory_provider.set(key, value);
+            } else {
+                log::warn!("Cannot set config value directly on non-memory config provider");
+            }
         } else {
-            log::warn!("Cannot set config value directly on non-memory config provider");
+            log::warn!("Cannot get mutable reference to config provider");
         }
         self
     }
 
     /// Register the config provider as a component
     pub fn with_config_as_component(self) -> Self {
-        // Create a new reference to the config provider
-        let provider = Arc::new(self.config_provider.as_ref().clone_box());
+        // Clone the Arc rather than trying to clone the inner provider
+        let provider = self.config_provider.clone();
 
         // Register the provider
         self.registry
@@ -255,7 +288,7 @@ impl ApplicationBuilder {
         // Create the application
         Ok(Application {
             registry: self.registry,
-            config_provider: self.config_provider,
+            config_provider: Box::new(ConfigProviderClone(self.config_provider)),
         })
     }
 }
@@ -266,14 +299,28 @@ impl Default for ApplicationBuilder {
     }
 }
 
-/// Clone box method for ConfigProvider
-trait CloneBox {
-    fn clone_box(&self) -> Box<dyn ConfigProvider>;
-}
+/// Wrapper struct for Arc<dyn ConfigProvider> to simplify conversion to Box
+struct ConfigProviderClone(Arc<dyn ConfigProvider>);
 
-impl<T: ConfigProvider + Clone + 'static> CloneBox for T {
-    fn clone_box(&self) -> Box<dyn ConfigProvider> {
-        Box::new(self.clone())
+impl ConfigProvider for ConfigProviderClone {
+    fn get_value(&self, key: &str) -> Result<Box<dyn Any + Send + Sync>> {
+        self.0.get_value(key)
+    }
+
+    fn has(&self, key: &str) -> bool {
+        self.0.has(key)
+    }
+
+    fn keys_with_prefix(&self, prefix: &str) -> Vec<String> {
+        self.0.keys_with_prefix(prefix)
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

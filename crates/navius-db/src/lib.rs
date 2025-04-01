@@ -5,43 +5,47 @@ This crate provides database connectivity, query execution, and ORM functionalit
 for the Navius framework with pluggable database backends.
 */
 
-// Internal modules
-mod config;
-mod connection;
-mod error;
-mod pool;
-mod query;
-mod repository;
-mod transaction;
+// Re-exports
+pub use connection::{DatabaseConnection, PgConnection};
+pub use error::DatabaseError;
+pub use transaction::{DatabaseTransaction, PgTransaction};
 
-// Public exports
-pub use config::DatabaseConfig;
-pub use connection::DatabaseConnectionManager;
-pub use error::{DatabaseError, DatabaseResult};
-pub use pool::{
-    DatabaseConnection, DatabasePool, DatabaseRowSet, DatabaseTransaction, PoolOptions,
-};
-pub use query::{Query, QueryBuilder, QueryExecutor, SortDirection};
-pub use repository::{Entity, Repository};
-pub use transaction::Transaction;
+pub mod connection;
+pub mod error;
+pub mod pool;
+pub mod repository;
+pub mod transaction;
 
-/// Database provider interface
-pub trait DatabaseProvider: Send + Sync + 'static {
-    /// Get the provider name
-    fn name(&self) -> &'static str;
-
-    /// Get the provider version
-    fn version(&self) -> &'static str;
-
-    /// Check if this provider supports database migrations
-    fn supports_migrations(&self) -> bool {
-        false // Default implementation returns false
-    }
+/// The context for database operations
+/// Used to track operation context and logging
+#[derive(Debug, Clone)]
+pub struct OperationContext {
+    /// The name of the operation
+    pub operation: String,
+    /// The name of the table or collection
+    pub table: Option<String>,
+    /// Additional context for error reporting
+    pub additional_context: Option<String>,
 }
 
-/// Database module to be used in applications
-pub mod database {
-    pub use super::*;
+impl OperationContext {
+    pub fn new<S: Into<String>>(operation: S) -> Self {
+        Self {
+            operation: operation.into(),
+            table: None,
+            additional_context: None,
+        }
+    }
+
+    pub fn with_table<S: Into<String>>(mut self, table: S) -> Self {
+        self.table = Some(table.into());
+        self
+    }
+
+    pub fn with_additional_context<S: Into<String>>(mut self, context: S) -> Self {
+        self.additional_context = Some(context.into());
+        self
+    }
 }
 
 #[cfg(test)]

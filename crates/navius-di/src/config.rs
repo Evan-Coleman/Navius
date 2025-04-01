@@ -6,7 +6,6 @@
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
-    fmt,
     sync::{Arc, RwLock},
 };
 
@@ -14,6 +13,7 @@ use serde::de::DeserializeOwned;
 
 use crate::{
     application::ConfigProvider,
+    application::ConfigProviderExt,
     error::{Error, Result},
 };
 
@@ -63,15 +63,16 @@ impl<'a> ConfigBinding for Binder<'a> {
 
         // Convert the map to the target type using serde
         serde_json::to_value(config_map)
-            .map_err(|e| {
-                Error::ConfigBindingFailed(format!("Failed to serialize config map: {}", e))
+            .map_err(|e| Error::ConfigBindingFailed {
+                message: format!("Failed to serialize config map: {}", e),
             })
             .and_then(|json| {
-                serde_json::from_value::<T>(json).map_err(|e| {
-                    Error::ConfigBindingFailed(format!(
-                        "Failed to deserialize to target type: {}",
+                serde_json::from_value::<T>(json).map_err(|e| Error::ConfigBindingFailed {
+                    message: format!(
+                        "Failed to deserialize config map to {}: {}",
+                        std::any::type_name::<T>(),
                         e
-                    ))
+                    ),
                 })
             })
     }

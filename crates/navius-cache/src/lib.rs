@@ -54,12 +54,12 @@ let user: Option<User> = cache.get("user:123").await?;
 */
 
 // Internal modules
-mod config;
-mod connection;
-mod error;
-mod invalidation;
-mod metrics;
-mod operations;
+pub mod config;
+pub mod connection;
+pub mod error;
+pub mod invalidation;
+pub mod metrics;
+pub mod operations;
 
 // Public exports
 pub use config::CacheConfig;

@@ -98,6 +98,3 @@ pub use registry::{
     AsyncLifecycle, ComponentFactory, ComponentRef, ComponentRegistry, ComponentScope,
     DynComponentRef, Lifecycle, LifecyclePhase, TypedComponentFactory,
 };
-
-// Re-export macros
-pub use crate::{autowire, bean, component, config, inject, module};

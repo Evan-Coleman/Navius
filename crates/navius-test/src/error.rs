@@ -1,6 +1,7 @@
 use std::error::Error as StdError;
 use std::fmt;
 use std::result;
+use thiserror::Error;
 
 /// Result type for test operations
 pub type TestResult<T> = Result<T, TestError>;
@@ -283,67 +284,6 @@ impl TestError {
     }
 }
 
-impl fmt::Display for TestError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TestError::RegistryError(msg) => write!(f, "Registry error: {}", msg),
-            TestError::MockNotFound(msg) => write!(f, "Mock not found: {}", msg),
-            TestError::MockTypeMismatch(msg) => write!(f, "Mock type mismatch: {}", msg),
-            TestError::ExpectationNotMet(msg) => write!(f, "Expectation not met: {}", msg),
-            TestError::SetupError(msg) => write!(f, "Setup error: {}", msg),
-            TestError::TeardownError(msg) => write!(f, "Teardown error: {}", msg),
-            TestError::AssertionFailed(msg) => write!(f, "Assertion failed: {}", msg),
-            TestError::FixtureError(msg) => write!(f, "Fixture error: {}", msg),
-            TestError::MockError(msg) => write!(f, "Mock error: {}", msg),
-            TestError::IoError(err) => write!(f, "IO error: {}", err),
-            TestError::ValidationError(msg) => write!(f, "Validation error: {}", msg),
-            TestError::AssertionError(msg) => write!(f, "Assertion error: {}", msg),
-            TestError::ExecutionError(msg) => write!(f, "Execution error: {}", msg),
-            TestError::MissingComponent(msg) => write!(f, "Missing component: {}", msg),
-            TestError::MissingResource(msg) => write!(f, "Missing resource error: {}", msg),
-            TestError::InvalidConfiguration(msg) => {
-                write!(f, "Invalid configuration error: {}", msg)
-            }
-            TestError::ConversionError(msg) => write!(f, "Conversion error: {}", msg),
-            TestError::ConfigurationError(msg) => write!(f, "Configuration error: {}", msg),
-            TestError::ConcurrencyError(msg) => write!(f, "Concurrency error: {}", msg),
-            TestError::TimeoutError(msg) => write!(f, "Timeout error: {}", msg),
-            TestError::MockExpectationError(msg) => write!(f, "Mock expectation error: {}", msg),
-            TestError::InjectedError(msg) => write!(f, "Injected error: {}", msg),
-            TestError::ErrorPropagationError(msg) => write!(f, "Error propagation error: {}", msg),
-            TestError::ErrorContextError(msg) => write!(f, "Error context error: {}", msg),
-            TestError::MockNotRegistered(msg) => write!(f, "Mock not registered: {}", msg),
-            TestError::NetworkError(msg) => write!(f, "Network error: {}", msg),
-            TestError::ResourceError(msg) => write!(f, "Resource error: {}", msg),
-            TestError::DependencyError(msg) => write!(f, "Dependency error: {}", msg),
-            TestError::SuiteError(msg) => write!(f, "Test suite error: {}", msg),
-            TestError::RunnerError(msg) => write!(f, "Runner error: {}", msg),
-            TestError::HarnessError(msg) => write!(f, "Harness error: {}", msg),
-            TestError::IntegrationError(msg) => write!(f, "Integration error: {}", msg),
-            TestError::JsonError(err) => write!(f, "JSON error: {}", err),
-            TestError::TomlError(msg) => write!(f, "TOML error: {}", msg),
-            TestError::SerializationError(msg) => write!(f, "Serialization error: {}", msg),
-            TestError::GenericError(msg) => write!(f, "Generic error: {}", msg),
-        }
-    }
-}
-
-impl StdError for TestError {
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
-        match self {
-            TestError::IoError(err) => Some(err),
-            TestError::GenericError(err) => Some(err.as_ref()),
-            _ => None,
-        }
-    }
-}
-
-impl From<std::io::Error> for TestError {
-    fn from(err: std::io::Error) -> Self {
-        TestError::IoError(err)
-    }
-}
-
 impl From<String> for TestError {
     fn from(err: String) -> Self {
         TestError::GenericError(err)
@@ -353,12 +293,6 @@ impl From<String> for TestError {
 impl From<&str> for TestError {
     fn from(err: &str) -> Self {
         TestError::GenericError(err.to_string())
-    }
-}
-
-impl From<serde_json::Error> for TestError {
-    fn from(err: serde_json::Error) -> Self {
-        TestError::SerializationError(err.to_string())
     }
 }
 

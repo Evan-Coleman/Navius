@@ -4,6 +4,7 @@
 //! It supports running tests with fixtures, mocks, and environment configuration.
 
 use std::collections::HashMap;
+use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -11,7 +12,7 @@ use std::time::{Duration, Instant};
 use crate::config::TestConfig;
 use crate::error::{TestError, TestResult};
 use crate::fixture::TestFixture;
-use crate::integration::{IntegrationContext, IntegrationTestConfig};
+use crate::integration::{IntegrationContext, IntegrationTestConfig, TestLifecycleHooks};
 use crate::mock::MockRegistry;
 
 /// Trait for integration tests
@@ -32,40 +33,40 @@ pub trait IntegrationTest: Send + Sync {
     fn box_clone(&self) -> Box<dyn IntegrationTest + Send>;
 }
 
+// Add a Debug implementation for dyn IntegrationTest
+impl fmt::Debug for dyn IntegrationTest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "IntegrationTest({})", self.name())
+    }
+}
+
 /// Test result report
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TestReport {
-    /// Name of the test
-    pub name: String,
-    /// Whether the test passed
+    pub test_name: String,
     pub passed: bool,
-    /// Error information if the test failed
     pub error: Option<String>,
-    /// Duration of the test execution
     pub duration: Duration,
-    /// Additional information about the test
     pub info: HashMap<String, String>,
 }
 
 impl TestReport {
-    /// Create a new test report for a successful test
-    pub fn success(name: impl Into<String>, duration: Duration) -> Self {
+    pub fn new(test_name: String) -> Self {
         Self {
-            name: name.into(),
+            test_name,
             passed: true,
             error: None,
-            duration,
+            duration: Duration::default(),
             info: HashMap::new(),
         }
     }
 
-    /// Create a new test report for a failed test
-    pub fn failure(name: impl Into<String>, error: impl Into<String>, duration: Duration) -> Self {
+    pub fn failed(test_name: String, error: String) -> Self {
         Self {
-            name: name.into(),
+            test_name,
             passed: false,
-            error: Some(error.into()),
-            duration,
+            error: Some(error),
+            duration: Duration::default(),
             info: HashMap::new(),
         }
     }
@@ -78,6 +79,7 @@ impl TestReport {
 }
 
 /// Test runner for cross-crate integration tests
+#[derive(Debug)]
 pub struct TestRunner {
     /// Test configuration
     config: TestConfig,
@@ -143,7 +145,7 @@ impl TestRunner {
             }
 
             if let Some(report_dir) = &self.report_dir {
-                let report_path = report_dir.join(format!("{}.txt", report.name));
+                let report_path = report_dir.join(format!("{}.txt", report.test_name));
                 std::fs::write(&report_path, format!("{:?}", report)).map_err(|e| {
                     TestError::SetupError(format!("Failed to write test report: {}", e))
                 })?;
@@ -175,6 +177,10 @@ impl TestRunner {
             timeout: Some(timeout),
             verify_mocks: self.config.mocks.verify_expectations,
             cleanup_resources: self.config.resources.cleanup,
+            service_configs: HashMap::new(),
+            test_data_path: Some(PathBuf::from("tests/data")),
+            db_setup_scripts: Vec::new(),
+            lifecycle_hooks: TestLifecycleHooks::default(),
         };
 
         // Create the context here
@@ -207,7 +213,7 @@ impl TestRunner {
         let duration = end_time.duration_since(start_time);
 
         let report = TestReport {
-            name: test_name,
+            test_name,
             passed: run_result.is_ok(),
             error: run_result.err().map(|e| format!("{}", e)),
             duration,
@@ -220,9 +226,17 @@ impl TestRunner {
     /// Print a test report to stdout
     fn print_report(&self, report: &TestReport) {
         if report.passed {
-            println!("✅ {} - {:.2}s", report.name, report.duration.as_secs_f64());
+            println!(
+                "✅ {} - {:.2}s",
+                report.test_name,
+                report.duration.as_secs_f64()
+            );
         } else {
-            println!("❌ {} - {:.2}s", report.name, report.duration.as_secs_f64());
+            println!(
+                "❌ {} - {:.2}s",
+                report.test_name,
+                report.duration.as_secs_f64()
+            );
             if let Some(error) = &report.error {
                 println!("   Error: {}", error);
             }
@@ -429,7 +443,7 @@ mod tests {
         let report = runner.run_test(&test).unwrap();
 
         assert!(report.passed);
-        assert_eq!(report.name, "macro_test");
+        assert_eq!(report.test_name, "macro_test");
     }
 
     #[test]

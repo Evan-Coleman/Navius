@@ -17,6 +17,11 @@ pub use database::{
     Row, Value,
 };
 
+pub use cache::{
+    AsyncCache, CacheConnection, CacheConnectionManager, InMemoryCache, MockCacheConnection,
+    MockCacheConnectionManager, MockableCacheConnection,
+};
+
 pub use filesystem::{
     FileMetadata, FileSystem, MockFileHandle, MockFileMetadata, MockFileSystem, MockFileSystemError,
 };
@@ -42,6 +47,10 @@ pub use messaging::{
 pub use metrics::{MetricType, MetricValue, MetricsCollector, MetricsExporter, MockMetrics};
 
 use std::sync::Arc;
+
+use crate::config::TestConfig;
+use crate::error::{TestError, TestResult};
+use crate::mock::MockRegistry;
 
 /// Utility function to create a mock registry with common mocks
 pub fn setup_common_mocks() -> Arc<crate::mock::MockRegistry> {
@@ -479,19 +488,17 @@ pub fn register_default_mocks(
     let logger = Arc::new(MockLogger::new());
     let metrics = Arc::new(MockMetrics::new());
 
-    let _ = registry.register::<dyn events::EventPublisher, _>(event_broker.clone());
-    let _ = registry.register::<dyn events::EventSubscriber, _>(event_broker.clone());
-    let _ = registry.register::<dyn events::EventBroker, _>(event_broker);
-
-    let _ = registry.register::<dyn messaging::MessagePublisher, _>(message_broker.clone());
-    let _ = registry.register::<dyn messaging::MessageConsumer, _>(message_broker.clone());
-    let _ = registry.register::<dyn messaging::MessageBroker, _>(message_broker);
-
-    let _ = registry.register::<dyn cache::Cache, _>(cache);
-    let _ = registry.register::<dyn database::DatabaseClient, _>(db);
-    let _ = registry.register::<dyn filesystem::FileSystem, _>(fs);
-    let _ = registry.register::<dyn logger::Logger, _>(logger);
-    let _ = registry.register::<dyn metrics::Metrics, _>(metrics);
+    registry.register::<dyn events::EventPublisher, _>(event_broker.clone())?;
+    registry.register::<dyn events::EventSubscriber, _>(event_broker.clone())?;
+    registry.register::<dyn events::EventBroker, _>(event_broker.clone())?;
+    registry.register::<dyn messaging::MessagePublisher, _>(message_broker.clone())?;
+    registry.register::<dyn messaging::MessageConsumer, _>(message_broker.clone())?;
+    registry.register::<dyn messaging::MessageBroker, _>(message_broker.clone())?;
+    registry.register::<dyn cache::MockableCacheConnection, _>(cache)?;
+    registry.register::<dyn database::DatabaseClient, _>(db)?;
+    registry.register::<dyn filesystem::FileSystem, _>(fs)?;
+    registry.register::<dyn logger::Logger, _>(logger)?;
+    registry.register::<dyn metrics::MetricsCollector, _>(metrics)?;
 
     Ok(())
 }
@@ -508,18 +515,17 @@ pub fn register_default_mocks_with_config(
     let logger = Arc::new(MockLogger::new());
     let metrics = Arc::new(MockMetrics::new());
 
-    registry
-        .register::<dyn events::EventPublisher, _>(event_broker.clone())
-        .register::<dyn events::EventSubscriber, _>(event_broker.clone())
-        .register::<dyn events::EventBroker, _>(event_broker.clone())
-        .register::<dyn messaging::MessagePublisher, _>(message_broker.clone())
-        .register::<dyn messaging::MessageConsumer, _>(message_broker.clone())
-        .register::<dyn messaging::MessageBroker, _>(message_broker.clone())
-        .register::<dyn cache::Cache, _>(cache)
-        .register::<dyn database::DatabaseClient, _>(db)
-        .register::<dyn filesystem::FileSystem, _>(fs)
-        .register::<dyn logger::Logger, _>(logger)
-        .register::<dyn metrics::Metrics, _>(metrics);
+    registry.register::<dyn events::EventPublisher, _>(event_broker.clone())?;
+    registry.register::<dyn events::EventSubscriber, _>(event_broker.clone())?;
+    registry.register::<dyn events::EventBroker, _>(event_broker.clone())?;
+    registry.register::<dyn messaging::MessagePublisher, _>(message_broker.clone())?;
+    registry.register::<dyn messaging::MessageConsumer, _>(message_broker.clone())?;
+    registry.register::<dyn messaging::MessageBroker, _>(message_broker.clone())?;
+    registry.register::<dyn cache::MockableCacheConnection, _>(cache)?;
+    registry.register::<dyn database::DatabaseClient, _>(db)?;
+    registry.register::<dyn filesystem::FileSystem, _>(fs)?;
+    registry.register::<dyn logger::Logger, _>(logger)?;
+    registry.register::<dyn metrics::MetricsCollector, _>(metrics)?;
 
     Ok(())
 }

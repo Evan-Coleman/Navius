@@ -9,8 +9,8 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::{Arc, RwLock};
 
-use self::config::{Expectation, ExpectedTimes};
-use self::expect::{MethodExpectBuilder, MockExpectBuilder};
+pub use self::config::{Expectation, ExpectedTimes};
+pub use self::expect::{MethodExpectBuilder, MockExpectBuilder};
 use crate::error::{TestError, TestResult};
 
 // Core traits and structures for mocking
@@ -114,11 +114,12 @@ impl MockRegistry {
     /// Record a method call
     pub fn record_call(
         &self,
-        mock_name: impl Into<String>,
-        method: impl Into<String>,
+        mock_name: impl Into<String> + Clone,
+        method: impl Into<String> + Clone,
         args: Vec<String>,
     ) -> TestResult<()> {
-        let key = format!("{}::{}", mock_name.into(), method.into());
+        let mock_name_clone = mock_name.clone();
+        let key = format!("{}::{}", mock_name.into(), method.clone().into());
         let mut call_counts = self.call_counts.write().unwrap();
 
         let count = call_counts.entry(key.clone()).or_insert(0);
@@ -126,9 +127,9 @@ impl MockRegistry {
 
         // Check if this call matches any expectations
         let expectations = self.expectations.read().unwrap();
-        if let Some(mock_expectations) = expectations.get(&mock_name.into()) {
+        if let Some(mock_expectations) = expectations.get(&mock_name_clone.into()) {
             for expectation in mock_expectations {
-                if expectation.method == method.into() && expectation.args == args {
+                if expectation.method == method.clone().into() && expectation.args == args {
                     // Found a matching expectation
                     return Ok(());
                 }
@@ -190,6 +191,45 @@ impl MockRegistry {
                 errors.join("\n")
             )))
         }
+    }
+
+    pub fn verify_call<S1, S2>(&self, mock_name: S1, method: S2, args: Vec<String>) -> bool
+    where
+        S1: Into<String> + Clone,
+        S2: Into<String> + Clone,
+    {
+        let mock_name_str = mock_name.clone().into();
+        let method_str = method.clone().into();
+        let key = format!("{}::{}", mock_name_str, method_str);
+
+        if let Some(mock_expectations) = self.expectations.read().unwrap().get(&mock_name_str) {
+            for expectation in mock_expectations {
+                if expectation.method == method_str && expectation.args == args {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    pub fn verify_expectation(
+        &self,
+        mock_name: impl AsRef<str>,
+        method: impl AsRef<str>,
+        args: Vec<String>,
+    ) -> bool {
+        let mock_name = mock_name.as_ref();
+        let method = method.as_ref();
+        let key = format!("{}::{}", mock_name, method);
+
+        if let Some(mock_expectations) = self.expectations.read().unwrap().get(mock_name) {
+            for expectation in mock_expectations {
+                if expectation.method == method && expectation.args == args {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }
 

@@ -17,7 +17,9 @@ postgres = []
 [dependencies]
 # Core dependencies
 navius-core = { path = "../../crates/navius-core", version = "0.1.0" }
+# navius-test = { path = "../../crates/navius-test", version = "0.1.0" }
 async-trait = { workspace = true }
+futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

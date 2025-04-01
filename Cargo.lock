@@ -2627,47 +2627,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "navius"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "axum",
- "chrono",
- "config",
- "dotenvy",
- "mockall",
- "navius-auth",
- "navius-auth-entra",
- "navius-cache",
- "navius-cache-redis",
- "navius-core",
- "navius-db",
- "navius-db-postgres",
- "navius-di",
- "navius-event",
- "navius-http",
- "navius-job",
- "navius-messaging",
- "navius-metrics",
- "navius-metrics-prometheus",
- "navius-plugin",
- "redis",
- "serde",
- "serde_json",
- "sqlx",
- "thiserror 2.0.12",
- "tokio",
- "tokio-test",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "utoipa",
- "utoipa-swagger-ui",
- "uuid",
-]
-
-[[package]]
 name = "navius-auth"
 version = "0.1.0"
 dependencies = [
@@ -2824,6 +2783,7 @@ name = "navius-db"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "futures",
  "mockall",
  "navius-core",
  "serde",
@@ -2885,6 +2845,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "env_logger",
+ "futures",
  "log",
  "mockall",
  "navius-core",
@@ -3080,6 +3041,7 @@ dependencies = [
  "async-trait",
  "axum",
  "fake",
+ "metrics",
  "metrics-exporter-prometheus",
  "mock-it",
  "mockall",

@@ -3,18 +3,19 @@ use crate::error::{RedisCacheError, RedisCacheResult};
 use crate::metrics;
 use async_trait::async_trait;
 use navius_cache::error::{CacheError, CacheResult};
+use redis::aio::Connection;
 use redis::{AsyncCommands, FromRedisValue, RedisError, Script, ScriptInvocation};
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::RwLock;
 use tracing::{debug, error, instrument, trace};
 
 // Forward declaration of RedisCache to avoid circular reference
 use crate::operations::RedisCache;
 
-/// Redis Lua scripting trait
-#[async_trait]
+/// Redis Lua scripting interface for atomic operations
 pub trait RedisLuaScripting: Send + Sync {
     /// Register a new script
     async fn register_script(&self, name: &str, script_body: &str) -> CacheResult<()>;
@@ -28,13 +29,13 @@ pub trait RedisLuaScripting: Send + Sync {
     ) -> CacheResult<T>;
 
     /// Get a cached value with automatic deserialization
-    async fn atomic_get<T: DeserializeOwned + Send + Sync>(
+    async fn atomic_get<T: DeserializeOwned + Send + Sync + 'static>(
         &self,
         key: &str,
     ) -> CacheResult<Option<T>>;
 
     /// Set a value with automatic serialization
-    async fn atomic_set<T: Serialize + Send + Sync>(
+    async fn atomic_set<T: Serialize + Send + Sync + 'static>(
         &self,
         key: &str,
         value: &T,
@@ -42,7 +43,7 @@ pub trait RedisLuaScripting: Send + Sync {
     ) -> CacheResult<()>;
 
     /// Update a value atomically
-    async fn atomic_update<T: Serialize + DeserializeOwned + Send + Sync>(
+    async fn atomic_update<T: Serialize + DeserializeOwned + Send + Sync + 'static>(
         &self,
         key: &str,
         update_fn: Box<dyn FnOnce(Option<T>) -> T + Send + Sync>,
@@ -53,7 +54,7 @@ pub trait RedisLuaScripting: Send + Sync {
     async fn atomic_increment(&self, key: &str, amount: i64) -> CacheResult<i64>;
 
     /// Set a value with TTL if it doesn't exist
-    async fn atomic_set_nx<T: Serialize + Send + Sync>(
+    async fn atomic_set_nx<T: Serialize + Send + Sync + 'static>(
         &self,
         key: &str,
         value: &T,
@@ -71,11 +72,12 @@ pub struct ScriptInfo {
 }
 
 /// Redis Lua script manager
+#[derive(Debug)]
 pub struct RedisLuaManager {
     /// Connection manager
-    pub(crate) connection_manager: Arc<RedisConnectionManager>,
+    connection_manager: Arc<RedisConnectionManager>,
     /// Registered scripts
-    pub(crate) scripts: Mutex<HashMap<String, ScriptInfo>>,
+    scripts: RwLock<HashMap<String, Script>>,
 }
 
 impl RedisLuaManager {
@@ -83,48 +85,115 @@ impl RedisLuaManager {
     pub fn new(connection_manager: Arc<RedisConnectionManager>) -> Self {
         Self {
             connection_manager,
-            scripts: Mutex::new(HashMap::new()),
+            scripts: RwLock::new(HashMap::new()),
         }
     }
 
     /// Register a script
-    pub fn register(&self, name: &str, script: &str) -> ScriptInfo {
-        let script_obj = Script::new(script);
-        let hash = script_obj.get_hash().to_string();
-        let script_info = ScriptInfo {
-            script: script.to_string(),
-            hash,
-        };
+    #[instrument(skip(self, script), level = "debug")]
+    pub async fn register_script(&self, name: &str, script: &str) -> Result<(), RedisCacheError> {
+        let script = redis::Script::new(script);
+        let mut scripts = self.scripts.write().await;
+        scripts.insert(name.to_string(), script);
+        Ok(())
+    }
 
-        let mut scripts = self.scripts.lock().unwrap();
-        scripts.insert(name.to_string(), script_info.clone());
-        script_info
+    /// Get a prefixed key
+    pub fn get_prefixed_key(&self, key: &str) -> String {
+        self.connection_manager.prefix_key(key)
     }
 
     /// Get a script
-    pub fn get_script(&self, name: &str) -> Option<ScriptInfo> {
-        let scripts = self.scripts.lock().unwrap();
-        scripts.get(name).cloned()
+    pub async fn get_script(&self, name: &str) -> Option<ScriptInfo> {
+        let scripts = self.scripts.read().await;
+        scripts.get(name).map(|s| ScriptInfo {
+            script: s.get_body().to_string(),
+            hash: s.get_hash().to_string(),
+        })
     }
 
     /// Check if a script exists
-    pub fn script_exists(&self, script_name: &str) -> bool {
-        self.scripts.lock().unwrap().contains_key(script_name)
+    pub async fn script_exists(&self, script_name: &str) -> bool {
+        let scripts = self.scripts.read().await;
+        scripts.contains_key(script_name)
     }
 
     /// Get a script hash
-    pub fn get_script_hash(&self, script_name: &str) -> Option<String> {
-        self.scripts
-            .lock()
-            .unwrap()
-            .get(script_name)
-            .map(|s| s.hash.clone())
+    pub async fn get_script_hash(&self, script_name: &str) -> Option<String> {
+        let scripts = self.scripts.read().await;
+        scripts.get(script_name).map(|s| s.get_hash().to_string())
+    }
+
+    #[instrument(skip(self, script), level = "debug")]
+    pub async fn load_script(&self, script: &str) -> Result<Script, RedisError> {
+        let mut conn = self.connection_manager.get_connection().await?;
+        let script = Script::new(script);
+        script
+            .prepare_invoke()
+            .invoke_async::<_, ()>(&mut *conn)
+            .await?;
+
+        let mut scripts = self.scripts.write().await;
+        scripts.insert(script.get_name().to_string(), script.clone());
+
+        Ok(script)
+    }
+
+    #[instrument(skip(self, keys, args), level = "debug")]
+    pub async fn execute_script<T: FromRedisValue>(
+        &self,
+        name: &str,
+        keys: &[&str],
+        args: &[&str],
+    ) -> Result<T, RedisCacheError> {
+        let scripts = self.scripts.read().await;
+        let script = scripts.get(name).ok_or_else(|| {
+            RedisCacheError::OperationError(format!("Script '{}' not found", name))
+        })?;
+
+        let timer = metrics::TimedOperation::new("EVALSHA");
+        let result = self
+            .connection_manager
+            .execute_command(name, "EVALSHA", |mut conn| async move {
+                script
+                    .key(keys)
+                    .arg(args)
+                    .invoke_async(&mut conn)
+                    .await
+                    .map_err(|e| RedisCacheError::OperationError(e.to_string()))
+            })
+            .await;
+
+        timer.record(&result);
+        result
+    }
+
+    #[instrument(skip(self, keys, args), level = "debug")]
+    pub async fn execute_script_with_deserialization<T: DeserializeOwned>(
+        &self,
+        script_name: &str,
+        keys: &[&str],
+        args: &[&str],
+    ) -> Result<T, RedisCacheError> {
+        let bytes = self
+            .execute_script::<Vec<u8>>(script_name, keys, args)
+            .await?;
+
+        self.connection_manager.deserialize(&bytes).await
+    }
+
+    #[instrument(skip(self), level = "debug")]
+    pub async fn clear_scripts(&self) -> Result<(), RedisCacheError> {
+        let mut scripts = self.scripts.write().await;
+        scripts.clear();
+        Ok(())
     }
 }
 
 /// Helper function to execute a Lua script with metrics
+#[instrument(skip(connection_manager, script), level = "debug")]
 pub async fn execute_script_with_metrics<T: FromRedisValue>(
-    connection_manager: &Arc<RedisConnectionManager>,
+    connection_manager: &RedisConnectionManager,
     script_name: &str,
     script: ScriptInvocation<'_>,
     key: &str,
@@ -132,21 +201,8 @@ pub async fn execute_script_with_metrics<T: FromRedisValue>(
     let timer = metrics::TimedOperation::new(metrics::names::SCRIPT_EXECUTE);
 
     let result = connection_manager
-        .execute_command(key, "EVALSHA", move |mut conn| {
-            let result = script.invoke(&mut conn);
-            match result {
-                Ok(value) => Ok(value),
-                Err(err) => {
-                    // Check if this is a NOSCRIPT error, which means we need to load the script
-                    if let redis::RedisError::Redis(ref redis_err) = err {
-                        if redis_err.contains("NOSCRIPT") {
-                            // Script not found, but this should not happen with our initialization
-                            error!("Script '{}' not found in Redis. This should not happen with proper initialization.", script_name);
-                        }
-                    }
-                    Err(err)
-                }
-            }
+        .execute_command(key, "EVALSHA", |conn| async move {
+            script.invoke_async(&mut conn).await
         })
         .await;
 
@@ -161,15 +217,11 @@ impl RedisLuaScripting for RedisLuaManager {
     #[instrument(skip(self), level = "debug")]
     async fn register_script(&self, name: &str, script_body: &str) -> CacheResult<()> {
         // Register the script with the manager
-        self.register(name, script_body);
+        self.register_script(name, script_body).await?;
 
         // Load the script into Redis to validate syntax
         let script = Script::new(script_body);
-        let mut conn = self
-            .connection_manager
-            .get_connection()
-            .await
-            .map_err(|e| CacheError::OperationError(format!("Failed to get connection: {}", e)))?;
+        let mut conn = self.connection_manager.get_connection().await?;
 
         // Try to preload the script
         script
@@ -196,8 +248,8 @@ impl RedisLuaScripting for RedisLuaManager {
             args.len()
         );
 
-        let script_info = match self.scripts.lock().unwrap().get(name) {
-            Some(script) => script.clone(),
+        let script_info = match self.get_script(name).await {
+            Some(script) => script,
             None => {
                 return Err(CacheError::OperationError(format!(
                     "Script '{}' not found",
@@ -220,7 +272,7 @@ impl RedisLuaScripting for RedisLuaManager {
     }
 
     #[instrument(skip(self), level = "debug")]
-    async fn atomic_get<T: DeserializeOwned + Send + Sync>(
+    async fn atomic_get<T: DeserializeOwned + Send + Sync + 'static>(
         &self,
         key: &str,
     ) -> CacheResult<Option<T>> {
@@ -228,7 +280,7 @@ impl RedisLuaScripting for RedisLuaManager {
         trace!("Executing atomic get for key: {}", key);
 
         // Set up the script if not already registered
-        if !self.script_exists(script_name) {
+        if !self.script_exists(script_name).await {
             let script = r#"
             local value = redis.call('GET', KEYS[1])
             if not value then
@@ -240,18 +292,18 @@ impl RedisLuaScripting for RedisLuaManager {
             self.register_script(script_name, script).await?;
         }
 
-        let prefixed_key = self.connection_manager.prefixed_key(key);
+        let prefixed_key = self.get_prefixed_key(key);
 
-        let result: Option<String> = self
+        let result: Option<Vec<u8>> = self
             .execute_script(script_name, &[&prefixed_key], &[])
             .await?;
 
         match result {
             Some(val) => {
                 // Deserialize the value
-                let bytes = val.as_bytes();
                 self.connection_manager
-                    .deserialize::<T>(bytes)
+                    .deserialize(&val)
+                    .await
                     .map(Some)
                     .map_err(|e| CacheError::DeserializationError(e.to_string()))
             }
@@ -260,7 +312,7 @@ impl RedisLuaScripting for RedisLuaManager {
     }
 
     #[instrument(skip(self, value), level = "debug")]
-    async fn atomic_set<T: Serialize + Send + Sync>(
+    async fn atomic_set<T: Serialize + Send + Sync + 'static>(
         &self,
         key: &str,
         value: &T,
@@ -270,7 +322,7 @@ impl RedisLuaScripting for RedisLuaManager {
         trace!("Executing atomic set for key: {}", key);
 
         // Set up the script if not already registered
-        if !self.script_exists(script_name) {
+        if !self.script_exists(script_name).await {
             let script = r#"
             if ARGV[2] ~= '' then
                 redis.call('SETEX', KEYS[1], ARGV[2], ARGV[1])
@@ -283,19 +335,21 @@ impl RedisLuaScripting for RedisLuaManager {
             self.register_script(script_name, script).await?;
         }
 
-        let prefixed_key = self.connection_manager.prefixed_key(key);
+        let prefixed_key = self.get_prefixed_key(key);
         let ttl_seconds = ttl.map(|t| t.as_secs().to_string()).unwrap_or_default();
 
         // Serialize the value
         let serialized = self.connection_manager.serialize(value).await?;
-        let serialized_str = String::from_utf8(serialized)
-            .map_err(|e| CacheError::SerializationError(e.to_string()))?;
 
         let _: i32 = self
             .execute_script(
                 script_name,
                 &[&prefixed_key],
-                &[&serialized_str, &ttl_seconds],
+                &[
+                    std::str::from_utf8(&serialized)
+                        .map_err(|e| CacheError::SerializationError(e.to_string()))?,
+                    &ttl_seconds,
+                ],
             )
             .await?;
 
@@ -303,7 +357,7 @@ impl RedisLuaScripting for RedisLuaManager {
     }
 
     #[instrument(skip(self, update_fn), level = "debug")]
-    async fn atomic_update<T: Serialize + DeserializeOwned + Send + Sync>(
+    async fn atomic_update<T: Serialize + DeserializeOwned + Send + Sync + 'static>(
         &self,
         key: &str,
         update_fn: Box<dyn FnOnce(Option<T>) -> T + Send + Sync>,
@@ -321,7 +375,7 @@ impl RedisLuaScripting for RedisLuaManager {
         let script_name = "atomic_update";
 
         // Set up the script if not already registered
-        if !self.script_exists(script_name) {
+        if !self.script_exists(script_name).await {
             let script = r#"
             if ARGV[2] ~= '' then
                 redis.call('SETEX', KEYS[1], ARGV[2], ARGV[1])
@@ -334,19 +388,21 @@ impl RedisLuaScripting for RedisLuaManager {
             self.register_script(script_name, script).await?;
         }
 
-        let prefixed_key = self.connection_manager.prefixed_key(key);
+        let prefixed_key = self.get_prefixed_key(key);
         let ttl_seconds = ttl.map(|t| t.as_secs().to_string()).unwrap_or_default();
 
         // Serialize the value
         let serialized = self.connection_manager.serialize(&new_value).await?;
-        let serialized_str = String::from_utf8(serialized)
-            .map_err(|e| CacheError::SerializationError(e.to_string()))?;
 
-        let _: String = self
+        let _: Vec<u8> = self
             .execute_script(
                 script_name,
                 &[&prefixed_key],
-                &[&serialized_str, &ttl_seconds],
+                &[
+                    std::str::from_utf8(&serialized)
+                        .map_err(|e| CacheError::SerializationError(e.to_string()))?,
+                    &ttl_seconds,
+                ],
             )
             .await?;
 
@@ -359,7 +415,7 @@ impl RedisLuaScripting for RedisLuaManager {
         trace!("Executing atomic increment for key: {} by {}", key, amount);
 
         // Set up the script if not already registered
-        if !self.script_exists(script_name) {
+        if !self.script_exists(script_name).await {
             let script = r#"
             return redis.call('INCRBY', KEYS[1], ARGV[1])
             "#;
@@ -367,7 +423,7 @@ impl RedisLuaScripting for RedisLuaManager {
             self.register_script(script_name, script).await?;
         }
 
-        let prefixed_key = self.connection_manager.prefixed_key(key);
+        let prefixed_key = self.get_prefixed_key(key);
 
         let result: i64 = self
             .execute_script(script_name, &[&prefixed_key], &[&amount.to_string()])
@@ -377,7 +433,7 @@ impl RedisLuaScripting for RedisLuaManager {
     }
 
     #[instrument(skip(self, value), level = "debug")]
-    async fn atomic_set_nx<T: Serialize + Send + Sync>(
+    async fn atomic_set_nx<T: Serialize + Send + Sync + 'static>(
         &self,
         key: &str,
         value: &T,
@@ -387,7 +443,7 @@ impl RedisLuaScripting for RedisLuaManager {
         trace!("Executing atomic set_nx for key: {}", key);
 
         // Set up the script if not already registered
-        if !self.script_exists(script_name) {
+        if !self.script_exists(script_name).await {
             let script = r#"
             local result = redis.call('SETNX', KEYS[1], ARGV[1])
             if result == 1 then
@@ -400,19 +456,21 @@ impl RedisLuaScripting for RedisLuaManager {
             self.register_script(script_name, script).await?;
         }
 
-        let prefixed_key = self.connection_manager.prefixed_key(key);
+        let prefixed_key = self.get_prefixed_key(key);
         let ttl_seconds = ttl.as_secs().to_string();
 
         // Serialize the value
         let serialized = self.connection_manager.serialize(value).await?;
-        let serialized_str = String::from_utf8(serialized)
-            .map_err(|e| CacheError::SerializationError(e.to_string()))?;
 
         let result: i32 = self
             .execute_script(
                 script_name,
                 &[&prefixed_key],
-                &[&serialized_str, &ttl_seconds],
+                &[
+                    std::str::from_utf8(&serialized)
+                        .map_err(|e| CacheError::SerializationError(e.to_string()))?,
+                    &ttl_seconds,
+                ],
             )
             .await?;
 
@@ -500,7 +558,6 @@ pub async fn initialize_common_scripts(cache: &RedisCache) -> CacheResult<()> {
 mod tests {
     use super::*;
     use crate::config::RedisCacheConfig;
-    use navius_cache::serialization::JsonSerializer;
     use serde::{Deserialize, Serialize};
     use std::time::Duration;
 
@@ -515,20 +572,17 @@ mod tests {
         // Create configuration
         let config = RedisCacheConfig {
             url: "redis://127.0.0.1:6379".to_string(),
-            key_prefix: "test:lua:".to_string(),
-            default_ttl: Duration::from_secs(300),
-            max_connections: 10,
-            database: 0,
-            password: None,
-            use_tls: false,
-            connection_timeout_seconds: 5,
+            key_prefix: Some("test:lua:".to_string()),
             command_timeout_seconds: 2,
-            retry_commands: true,
-            max_retries: 3,
+            ..Default::default()
         };
 
         // Create connection manager and cache
-        let connection_manager = match RedisConnectionManager::new(config).await {
+        let connection_manager = match RedisConnectionManager::new(
+            &config.url,
+            config.key_prefix.clone(),
+            Duration::from_secs(config.command_timeout_seconds),
+        ) {
             Ok(manager) => manager,
             Err(_) => {
                 println!("Skipping test_lua_scripting - Redis not available");
@@ -536,69 +590,29 @@ mod tests {
             }
         };
 
-        let cache = RedisCache::with_serializer(connection_manager, JsonSerializer)
-            .expect("Failed to create Redis cache");
+        let cache =
+            RedisCache::new(Arc::new(connection_manager)).expect("Failed to create Redis cache");
 
-        // Test execute_raw_script
-        let result: i64 = cache
-            .execute_raw_script(
-                "return tonumber(ARGV[1]) + tonumber(ARGV[2])",
-                &[],
-                &["5", "7"],
-            )
+        // Test script registration and execution
+        let script_name = "test_script";
+        let script_body = "return {KEYS[1], ARGV[1], ARGV[2]}";
+
+        cache
+            .register_script(script_name, script_body)
             .await
-            .expect("Failed to execute Lua script");
-        assert_eq!(result, 12);
+            .expect("Failed to register script");
 
-        // Test check_and_increment_counter
-        let key = "counter:test";
-        let max_value = 5;
-        let ttl = Some(Duration::from_secs(60));
-
-        // Reset the counter
-        cache.delete(key).await.unwrap();
-
-        // Increment counter 5 times
-        for i in 0..5 {
-            let result = cache
-                .check_and_increment_counter(key, max_value, ttl)
-                .await
-                .expect("Failed to check and increment counter");
-            assert!(result, "Counter increment {} failed", i);
-        }
-
-        // Sixth increment should fail
-        let result = cache
-            .check_and_increment_counter(key, max_value, ttl)
+        let result: Vec<String> = cache
+            .execute_script(script_name, &["key1"], &["arg1", "arg2"])
             .await
-            .expect("Failed to check and increment counter");
-        assert!(!result, "Counter should have reached max value");
+            .expect("Failed to execute script");
 
-        // Test set_if_not_exists
-        let key = "user:unique";
-        cache.delete(key).await.unwrap();
-
-        let user = TestUser {
-            id: 1,
-            name: "Test User".to_string(),
-        };
-
-        // First set should succeed
-        let result = cache
-            .set_if_not_exists(key, &user, Some(Duration::from_secs(60)))
-            .await
-            .expect("Failed to set if not exists");
-        assert!(result, "First set should succeed");
-
-        // Second set should fail
-        let result = cache
-            .set_if_not_exists(key, &user, Some(Duration::from_secs(60)))
-            .await
-            .expect("Failed to set if not exists");
-        assert!(!result, "Second set should fail");
+        assert_eq!(result.len(), 3);
+        assert!(result[0].contains("key1"));
+        assert_eq!(result[1], "arg1");
+        assert_eq!(result[2], "arg2");
 
         // Clean up
-        cache.delete(key).await.unwrap();
-        cache.delete("counter:test").await.unwrap();
+        cache.flush().await.expect("Failed to flush cache");
     }
 }

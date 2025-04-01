@@ -1,26 +1,22 @@
 use async_trait::async_trait;
-use navius_cache::{
-    error::{CacheError, CacheResult},
-    operations::Cache,
-    serialization::CacheSerializer,
-};
-use redis::{AsyncCommands, Pipeline, aio::ConnectionManager, pipe};
-use serde::{Serialize, de::DeserializeOwned};
+use navius_cache::{Cache, CacheError, CacheResult};
+use redis::{aio::Connection, AsyncCommands, Pipeline, RedisError, Value as RedisValue};
+use serde::{de::DeserializeOwned, Serialize};
 use std::{sync::Arc, time::Duration};
+use tokio::sync::MutexGuard;
+use tokio::time::timeout;
 use tracing::{debug, error, instrument};
 
-use crate::{
-    error::{RedisCacheError, RedisCacheResult},
-    operations::RedisCache,
-};
-
 use crate::connection::RedisConnectionManager;
+use crate::error::RedisCacheError;
+use crate::lua::RedisLuaManager;
 use crate::metrics;
+use crate::RedisCache;
 use std::time::Instant;
 
-/// Batched operations for the Redis cache
+/// Pipeline interface for Redis operations
 #[async_trait]
-pub trait RedisPipeline: Cache {
+pub trait RedisPipeline {
     /// Execute multiple operations in a single Redis pipeline
     ///
     /// This can significantly improve performance by reducing round trips to the Redis server.
@@ -31,7 +27,7 @@ pub trait RedisPipeline: Cache {
         R: DeserializeOwned + Send + Sync;
 
     /// Set multiple key-value pairs in a single batch operation
-    async fn set_many<T: Serialize + Send + Sync>(
+    async fn set_many<T: Serialize + Send + Sync + std::fmt::Debug>(
         &self,
         entries: &[(&str, &T)],
         ttl: Option<Duration>,
@@ -59,60 +55,60 @@ impl RedisPipelineBuilder {
     /// Create a new pipeline builder
     pub fn new() -> Self {
         Self {
-            pipeline: pipe(),
+            pipeline: Pipeline::new(),
             operation_count: 0,
         }
     }
 
     /// Add a GET operation to the pipeline
     pub fn get(mut self, key: &str) -> Self {
-        self.pipeline = self.pipeline.cmd("GET").arg(key);
+        self.pipeline.get(key).ignore();
         self.operation_count += 1;
         self
     }
 
     /// Add a SET operation to the pipeline
     pub fn set(mut self, key: &str, value: &[u8]) -> Self {
-        self.pipeline = self.pipeline.cmd("SET").arg(key).arg(value);
+        self.pipeline.set(key, value).ignore();
         self.operation_count += 1;
         self
     }
 
     /// Add a SETEX operation (SET with expiration) to the pipeline
     pub fn setex(mut self, key: &str, seconds: u64, value: &[u8]) -> Self {
-        self.pipeline = self.pipeline.cmd("SETEX").arg(key).arg(seconds).arg(value);
+        self.pipeline.set_ex(key, value, seconds as usize).ignore();
         self.operation_count += 1;
         self
     }
 
     /// Add a DEL operation to the pipeline
     pub fn del(mut self, key: &str) -> Self {
-        self.pipeline = self.pipeline.cmd("DEL").arg(key);
+        self.pipeline.del(key).ignore();
         self.operation_count += 1;
         self
     }
 
     /// Add a EXISTS operation to the pipeline
     pub fn exists(mut self, key: &str) -> Self {
-        self.pipeline = self.pipeline.cmd("EXISTS").arg(key);
+        self.pipeline.exists(key).ignore();
         self.operation_count += 1;
         self
     }
 
     /// Add an INCR operation to the pipeline
     pub fn incr(mut self, key: &str, amount: i64) -> Self {
-        self.pipeline = self.pipeline.cmd("INCRBY").arg(key).arg(amount);
+        self.pipeline.incr(key, amount).ignore();
         self.operation_count += 1;
         self
     }
 
     /// Add a custom command to the pipeline
-    pub fn cmd(mut self, cmd: &str, args: Vec<&str>) -> Self {
-        let mut command = self.pipeline.cmd(cmd);
+    pub fn cmd(mut self, cmd_str: &str, args: Vec<&str>) -> Self {
+        let mut command = redis::cmd(cmd_str);
         for arg in args {
-            command = command.arg(arg);
+            command.arg(arg);
         }
-        self.pipeline = command;
+        self.pipeline.add_command(command).ignore();
         self.operation_count += 1;
         self
     }
@@ -134,30 +130,36 @@ impl Default for RedisPipelineBuilder {
     }
 }
 
-/// Pipeline trait for batching Redis operations
-pub trait Pipeline {
-    /// Execute the pipeline
-    async fn execute(self) -> RedisCacheResult<()>;
+#[derive(Debug)]
+pub enum PipelineCommand {
+    Set {
+        key: String,
+        value: Vec<u8>,
+        expiry: Option<Duration>,
+    },
+    Get {
+        key: String,
+    },
+    Del {
+        key: String,
+    },
+    Exists {
+        key: String,
+    },
 }
 
 /// Redis pipeline implementation
-#[derive(Debug)]
-pub struct RedisPipeline {
-    /// Connection manager
-    connection_manager: Arc<RedisConnectionManager>,
-    /// Redis pipeline
-    pipeline: RedisPipeline,
-    /// Key for tracking which entity this pipeline is operating on
-    key: String,
+pub struct RedisPipelineImpl {
+    commands: Vec<PipelineCommand>,
+    connection_manager: RedisConnectionManager,
 }
 
-impl RedisPipeline {
+impl RedisPipelineImpl {
     /// Create a new Redis pipeline
-    pub fn new(connection_manager: Arc<RedisConnectionManager>, key: &str) -> Self {
+    pub fn new(connection_manager: RedisConnectionManager) -> Self {
         Self {
+            commands: Vec::new(),
             connection_manager,
-            pipeline: RedisPipeline::new(),
-            key: key.to_string(),
         }
     }
 
@@ -168,49 +170,71 @@ impl RedisPipeline {
         for arg in args {
             redis_cmd.arg(arg);
         }
-        self.pipeline.add_command(redis_cmd);
+        self.commands.push(PipelineCommand::Set {
+            key: cmd.to_string(),
+            value: args.iter().map(|arg| arg.to_redis_args()).collect(),
+            expiry: None,
+        });
         self
     }
 
     /// Add a SET command to the pipeline
     #[instrument(skip(self, value), level = "debug")]
     pub fn set<V: redis::ToRedisArgs>(&mut self, key: &str, value: V) -> &mut Self {
-        self.pipeline.set(key, value);
+        self.commands.push(PipelineCommand::Set {
+            key: key.to_string(),
+            value: value.to_redis_args().collect(),
+            expiry: None,
+        });
         self
     }
 
     /// Add a GET command to the pipeline
     #[instrument(skip(self), level = "debug")]
     pub fn get(&mut self, key: &str) -> &mut Self {
-        self.pipeline.get(key);
+        self.commands.push(PipelineCommand::Get {
+            key: key.to_string(),
+        });
         self
     }
 
     /// Add a DEL command to the pipeline
     #[instrument(skip(self), level = "debug")]
     pub fn del(&mut self, key: &str) -> &mut Self {
-        self.pipeline.del(key);
+        self.commands.push(PipelineCommand::Del {
+            key: key.to_string(),
+        });
         self
     }
 
     /// Add an EXISTS command to the pipeline
     #[instrument(skip(self), level = "debug")]
     pub fn exists(&mut self, key: &str) -> &mut Self {
-        self.pipeline.exists(key);
+        self.commands.push(PipelineCommand::Exists {
+            key: key.to_string(),
+        });
         self
     }
 
     /// Add an EXPIRE command to the pipeline
     #[instrument(skip(self), level = "debug")]
     pub fn expire(&mut self, key: &str, seconds: usize) -> &mut Self {
-        self.pipeline.expire(key, seconds);
+        self.commands.push(PipelineCommand::Set {
+            key: key.to_string(),
+            value: Vec::new(),
+            expiry: Some(Duration::from_secs(seconds as u64)),
+        });
         self
     }
 
     /// Add a TTL command to the pipeline
     #[instrument(skip(self), level = "debug")]
     pub fn ttl(&mut self, key: &str) -> &mut Self {
-        self.pipeline.ttl(key);
+        self.commands.push(PipelineCommand::Set {
+            key: key.to_string(),
+            value: Vec::new(),
+            expiry: None,
+        });
         self
     }
 
@@ -221,122 +245,252 @@ impl RedisPipeline {
         key: &str,
         items: &[(K, V)],
     ) -> &mut Self {
-        self.pipeline.hmset(key, items);
+        self.commands.push(PipelineCommand::Set {
+            key: key.to_string(),
+            value: items
+                .iter()
+                .map(|(k, v)| k.to_redis_args().chain(v.to_redis_args()))
+                .flatten()
+                .collect(),
+            expiry: None,
+        });
         self
     }
 
     /// Add a HGET command to the pipeline
     #[instrument(skip(self), level = "debug")]
     pub fn hget(&mut self, key: &str, field: &str) -> &mut Self {
-        self.pipeline.hget(key, field);
+        self.commands.push(PipelineCommand::Set {
+            key: format!("{}:{}", key, field),
+            value: Vec::new(),
+            expiry: None,
+        });
         self
     }
 
     /// Add a HDEL command to the pipeline
     #[instrument(skip(self), level = "debug")]
     pub fn hdel(&mut self, key: &str, field: &str) -> &mut Self {
-        self.pipeline.hdel(key, field);
+        self.commands.push(PipelineCommand::Del {
+            key: format!("{}:{}", key, field),
+        });
         self
     }
 
     /// Add a HGETALL command to the pipeline
     #[instrument(skip(self), level = "debug")]
     pub fn hgetall(&mut self, key: &str) -> &mut Self {
-        self.pipeline.hgetall(key);
+        self.commands.push(PipelineCommand::Set {
+            key: key.to_string(),
+            value: Vec::new(),
+            expiry: None,
+        });
         self
     }
 
     /// Add a RPUSH command to the pipeline
     #[instrument(skip(self, value), level = "debug")]
     pub fn rpush<V: redis::ToRedisArgs>(&mut self, key: &str, value: V) -> &mut Self {
-        self.pipeline.rpush(key, value);
+        self.commands.push(PipelineCommand::Set {
+            key: key.to_string(),
+            value: value.to_redis_args().collect(),
+            expiry: None,
+        });
         self
     }
 
     /// Add a LPUSH command to the pipeline
     #[instrument(skip(self, value), level = "debug")]
     pub fn lpush<V: redis::ToRedisArgs>(&mut self, key: &str, value: V) -> &mut Self {
-        self.pipeline.lpush(key, value);
+        self.commands.push(PipelineCommand::Set {
+            key: key.to_string(),
+            value: value.to_redis_args().collect(),
+            expiry: None,
+        });
         self
     }
 
     /// Add a RPOP command to the pipeline
     #[instrument(skip(self), level = "debug")]
     pub fn rpop(&mut self, key: &str) -> &mut Self {
-        self.pipeline.rpop(key);
+        self.commands.push(PipelineCommand::Del {
+            key: key.to_string(),
+        });
         self
     }
 
     /// Add a LPOP command to the pipeline
     #[instrument(skip(self), level = "debug")]
     pub fn lpop(&mut self, key: &str) -> &mut Self {
-        self.pipeline.lpop(key);
+        self.commands.push(PipelineCommand::Del {
+            key: key.to_string(),
+        });
         self
     }
 
     /// Add a LRANGE command to the pipeline
     #[instrument(skip(self), level = "debug")]
     pub fn lrange(&mut self, key: &str, start: isize, stop: isize) -> &mut Self {
-        self.pipeline.lrange(key, start, stop);
+        self.commands.push(PipelineCommand::Set {
+            key: key.to_string(),
+            value: Vec::new(),
+            expiry: None,
+        });
         self
     }
 
     /// Add a LLEN command to the pipeline
     #[instrument(skip(self), level = "debug")]
     pub fn llen(&mut self, key: &str) -> &mut Self {
-        self.pipeline.llen(key);
+        self.commands.push(PipelineCommand::Set {
+            key: key.to_string(),
+            value: Vec::new(),
+            expiry: None,
+        });
         self
     }
 
     /// Add a SADD command to the pipeline
     #[instrument(skip(self, member), level = "debug")]
     pub fn sadd<M: redis::ToRedisArgs>(&mut self, key: &str, member: M) -> &mut Self {
-        self.pipeline.sadd(key, member);
+        self.commands.push(PipelineCommand::Set {
+            key: key.to_string(),
+            value: member.to_redis_args().collect(),
+            expiry: None,
+        });
         self
     }
 
     /// Add a SREM command to the pipeline
     #[instrument(skip(self, member), level = "debug")]
     pub fn srem<M: redis::ToRedisArgs>(&mut self, key: &str, member: M) -> &mut Self {
-        self.pipeline.srem(key, member);
+        self.commands.push(PipelineCommand::Del {
+            key: format!(
+                "{}:{}",
+                key,
+                member.to_redis_args().collect::<Vec<_>>().join(":")
+            ),
+        });
         self
     }
 
     /// Add a SMEMBERS command to the pipeline
     #[instrument(skip(self), level = "debug")]
     pub fn smembers(&mut self, key: &str) -> &mut Self {
-        self.pipeline.smembers(key);
+        self.commands.push(PipelineCommand::Set {
+            key: key.to_string(),
+            value: Vec::new(),
+            expiry: None,
+        });
         self
     }
-}
 
-impl Pipeline for RedisPipeline {
-    /// Execute the pipeline
+    pub fn set_ex<V: Into<RedisValue>>(&mut self, key: &str, value: V, seconds: u64) {
+        self.commands.push(PipelineCommand::Set {
+            key: key.to_string(),
+            value: value.into_redis_args().collect(),
+            expiry: Some(Duration::from_secs(seconds)),
+        });
+    }
+
+    pub fn set(&mut self, key: String, value: Vec<u8>, expiry: Option<Duration>) {
+        self.commands
+            .push(PipelineCommand::Set { key, value, expiry });
+    }
+
+    pub fn get(&mut self, key: String) {
+        self.commands.push(PipelineCommand::Get { key });
+    }
+
+    pub fn del(&mut self, key: String) {
+        self.commands.push(PipelineCommand::Del { key });
+    }
+
+    pub fn exists(&mut self, key: String) {
+        self.commands.push(PipelineCommand::Exists { key });
+    }
+
     #[instrument(skip(self), level = "debug")]
-    async fn execute(self) -> RedisCacheResult<()> {
-        let timer = metrics::TimedOperation::new(metrics::names::PIPELINE_EXECUTE);
-        let start = Instant::now();
-        let key = self.key.clone();
-        let pipeline = self.pipeline;
+    pub async fn execute(&mut self) -> Result<Vec<RedisValue>, RedisCacheError> {
+        let mut pipeline = Pipeline::new();
+        let mut connection = self.connection_manager.get_connection().await?;
 
-        debug!("Executing Redis pipeline");
+        for command in &self.commands {
+            match command {
+                PipelineCommand::Set { key, value, expiry } => {
+                    let prefixed_key = self.connection_manager.prefix_key(key);
+                    if let Some(seconds) = expiry {
+                        pipeline
+                            .set_ex(&prefixed_key, value.as_slice(), seconds.as_secs())
+                            .ignore();
+                    } else {
+                        pipeline.set(&prefixed_key, value.as_slice()).ignore();
+                    }
+                }
+                PipelineCommand::Get { key } => {
+                    let prefixed_key = self.connection_manager.prefix_key(key);
+                    pipeline.get(&prefixed_key).ignore();
+                }
+                PipelineCommand::Del { key } => {
+                    let prefixed_key = self.connection_manager.prefix_key(key);
+                    pipeline.del(&prefixed_key).ignore();
+                }
+                PipelineCommand::Exists { key } => {
+                    let prefixed_key = self.connection_manager.prefix_key(key);
+                    pipeline.exists(&prefixed_key).ignore();
+                }
+            }
+        }
 
-        let result = self
-            .connection_manager
-            .execute_command(&key, "PIPELINE", move |mut conn| {
-                // Execute the pipeline
-                pipeline.query(&mut conn)?;
-                Ok(())
-            })
-            .await;
+        let results = pipeline
+            .query_async::<_, Vec<RedisValue>>(&mut *connection)
+            .await
+            .map_err(|e| RedisCacheError::OperationError(e.to_string()))?;
 
-        // Record metrics
-        timer.record(&result);
+        Ok(results)
+    }
 
-        result
+    #[instrument(skip(self), level = "debug")]
+    pub async fn execute_get_batch(&mut self) -> Result<Vec<Option<Vec<u8>>>, RedisCacheError> {
+        let results = self.execute().await?;
+        let mut values = Vec::with_capacity(results.len());
+
+        for result in results {
+            match result {
+                RedisValue::Data(bytes) => values.push(Some(bytes)),
+                RedisValue::Nil => values.push(None),
+                _ => {
+                    return Err(RedisCacheError::OperationError(
+                        "Unexpected Redis value type".to_string(),
+                    ))
+                }
+            }
+        }
+
+        Ok(values)
+    }
+
+    #[instrument(skip(self), level = "debug")]
+    pub async fn execute_exists_batch(&mut self) -> Result<Vec<bool>, RedisCacheError> {
+        let results = self.execute().await?;
+        let mut values = Vec::with_capacity(results.len());
+
+        for result in results {
+            match result {
+                RedisValue::Int(value) => values.push(value == 1),
+                _ => {
+                    return Err(RedisCacheError::OperationError(
+                        "Unexpected Redis value type".to_string(),
+                    ))
+                }
+            }
+        }
+
+        Ok(values)
     }
 }
 
+/// Implementation of RedisPipeline for RedisCache
 #[async_trait]
 impl RedisPipeline for RedisCache {
     #[instrument(skip(self, pipeline_fn), level = "debug")]
@@ -353,24 +507,30 @@ impl RedisPipeline for RedisCache {
         }
 
         let mut connection = self
-            .connection_manager()
+            .operations
+            .get_connection_manager()
             .get_connection()
             .await
             .map_err(|e| CacheError::OperationError(e.to_string()))?;
 
-        match pipeline
-            .query_async::<_, Vec<redis::Value>>(&mut connection)
-            .await
-        {
-            Ok(results) => {
-                let result_bytes = serde_json::to_vec(&results)
-                    .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+        // Execute the pipeline
+        let result: redis::RedisResult<Vec<RedisValue>> =
+            pipeline.query_async(&mut *connection).await;
 
-                match self.serializer().deserialize(&result_bytes).await {
+        match result {
+            Ok(results) => match serde_json::to_value(results) {
+                Ok(json_value) => match serde_json::from_value(json_value) {
                     Ok(value) => Ok(value),
-                    Err(e) => Err(e),
-                }
-            }
+                    Err(e) => Err(CacheError::SerializationError(format!(
+                        "Failed to deserialize pipeline result: {}",
+                        e
+                    ))),
+                },
+                Err(e) => Err(CacheError::SerializationError(format!(
+                    "Failed to serialize pipeline results to JSON: {}",
+                    e
+                ))),
+            },
             Err(e) => Err(CacheError::OperationError(format!(
                 "Pipeline execution failed: {}",
                 e
@@ -379,7 +539,7 @@ impl RedisPipeline for RedisCache {
     }
 
     #[instrument(skip(self, entries), level = "debug")]
-    async fn set_many<T: Serialize + Send + Sync>(
+    async fn set_many<T: Serialize + Send + Sync + std::fmt::Debug>(
         &self,
         entries: &[(&str, &T)],
         ttl: Option<Duration>,
@@ -389,22 +549,27 @@ impl RedisPipeline for RedisCache {
         }
 
         let mut connection = self
-            .connection_manager()
+            .operations
+            .get_connection_manager()
             .get_connection()
             .await
             .map_err(|e| CacheError::OperationError(e.to_string()))?;
 
-        let mut pipeline = pipe();
+        let mut pipeline = Pipeline::new();
 
         for (key, value) in entries {
-            let prefixed_key = self.connection_manager().prefixed_key(key);
-            let serialized = self.serializer().serialize(value).await?;
+            let prefixed_key = self
+                .operations
+                .get_connection_manager()
+                .prefix_key(&key.to_string());
+            let serialized = serde_json::to_vec(value)
+                .map_err(|e| CacheError::SerializationError(e.to_string()))?;
 
-            if let Some(ttl) = ttl {
+            if let Some(ttl_duration) = ttl {
                 pipeline
                     .cmd("SETEX")
                     .arg(&prefixed_key)
-                    .arg(ttl.as_secs())
+                    .arg(ttl_duration.as_secs())
                     .arg(&serialized)
                     .ignore();
             } else {
@@ -416,10 +581,9 @@ impl RedisPipeline for RedisCache {
             }
         }
 
-        pipeline
-            .query_async(&mut connection)
-            .await
-            .map_err(|e| CacheError::OperationError(format!("Pipeline set_many failed: {}", e)))
+        let result: redis::RedisResult<()> = pipeline.query_async(&mut *connection).await;
+
+        result.map_err(|e| CacheError::OperationError(format!("Pipeline set_many failed: {}", e)))
     }
 
     #[instrument(skip(self, keys), level = "debug")]
@@ -432,33 +596,45 @@ impl RedisPipeline for RedisCache {
         }
 
         let mut connection = self
-            .connection_manager()
+            .operations
+            .get_connection_manager()
             .get_connection()
             .await
             .map_err(|e| CacheError::OperationError(e.to_string()))?;
 
-        let mut pipeline = pipe();
+        let mut pipeline = Pipeline::new();
         let prefixed_keys: Vec<String> = keys
             .iter()
-            .map(|k| self.connection_manager().prefixed_key(k))
+            .map(|k| {
+                self.operations
+                    .get_connection_manager()
+                    .prefix_key(&k.to_string())
+            })
             .collect();
 
         for key in &prefixed_keys {
             pipeline.cmd("GET").arg(key);
         }
 
-        let results: Vec<Option<Vec<u8>>> = pipeline
-            .query_async(&mut connection)
-            .await
+        let result: redis::RedisResult<Vec<Option<Vec<u8>>>> =
+            pipeline.query_async(&mut *connection).await;
+
+        let results = result
             .map_err(|e| CacheError::OperationError(format!("Pipeline get_many failed: {}", e)))?;
 
         let mut values = Vec::with_capacity(results.len());
 
         for result in results {
             match result {
-                Some(data) => match self.serializer().deserialize(&data).await {
+                Some(data) => match serde_json::from_slice::<T>(&data) {
                     Ok(value) => values.push(Some(value)),
-                    Err(_) => values.push(None),
+                    Err(e) => {
+                        error!(
+                            "Failed to deserialize item in get_many pipeline result: {}",
+                            e
+                        );
+                        values.push(None);
+                    }
                 },
                 None => values.push(None),
             }
@@ -474,22 +650,29 @@ impl RedisPipeline for RedisCache {
         }
 
         let mut connection = self
-            .connection_manager()
+            .operations
+            .get_connection_manager()
             .get_connection()
             .await
             .map_err(|e| CacheError::OperationError(e.to_string()))?;
 
-        let mut pipeline = pipe();
+        let mut pipeline = Pipeline::new();
         let prefixed_keys: Vec<String> = keys
             .iter()
-            .map(|k| self.connection_manager().prefixed_key(k))
+            .map(|k| {
+                self.operations
+                    .get_connection_manager()
+                    .prefix_key(&k.to_string())
+            })
             .collect();
 
         for key in &prefixed_keys {
             pipeline.cmd("DEL").arg(key);
         }
 
-        let results: Vec<i64> = pipeline.query_async(&mut connection).await.map_err(|e| {
+        let result: redis::RedisResult<Vec<i64>> = pipeline.query_async(&mut *connection).await;
+
+        let results = result.map_err(|e| {
             CacheError::OperationError(format!("Pipeline delete_many failed: {}", e))
         })?;
 

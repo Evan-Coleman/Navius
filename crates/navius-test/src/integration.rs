@@ -7,6 +7,7 @@
 
 use std::any::TypeId;
 use std::collections::HashMap;
+use std::fmt;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::path::PathBuf;
@@ -518,19 +519,19 @@ impl IntegrationContext {
 
     /// Set up database for testing
     pub fn setup_database(&self) -> TestResult<()> {
-        // Create mock database client if not already created
-        let db_client = Arc::new(MockDatabaseClient::new());
-
-        // Register with registry
-        self.registry
-            .register::<dyn DatabaseClient, _>(db_client.clone())?;
-
-        // Execute setup scripts
-        for script in &self.config.db_setup_scripts {
-            db_client.expect_execute(script, Ok(1))?;
+        if let Some(db_client) = &self.db_client {
+            for script in &self.config.db_setup_scripts {
+                // Map the MockDatabaseError to a TestError::MockError
+                db_client
+                    .execute_script(script)
+                    .map_err(|e| TestError::MockError(e.to_string()))?;
+            }
+            Ok(())
+        } else {
+            Err(TestError::ConfigurationError(
+                "Database client not set up".into(),
+            ))
         }
-
-        Ok(())
     }
 
     /// Register a service with the context
@@ -554,13 +555,15 @@ impl IntegrationContext {
         })?;
 
         if let Some(service) = services.get(name) {
-            if let Some(typed_service) = service.clone().downcast_arc::<T>() {
-                Ok(typed_service)
-            } else {
-                Err(TestError::type_mismatch(format!(
+            // Clone the Arc<dyn Any...> before attempting downcast
+            let service_clone = service.clone();
+            // Use Arc::downcast which returns Result<Arc<T>, Arc<dyn Any...>>
+            match service_clone.downcast::<T>() {
+                Ok(typed_service) => Ok(typed_service), // Successfully downcasted to Arc<T>
+                Err(_) => Err(TestError::type_mismatch(format!(
                     "Service {} is not of requested type",
                     name
-                )))
+                ))),
             }
         } else {
             Err(TestError::missing_component(format!(
@@ -1007,19 +1010,24 @@ impl CrossCrateTestBuilder {
                 crates: Vec::new(),
                 timeout: Some(Duration::from_secs(60)),
                 resources_dir: None,
+                service_configs: HashMap::new(),
+                test_data_path: None,
+                db_setup_scripts: Vec::new(),
+                lifecycle_hooks: TestLifecycleHooks::default(),
             },
             integration_config: IntegrationTestConfig {
                 name,
                 test_dir: None,
                 env_vars: HashMap::new(),
+                timeout: Some(Duration::from_secs(60)),
                 verify_mocks: true,
                 cleanup_resources: true,
-                timeout: Some(Duration::from_secs(60)),
-                test_data_path: None,
                 service_configs: HashMap::new(),
+                test_data_path: None,
                 db_setup_scripts: Vec::new(),
                 lifecycle_hooks: TestLifecycleHooks::default(),
             },
+            fixtures: HashMap::new(),
         }
     }
 
@@ -1153,8 +1161,7 @@ where
 {
     let mut builder = CrossCrateTestBuilder::new(name);
     builder_fn(&mut builder);
-    let config = builder.build()?;
-    IntegrationRunner::new(config)
+    builder.build()
 }
 
 /// Helper trait for creating service instances from configuration
@@ -1166,47 +1173,75 @@ pub trait ServiceFactory<T> {
 /// CI/CD environment detection and configuration
 #[derive(Debug, Clone, Serialize)]
 pub enum CIEnvironment {
+    Unknown,
     GitHub,
     GitLab,
     Jenkins,
+    CircleCI,
+    TravisCI,
+    AzureDevOps,
     Local,
 }
 
+impl fmt::Display for CIEnvironment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 impl CIEnvironment {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CIEnvironment::GitHub => "GitHub Actions",
+            CIEnvironment::GitLab => "GitLab CI",
+            CIEnvironment::Jenkins => "Jenkins",
+            CIEnvironment::Local => "Local",
+            CIEnvironment::Unknown => "Unknown",
+            CIEnvironment::CircleCI => "CircleCI",
+            CIEnvironment::TravisCI => "TravisCI",
+            CIEnvironment::AzureDevOps => "Azure DevOps",
+        }
+    }
+
     /// Detect the current CI environment
     pub fn detect() -> Option<Self> {
-        // GitLab CI
         if std::env::var("GITLAB_CI").is_ok() {
-            return Some(Self::GitLab);
+            Some(Self::GitLab)
+        } else if std::env::var("GITHUB_ACTIONS").is_ok() {
+            Some(Self::GitHub)
+        } else if std::env::var("JENKINS_URL").is_ok() {
+            Some(Self::Jenkins)
         }
-
-        // GitHub Actions
-        if std::env::var("GITHUB_ACTIONS").is_ok() {
-            return Some(Self::GitHub);
-        }
-
-        // Jenkins
-        if std::env::var("JENKINS_URL").is_ok() {
-            return Some(Self::Jenkins);
-        }
-
-        // CircleCI
-        if std::env::var("CIRCLECI").is_ok() {
-            return Some(Self::Local);
-        }
-
-        // Azure Pipelines
-        if std::env::var("TF_BUILD").is_ok() {
-            return Some(Self::Local);
-        }
-
-        None
+        // Treat others as Local for now
+        else if std::env::var("CI").is_ok()
+            || std::env::var("CIRCLECI").is_ok()
+            || std::env::var("TF_BUILD").is_ok()
+        {
+            Some(Self::Local)
+        } else {
+            None
+        } // Not in a known CI or explicitly local
     }
 
     /// Is running in CI environment
     pub fn is_ci() -> bool {
-        Self::detect().is_some()
+        match Self::detect() {
+            Some(Self::Local) => false, // Treat explicitly detected Local as not CI
+            Some(_) => true,
+            None => false,
+        }
     }
+
+    // Placeholder methods for missing fields
+    pub fn commit(&self) -> Option<String> {
+        None
+    } // Placeholder
+    pub fn name(&self) -> Option<String> {
+        Some(self.as_str().to_string())
+    }
+    pub fn build_id(&self) -> Option<String> {
+        None
+    } // Placeholder
 }
 
 /// Configuration for test reports in CI/CD environments
@@ -1286,32 +1321,31 @@ impl CIReportConfig {
 impl IntegrationTestConfig {
     /// Configure the test for CI/CD environments
     pub fn configure_for_ci(&mut self) -> TestResult<()> {
-        // Only apply CI-specific configurations if we're in a CI environment
         if !CIEnvironment::is_ci() {
             return Ok(());
         }
 
-        // Add CI environment variables
         if let Some(ci) = CIEnvironment::detect() {
-            println!("Detected CI environment: {:?}", ci);
+            let ci_name = ci.name().unwrap_or_else(|| "Unknown CI".to_string());
+            println!("Detected CI environment: {}", ci_name);
 
             // Set environment variables based on CI environment
             self.env_vars
-                .insert("CI_ENVIRONMENT".to_string(), ci.to_string());
+                .insert("CI_ENVIRONMENT".to_string(), ci_name.clone());
 
             // Configure test directory based on CI
             if self.test_dir.is_none() {
-                let base_dir = match ci.as_str() {
-                    "GitLab CI" => PathBuf::from(
+                let base_dir = match ci {
+                    CIEnvironment::GitLab => PathBuf::from(
                         std::env::var("CI_PROJECT_DIR").unwrap_or_else(|_| ".".to_string()),
                     ),
-                    "GitHub Actions" => PathBuf::from(
+                    CIEnvironment::GitHub => PathBuf::from(
                         std::env::var("GITHUB_WORKSPACE").unwrap_or_else(|_| ".".to_string()),
                     ),
-                    _ => PathBuf::from("."),
+                    _ => PathBuf::from("."), // Default for Jenkins, Local, etc.
                 };
 
-                // Create a unique test directory
+                // Use the test name field from self, not ci
                 let test_dir = base_dir.join("test-artifacts").join(&self.name);
                 std::fs::create_dir_all(&test_dir)?;
                 self.test_dir = Some(test_dir);
@@ -1324,14 +1358,11 @@ impl IntegrationTestConfig {
             // Add CI-specific hooks
             self.lifecycle_hooks.before_setup.push(format!(
                 "echo 'Running {} in CI environment {}'",
-                self.name, ci
+                self.name, // Use test name from self
+                ci_name    // Use detected CI name
             ));
 
-            if let Some(commit) = CIEnvironment::detect().and_then(|ci| ci.commit) {
-                self.lifecycle_hooks
-                    .before_setup
-                    .push(format!("echo 'Test running on commit {}'", commit));
-            }
+            // Removed check for ci.commit as it's a placeholder
         }
 
         Ok(())

@@ -35,6 +35,10 @@ pub enum CacheError {
     /// Backend errors (Redis, etc.)
     #[error("Cache backend error: {0}")]
     BackendError(String),
+
+    /// Unsupported operation
+    #[error("Unsupported cache operation: {0}")]
+    UnsupportedOperation(String),
 }
 
 /// Result type for cache operations
@@ -65,6 +69,9 @@ impl From<CacheError> for AppError {
             }
             CacheError::BackendError(msg) => {
                 AppError::internal(format!("Cache backend error: {}", msg))
+            }
+            CacheError::UnsupportedOperation(msg) => {
+                AppError::internal(format!("Unsupported cache operation: {}", msg))
             }
         }
     }

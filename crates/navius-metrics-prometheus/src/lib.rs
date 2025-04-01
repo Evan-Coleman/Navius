@@ -3,6 +3,7 @@
 // This crate provides a Prometheus implementation for the Navius metrics system.
 
 use async_trait::async_trait;
+use metrics;
 use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
 use navius_metrics::{MetricsCollector, MetricsError, MetricsExporter, Result};
 use std::sync::Arc;
@@ -11,14 +12,25 @@ use std::sync::Arc;
 pub struct PrometheusCollector {
     handle: PrometheusHandle,
     labels: Vec<(String, String)>,
+    namespace: Option<String>,
 }
 
 impl PrometheusCollector {
     /// Create a new Prometheus collector
-    pub fn new(handle: PrometheusHandle) -> Self {
+    pub fn new(handle: PrometheusHandle, namespace: Option<String>) -> Self {
         Self {
             handle,
             labels: Vec::new(),
+            namespace,
+        }
+    }
+
+    /// Format metric name with namespace
+    fn format_name(&self, name: &str) -> String {
+        if let Some(ns) = &self.namespace {
+            format!("{}_{}", ns, name)
+        } else {
+            name.to_string()
         }
     }
 }
@@ -27,17 +39,20 @@ impl MetricsCollector for PrometheusCollector {
     fn increment_counter(&self, name: &str, value: u64) -> Result<()> {
         // Add labels and increment counter
         // This is simplified - actual implementation would need to handle labels
-        metrics::counter!(name).increment(value);
+        let formatted_name = self.format_name(name);
+        metrics::counter!(formatted_name).increment(value);
         Ok(())
     }
 
     fn record_gauge(&self, name: &str, value: f64) -> Result<()> {
-        metrics::gauge!(name).set(value);
+        let formatted_name = self.format_name(name);
+        metrics::gauge!(formatted_name).set(value);
         Ok(())
     }
 
     fn record_histogram(&self, name: &str, value: f64) -> Result<()> {
-        metrics::histogram!(name).record(value);
+        let formatted_name = self.format_name(name);
+        metrics::histogram!(formatted_name).record(value);
         Ok(())
     }
 
@@ -51,6 +66,7 @@ impl MetricsCollector for PrometheusCollector {
         Arc::new(Self {
             handle: self.handle.clone(),
             labels: new_labels,
+            namespace: self.namespace.clone(),
         })
     }
 }
@@ -127,13 +143,8 @@ impl PrometheusMetricsBuilder {
             builder = builder.add_global_label(key, value);
         }
 
-        // Set namespace prefix if provided
-        if let Some(namespace) = &self.namespace {
-            builder = builder.with_namespace(namespace);
-        }
-
         // Install HTTP listener if address provided
-        let handle = if let Some(addr) = self.listen_address {
+        let handle = if let Some(_addr) = self.listen_address {
             #[cfg(feature = "http-listener")]
             {
                 // Install with HTTP listener
@@ -156,7 +167,7 @@ impl PrometheusMetricsBuilder {
             }
         };
 
-        let collector = Arc::new(PrometheusCollector::new(handle.clone()));
+        let collector = Arc::new(PrometheusCollector::new(handle.clone(), self.namespace));
         let exporter = Arc::new(PrometheusExporter::new(handle));
 
         Ok((collector, exporter))
