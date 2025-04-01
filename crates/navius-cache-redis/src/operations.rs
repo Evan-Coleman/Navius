@@ -1027,11 +1027,12 @@ impl CacheOperations for RedisCache {
     }
 
     /// Set a value in the cache
-    async fn set<K, V>(&self, key: K, value: &V, ttl_secs: Option<usize>) -> CacheResult<()>
+    async fn set<K, V>(&self, key: K, value: &V, options: Option<CacheOptions>) -> CacheResult<()>
     where
         K: CacheKey + 'static,
         V: Serialize + Send + Sync + 'static,
     {
+        let ttl = options.and_then(|opts| opts.ttl);
         let key_str = self.key_to_string(&key).await?;
         let value_bytes = self.serialize(value).await?;
 
@@ -1039,9 +1040,10 @@ impl CacheOperations for RedisCache {
 
         self.connection_manager
             .execute_command(&key_str, "SET", |mut conn| async move {
-                match ttl_secs {
+                match ttl {
                     Some(ttl) => {
-                        conn.set_ex(&key_str_clone, value_bytes, ttl).await?;
+                        conn.set_ex(&key_str_clone, value_bytes, ttl.as_secs() as usize)
+                            .await?;
                     }
                     None => {
                         conn.set(&key_str_clone, value_bytes).await?;
@@ -1064,9 +1066,9 @@ impl CacheOperations for RedisCache {
         K: CacheKey + 'static,
         V: Serialize + Send + Sync + 'static,
     {
+        let ttl = options.and_then(|opts| opts.ttl);
         for (key, value) in entries {
-            self.set(key, &value, options.clone().map(|o| o.ttl))
-                .await?;
+            self.set(key, &value, ttl).await?;
         }
         Ok(())
     }
@@ -1155,7 +1157,6 @@ impl CacheOperations for RedisCache {
         let result = self
             .connection_manager
             .execute_command(&key_str, "EXPIRE", |mut conn| async move {
-                // Convert to usize as required by redis library
                 conn.expire(&key_str_clone, ttl_secs as usize).await
             })
             .await;
