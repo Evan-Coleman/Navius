@@ -76,7 +76,7 @@ impl RedisPipelineBuilder {
 
     /// Add a SETEX operation (SET with expiration) to the pipeline
     pub fn setex(mut self, key: &str, seconds: u64, value: &[u8]) -> Self {
-        self.pipeline.set_ex(key, value, seconds as usize).ignore();
+        self.pipeline.set_ex(key, value, seconds).ignore();
         self.operation_count += 1;
         self
     }
@@ -149,12 +149,12 @@ pub enum PipelineCommand {
 }
 
 /// Redis pipeline implementation
-pub struct RedisPipelineImpl {
+pub struct RedisPipelineManager {
     commands: Vec<PipelineCommand>,
     connection_manager: RedisConnectionManager,
 }
 
-impl RedisPipelineImpl {
+impl RedisPipelineManager {
     /// Create a new Redis pipeline
     pub fn new(connection_manager: RedisConnectionManager) -> Self {
         Self {
@@ -170,9 +170,18 @@ impl RedisPipelineImpl {
         for arg in args {
             redis_cmd.arg(arg);
         }
+
+        // Convert args to a flattened vec of bytes
+        let mut all_args = Vec::new();
+        for arg in args {
+            for bytes in arg.to_redis_args() {
+                all_args.extend(bytes);
+            }
+        }
+
         self.commands.push(PipelineCommand::Set {
             key: cmd.to_string(),
-            value: args.iter().map(|arg| arg.to_redis_args()).collect(),
+            value: all_args,
             expiry: None,
         });
         self
@@ -181,9 +190,14 @@ impl RedisPipelineImpl {
     /// Add a SET command to the pipeline
     #[instrument(skip(self, value), level = "debug")]
     pub fn set<V: redis::ToRedisArgs>(&mut self, key: &str, value: V) -> &mut Self {
+        let mut flattened = Vec::new();
+        for bytes in value.to_redis_args() {
+            flattened.extend(bytes);
+        }
+
         self.commands.push(PipelineCommand::Set {
             key: key.to_string(),
-            value: value.to_redis_args().collect(),
+            value: flattened,
             expiry: None,
         });
         self
@@ -245,13 +259,15 @@ impl RedisPipelineImpl {
         key: &str,
         items: &[(K, V)],
     ) -> &mut Self {
+        let mut all_args = Vec::new();
+        for (k, v) in items {
+            all_args.extend(k.to_redis_args());
+            all_args.extend(v.to_redis_args());
+        }
+
         self.commands.push(PipelineCommand::Set {
             key: key.to_string(),
-            value: items
-                .iter()
-                .map(|(k, v)| k.to_redis_args().chain(v.to_redis_args()))
-                .flatten()
-                .collect(),
+            value: all_args,
             expiry: None,
         });
         self
@@ -291,9 +307,14 @@ impl RedisPipelineImpl {
     /// Add a RPUSH command to the pipeline
     #[instrument(skip(self, value), level = "debug")]
     pub fn rpush<V: redis::ToRedisArgs>(&mut self, key: &str, value: V) -> &mut Self {
+        let mut flattened = Vec::new();
+        for bytes in value.to_redis_args() {
+            flattened.extend(bytes);
+        }
+
         self.commands.push(PipelineCommand::Set {
             key: key.to_string(),
-            value: value.to_redis_args().collect(),
+            value: flattened,
             expiry: None,
         });
         self
@@ -302,9 +323,14 @@ impl RedisPipelineImpl {
     /// Add a LPUSH command to the pipeline
     #[instrument(skip(self, value), level = "debug")]
     pub fn lpush<V: redis::ToRedisArgs>(&mut self, key: &str, value: V) -> &mut Self {
+        let mut flattened = Vec::new();
+        for bytes in value.to_redis_args() {
+            flattened.extend(bytes);
+        }
+
         self.commands.push(PipelineCommand::Set {
             key: key.to_string(),
-            value: value.to_redis_args().collect(),
+            value: flattened,
             expiry: None,
         });
         self
@@ -353,9 +379,14 @@ impl RedisPipelineImpl {
     /// Add a SADD command to the pipeline
     #[instrument(skip(self, member), level = "debug")]
     pub fn sadd<M: redis::ToRedisArgs>(&mut self, key: &str, member: M) -> &mut Self {
+        let mut flattened = Vec::new();
+        for bytes in member.to_redis_args() {
+            flattened.extend(bytes);
+        }
+
         self.commands.push(PipelineCommand::Set {
             key: key.to_string(),
-            value: member.to_redis_args().collect(),
+            value: flattened,
             expiry: None,
         });
         self
@@ -364,12 +395,19 @@ impl RedisPipelineImpl {
     /// Add a SREM command to the pipeline
     #[instrument(skip(self, member), level = "debug")]
     pub fn srem<M: redis::ToRedisArgs>(&mut self, key: &str, member: M) -> &mut Self {
+        let member_bytes = member.to_redis_args();
+        let mut joined_str = String::new();
+        for bytes in member_bytes {
+            if let Ok(s) = String::from_utf8(bytes) {
+                if !joined_str.is_empty() {
+                    joined_str.push(':');
+                }
+                joined_str.push_str(&s);
+            }
+        }
+
         self.commands.push(PipelineCommand::Del {
-            key: format!(
-                "{}:{}",
-                key,
-                member.to_redis_args().collect::<Vec<_>>().join(":")
-            ),
+            key: format!("{}:{}", key, joined_str),
         });
         self
     }
@@ -385,10 +423,10 @@ impl RedisPipelineImpl {
         self
     }
 
-    pub fn set_ex<V: Into<RedisValue>>(&mut self, key: &str, value: V, seconds: u64) {
+    pub fn set_ex<V: redis::ToRedisArgs>(&mut self, key: &str, value: V, seconds: u64) {
         self.commands.push(PipelineCommand::Set {
             key: key.to_string(),
-            value: value.into_redis_args().collect(),
+            value: value.to_redis_args(),
             expiry: Some(Duration::from_secs(seconds)),
         });
     }
@@ -488,6 +526,12 @@ impl RedisPipelineImpl {
 
         Ok(values)
     }
+
+    /// Push a command to the pipeline
+    pub fn push(&mut self, command: PipelineCommand) -> &mut Self {
+        self.commands.push(command);
+        self
+    }
 }
 
 /// Implementation of RedisPipeline for RedisCache
@@ -515,22 +559,165 @@ impl RedisPipeline for RedisCache {
 
         // Execute the pipeline
         let result: redis::RedisResult<Vec<RedisValue>> =
-            pipeline.query_async(&mut *connection).await;
+            pipeline.query_async(&mut connection).await;
 
         match result {
-            Ok(results) => match serde_json::to_value(results) {
-                Ok(json_value) => match serde_json::from_value(json_value) {
-                    Ok(value) => Ok(value),
+            Ok(results) => {
+                // Convert the results to the desired type using custom deserialization
+                // Handle different RedisValue variants
+                if results.len() == 1 {
+                    match &results[0] {
+                        RedisValue::Array(items) => {
+                            // Try to deserialize bulk items
+                            let json_values: Vec<serde_json::Value> = items
+                                .iter()
+                                .map(|val| match val {
+                                    RedisValue::Nil => serde_json::Value::Null,
+                                    RedisValue::Int(i) => serde_json::Value::Number((*i).into()),
+                                    RedisValue::BulkString(bytes) => {
+                                        if let Ok(s) = String::from_utf8(bytes.clone()) {
+                                            if let Ok(json) =
+                                                serde_json::from_str::<serde_json::Value>(&s)
+                                            {
+                                                return json;
+                                            }
+                                            return serde_json::Value::String(s);
+                                        }
+                                        serde_json::Value::String(format!("binary:{}", bytes.len()))
+                                    }
+                                    RedisValue::SimpleString(s) => {
+                                        serde_json::Value::String(s.clone())
+                                    }
+                                    RedisValue::Okay => serde_json::Value::String("OK".to_string()),
+                                    _ => serde_json::Value::Null,
+                                })
+                                .collect();
+
+                            return match serde_json::to_value(json_values) {
+                                Ok(json_value) => match serde_json::from_value(json_value) {
+                                    Ok(value) => Ok(value),
+                                    Err(e) => Err(CacheError::SerializationError(format!(
+                                        "Failed to deserialize bulk items as collection: {}",
+                                        e
+                                    ))),
+                                },
+                                Err(e) => Err(CacheError::SerializationError(format!(
+                                    "Failed to convert bulk items to JSON: {}",
+                                    e
+                                ))),
+                            };
+                        }
+                        RedisValue::BulkString(bytes) => {
+                            // Try to deserialize binary data
+                            return match serde_json::from_slice::<R>(bytes) {
+                                Ok(value) => Ok(value),
+                                Err(e) => Err(CacheError::SerializationError(format!(
+                                    "Failed to deserialize data: {}",
+                                    e
+                                ))),
+                            };
+                        }
+                        RedisValue::Int(val) => {
+                            // Convert integer to desired type
+                            return match serde_json::to_value(val) {
+                                Ok(json_value) => match serde_json::from_value(json_value) {
+                                    Ok(value) => Ok(value),
+                                    Err(e) => Err(CacheError::SerializationError(format!(
+                                        "Failed to deserialize integer value: {}",
+                                        e
+                                    ))),
+                                },
+                                Err(e) => Err(CacheError::SerializationError(format!(
+                                    "Failed to convert integer to JSON: {}",
+                                    e
+                                ))),
+                            };
+                        }
+                        RedisValue::Nil => {
+                            // Handle nil value
+                            return match serde_json::to_value(()) {
+                                Ok(json_value) => match serde_json::from_value(json_value) {
+                                    Ok(value) => Ok(value),
+                                    Err(e) => Err(CacheError::SerializationError(format!(
+                                        "Failed to deserialize nil value: {}",
+                                        e
+                                    ))),
+                                },
+                                Err(e) => Err(CacheError::SerializationError(format!(
+                                    "Failed to convert nil to JSON: {}",
+                                    e
+                                ))),
+                            };
+                        }
+                        _ => {}
+                    }
+                }
+
+                // Create a custom JSON representation of the Redis values
+                let json_values: Vec<serde_json::Value> = results
+                    .iter()
+                    .map(|val| match val {
+                        RedisValue::Nil => serde_json::Value::Null,
+                        RedisValue::Int(i) => serde_json::Value::Number((*i).into()),
+                        RedisValue::BulkString(bytes) => {
+                            if let Ok(s) = String::from_utf8(bytes.clone()) {
+                                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&s) {
+                                    return json;
+                                }
+                                return serde_json::Value::String(s);
+                            }
+                            serde_json::Value::String(format!("binary:{}", bytes.len()))
+                        }
+                        RedisValue::Array(items) => {
+                            let item_values: Vec<serde_json::Value> = items
+                                .iter()
+                                .map(|item| match item {
+                                    RedisValue::Nil => serde_json::Value::Null,
+                                    RedisValue::Int(i) => serde_json::Value::Number((*i).into()),
+                                    RedisValue::BulkString(bytes) => {
+                                        if let Ok(s) = String::from_utf8(bytes.clone()) {
+                                            if let Ok(json) =
+                                                serde_json::from_str::<serde_json::Value>(&s)
+                                            {
+                                                return json;
+                                            }
+                                            return serde_json::Value::String(s);
+                                        }
+                                        serde_json::Value::String(format!("binary:{}", bytes.len()))
+                                    }
+                                    _ => serde_json::Value::Null,
+                                })
+                                .collect();
+                            serde_json::Value::Array(item_values)
+                        }
+                        RedisValue::SimpleString(s) => serde_json::Value::String(s.clone()),
+                        RedisValue::Okay => serde_json::Value::String("OK".to_string()),
+                        RedisValue::Double(d) => {
+                            if let Some(num) = serde_json::Number::from_f64(*d) {
+                                serde_json::Value::Number(num)
+                            } else {
+                                serde_json::Value::Null
+                            }
+                        }
+                        _ => serde_json::Value::Null,
+                    })
+                    .collect();
+
+                // Try to deserialize the JSON values
+                match serde_json::to_value(json_values) {
+                    Ok(json_value) => match serde_json::from_value::<R>(json_value) {
+                        Ok(value) => Ok(value),
+                        Err(e) => Err(CacheError::SerializationError(format!(
+                            "Failed to deserialize pipeline result: {}",
+                            e
+                        ))),
+                    },
                     Err(e) => Err(CacheError::SerializationError(format!(
-                        "Failed to deserialize pipeline result: {}",
+                        "Failed to serialize pipeline results to JSON: {}",
                         e
                     ))),
-                },
-                Err(e) => Err(CacheError::SerializationError(format!(
-                    "Failed to serialize pipeline results to JSON: {}",
-                    e
-                ))),
-            },
+                }
+            }
             Err(e) => Err(CacheError::OperationError(format!(
                 "Pipeline execution failed: {}",
                 e
@@ -581,7 +768,7 @@ impl RedisPipeline for RedisCache {
             }
         }
 
-        let result: redis::RedisResult<()> = pipeline.query_async(&mut *connection).await;
+        let result: redis::RedisResult<()> = pipeline.query_async(&mut connection).await;
 
         result.map_err(|e| CacheError::OperationError(format!("Pipeline set_many failed: {}", e)))
     }
@@ -617,7 +804,7 @@ impl RedisPipeline for RedisCache {
         }
 
         let result: redis::RedisResult<Vec<Option<Vec<u8>>>> =
-            pipeline.query_async(&mut *connection).await;
+            pipeline.query_async(&mut connection).await;
 
         let results = result
             .map_err(|e| CacheError::OperationError(format!("Pipeline get_many failed: {}", e)))?;
@@ -670,7 +857,7 @@ impl RedisPipeline for RedisCache {
             pipeline.cmd("DEL").arg(key);
         }
 
-        let result: redis::RedisResult<Vec<i64>> = pipeline.query_async(&mut *connection).await;
+        let result: redis::RedisResult<Vec<i64>> = pipeline.query_async(&mut connection).await;
 
         let results = result.map_err(|e| {
             CacheError::OperationError(format!("Pipeline delete_many failed: {}", e))

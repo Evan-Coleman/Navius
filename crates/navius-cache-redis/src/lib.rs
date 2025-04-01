@@ -27,7 +27,7 @@ pub use metrics::{
     TimedOperation,
 };
 pub use operations::RedisCache;
-pub use pipeline::RedisPipeline;
+pub use pipeline::{RedisPipeline, RedisPipelineBuilder, RedisPipelineManager};
 pub use redis::Pipeline;
 
 // Error types
@@ -90,24 +90,24 @@ impl RedisCache {
 
 #[async_trait::async_trait]
 impl CacheOperations for RedisCache {
-    async fn get<K, V>(&self, key: K) -> CacheResult<Option<V>>
+    async fn get<T>(&self, key: &K) -> Result<Option<T>, CacheError>
     where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
+        T: DeserializeOwned + 'static,
     {
         self.operations
-            .get(key)
+            .get::<T>(key.as_ref())
             .await
-            .map_err(|e| RedisOperations::into_cache_error(e))
+            .map_err(|e: RedisCacheError| RedisOperations::<K, V>::into_cache_error(e))
     }
 
-    async fn get_many<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<Option<V>>>
+    async fn get_many<T>(&self, keys: Vec<K>) -> Result<Vec<Option<T>>, CacheError>
     where
-        K: CacheKey + 'static,
+        T: DeserializeOwned + 'static,
         V: DeserializeOwned + 'static,
     {
+        let str_keys: Vec<&str> = keys.iter().map(|k| k.as_ref()).collect();
         self.operations
-            .get_many(keys)
+            .get_many::<T>(&str_keys)
             .await
             .map_err(|e| RedisOperations::into_cache_error(e))
     }

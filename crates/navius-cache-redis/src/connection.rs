@@ -51,7 +51,6 @@ pub enum ConnectionHealth {
 }
 
 /// A connection with metadata for pool management
-#[derive(Debug)]
 struct PooledConnection {
     /// The actual Redis connection
     connection: Connection,
@@ -61,6 +60,17 @@ struct PooledConnection {
     last_used: Instant,
     /// Number of times this connection has been used
     use_count: usize,
+}
+
+impl fmt::Debug for PooledConnection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PooledConnection")
+            .field("created_at", &self.created_at)
+            .field("last_used", &self.last_used)
+            .field("use_count", &self.use_count)
+            .field("connection", &"<redis::Connection>")
+            .finish()
+    }
 }
 
 impl PooledConnection {
