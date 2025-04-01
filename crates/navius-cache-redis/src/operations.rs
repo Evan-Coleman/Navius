@@ -547,3 +547,43 @@ impl CacheOperations for RedisCache {
             }
         }
     }
+
+    #[instrument(skip(self), level = "debug")]
+    async fn list_range<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        let key_str = key.to_string();
+        let prefixed_key = self.connection_manager.prefixed_key(&key_str);
+        debug!("Getting list range for key: {}", prefixed_key);
+
+        let data: Vec<Vec<u8>> = self
+            .connection_manager
+            .execute_command(&prefixed_key, "LRANGE", |mut conn| {
+                redis::cmd("LRANGE")
+                    .arg(&prefixed_key)
+                    .arg(start)
+                    .arg(stop)
+                    .query(&mut conn)
+            })
+            .await
+            .map_err(|e| CacheError::from(e))?;
+
+        let mut values = Vec::with_capacity(data.len());
+        for item in data {
+            match self.serializer.deserialize(&item).await {
+                Ok(value) => values.push(value),
+                Err(e) => {
+                    error!(
+                        "Failed to deserialize value for key {}: {:?}",
+                        prefixed_key, e
+                    );
+                    return Err(e);
+                }
+            }
+        }
+
+        Ok(values)
+    }
+}
