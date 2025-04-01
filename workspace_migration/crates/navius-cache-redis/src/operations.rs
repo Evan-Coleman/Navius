@@ -334,81 +334,77 @@ where
 // Fix the same pattern for other Redis operations like set operations
 impl<K> RedisSet<K> for RedisCache
 where
-    K: CacheKey + std::fmt::Debug + 'static,
+    K: CacheKey + 'static + std::fmt::Debug,
 {
     #[instrument(skip(self, values), level = "debug")]
-    async fn srem<V: CacheKey + Serialize + std::fmt::Debug>(&self, key: &K, values: &[V]) -> Result<usize, RedisCacheError> {
-        let prefixed_key = self.prefix_key(key);
-        
-        // Build command with all serialized values
-        let mut cmd = redis::cmd("SREM");
-        cmd.arg(&prefixed_key);
-        
+    pub async fn srem<'a, T, I>(&self, key: &K, values: I) -> CacheResult<u64>
+    where
+        T: Serialize + Send + 'static + std::fmt::Debug,
+        I: IntoIterator<Item = &'a T> + Send + std::fmt::Debug,
+        T: 'a,
+    {
+        let prefixed_key = self.client.add_prefix(key)?;
+        let mut cmd = redis::cmd("SREM").arg(&prefixed_key);
         for value in values {
-            let serialized = self.serialize(value)?;
+            let serialized = serde_json::to_vec(value)?;
             cmd.arg(serialized);
         }
-        
-        self.with_connection(|mut conn| async move {
-            let result = cmd.query_async(&mut conn).await?;
-            Ok(result)
-        }).await
+
+        self.client
+            .execute_command(&prefixed_key, "SREM", |mut conn| 
+                cmd.query(&mut conn)
+            )
+            .await
+    }
+
+    #[instrument(skip(self, value), level = "debug")]
+    pub async fn sismember<T>(&self, key: &K, value: &T) -> CacheResult<bool>
+    where
+        T: Serialize + Send + 'static + std::fmt::Debug,
+    {
+        let prefixed_key = self.client.add_prefix(key)?;
+        let serialized = serde_json::to_vec(value)?;
+        self.client
+            .execute_command(&prefixed_key, "SISMEMBER", |mut conn| 
+                redis::cmd("SISMEMBER")
+                    .arg(&prefixed_key)
+                    .arg(serialized)
+                    .query(&mut conn)
+            )
+            .await
     }
 
     #[instrument(skip(self), level = "debug")]
-    async fn sismember<V: CacheKey + Serialize + std::fmt::Debug>(&self, key: &K, value: &V) -> Result<bool, RedisCacheError> {
-        let prefixed_key = self.prefix_key(key);
-        let serialized = self.serialize(value)?;
-        
-        let is_member = self.with_connection(|mut conn| async move {
-            let result = redis::cmd("SISMEMBER")
-                .arg(&prefixed_key)
-                .arg(serialized)
-                .query_async(&mut conn)
-                .await?;
-            Ok(result)
-        }).await?;
-        
-        Ok(is_member)
-    }
+    pub async fn smembers<T>(&self, key: &K) -> CacheResult<Vec<T>>
+    where
+        T: DeserializeOwned + Send + 'static,
+    {
+        let prefixed_key = self.client.add_prefix(key)?;
+        let raw_values: Vec<Vec<u8>> = self.client
+            .execute_command(&prefixed_key, "SMEMBERS", |mut conn| 
+                redis::cmd("SMEMBERS")
+                    .arg(&prefixed_key)
+                    .query(&mut conn)
+            )
+            .await?;
 
-    #[instrument(skip(self), level = "debug")]
-    async fn smembers<V: DeserializeOwned + std::fmt::Debug>(&self, key: &K) -> Result<HashSet<V>, RedisCacheError> {
-        let prefixed_key = self.prefix_key(key);
-        
-        let values: Vec<String> = self.with_connection(|mut conn| async move {
-            let result = redis::cmd("SMEMBERS")
-                .arg(&prefixed_key)
-                .query_async(&mut conn)
-                .await?;
-            Ok(result)
-        }).await?;
-        
-        // Deserialize values
-        let mut result = HashSet::new();
-        for value in values {
-            match self.deserialize::<V>(&value) {
-                Ok(v) => { result.insert(v); },
-                Err(e) => return Err(e),
-            }
+        let mut values = Vec::with_capacity(raw_values.len());
+        for raw in raw_values {
+            values.push(serde_json::from_slice(&raw)?);
         }
-        
-        Ok(result)
+        Ok(values)
     }
 
     #[instrument(skip(self), level = "debug")]
-    async fn scard(&self, key: &K) -> Result<usize, RedisCacheError> {
-        let prefixed_key = self.prefix_key(key);
-        
-        let count = self.with_connection(|mut conn| async move {
-            let result = redis::cmd("SCARD")
-                .arg(&prefixed_key)
-                .query_async(&mut conn)
-                .await?;
-            Ok(result)
-        }).await?;
-        
-        Ok(count)
+    pub async fn scard(&self, key: &K) -> CacheResult<u64> {
+        let prefixed_key = self.client.add_prefix(key)?;
+        self.client
+            .execute_command(&prefixed_key, "SCARD", |mut conn| 
+                redis::cmd("SCARD")
+                    .arg(&prefixed_key)
+                    .query(&mut conn)
+            )
+            .await
     }
 
     // ... existing code for other set operations ...
