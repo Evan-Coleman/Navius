@@ -23,16 +23,23 @@ pub enum PluginError {
 
     /// Plugin dependency not found
     DependencyNotFound {
+        /// The ID of the plugin that requires the dependency
         plugin_id: String,
+        /// The ID of the missing dependency
         dependency_id: String,
+        /// The required version of the dependency
         version: String,
     },
 
     /// Plugin dependency version mismatch
     DependencyVersionMismatch {
+        /// The ID of the plugin with the incompatible dependency
         plugin_id: String,
+        /// The ID of the dependency with version mismatch
         dependency_id: String,
+        /// The required version of the dependency
         required: String,
+        /// The actual version found
         found: String,
     },
 
@@ -50,14 +57,19 @@ pub enum PluginError {
 
     /// Plugin capability not found
     CapabilityNotFound {
+        /// The ID of the plugin missing the capability
         plugin_id: String,
+        /// The ID of the missing capability
         capability_id: String,
     },
 
     /// Plugin in invalid state for operation
     InvalidState {
+        /// The ID of the plugin in invalid state
         plugin_id: String,
+        /// The current state of the plugin
         current_state: String,
+        /// The required state for the operation
         required_state: String,
     },
 

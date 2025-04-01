@@ -42,7 +42,7 @@ validator = { version = "0.20.0", features = ["derive"] }
 
 # For OpenAPI specification generation
 utoipa = { version = "5.3.1", features = ["axum_extras", "uuid", "chrono"] }
-utoipa-swagger-ui = { version = "9.0.0", features = ["axum"] }
+utoipa-swagger-ui = { version = "9.0.0", features = ["axum", "debug-embed"] }
 
 [dev-dependencies]
 tokio-test = "0.4.4"

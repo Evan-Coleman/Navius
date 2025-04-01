@@ -103,3 +103,63 @@ impl Plugin for BasePlugin {
         self.capabilities.get(capability_id).cloned()
     }
 }
+
+/// Builder for creating plugins
+#[derive(Debug)]
+pub struct PluginBuilder {
+    metadata: PluginMetadata,
+    capabilities: HashMap<String, Arc<dyn std::any::Any + Send + Sync>>,
+}
+
+impl PluginBuilder {
+    /// Create a new plugin builder
+    pub fn new(
+        name: impl Into<String>,
+        version: impl Into<String>,
+        description: impl Into<String>,
+        author: impl Into<String>,
+    ) -> Self {
+        let name_str = name.into();
+        Self {
+            metadata: PluginMetadata::new(
+                name_str.clone(), // id is same as name
+                version,
+                name_str,
+                description,
+                author,
+            ),
+            capabilities: HashMap::new(),
+        }
+    }
+
+    /// Add a capability to the plugin
+    pub fn with_capability(
+        mut self,
+        id: impl Into<String>,
+        capability: Arc<dyn std::any::Any + Send + Sync>,
+    ) -> Self {
+        self.capabilities.insert(id.into(), capability);
+        self
+    }
+
+    /// Add a tag to the plugin
+    pub fn with_tag(mut self, tag: impl Into<String>) -> Self {
+        self.metadata = self.metadata.with_tag(tag);
+        self
+    }
+
+    /// Add multiple tags to the plugin
+    pub fn with_tags(mut self, tags: Vec<impl Into<String>>) -> Self {
+        self.metadata = self.metadata.with_tags(tags);
+        self
+    }
+
+    /// Build the plugin
+    pub fn build(self) -> BasePlugin {
+        let mut plugin = BasePlugin::new(self.metadata);
+        for (id, capability) in self.capabilities {
+            plugin.add_capability(id, capability);
+        }
+        plugin
+    }
+}

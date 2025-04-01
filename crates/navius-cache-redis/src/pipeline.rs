@@ -90,8 +90,12 @@ impl RedisPipelineBuilder {
             .execute_command(&self.key, metrics::names::PIPELINE_EXECUTE, |mut conn| {
                 let pipeline = pipeline.clone();
                 async move {
-                    let res: () = pipeline.query_async(&mut conn).await?;
-                    Ok(res)
+                    pipeline.query_async(&mut conn).await.map_err(|e| {
+                        error!(error = %e, key = %self.key, "Pipeline execution failed");
+                        RedisCacheError::from(e)
+                    })?;
+                    debug!(key = %self.key, "Pipeline execution completed");
+                    Ok(())
                 }
             })
             .await;
@@ -294,9 +298,16 @@ impl Pipeline for RedisPipelineImpl {
 
         let result = self
             .connection_manager
-            .execute_command(&key, "PIPELINE_EXECUTE", |mut conn| async move {
-                pipeline.query_async(&mut conn).await?;
-                Ok(())
+            .execute_command(&key, metrics::names::PIPELINE_EXECUTE, |mut conn| {
+                let pipeline = pipeline.clone();
+                async move {
+                    pipeline.query_async(&mut conn).await.map_err(|e| {
+                        error!(error = %e, key = %key, "Pipeline execution failed");
+                        RedisCacheError::from(e)
+                    })?;
+                    debug!(key = %key, "Pipeline execution completed");
+                    Ok(())
+                }
             })
             .await;
 

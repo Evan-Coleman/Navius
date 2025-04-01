@@ -50,6 +50,36 @@ pub mod health {
     pub const DEFAULT_CHECK_TIMEOUT_SECS: u64 = 5;
 }
 
+/// Constants related to HTTP headers
+pub mod headers {
+    /// Request ID header
+    pub const REQUEST_ID: &str = "X-Request-ID";
+
+    /// Correlation ID header
+    pub const CORRELATION_ID: &str = "X-Correlation-ID";
+
+    /// Client ID header
+    pub const CLIENT_ID: &str = "X-Client-ID";
+
+    /// API Version header
+    pub const API_VERSION: &str = "X-API-Version";
+}
+
+/// Default values for various settings
+pub mod defaults {
+    /// Default server port
+    pub const SERVER_PORT: u16 = 8080;
+
+    /// Default server host
+    pub const SERVER_HOST: &str = "127.0.0.1";
+
+    /// Default request timeout in seconds
+    pub const REQUEST_TIMEOUT_SECS: u64 = 30;
+
+    /// Default connection timeout in seconds
+    pub const CONNECTION_TIMEOUT_SECS: u64 = 5;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -81,5 +111,21 @@ mod tests {
     fn test_health_constants() {
         assert_eq!(health::DEFAULT_CHECK_INTERVAL_SECS, 15);
         assert_eq!(health::DEFAULT_CHECK_TIMEOUT_SECS, 5);
+    }
+
+    #[test]
+    fn test_header_constants() {
+        assert_eq!(headers::REQUEST_ID, "X-Request-ID");
+        assert_eq!(headers::CORRELATION_ID, "X-Correlation-ID");
+        assert_eq!(headers::CLIENT_ID, "X-Client-ID");
+        assert_eq!(headers::API_VERSION, "X-API-Version");
+    }
+
+    #[test]
+    fn test_default_constants() {
+        assert_eq!(defaults::SERVER_PORT, 8080);
+        assert_eq!(defaults::SERVER_HOST, "127.0.0.1");
+        assert_eq!(defaults::REQUEST_TIMEOUT_SECS, 30);
+        assert_eq!(defaults::CONNECTION_TIMEOUT_SECS, 5);
     }
 }
