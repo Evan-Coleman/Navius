@@ -114,8 +114,8 @@ impl RedisPipelineBuilder {
     }
 
     /// Get the built pipeline
-    pub fn build(self) -> Pipeline {
-        self.pipeline
+    pub fn build(&self) -> Pipeline {
+        self.pipeline.clone()
     }
 
     /// Get the number of operations in the pipeline
@@ -259,15 +259,20 @@ impl RedisPipelineManager {
         key: &str,
         items: &[(K, V)],
     ) -> &mut Self {
-        let mut all_args = Vec::new();
+        let mut flattened = Vec::new();
+
         for (k, v) in items {
-            all_args.extend(k.to_redis_args());
-            all_args.extend(v.to_redis_args());
+            for bytes in k.to_redis_args() {
+                flattened.extend(bytes);
+            }
+            for bytes in v.to_redis_args() {
+                flattened.extend(bytes);
+            }
         }
 
         self.commands.push(PipelineCommand::Set {
             key: key.to_string(),
-            value: all_args,
+            value: flattened,
             expiry: None,
         });
         self
@@ -424,9 +429,14 @@ impl RedisPipelineManager {
     }
 
     pub fn set_ex<V: redis::ToRedisArgs>(&mut self, key: &str, value: V, seconds: u64) {
+        let mut flattened = Vec::new();
+        for bytes in value.to_redis_args() {
+            flattened.extend(bytes);
+        }
+
         self.commands.push(PipelineCommand::Set {
             key: key.to_string(),
-            value: value.to_redis_args(),
+            value: flattened,
             expiry: Some(Duration::from_secs(seconds)),
         });
     }
@@ -544,11 +554,12 @@ impl RedisPipeline for RedisCache {
         R: DeserializeOwned + Send + Sync,
     {
         let builder = pipeline_fn(RedisPipelineBuilder::new());
-        let pipeline = builder.build();
 
         if builder.operation_count() == 0 {
             return Err(CacheError::OperationError("Empty pipeline".to_string()));
         }
+
+        let pipeline = builder.build();
 
         let mut connection = self
             .operations
