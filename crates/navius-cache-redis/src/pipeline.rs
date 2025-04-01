@@ -288,31 +288,26 @@ impl RedisPipelineImpl {
     }
 }
 
-impl Pipeline for RedisPipelineImpl {
-    /// Execute the pipeline
-    #[instrument(skip(self), level = "debug")]
-    async fn execute(&self) -> RedisCacheResult<()> {
+#[async_trait]
+impl RedisPipeline for RedisPipelineImpl {
+    async fn execute(self) -> RedisCacheResult<()> {
         let key = self.key.clone();
-        let pipeline = self.pipeline.clone();
-        let timer = metrics::TimedOperation::new(metrics::names::PIPELINE_EXECUTE);
+        let pipeline = self.pipeline;
+        let cache = self.cache;
 
-        let result = self
-            .connection_manager
-            .execute_command(&key, metrics::names::PIPELINE_EXECUTE, |mut conn| {
-                let pipeline = pipeline.clone();
-                async move {
+        cache
+            .connection_manager()
+            .execute_command(
+                &key,
+                metrics::names::PIPELINE_EXECUTE,
+                |mut conn| async move {
                     pipeline.query_async(&mut conn).await.map_err(|e| {
                         error!(error = %e, key = %key, "Pipeline execution failed");
-                        RedisCacheError::from(e)
-                    })?;
-                    debug!(key = %key, "Pipeline execution completed");
-                    Ok(())
-                }
-            })
-            .await;
-
-        timer.record(&result);
-        result
+                        RedisCacheError::PipelineError(e.to_string())
+                    })
+                },
+            )
+            .await
     }
 }
 
