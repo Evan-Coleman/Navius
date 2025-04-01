@@ -87,18 +87,16 @@ impl RedisCache {
         Ok(key.to_string())
     }
 
-    async fn serialize_sync<T: Serialize>(&self, value: &T) -> CacheResult<Vec<u8>> {
-        serde_json::to_vec(value).map_err(|e| CacheError::SerializationError(e.to_string()))
-    }
-
-    // Helper method to serialize a value
+    /// Serialize a value to bytes
     async fn serialize<T: Serialize + Send + Sync>(&self, value: &T) -> CacheResult<Vec<u8>> {
-        serde_json::to_vec(value).map_err(|e| CacheError::SerializationError(e.to_string()))
+        serde_json::to_vec(value)
+            .map_err(|e| RedisCacheError::SerializationError(e.to_string()).into())
     }
 
-    // Helper method to deserialize a value
+    /// Deserialize bytes to a value
     async fn deserialize<T: DeserializeOwned>(&self, bytes: &[u8]) -> CacheResult<T> {
-        serde_json::from_slice(bytes).map_err(|e| CacheError::SerializationError(e.to_string()))
+        serde_json::from_slice(bytes)
+            .map_err(|e| RedisCacheError::DeserializationError(e.to_string()).into())
     }
 
     /// Execute a raw Lua script with the given arguments
@@ -251,18 +249,21 @@ impl RedisCache {
 
     /// Check if a key exists in Redis
     #[instrument(skip(self), level = "debug")]
-    pub async fn exists<K>(&self, key: &K) -> CacheResult<bool>
+    pub async fn exists<K>(&self, key: K) -> CacheResult<bool>
     where
-        K: CacheKey + 'static + std::fmt::Debug,
+        K: CacheKey + 'static,
     {
-        let timer = metrics::TimedOperation::new(metrics::names::EXISTS);
+        let key_str = self.key_to_string(&key).await?;
+        let key_str_clone = key_str.clone();
+
         let result = self
             .connection_manager
-            .execute_command(key, "EXISTS", |mut conn| conn.exists(key))
+            .execute_command(&key_str, "EXISTS", |mut conn| async move {
+                conn.exists(&key_str_clone).await
+            })
             .await;
 
-        timer.record(&result);
-        result
+        result.map_err(|e| e.into())
     }
 
     /// Delete a key from Redis
@@ -448,24 +449,22 @@ impl RedisCache {
     #[instrument(skip(self), level = "debug")]
     async fn list_trim<K>(&self, key: K, start: isize, stop: isize) -> CacheResult<()>
     where
-        K: CacheKey + std::fmt::Debug + 'static,
+        K: CacheKey + 'static,
     {
         let key_str = self.key_to_string(&key).await?;
-        let prefixed_key = self.connection_manager.prefixed_key(&key_str);
-        let prefixed_key_str = ToString::to_string(&prefixed_key);
-        let prefixed_key_str_clone = prefixed_key_str.clone();
+
+        // Clone for use in closure
+        let key_str_clone = key_str.clone();
 
         let result = self
             .connection_manager
-            .execute_command(&prefixed_key_str, "LTRIM", |mut conn| async move {
-                conn.ltrim(&prefixed_key_str_clone, start, stop).await
+            .execute_command(&key_str, "LTRIM", |mut conn| async move {
+                conn.ltrim(&key_str_clone, start, stop).await?;
+                Ok(())
             })
             .await;
 
-        match result {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e.into()),
-        }
+        result.map_err(|e| e.into())
     }
 
     // === Set operations ===
@@ -693,56 +692,53 @@ impl RedisCache {
     #[instrument(skip(self, field), level = "debug")]
     async fn hash_exists<K, F>(&self, key: K, field: F) -> CacheResult<bool>
     where
-        K: CacheKey + std::fmt::Debug + Send + Sync + 'static,
-        F: CacheKey + std::fmt::Debug + Send + Sync + 'static,
+        K: CacheKey + 'static,
+        F: CacheKey + 'static,
     {
         let key_str = self.key_to_string(&key).await?;
         let field_str = self.key_to_string(&field).await?;
-        let prefixed_key = self.connection_manager.prefixed_key(&key_str);
-        let prefixed_key_str = ToString::to_string(&prefixed_key);
-        let prefixed_key_str_clone = prefixed_key_str.clone();
+
+        // Clone the strings for use in the closure
+        let key_str_clone = key_str.clone();
         let field_str_clone = field_str.clone();
 
         let result = self
             .connection_manager
-            .execute_command(&prefixed_key_str, "HEXISTS", |mut conn| async move {
-                conn.hexists(&prefixed_key_str_clone, &field_str_clone)
-                    .await
+            .execute_command(&key_str, "HEXISTS", |mut conn| async move {
+                conn.hexists(&key_str_clone, &field_str_clone).await
             })
             .await;
 
-        match result {
-            Ok(exists) => Ok(exists),
-            Err(e) => Err(e.into()),
-        }
+        result.map_err(|e| e.into())
     }
 
     #[instrument(skip(self, fields), level = "debug")]
     async fn hash_delete<K, F>(&self, key: K, fields: Vec<F>) -> CacheResult<usize>
     where
-        K: CacheKey + std::fmt::Debug + Send + Sync + 'static,
-        F: CacheKey + std::fmt::Debug + Send + Sync + 'static,
+        K: CacheKey + 'static,
+        F: CacheKey + 'static,
     {
         let key_str = self.key_to_string(&key).await?;
-        let field_strs =
-            futures::future::try_join_all(fields.iter().map(|f| self.key_to_string(f))).await?;
 
-        let prefixed_key = self.connection_manager.prefixed_key(&key_str);
-        let prefixed_key_str = ToString::to_string(&prefixed_key);
-        let prefixed_key_str_clone = prefixed_key_str.clone();
-        let field_strs_clone = field_strs.clone();
+        // Convert all fields to strings asynchronously
+        let mut field_strs = Vec::with_capacity(fields.len());
+        for field in fields {
+            let field_str = self.key_to_string(&field).await?;
+            field_strs.push(field_str);
+        }
+
+        // Clone for use in closure
+        let key_str_clone = key_str.clone();
 
         let result = self
             .connection_manager
-            .execute_command(&prefixed_key_str, "HDEL", |mut conn| async move {
-                conn.hdel(&prefixed_key_str_clone, field_strs_clone).await
+            .execute_command(&key_str, "HDEL", |mut conn| async move {
+                let count: i32 = conn.hdel(&key_str_clone, field_strs).await?;
+                Ok(count as usize)
             })
             .await;
 
-        match result {
-            Ok(count) => Ok(count),
-            Err(e) => Err(e.into()),
-        }
+        result.map_err(|e| e.into())
     }
 
     #[instrument(skip(self), level = "debug")]
@@ -998,10 +994,12 @@ impl CacheOperations for RedisCache {
         V: DeserializeOwned + 'static,
     {
         let key_str = self.key_to_string(&key).await?;
+        let key_str_clone = key_str.clone();
+
         let result = self
             .connection_manager
             .execute_command(&key_str, "GET", |mut conn| async move {
-                let data: Option<Vec<u8>> = conn.get(&key_str).await?;
+                let data: Option<Vec<u8>> = conn.get(&key_str_clone).await?;
                 Ok(data)
             })
             .await?;
@@ -1029,28 +1027,29 @@ impl CacheOperations for RedisCache {
     }
 
     /// Set a value in the cache
-    async fn set<K, V>(&self, key: K, value: &V, options: Option<CacheOptions>) -> CacheResult<()>
+    async fn set<K, V>(&self, key: K, value: &V, ttl_secs: Option<usize>) -> CacheResult<()>
     where
         K: CacheKey + 'static,
         V: Serialize + Send + Sync + 'static,
     {
         let key_str = self.key_to_string(&key).await?;
         let value_bytes = self.serialize(value).await?;
+
         let key_str_clone = key_str.clone();
 
         self.connection_manager
             .execute_command(&key_str, "SET", |mut conn| async move {
-                conn.set(&key_str_clone, value_bytes).await?;
+                match ttl_secs {
+                    Some(ttl) => {
+                        conn.set_ex(&key_str_clone, value_bytes, ttl).await?;
+                    }
+                    None => {
+                        conn.set(&key_str_clone, value_bytes).await?;
+                    }
+                }
                 Ok(())
             })
             .await?;
-
-        // If TTL is provided, set expiration
-        if let Some(options) = options {
-            if let Some(ttl) = options.ttl {
-                self.expire_key(&key, ttl.as_secs() as i64).await?;
-            }
-        }
 
         Ok(())
     }
@@ -1066,7 +1065,8 @@ impl CacheOperations for RedisCache {
         V: Serialize + Send + Sync + 'static,
     {
         for (key, value) in entries {
-            self.set(key, &value, options.clone()).await?;
+            self.set(key, &value, options.clone().map(|o| o.ttl))
+                .await?;
         }
         Ok(())
     }
@@ -1119,9 +1119,9 @@ impl CacheOperations for RedisCache {
             .execute_command(&key_str, "EXISTS", |mut conn| async move {
                 conn.exists(&key_str_clone).await
             })
-            .await?;
+            .await;
 
-        Ok(result)
+        result.map_err(|e| e.into())
     }
 
     /// Increment a counter in the cache

@@ -122,16 +122,19 @@ impl RedisLuaManager {
     }
 }
 
-/// Helper function to execute a Lua script with metrics
-pub async fn execute_script_with_metrics<T: FromRedisValue + std::marker::Send>(
+/// Execute a Lua script with metrics instrumentation
+///
+/// This is a helper function to execute a Lua script and record metrics
+/// for the execution time and result.
+pub async fn execute_script_with_metrics<'a, T: FromRedisValue + std::marker::Send + 'static>(
     connection_manager: &Arc<RedisConnectionManager>,
     script_name: &str,
-    script: &Script,
-    key: &str,
-    keys: &[&str],
-    args: &[&str],
-) -> RedisCacheResult<T> {
-    let start_time = Instant::now();
+    script: &'a Script,
+    key: &'a str,
+    keys: &'a [&'a str],
+    args: &'a [&'a str],
+) -> Result<T, RedisCacheError> {
+    let timer = metrics::TimedOperation::new(script_name);
 
     let result = connection_manager
         .execute_command(key, script_name, |mut conn| async move {
@@ -139,13 +142,8 @@ pub async fn execute_script_with_metrics<T: FromRedisValue + std::marker::Send>(
         })
         .await;
 
-    let duration = start_time.elapsed();
-
-    // Record metrics
-    let timer = metrics::TimedOperation::new(metrics::names::SCRIPT_EXECUTE);
     timer.record(&result);
-
-    result
+    result.map_err(|e| e.into())
 }
 
 #[async_trait]
