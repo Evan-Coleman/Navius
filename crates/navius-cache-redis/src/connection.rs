@@ -1,9 +1,9 @@
 use crate::metrics;
 use crate::{
     config::RedisCacheConfig,
-    error::{RedisCacheError, RedisCacheResult, error_helpers},
+    error::{error_helpers, RedisCacheError, RedisCacheResult},
 };
-use redis::{Client, Connection, RedisError, aio::ConnectionManager};
+use redis::{aio::ConnectionManager, Client, Connection, RedisError};
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -496,12 +496,15 @@ impl RedisConnectionManager {
         F: FnOnce(Connection) -> Result<T, RedisError>,
     {
         let start_time = Instant::now();
-        
+
         // Get a connection from the pool
         let connection = match self.get_connection().await {
             Ok(conn) => conn,
             Err(e) => {
-                error!("Failed to get connection for pipeline operation {}: {}", operation, e);
+                error!(
+                    "Failed to get connection for pipeline operation {}: {}",
+                    operation, e
+                );
                 metrics::record_operation_error(
                     &format!("{}_pipeline", metrics::names::CONNECTION_ERROR),
                     &e,
@@ -509,14 +512,10 @@ impl RedisConnectionManager {
                 return Err(e);
             }
         };
-        
+
         // Execute the command with timeout
         let timeout_duration = Duration::from_secs(self.config.command_timeout_seconds);
-        let result = match timeout(timeout_duration, async {
-            func(connection)
-        })
-        .await
-        {
+        let result = match timeout(timeout_duration, async { func(connection) }).await {
             Ok(Ok(result)) => {
                 // Record successful operation
                 debug!("Pipeline operation {} completed successfully", operation);
@@ -524,14 +523,23 @@ impl RedisConnectionManager {
             }
             Ok(Err(redis_error)) => {
                 // Record Redis error
-                error!("Redis error during pipeline operation {}: {}", operation, redis_error);
+                error!(
+                    "Redis error during pipeline operation {}: {}",
+                    operation, redis_error
+                );
                 self.record_connection_failure().await;
-                metrics::record_operation_error(operation, &RedisCacheError::from(redis_error.clone()));
+                metrics::record_operation_error(
+                    operation,
+                    &RedisCacheError::from(redis_error.clone()),
+                );
                 Err(redis_error.into())
             }
             Err(timeout_error) => {
                 // Record timeout error
-                error!("Timeout during pipeline operation {}: {}", operation, timeout_error);
+                error!(
+                    "Timeout during pipeline operation {}: {}",
+                    operation, timeout_error
+                );
                 self.record_connection_failure().await;
                 let error = RedisCacheError::Timeout(format!(
                     "Operation timed out after {:?}: {}",
@@ -541,13 +549,13 @@ impl RedisConnectionManager {
                 Err(error)
             }
         };
-        
+
         // Record operation time
         let elapsed = start_time.elapsed();
-        if let Ok(ref _) = result {
+        if let Ok(ref result_val) = result {
             metrics::record_operation_duration(operation, elapsed);
         }
-        
+
         result
     }
 
@@ -730,13 +738,20 @@ mod tests {
             key_prefix: "test:".to_string(),
             default_ttl: Duration::from_secs(60),
             max_connections: 5,
+            min_connections: 2,
             database: 0,
             password: None,
             use_tls: false,
             connection_timeout_seconds: 2,
             command_timeout_seconds: 1,
+            idle_timeout_seconds: 60,
+            max_lifetime_seconds: 300,
             retry_commands: true,
             max_retries: 3,
+            health_check_interval_seconds: 30,
+            circuit_breaker_threshold: 5,
+            circuit_reset_timeout_seconds: 5,
+            enable_metrics: false,
         };
 
         let connection_manager = match RedisConnectionManager::new(config).await {

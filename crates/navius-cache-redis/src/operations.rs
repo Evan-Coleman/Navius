@@ -586,4 +586,10 @@ impl CacheOperations for RedisCache {
 
         Ok(values)
     }
+
+    // TODO: Implement remaining required methods from CacheOperations trait
+    // This implementation is incomplete and requires additional methods
+    // to fully satisfy the CacheOperations trait.
 }
+
+impl Cache for RedisCache {}
