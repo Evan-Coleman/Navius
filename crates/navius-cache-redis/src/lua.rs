@@ -4,11 +4,11 @@ use crate::metrics;
 use async_trait::async_trait;
 use navius_cache::error::{CacheError, CacheResult};
 use redis::{AsyncCommands, FromRedisValue, RedisError, Script, ScriptInvocation};
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tracing::{debug, error, instrument, trace};
+use tracing::{debug, error, instrument, trace, warn};
 
 // Forward declaration of RedisCache to avoid circular reference
 use crate::operations::RedisCache;
@@ -123,34 +123,26 @@ impl RedisLuaManager {
 }
 
 /// Helper function to execute a Lua script with metrics
-pub async fn execute_script_with_metrics<T: FromRedisValue>(
+pub async fn execute_script_with_metrics<T: FromRedisValue + std::marker::Send>(
     connection_manager: &Arc<RedisConnectionManager>,
     script_name: &str,
-    script: ScriptInvocation<'_>,
+    script: &Script,
     key: &str,
+    keys: &[&str],
+    args: &[&str],
 ) -> RedisCacheResult<T> {
-    let timer = metrics::TimedOperation::new(metrics::names::SCRIPT_EXECUTE);
+    let start_time = Instant::now();
 
     let result = connection_manager
-        .execute_command(key, "EVALSHA", move |mut conn| {
-            let result = script.invoke(&mut conn);
-            match result {
-                Ok(value) => Ok(value),
-                Err(err) => {
-                    // Check if this is a NOSCRIPT error, which means we need to load the script
-                    if let redis::RedisError::Redis(ref redis_err) = err {
-                        if redis_err.contains("NOSCRIPT") {
-                            // Script not found, but this should not happen with our initialization
-                            error!("Script '{}' not found in Redis. This should not happen with proper initialization.", script_name);
-                        }
-                    }
-                    Err(err)
-                }
-            }
+        .execute_command(key, script_name, |mut conn| async move {
+            script.invoke_async(&mut conn).await
         })
         .await;
 
+    let duration = start_time.elapsed();
+
     // Record metrics
+    let timer = metrics::TimedOperation::new(metrics::names::SCRIPT_EXECUTE);
     timer.record(&result);
 
     result
@@ -182,41 +174,34 @@ impl RedisLuaScripting for RedisLuaManager {
         Ok(())
     }
 
-    #[instrument(skip(self), level = "debug")]
-    async fn execute_script<T: FromRedisValue + Send + Sync>(
+    /// Execute a registered script by name.
+    #[instrument(skip(self, script_name, keys, args), level = "debug")]
+    pub async fn execute_script<T: FromRedisValue + Send>(
         &self,
-        name: &str,
+        script_name: &str,
         keys: &[&str],
         args: &[&str],
-    ) -> CacheResult<T> {
-        trace!(
-            "Executing Lua script '{}' with {} keys and {} args",
-            name,
-            keys.len(),
-            args.len()
-        );
-
-        let script_info = match self.scripts.lock().unwrap().get(name) {
-            Some(script) => script.clone(),
+    ) -> RedisCacheResult<T> {
+        let script = match self.scripts.lock().unwrap().get(script_name) {
+            Some(script) => script.clone(), // Clone Arc<Script>
             None => {
-                return Err(CacheError::OperationError(format!(
-                    "Script '{}' not found",
-                    name
+                return Err(RedisCacheError::ScriptError(format!(
+                    "Script '{}' not registered.",
+                    script_name
                 )));
             }
         };
 
-        let script = Script::new(&script_info.script);
-        let invocation = script.prepare_invoke().key(keys).arg(args);
-
+        // Pass &script instead of script
         execute_script_with_metrics(
             &self.connection_manager,
-            name,
-            invocation,
-            keys.first().unwrap_or(&"script"),
+            script_name,
+            &script,                           // Pass reference to the script
+            keys.first().unwrap_or(&"script"), // Use first key for routing or default
+            keys,
+            args,
         )
         .await
-        .map_err(|e| CacheError::OperationError(format!("Failed to execute script: {}", e)))
     }
 
     #[instrument(skip(self), level = "debug")]
@@ -500,8 +485,10 @@ pub async fn initialize_common_scripts(cache: &RedisCache) -> CacheResult<()> {
 mod tests {
     use super::*;
     use crate::config::RedisCacheConfig;
+    use crate::connection::RedisConnectionManager;
     use navius_cache::serialization::JsonSerializer;
     use serde::{Deserialize, Serialize};
+    use std::sync::Arc;
     use std::time::Duration;
 
     #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -510,7 +497,33 @@ mod tests {
         name: String,
     }
 
+    // Helper function to create a mock Redis connection manager for tests
+    async fn create_test_manager() -> Arc<RedisConnectionManager> {
+        let config = RedisCacheConfig {
+            url: "redis://127.0.0.1:6379".to_string(),
+            key_prefix: "test_lua:".to_string(),
+            default_ttl: Duration::from_secs(60),
+            max_connections: 5,
+            database: 0,
+            password: None,
+            use_tls: false,
+            connection_timeout_seconds: 2,
+            command_timeout_seconds: 1,
+            retry_commands: true,
+            max_retries: 3,
+            min_connections: 1,
+            idle_timeout_seconds: 300,
+            max_lifetime_seconds: 600,
+            health_check_interval_seconds: 60,
+            circuit_breaker_threshold: 5,
+            circuit_reset_timeout_seconds: 30,
+            enable_metrics: false,
+        };
+        RedisConnectionManager::new(config).await.unwrap()
+    }
+
     #[tokio::test]
+    #[ignore] // Requires running Redis instance
     async fn test_lua_scripting() {
         // Create configuration
         let config = RedisCacheConfig {

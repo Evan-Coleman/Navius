@@ -1,19 +1,15 @@
+//! Redis implementation for cache invalidation.
+
+use crate::connection::RedisConnectionManager;
 use async_trait::async_trait;
-use navius_cache::{
-    error::{CacheError, CacheResult},
-    invalidation::CacheInvalidator as NaviusCacheInvalidator,
-    key::CacheKey,
-};
-use redis::aio::ConnectionManager;
+use navius_cache::CacheKey;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::HashSet, sync::Arc, time::Duration};
-use tracing::{debug, error, instrument};
+use tracing::{debug, instrument};
 
-use crate::{
-    connection::RedisConnectionManager,
-    error::{error_helpers, RedisCacheError, RedisCacheResult},
-    operations::RedisCache,
-};
+use navius_cache::error::{CacheError, CacheResult};
+use navius_cache::invalidation::CacheInvalidator;
+use navius_cache::CacheOperations;
 
 /// Redis implementation of CacheInvalidator
 pub struct RedisInvalidator {
@@ -28,7 +24,8 @@ impl RedisInvalidator {
     }
 }
 
-impl NaviusCacheInvalidator for RedisInvalidator {
+#[async_trait]
+impl CacheInvalidator for RedisInvalidator {
     #[instrument(skip(self, key), level = "debug")]
     async fn invalidate<K: CacheKey>(&self, key: K) -> CacheResult<bool> {
         self.cache.delete(key).await
@@ -186,124 +183,6 @@ impl NaviusCacheInvalidator for RedisInvalidator {
         }
 
         Ok(total_count)
-    }
-}
-
-#[async_trait]
-impl CacheOperations for RedisInvalidator {
-    #[instrument(skip(self, entity), level = "debug")]
-    async fn track_entity_change<T: Serialize + DeserializeOwned + Send + Sync>(
-        &self,
-        entity_type: &str,
-        entity_id: &str,
-        entity: &T,
-    ) -> CacheResult<()> {
-        let entity_key = self
-            .cache
-            .prefixed_key(&format!("entity:{}:{}", entity_type, entity_id));
-        let mut conn = self
-            .get_connection()
-            .await
-            .map_err(|e| CacheError::InvalidationError(e.to_string()))?;
-
-        // Store the serialized entity in the cache
-        let serialized = serde_json::to_string(entity).map_err(|e| {
-            CacheError::SerializationError(format!("Failed to serialize entity: {}", e))
-        })?;
-
-        let _: () = redis::cmd("SET")
-            .arg(&entity_key)
-            .arg(serialized)
-            .query_async(&mut conn)
-            .await
-            .map_err(|e| CacheError::InvalidationError(format!("Failed to store entity: {}", e)))?;
-
-        debug!("Tracked entity change: {}:{}", entity_type, entity_id);
-        Ok(())
-    }
-
-    #[instrument(skip(self), level = "debug")]
-    async fn get_entity_cache_keys(
-        &self,
-        entity_type: &str,
-        entity_id: &str,
-    ) -> CacheResult<Vec<String>> {
-        let entity_key = self
-            .cache
-            .prefixed_key(&format!("entity:{}:{}", entity_type, entity_id));
-        let mut conn = self
-            .get_connection()
-            .await
-            .map_err(|e| CacheError::InvalidationError(e.to_string()))?;
-
-        // Get all cache keys related to this entity
-        let cache_keys: Vec<String> = redis::cmd("SMEMBERS")
-            .arg(&entity_key)
-            .query_async(&mut conn)
-            .await
-            .map_err(|e| {
-                CacheError::InvalidationError(format!("Failed to get entity cache keys: {}", e))
-            })?;
-
-        // Remove the prefix from the keys to return the original key names
-        let prefix = self.cache.key_prefix();
-        let result: Vec<String> = cache_keys
-            .into_iter()
-            .filter_map(|key| key.strip_prefix(prefix).map(ToString::to_string))
-            .collect();
-
-        Ok(result)
-    }
-
-    #[instrument(skip(self), level = "debug")]
-    async fn invalidate_entity(&self, entity_type: &str, entity_id: &str) -> CacheResult<u64> {
-        let entity_key = self
-            .cache
-            .prefixed_key(&format!("entity:{}:{}", entity_type, entity_id));
-        let mut conn = self
-            .get_connection()
-            .await
-            .map_err(|e| CacheError::InvalidationError(e.to_string()))?;
-
-        // Get all cache keys related to this entity
-        let keys: Vec<String> = redis::cmd("SMEMBERS")
-            .arg(&entity_key)
-            .query_async(&mut conn)
-            .await
-            .map_err(|e| {
-                CacheError::InvalidationError(format!("Failed to get entity cache keys: {}", e))
-            })?;
-
-        if keys.is_empty() {
-            // Just delete the entity itself
-            let _: () = redis::cmd("DEL")
-                .arg(&entity_key)
-                .query_async(&mut conn)
-                .await
-                .map_err(|e| {
-                    CacheError::InvalidationError(format!("Failed to delete entity: {}", e))
-                })?;
-
-            return Ok(1);
-        }
-
-        // Delete all related cache keys
-        let count: i64 = redis::cmd("DEL")
-            .arg(&keys)
-            .arg(&entity_key)
-            .query_async(&mut conn)
-            .await
-            .map_err(|e| {
-                CacheError::InvalidationError(format!("Failed to invalidate entity: {}", e))
-            })?;
-
-        debug!(
-            "Invalidated entity {}:{} with {} related cache keys",
-            entity_type,
-            entity_id,
-            keys.len()
-        );
-        Ok(count as u64)
     }
 }
 

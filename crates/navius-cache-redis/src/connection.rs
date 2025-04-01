@@ -3,7 +3,9 @@ use crate::{
     config::RedisCacheConfig,
     error::{error_helpers, RedisCacheError, RedisCacheResult},
 };
-use redis::{aio::ConnectionManager, Client, Connection, RedisError};
+use navius_cache::CacheKey;
+use navius_core::health::HealthCheck;
+use redis::{aio::MultiplexedConnection, Client, Cmd, RedisError};
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -45,7 +47,7 @@ pub enum ConnectionHealth {
 #[derive(Debug)]
 struct PooledConnection {
     /// The actual Redis connection
-    connection: Connection,
+    connection: MultiplexedConnection,
     /// When the connection was created
     created_at: Instant,
     /// When the connection was last used
@@ -56,7 +58,7 @@ struct PooledConnection {
 
 impl PooledConnection {
     /// Create a new pooled connection
-    fn new(connection: Connection) -> Self {
+    fn new(connection: MultiplexedConnection) -> Self {
         let now = Instant::now();
         Self {
             connection,
@@ -129,7 +131,7 @@ impl RedisConnectionManager {
         let mut initial_connections = Vec::with_capacity(min_connections as usize);
 
         // Initialize with at least one verified connection
-        match client.get_connection() {
+        match client.get_multiplexed_async_connection().await {
             Ok(conn) => {
                 initial_connections.push(PooledConnection::new(conn));
             }
@@ -144,7 +146,7 @@ impl RedisConnectionManager {
 
         // Try to establish the minimum connections (don't fail if we can't get them all)
         for _ in 1..min_connections {
-            if let Ok(conn) = client.get_connection() {
+            if let Ok(conn) = client.get_multiplexed_async_connection().await {
                 initial_connections.push(PooledConnection::new(conn));
             } else {
                 // We already have at least one connection, so just warn
@@ -180,7 +182,7 @@ impl RedisConnectionManager {
     }
 
     /// Get a connection from the pool or create a new one
-    pub async fn get_connection(&self) -> RedisCacheResult<Connection> {
+    pub async fn get_connection(&self) -> RedisCacheResult<MultiplexedConnection> {
         let start_time = Instant::now();
 
         // Check if circuit breaker is open
@@ -200,7 +202,10 @@ impl RedisConnectionManager {
                     );
 
                     // Record the error in metrics
-                    metrics::record_operation_error(metrics::names::CONNECTION_ACQUIRE, &err);
+                    metrics::record_operation_error::<RedisCacheError>(
+                        metrics::names::CONNECTION_ACQUIRE,
+                        &err,
+                    );
 
                     return Err(err);
                 }
@@ -220,10 +225,11 @@ impl RedisConnectionManager {
 
         if let Some(index) = conn_index {
             // Get and remove the connection from the pool
-            let mut conn = pool.remove(index);
+            let mut pooled_conn_meta = pool.remove(index);
+            let mut conn_clone = pooled_conn_meta.connection.clone(); // Clone the MultiplexedConnection for use
 
             // Perform a quick health check before returning
-            let health = self.check_connection_health(&conn.connection).await;
+            let health = self.check_connection_health(&mut conn_clone).await;
 
             // Record health in metrics
             metrics::record_connection_health(&health);
@@ -231,7 +237,7 @@ impl RedisConnectionManager {
             match health {
                 ConnectionHealth::Healthy => {
                     // Mark connection as used
-                    conn.mark_used();
+                    pooled_conn_meta.mark_used();
 
                     // Update stats
                     let mut stats = self.stats.lock().await;
@@ -252,10 +258,15 @@ impl RedisConnectionManager {
                     // Record successful operation
                     metrics::record_operation_success(metrics::names::CONNECTION_ACQUIRE);
 
-                    return Ok(conn.connection);
+                    return Ok(conn_clone);
                 }
-                ConnectionHealth::Degraded(reason) | ConnectionHealth::Unhealthy(reason) => {
-                    debug!("Discarding unhealthy connection from pool: {}", reason);
+                ConnectionHealth::Degraded(reason) => {
+                    warn!("Returning degraded Redis connection: {}", reason);
+                    // Mark connection as used
+                    pooled_conn_meta.mark_used();
+                    pool.push(pooled_conn_meta); // Return original meta back to pool immediately
+
+                    // Update stats
                     let mut stats = self.stats.lock().await;
                     stats.total_connections_closed += 1;
                     stats.current_idle_connections -= 1;
@@ -276,6 +287,28 @@ impl RedisConnectionManager {
                     metrics::record_operation_error(metrics::names::CONNECTION_ACQUIRE, &err);
 
                     return self.create_connection().await;
+                }
+                ConnectionHealth::Unhealthy(reason) => {
+                    error!(
+                        "Unhealthy Redis connection detected and removed: {}",
+                        reason
+                    );
+                    // Close the unhealthy connection (MultiplexedConnection handles this internally when dropped)
+                    let mut stats = self.stats.lock().await;
+                    stats.total_connections_closed += 1;
+                    stats.current_idle_connections -= 1; // It was removed from pool earlier
+
+                    // Record pool stats
+                    metrics::record_connection_pool_stats(
+                        stats.total_connections_created - stats.total_connections_closed,
+                        stats.current_idle_connections,
+                        stats.current_active_connections,
+                    );
+
+                    // Try getting/creating another connection (recursive or loop might be better)
+                    // For now, just drop and continue to creation logic
+                    drop(pool); // Release lock before potential recursive call or new connection attempt
+                    return self.wait_for_available_connection().await;
                 }
             }
         }
@@ -320,11 +353,12 @@ impl RedisConnectionManager {
     }
 
     /// Create a new connection
-    async fn create_connection(&self) -> RedisCacheResult<Connection> {
+    async fn create_connection(&self) -> RedisCacheResult<MultiplexedConnection> {
         let timer = metrics::TimedOperation::new(metrics::names::CONNECTION_ACQUIRE);
 
-        let conn_timeout = Duration::from_secs(self.config.connect_timeout_seconds);
-        let conn_result = timeout(conn_timeout, self.client.get_async_connection()).await;
+        let conn_timeout = Duration::from_secs(self.config.connection_timeout_seconds);
+        let conn_result =
+            timeout(conn_timeout, self.client.get_multiplexed_async_connection()).await;
 
         match conn_result {
             Ok(Ok(conn)) => {
@@ -381,8 +415,8 @@ impl RedisConnectionManager {
     }
 
     /// Return a connection to the pool
-    pub async fn return_connection(&self, conn: Connection) {
-        let health = self.check_connection_health(&conn).await;
+    pub async fn return_connection(&self, mut conn: MultiplexedConnection) {
+        let health = self.check_connection_health(&mut conn).await;
 
         // Record health in metrics
         metrics::record_connection_health(&health);
@@ -397,7 +431,7 @@ impl RedisConnectionManager {
                 stats.current_idle_connections += 1;
             }
             ConnectionHealth::Degraded(reason) | ConnectionHealth::Unhealthy(reason) => {
-                debug!("Not returning unhealthy connection to pool: {}", reason);
+                warn!("Not returning unhealthy connection to pool: {}", reason);
                 stats.total_connections_closed += 1;
             }
         }
@@ -410,153 +444,296 @@ impl RedisConnectionManager {
         );
     }
 
-    /// Execute a Redis command and handle errors
-    pub async fn execute_command<F, T>(
+    /// Execute a Redis command using a pooled connection
+    /// Updated to use MultiplexedConnection and async closure
+    #[instrument(skip(self, key, operation, func), fields(redis.key = %key, redis.operation = %operation), level = "debug")]
+    pub async fn execute_command<F, Fut, T>(
         &self,
         key: &str,
         operation: &str,
         func: F,
     ) -> RedisCacheResult<T>
     where
-        F: FnOnce(Connection) -> Result<T, RedisError>,
+        F: FnOnce(MultiplexedConnection) -> Fut, // Closure takes owned connection clone
+        Fut: std::future::Future<Output = Result<T, RedisError>>, // Closure returns a Future
+        T: 'static + Send,                       // Ensure result is Send
     {
-        let conn = self.get_connection().await?;
+        let start_time = Instant::now();
+        let mut attempt = 0;
+        let max_retries = 3; // self.config.connection_retries;
 
-        // Track start time for operation
-        let start = Instant::now();
+        loop {
+            attempt += 1;
+            debug!(
+                "Executing command '{}' for key '{}', attempt {}",
+                operation, key, attempt
+            );
 
-        // Execute the command with timeout
-        let command_timeout = Duration::from_secs(self.config.command_timeout_seconds);
-        let operation_future = tokio::task::spawn_blocking(move || func(conn));
-
-        let result = match timeout(command_timeout, operation_future).await {
-            Ok(task_result) => match task_result {
-                Ok(cmd_result) => cmd_result,
-                Err(join_err) => {
-                    error!("Redis operation task failed: {}", join_err);
-                    Err(RedisError::from(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("Task execution error: {}", join_err),
-                    )))
+            // Get a connection (this handles retries internally now, but we add command-level retries)
+            // get_connection returns a clone, suitable for passing to the closure
+            let conn = match self.get_connection().await {
+                Ok(c) => c,
+                Err(e) => {
+                    error!(
+                        "Failed to get connection for command '{}', key '{}', attempt {}: {}",
+                        operation, key, attempt, e
+                    );
+                    if attempt > max_retries {
+                        metrics::record_operation_error(operation, &e);
+                        return Err(e);
+                    }
+                    // Wait before retrying
+                    tokio::time::sleep(Duration::from_millis(100 * attempt as u64)).await;
+                    continue; // Retry getting a connection
                 }
-            },
-            Err(_) => {
-                error!("Redis operation timed out after {:?}", command_timeout);
-                Err(RedisError::from(std::io::Error::new(
-                    std::io::ErrorKind::TimedOut,
-                    format!(
-                        "Operation '{}' timed out after {:?}",
-                        operation, command_timeout
-                    ),
-                )))
-            }
-        };
+            };
 
-        // Calculate operation duration
-        let duration = start.elapsed();
-        if duration > Duration::from_millis(100) {
-            warn!("Redis operation '{}' took {:?}", operation, duration);
-        }
+            // Execute the provided function (closure)
+            let command_future = func(conn.clone()); // Pass the clone to the async closure
 
-        match result {
-            Ok(value) => {
-                // Return a new connection to the pool
-                if let Ok(new_conn) = self.client.get_connection() {
-                    self.return_connection(new_conn).await;
+            // Apply command timeout
+            let timeout_duration = Duration::from_secs(self.config.command_timeout_seconds);
+            match timeout(timeout_duration, command_future).await {
+                Ok(Ok(result)) => {
+                    // Command succeeded
+                    let duration = start_time.elapsed();
+                    debug!(
+                        "Command '{}' for key '{}' succeeded in {:?} on attempt {}",
+                        operation, key, duration, attempt
+                    );
+                    // No need to explicitly return the connection for Multiplexed
+                    // self.return_connection(conn).await; // Not needed for Multiplexed
+                    metrics::record_operation_duration(operation, duration);
+                    metrics::record_operation_success(operation);
+                    self.reset_circuit_breaker().await; // Reset on success
+                    return Ok(result);
                 }
-                Ok(value)
-            }
-            Err(err) => {
-                // Record failure for circuit breaker
-                self.record_connection_failure().await;
+                Ok(Err(redis_err)) => {
+                    // Redis command failed
+                    let duration = start_time.elapsed();
+                    error!(
+                        "Redis command '{}' for key '{}' failed after {:?} on attempt {}: {}",
+                        operation, key, duration, attempt, redis_err
+                    );
+                    metrics::record_operation_duration(operation, duration);
+                    // Convert RedisError to RedisCacheError before recording
+                    let cache_err: RedisCacheError = redis_err.into();
+                    metrics::record_operation_error(operation, &cache_err);
 
-                error!(
-                    "Redis operation '{}' failed on key '{}': {}",
-                    operation, key, err
-                );
-                Err(RedisCacheError::OperationError(format!(
-                    "Redis operation '{}' failed: {}",
-                    operation, err
-                )))
+                    // Handle specific Redis errors if needed (e.g., connection errors)
+                    if matches!(
+                        cache_err.clone().into_inner().kind(),
+                        redis::ErrorKind::IoError
+                            | redis::ErrorKind::ConnectionRefused
+                            | redis::ErrorKind::AuthenticationFailed
+                            | redis::ErrorKind::ClientError
+                    ) {
+                        self.record_connection_failure().await;
+                        // Possibly close the specific connection instance if applicable,
+                        // though MultiplexedConnection might handle this.
+                    }
+
+                    if attempt > max_retries {
+                        error!(
+                            "Command '{}' failed after {} retries for key '{}'",
+                            operation, max_retries, key
+                        );
+                        return Err(cache_err); // Return final error
+                    }
+                    // Wait before retrying command
+                    tokio::time::sleep(Duration::from_millis(100 * attempt as u64)).await;
+                    // No need to return/replace connection explicitly for Multiplexed
+                }
+                Err(_) => {
+                    // Command timed out
+                    let duration = start_time.elapsed();
+                    error!(
+                        "Command '{}' for key '{}' timed out after {:?} on attempt {}",
+                        operation, key, duration, attempt
+                    );
+                    metrics::record_operation_duration(operation, duration);
+                    let timeout_err = RedisCacheError::TimeoutError(format!(
+                        "Operation '{}' timed out after {} seconds",
+                        operation,
+                        timeout_duration.as_secs()
+                    ));
+                    metrics::record_operation_error(operation, &timeout_err);
+                    self.record_connection_failure().await; // Record as connection issue
+
+                    if attempt > max_retries {
+                        error!(
+                            "Command '{}' timed out after {} retries for key '{}'",
+                            operation, max_retries, key
+                        );
+                        return Err(timeout_err); // Return final timeout error
+                    }
+                    // Wait before retrying command
+                    tokio::time::sleep(Duration::from_millis(100 * attempt as u64)).await;
+                    // No need to return/replace connection explicitly for Multiplexed
+                }
             }
-        }
+        } // End loop
     }
 
-    /// Execute a pipeline command on a Redis connection
-    ///
-    /// This method is similar to execute_command but is optimized for pipeline operations
-    /// which may operate on multiple keys.
-    #[instrument(skip(self, func), level = "debug")]
-    pub async fn execute_pipeline_command<F, T>(
+    /// Execute a pipeline command (needs similar MultiplexedConnection update)
+    // Updated signature and basic structure for async pipeline execution
+    #[instrument(skip(self, operation, func), fields(redis.operation = %operation), level = "debug")]
+    pub async fn execute_pipeline_command<F, Fut, T>(
         &self,
         operation: &str,
         func: F,
     ) -> RedisCacheResult<T>
     where
-        F: FnOnce(Connection) -> Result<T, RedisError>,
+        F: FnOnce(redis::Pipeline) -> Fut, // Closure takes an empty pipeline
+        Fut: std::future::Future<Output = Result<(redis::Pipeline, T), RedisError>>, // Closure returns pipeline + result
+        T: 'static + Send,
     {
         let start_time = Instant::now();
+        let mut attempt = 0;
+        let max_retries = 3; // self.config.connection_retries;
 
-        // Get a connection from the pool
-        let connection = match self.get_connection().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                error!(
-                    "Failed to get connection for pipeline operation {}: {}",
-                    operation, e
-                );
-                metrics::record_operation_error(
-                    &format!("{}_pipeline", metrics::names::CONNECTION_ERROR),
-                    &e,
-                );
-                return Err(e);
-            }
-        };
+        loop {
+            attempt += 1;
+            debug!(
+                "Executing pipeline command '{}', attempt {}",
+                operation, attempt
+            );
 
-        // Execute the command with timeout
-        let timeout_duration = Duration::from_secs(self.config.command_timeout_seconds);
-        let result = match timeout(timeout_duration, async { func(connection) }).await {
-            Ok(Ok(result)) => {
-                // Record successful operation
-                debug!("Pipeline operation {} completed successfully", operation);
-                Ok(result)
-            }
-            Ok(Err(redis_error)) => {
-                // Record Redis error
-                error!(
-                    "Redis error during pipeline operation {}: {}",
-                    operation, redis_error
-                );
-                self.record_connection_failure().await;
-                metrics::record_operation_error(
-                    operation,
-                    &RedisCacheError::from(redis_error.clone()),
-                );
-                Err(redis_error.into())
-            }
-            Err(timeout_error) => {
-                // Record timeout error
-                error!(
-                    "Timeout during pipeline operation {}: {}",
-                    operation, timeout_error
-                );
-                self.record_connection_failure().await;
-                let error = RedisCacheError::Timeout(format!(
-                    "Operation timed out after {:?}: {}",
-                    timeout_duration, timeout_error
-                ));
-                metrics::record_operation_error(operation, &error);
-                Err(error)
-            }
-        };
+            // Get a connection clone
+            let mut conn = match self.get_connection().await {
+                Ok(c) => c,
+                Err(e) => {
+                    error!(
+                        "Failed to get connection for pipeline '{}', attempt {}: {}",
+                        operation, attempt, e
+                    );
+                    if attempt > max_retries {
+                        metrics::record_operation_error(operation, &e);
+                        return Err(e);
+                    }
+                    tokio::time::sleep(Duration::from_millis(100 * attempt as u64)).await;
+                    continue;
+                }
+            };
 
-        // Record operation time
-        let elapsed = start_time.elapsed();
-        if let Ok(ref result_val) = result {
-            metrics::record_operation_duration(operation, elapsed);
-        }
+            // Create an empty pipeline
+            let pipeline = redis::pipe();
 
-        result
+            // Build the pipeline using the provided function
+            let pipeline_future = func(pipeline);
+
+            // Apply command timeout to pipeline building and execution
+            let timeout_duration = Duration::from_secs(self.config.command_timeout_seconds);
+            match timeout(timeout_duration, pipeline_future).await {
+                Ok(Ok((filled_pipeline, _))) => {
+                    // Pipeline built successfully
+                    // Execute the built pipeline
+                    let execution_future = filled_pipeline.query_async::<T>(&mut conn);
+                    match timeout(timeout_duration, execution_future).await {
+                        Ok(Ok(result)) => {
+                            // Pipeline succeeded
+                            let duration = start_time.elapsed();
+                            debug!(
+                                "Pipeline '{}' succeeded in {:?} on attempt {}",
+                                operation, duration, attempt
+                            );
+                            metrics::record_operation_duration(operation, duration);
+                            metrics::record_operation_success(operation);
+                            self.reset_circuit_breaker().await;
+                            return Ok(result);
+                        }
+                        Ok(Err(redis_err)) => {
+                            // Pipeline execution failed
+                            let duration = start_time.elapsed();
+                            error!(
+                                "Redis pipeline '{}' execution failed after {:?} on attempt {}: {}",
+                                operation, duration, attempt, redis_err
+                            );
+                            let cache_err: RedisCacheError = redis_err.into();
+                            metrics::record_operation_duration(operation, duration);
+                            metrics::record_operation_error(operation, &cache_err);
+                            if matches!(
+                                cache_err.clone().into_inner().kind(),
+                                redis::ErrorKind::IoError
+                                    | redis::ErrorKind::ConnectionRefused
+                                    | redis::ErrorKind::AuthenticationFailed
+                                    | redis::ErrorKind::ClientError
+                            ) {
+                                self.record_connection_failure().await;
+                            }
+                            if attempt > max_retries {
+                                return Err(cache_err);
+                            }
+                            tokio::time::sleep(Duration::from_millis(100 * attempt as u64)).await;
+                        }
+                        Err(_) => {
+                            // Pipeline execution timed out
+                            let duration = start_time.elapsed();
+                            error!(
+                                "Pipeline '{}' execution timed out after {:?} on attempt {}",
+                                operation, duration, attempt
+                            );
+                            let timeout_err = RedisCacheError::TimeoutError(format!(
+                                "Pipeline operation '{}' timed out after {} seconds",
+                                operation,
+                                timeout_duration.as_secs()
+                            ));
+                            metrics::record_operation_duration(operation, duration);
+                            metrics::record_operation_error(operation, &timeout_err);
+                            self.record_connection_failure().await;
+                            if attempt > max_retries {
+                                return Err(timeout_err);
+                            }
+                            tokio::time::sleep(Duration::from_millis(100 * attempt as u64)).await;
+                        }
+                    }
+                }
+                Ok(Err(build_err)) => {
+                    // Error during pipeline building phase (returned from closure)
+                    let duration = start_time.elapsed();
+                    error!(
+                        "Building Redis pipeline '{}' failed after {:?} on attempt {}: {}",
+                        operation, duration, attempt, build_err
+                    );
+                    let cache_err: RedisCacheError = build_err.into();
+                    metrics::record_operation_duration(operation, duration);
+                    metrics::record_operation_error(operation, &cache_err);
+                    if matches!(
+                        cache_err.clone().into_inner().kind(),
+                        redis::ErrorKind::IoError
+                            | redis::ErrorKind::ConnectionRefused
+                            | redis::ErrorKind::AuthenticationFailed
+                            | redis::ErrorKind::ClientError
+                    ) {
+                        self.record_connection_failure().await;
+                    }
+                    if attempt > max_retries {
+                        return Err(cache_err);
+                    }
+                    tokio::time::sleep(Duration::from_millis(100 * attempt as u64)).await;
+                }
+                Err(_) => {
+                    // Timeout during pipeline building phase
+                    let duration = start_time.elapsed();
+                    error!(
+                        "Building pipeline '{}' timed out after {:?} on attempt {}",
+                        operation, duration, attempt
+                    );
+                    let timeout_err = RedisCacheError::TimeoutError(format!(
+                        "Building pipeline operation '{}' timed out after {} seconds",
+                        operation,
+                        timeout_duration.as_secs()
+                    ));
+                    metrics::record_operation_duration(operation, duration);
+                    metrics::record_operation_error(operation, &timeout_err);
+                    self.record_connection_failure().await;
+                    if attempt > max_retries {
+                        return Err(timeout_err);
+                    }
+                    tokio::time::sleep(Duration::from_millis(100 * attempt as u64)).await;
+                }
+            } // End match timeout
+        } // End loop
     }
 
     /// Create a prefixed key
@@ -575,10 +752,11 @@ impl RedisConnectionManager {
 
     /// Check if Redis is available
     pub async fn ping(&self) -> RedisCacheResult<()> {
-        self.execute_command("ping", "PING", |mut conn| {
-            redis::cmd("PING").query::<String>(&mut conn).map(|_| ())
+        self.execute_command("ping", "PING", |mut conn| async move {
+            redis::cmd("PING").query_async(&mut conn).await
         })
         .await
+        .map(|_: String| ())
     }
 
     /// Get the Redis configuration
@@ -601,15 +779,11 @@ impl RedisConnectionManager {
     }
 
     /// Check the health of a connection
-    async fn check_connection_health(&self, conn: &Connection) -> ConnectionHealth {
+    async fn check_connection_health(&self, conn: &mut MultiplexedConnection) -> ConnectionHealth {
         let timeout_duration = Duration::from_millis(500); // Quick health check timeout
 
-        match timeout(
-            timeout_duration,
-            conn.clone().req_command(&redis::cmd("PING")),
-        )
-        .await
-        {
+        let cmd = redis::cmd("PING");
+        match timeout(timeout_duration, cmd.query_async::<()>(conn)).await {
             Ok(Ok(_)) => ConnectionHealth::Healthy,
             Ok(Err(err)) => ConnectionHealth::Unhealthy(format!("Ping failed: {}", err)),
             Err(_) => ConnectionHealth::Unhealthy(String::from("Health check timed out")),
@@ -617,9 +791,9 @@ impl RedisConnectionManager {
     }
 
     /// Wait for an available connection
-    async fn wait_for_available_connection(&self) -> RedisCacheResult<Connection> {
+    async fn wait_for_available_connection(&self) -> RedisCacheResult<MultiplexedConnection> {
         let retry_interval = Duration::from_millis(50);
-        let max_retries = (self.config.connection_timeout_seconds * 1000) / 50;
+        let max_retries = (3 * 1000) / 50; // (self.config.connection_timeout_seconds * 1000) / 50;
 
         for _ in 0..max_retries {
             // Try to get a connection from the pool
@@ -662,6 +836,17 @@ impl RedisConnectionManager {
             );
             *self.circuit_open.lock().await = false;
             *self.last_failure.lock().await = Some(Instant::now());
+        }
+    }
+
+    /// Reset the circuit breaker state after a successful operation
+    async fn reset_circuit_breaker(&self) {
+        let mut circuit_open = self.circuit_open.lock().await;
+        if !*circuit_open {
+            debug!("Resetting circuit breaker due to successful operation");
+            *circuit_open = true;
+            *self.consecutive_failures.lock().await = 0;
+            *self.last_failure.lock().await = None;
         }
     }
 
@@ -711,7 +896,7 @@ impl RedisConnectionManager {
             );
 
             for _ in 0..to_add {
-                if let Ok(conn) = self.client.get_connection() {
+                if let Ok(conn) = self.client.get_multiplexed_async_connection().await {
                     pool.push(PooledConnection::new(conn));
                     stats.total_connections_created += 1;
                     stats.current_idle_connections += 1;

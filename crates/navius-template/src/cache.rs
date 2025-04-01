@@ -419,7 +419,11 @@ mod tests {
             _context: &dyn ErasedSerialize, // Use erased type
         ) -> TemplateResult<String> {
             if self.fail_render {
-                return Err(TemplateError::render_error("Mock forced render error"));
+                // Needs name and message
+                return Err(TemplateError::render_error(
+                    name,
+                    "Mock forced render error",
+                ));
             }
             let templates = self.templates.lock().unwrap();
             let mut counts = self.render_count.lock().unwrap();
@@ -428,6 +432,7 @@ mod tests {
 
             match templates.get(name) {
                 Some(template) => Ok(template.clone()),
+                // Correctly takes one argument
                 None => Err(TemplateError::template_not_found(name)),
             }
         }
@@ -438,7 +443,9 @@ mod tests {
             _context: &dyn ErasedSerialize, // Use erased type
         ) -> TemplateResult<String> {
             if self.fail_render {
+                // Needs a "name" for the error, using "<inline>" for strings
                 return Err(TemplateError::render_error(
+                    "<inline>",
                     "Mock forced render_string error",
                 ));
             }

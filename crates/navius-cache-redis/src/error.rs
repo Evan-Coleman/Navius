@@ -5,7 +5,7 @@ use thiserror::Error;
 pub type RedisCacheResult<T> = Result<T, RedisCacheError>;
 
 /// Redis cache specific errors
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum RedisCacheError {
     /// Connection error
     #[error("Redis connection error: {0}")]
@@ -46,6 +46,14 @@ pub enum RedisCacheError {
     /// Deserialization error
     #[error("Failed to deserialize Redis data: {0}")]
     DeserializationError(String),
+
+    /// Operation timed out.
+    #[error("Operation timed out: {0}")]
+    TimeoutError(String),
+
+    /// Generic internal error.
+    #[error("Internal error: {0}")]
+    InternalError(String),
 }
 
 impl From<redis::RedisError> for RedisCacheError {
@@ -60,19 +68,22 @@ impl From<serde_json::Error> for RedisCacheError {
     }
 }
 
+/// Conversion from RedisCacheError to the generic CacheError
 impl From<RedisCacheError> for CacheError {
-    fn from(err: RedisCacheError) -> Self {
-        match err {
+    fn from(error: RedisCacheError) -> Self {
+        match error {
             RedisCacheError::ConnectionError(msg) => CacheError::ConnectionError(msg),
             RedisCacheError::OperationError(msg) => CacheError::OperationError(msg),
             RedisCacheError::ConfigurationError(msg) => CacheError::ConfigurationError(msg),
             RedisCacheError::SerializationError(msg) => CacheError::SerializationError(msg),
-            RedisCacheError::Unavailable(msg) => CacheError::UnavailableError(msg),
-            RedisCacheError::Timeout(msg) => CacheError::TimeoutError(msg),
-            RedisCacheError::ScriptError(msg) => CacheError::OperationError(msg),
-            RedisCacheError::KeyNotFound(msg) => CacheError::NotFoundError(msg),
-            RedisCacheError::CommandError(msg) => CacheError::OperationError(msg),
-            RedisCacheError::DeserializationError(msg) => CacheError::SerializationError(msg),
+            RedisCacheError::DeserializationError(msg) => CacheError::SerializationError(msg), // Map DeserializationError
+            RedisCacheError::Unavailable(msg) => CacheError::UnavailableError(msg), // Map Unavailable
+            RedisCacheError::Timeout(msg) => CacheError::TimeoutError(msg),         // Map Timeout
+            RedisCacheError::ScriptError(msg) => CacheError::OperationError(msg), // Map ScriptError
+            RedisCacheError::KeyNotFound(msg) => CacheError::NotFoundError(msg),  // Map KeyNotFound
+            RedisCacheError::CommandError(msg) => CacheError::OperationError(msg), // Map CommandError
+            RedisCacheError::TimeoutError(msg) => CacheError::TimeoutError(msg), // Map TimeoutError (the one we added)
+            RedisCacheError::InternalError(msg) => CacheError::InternalError(msg),
         }
     }
 }
