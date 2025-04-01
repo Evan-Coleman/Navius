@@ -82,6 +82,16 @@ impl RedisCache {
         self
     }
 
+    // Update helper methods to handle async properly
+    async fn key_to_string<K: CacheKey>(&self, key: &K) -> CacheResult<String> {
+        key.to_string()
+            .map_err(|e| CacheError::SerializationError(e.to_string()))
+    }
+
+    async fn serialize_sync<T: Serialize>(&self, value: &T) -> CacheResult<Vec<u8>> {
+        serde_json::to_vec(value).map_err(|e| CacheError::SerializationError(e.to_string()))
+    }
+
     // Helper method to serialize a value
     async fn serialize<T: Serialize + Send + Sync>(&self, value: &T) -> CacheResult<Vec<u8>> {
         serde_json::to_vec(value).map_err(|e| CacheError::SerializationError(e.to_string()))
@@ -457,8 +467,8 @@ impl RedisCache {
     #[instrument(skip(self), level = "debug")]
     pub async fn hash_get<K, F, V>(&self, key: &K, field: &F) -> CacheResult<Option<V>>
     where
-        K: CacheKey + Sync + Send + 'static,
-        F: Serialize + Sync + Send + 'static + std::fmt::Debug,
+        K: CacheKey + Sync + Send + std::fmt::Debug + 'static,
+        F: Serialize + Sync + Send + std::fmt::Debug + 'static,
         V: DeserializeOwned + Sync + Send + 'static,
     {
         let key_str = self.key_to_string(key)?;
@@ -487,8 +497,8 @@ impl RedisCache {
     #[instrument(skip(self), level = "debug")]
     pub async fn hash_delete<K, F>(&self, key: &K, field: &F) -> CacheResult<bool>
     where
-        K: CacheKey + Sync + Send + 'static,
-        F: Serialize + Sync + Send + 'static + std::fmt::Debug,
+        K: CacheKey + Sync + Send + std::fmt::Debug + 'static,
+        F: Serialize + Sync + Send + std::fmt::Debug + 'static,
     {
         let key_str = self.key_to_string(key)?;
         let field_str = self.key_to_string(field)?;
@@ -509,17 +519,17 @@ impl RedisCache {
     }
 
     #[instrument(skip(self, fields), level = "debug")]
-    async fn hash_get_many<K, F, V>(&self, key: &K, fields: &[F]) -> CacheResult<Vec<Option<V>>>
+    async fn hash_get_many<K, F, V>(&self, key: K, fields: Vec<F>) -> CacheResult<Vec<Option<V>>>
     where
-        K: CacheKey + Sync + Send + 'static,
-        F: CacheKey + Hash + Eq + Clone + Sync + Send + 'static + std::fmt::Debug,
-        V: DeserializeOwned + Sync + Send + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
     {
         if fields.is_empty() {
             return Ok(Vec::new());
         }
 
-        let key_str = self.key_to_string(key)?;
+        let key_str = self.key_to_string(&key)?;
         let prefixed_key = self.connection_manager.prefixed_key(&key_str);
         let field_strs: Vec<String> = fields.iter().map(|f| self.key_to_string(f)?).collect();
 
@@ -553,13 +563,13 @@ impl RedisCache {
     }
 
     #[instrument(skip(self, entries), level = "debug")]
-    async fn hash_set_many<K, F, V>(&self, key: &K, entries: Vec<(F, V)>) -> CacheResult<()>
+    async fn hash_set_many<K, F, V>(&self, key: K, entries: Vec<(F, V)>) -> CacheResult<()>
     where
-        K: CacheKey + Sync + Send + 'static,
-        F: Serialize + 'static + std::fmt::Debug + std::marker::Send + std::marker::Sync,
-        V: Serialize + 'static + std::marker::Send + std::marker::Sync,
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + std::fmt::Debug + 'static,
     {
-        let key_str = self.key_to_string(key)?;
+        let key_str = self.key_to_string(&key)?;
         let prefixed_key = self.connection_manager.prefixed_key(&key_str);
 
         let mut cmd = redis::cmd("HMSET");
@@ -793,8 +803,8 @@ impl RedisCache {
     #[instrument(skip(self), level = "debug")]
     async fn set_contains<K, V>(&self, key: K, value: &V) -> CacheResult<bool>
     where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + std::fmt::Debug + 'static,
     {
         let key_str = self.key_to_string(&key)?;
         let prefixed_key = self.connection_manager.prefixed_key(&key_str);
@@ -861,10 +871,10 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self), level = "debug")]
     async fn get<K, V>(&self, key: K) -> CacheResult<Option<V>>
     where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
+        K: CacheKey + std::fmt::Debug + Send + Sync + 'static,
+        V: DeserializeOwned + Send + Sync + 'static,
     {
-        let key_str = self.key_to_string(&key)?;
+        let key_str = self.key_to_string(&key).await?;
         let prefixed_key = self.connection_manager.prefixed_key(&key_str);
 
         let result: Option<Vec<u8>> = self
@@ -872,7 +882,8 @@ impl CacheOperations for RedisCache {
             .execute_command(&prefixed_key, "GET", |mut conn| async move {
                 conn.get(&prefixed_key).await
             })
-            .await?;
+            .await
+            .map_err(CacheError::from)?;
 
         match result {
             Some(bytes) => self.deserialize(&bytes).await.map(Some),
@@ -883,44 +894,49 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, keys), level = "debug")]
     async fn get_many<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<Option<V>>>
     where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
+        K: CacheKey + std::fmt::Debug + Send + Sync + 'static,
+        V: DeserializeOwned + Send + Sync + 'static,
     {
         if keys.is_empty() {
             return Ok(Vec::new());
         }
-        let prefixed_keys: Vec<String> = keys
-            .iter()
-            .map(|k| self.connection_manager.prefixed_key(&k.to_string()))
-            .collect();
+
+        let prefixed_keys: Vec<String> =
+            futures::future::join_all(keys.iter().map(|k| async move {
+                let key_str = self.key_to_string(k).await?;
+                Ok(self.connection_manager.prefixed_key(&key_str))
+            }))
+            .await
+            .into_iter()
+            .collect::<CacheResult<Vec<_>>>()?;
 
         let routing_key = &prefixed_keys[0];
-
         let results: Vec<Option<Vec<u8>>> = self
             .connection_manager
             .execute_command(routing_key, "MGET", |mut conn| async move {
                 conn.get(prefixed_keys).await
             })
-            .await?;
+            .await
+            .map_err(CacheError::from)?;
 
-        let mut deserialized_results = Vec::with_capacity(results.len());
-        for bytes_opt in results {
-            if let Some(bytes) = bytes_opt {
-                deserialized_results.push(self.deserialize(&bytes).await.map(Some)?);
-            } else {
-                deserialized_results.push(None);
+        futures::future::join_all(results.into_iter().map(|bytes_opt| async move {
+            match bytes_opt {
+                Some(bytes) => self.deserialize(&bytes).await.map(Some),
+                None => Ok(None),
             }
-        }
-        Ok(deserialized_results)
+        }))
+        .await
+        .into_iter()
+        .collect()
     }
 
     #[instrument(skip(self, value, options), level = "debug")]
     async fn set<K, V>(&self, key: K, value: &V, options: Option<CacheOptions>) -> CacheResult<()>
     where
-        K: CacheKey + 'static + std::fmt::Debug,
-        V: Serialize + Send + Sync + 'static,
+        K: CacheKey + std::fmt::Debug + Send + Sync + 'static,
+        V: Serialize + Send + Sync + std::fmt::Debug + 'static,
     {
-        let key_str = self.key_to_string(&key)?;
+        let key_str = self.key_to_string(&key).await?;
         let prefixed_key = self.connection_manager.prefixed_key(&key_str);
         let serialized = self.serialize(value).await?;
 
@@ -935,7 +951,8 @@ impl CacheOperations for RedisCache {
                 }
                 cmd.query_async(&mut conn).await
             })
-            .await?;
+            .await
+            .map_err(CacheError::from)?;
         Ok(())
     }
 
@@ -946,8 +963,8 @@ impl CacheOperations for RedisCache {
         options: Option<CacheOptions>,
     ) -> CacheResult<()>
     where
-        K: CacheKey + 'static + std::fmt::Debug,
-        V: Serialize + Send + Sync + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + std::fmt::Debug + 'static,
     {
         if entries.is_empty() {
             return Ok(());
@@ -1220,7 +1237,7 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self), level = "debug")]
     async fn list_range<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<V>>
     where
-        K: CacheKey + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
         V: DeserializeOwned + 'static,
     {
         let key_str = self.key_to_string(&key)?;
@@ -1300,8 +1317,8 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, field), level = "debug")]
     async fn hash_get<K, F, V>(&self, key: &K, field: &F) -> CacheResult<Option<V>>
     where
-        K: CacheKey + Sync + Send + 'static,
-        F: Serialize + Sync + Send + 'static + std::fmt::Debug,
+        K: CacheKey + Sync + Send + std::fmt::Debug + 'static,
+        F: Serialize + Sync + Send + std::fmt::Debug + 'static,
         V: DeserializeOwned + Sync + Send + 'static,
     {
         let key_str = self.key_to_string(key)?;
@@ -1350,8 +1367,8 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, fields), level = "debug")]
     async fn hash_get_many<K, F, V>(&self, key: K, fields: Vec<F>) -> CacheResult<Vec<Option<V>>>
     where
-        K: CacheKey + 'static,
-        F: CacheKey + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + std::fmt::Debug + 'static,
         V: DeserializeOwned + 'static,
     {
         if fields.is_empty() {
@@ -1359,7 +1376,7 @@ impl CacheOperations for RedisCache {
         }
         let key_str = self.key_to_string(&key)?;
         let prefixed_key = self.connection_manager.prefixed_key(&key_str);
-        let field_strs: Vec<String> = fields.iter().map(|f| self.key_to_string(&f)?).collect();
+        let field_strs: Vec<String> = fields.iter().map(|f| self.key_to_string(f)?).collect();
 
         let results_bytes: Vec<Option<Vec<u8>>> = self
             .connection_manager
@@ -1387,9 +1404,9 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, entries), level = "debug")]
     async fn hash_set_many<K, F, V>(&self, key: K, entries: Vec<(F, V)>) -> CacheResult<()>
     where
-        K: CacheKey + 'static,
-        F: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + std::fmt::Debug + 'static,
     {
         if entries.is_empty() {
             return Ok(());

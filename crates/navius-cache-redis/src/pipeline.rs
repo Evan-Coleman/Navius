@@ -18,24 +18,25 @@ use crate::metrics;
 use std::time::Instant;
 
 /// Trait that defines pipeline operations
-pub trait RedisCommandPipeline: Cache {
-    /// Creates a new pipeline with the initial operation.
-    fn pipeline(&self) -> RedisPipelineBuilder;
-
-    /// Executes a pipeline with multiple commands.
-    async fn execute_pipeline(&self, pipeline: RedisPipelineBuilder) -> RedisCacheResult<()>;
+#[async_trait]
+pub trait RedisCommandPipeline {
+    fn pipeline(&self, key: &str) -> RedisPipelineBuilder;
 }
 
 /// Builder for Redis pipelines
-#[derive(Default)]
+#[derive(Debug)]
 pub struct RedisPipelineBuilder {
-    pipeline: RedisPipeline,
+    pipeline: redis::Pipeline,
+    key: String,
 }
 
 impl RedisPipelineBuilder {
     /// Creates a new pipeline builder
-    pub fn new() -> Self {
-        Self { pipeline: pipe() }
+    pub fn new(key: String) -> Self {
+        Self {
+            pipeline: redis::Pipeline::new(),
+            key,
+        }
     }
 
     /// Adds a SET command to the pipeline
@@ -75,8 +76,31 @@ impl RedisPipelineBuilder {
     }
 
     /// Builds the pipeline and returns it
-    pub fn build(self) -> RedisPipeline {
+    pub fn build(self) -> redis::Pipeline {
         self.pipeline
+    }
+
+    #[instrument(skip(self), level = "debug")]
+    pub async fn execute(self, cache: &RedisCache) -> RedisCacheResult<()> {
+        let timer = metrics::TimedOperation::new(metrics::names::PIPELINE_EXECUTE);
+        let result = cache
+            .connection_manager()
+            .execute_pipeline_command(metrics::names::PIPELINE_EXECUTE, |pipeline| async move {
+                match self.pipeline.query_async(&mut conn).await {
+                    Ok(_) => {
+                        timer.record_success();
+                        Ok((pipeline, ()))
+                    }
+                    Err(e) => {
+                        let err = RedisCacheError::from(e);
+                        timer.record_error(&err);
+                        Err(e)
+                    }
+                }
+            })
+            .await;
+
+        result
     }
 }
 
@@ -283,32 +307,10 @@ impl Pipeline for RedisPipelineImpl {
     }
 }
 
+#[async_trait]
 impl RedisCommandPipeline for RedisCache {
     #[instrument(skip(self), level = "debug")]
-    fn pipeline(&self) -> RedisPipelineBuilder {
-        RedisPipelineBuilder::new()
-    }
-
-    #[instrument(skip(self), level = "debug")]
-    async fn execute_pipeline(
-        &self,
-        pipeline_builder: RedisPipelineBuilder,
-    ) -> RedisCacheResult<()> {
-        let start = Instant::now();
-        let pipeline = pipeline_builder.build();
-
-        self.execute_sync_command("PIPELINE", |mut conn| {
-            pipeline.query(&mut conn)?;
-            Ok(())
-        })
-        .await
-        .map_err(|e| {
-            let err = RedisCacheError::Other(format!("Pipeline error: {}", e));
-            metrics::record_operation_error(metrics::names::PIPELINE_EXECUTE, &err);
-            err
-        })?;
-
-        metrics::record_operation_duration(metrics::names::PIPELINE_EXECUTE, start.elapsed());
-        Ok(())
+    fn pipeline(&self, key: &str) -> RedisPipelineBuilder {
+        RedisPipelineBuilder::new(key.to_string())
     }
 }
