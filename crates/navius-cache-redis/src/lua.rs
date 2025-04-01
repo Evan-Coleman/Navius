@@ -179,7 +179,8 @@ impl RedisLuaManager {
             .execute_script::<Vec<u8>>(script_name, keys, args)
             .await?;
 
-        self.connection_manager.deserialize(&bytes).await
+        serde_json::from_slice(&bytes)
+            .map_err(|e| RedisCacheError::OperationError(format!("Deserialization error: {}", e)))
     }
 
     #[instrument(skip(self), level = "debug")]
@@ -195,13 +196,13 @@ impl RedisLuaManager {
 pub async fn execute_script_with_metrics<T: FromRedisValue>(
     connection_manager: &RedisConnectionManager,
     script_name: &str,
-    script: ScriptInvocation<'_>,
+    script: &ScriptInvocation<'_>,
     key: &str,
 ) -> RedisCacheResult<T> {
     let timer = metrics::TimedOperation::new(metrics::names::SCRIPT_EXECUTE);
 
     let result = connection_manager
-        .execute_command(key, "EVALSHA", |conn| async move {
+        .execute_command(key, "EVALSHA", |mut conn| async move {
             script.invoke_async(&mut conn).await
         })
         .await;
@@ -259,12 +260,14 @@ impl RedisLuaScripting for RedisLuaManager {
         };
 
         let script = Script::new(&script_info.script);
-        let invocation = script.prepare_invoke().key(keys).arg(args);
+        // Store the invocation in a binding to extend its lifetime
+        let mut invocation = script.prepare_invoke();
+        invocation.key(keys).arg(args);
 
         execute_script_with_metrics(
             &self.connection_manager,
             name,
-            invocation,
+            &invocation,
             keys.first().unwrap_or(&"script"),
         )
         .await
@@ -298,16 +301,12 @@ impl RedisLuaScripting for RedisLuaManager {
             .execute_script(script_name, &[&prefixed_key], &[])
             .await?;
 
-        match result {
-            Some(val) => {
-                // Deserialize the value
-                self.connection_manager
-                    .deserialize(&val)
-                    .await
-                    .map(Some)
-                    .map_err(|e| CacheError::DeserializationError(e.to_string()))
-            }
-            None => Ok(None),
+        if let Some(bytes) = result {
+            serde_json::from_slice(&bytes)
+                .map(Some)
+                .map_err(|e| CacheError::SerializationError(e.to_string()))
+        } else {
+            Ok(None)
         }
     }
 

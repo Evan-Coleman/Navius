@@ -251,6 +251,11 @@ impl RedisConnectionManager {
     {
         serde_json::from_slice(data).map_err(|e| RedisCacheError::DeserializationError(e))
     }
+
+    /// Gets the key prefix used by this connection manager
+    pub fn key_prefix(&self) -> &str {
+        &self.key_prefix
+    }
 }
 
 #[cfg(test)]
