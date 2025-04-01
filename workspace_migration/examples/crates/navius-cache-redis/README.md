@@ -1,41 +1,70 @@
 # Navius Redis Cache
 
-A high-performance Redis cache implementation with comprehensive metrics, connection pooling, and Lua scripting support.
+This crate provides a Redis-based cache implementation for the Navius platform, including robust connection management, comprehensive metrics, and optimized performance.
 
 ## Features
 
-- Robust connection pooling with health monitoring
-- Comprehensive metrics for all operations
-- Serialization/deserialization of complex objects
-- Support for atomic operations via Lua scripting
-- Pipeline support for batch operations
-- Collection operations (lists, sets, hashes)
-- Prometheus metrics integration
+- Robust connection pooling with timeout and retry handling
+- Comprehensive metrics for monitoring cache operations and performance
+- Support for all standard Redis operations, including:
+  - Basic key-value operations (GET, SET, DEL, etc.)
+  - List operations (LPUSH, RPUSH, LRANGE, etc.)
+  - Hash operations (HGET, HSET, HGETALL, etc.)
+  - Set operations (SADD, SMEMBERS, SINTER, etc.)
+  - Sorted Set operations (ZADD, ZRANGE, ZRANK, etc.)
+- Pipeline support for batch operations with optimized performance
+- Lua scripting support for atomic operations
 
 ## Usage
 
 ### Basic Usage
 
 ```rust
-use std::sync::Arc;
-use std::time::Duration;
-use navius_cache::{Cache, CacheError};
-use navius_cache_redis::{RedisCache, RedisConnectionManager};
+use navius_cache::{operations::{Cache, CacheOperations}, error::CacheResult};
+use navius_cache_redis::{connection::{RedisConnectionManager, RedisCacheConfig}, operations::RedisCache};
+use serde::{Deserialize, Serialize};
 
-async fn example() -> Result<(), CacheError> {
-    // Create a connection manager
-    let redis_url = "redis://127.0.0.1:6379/";
-    let connection_manager = Arc::new(RedisConnectionManager::new(redis_url)?);
+#[derive(Serialize, Deserialize)]
+struct User {
+    id: u32,
+    name: String,
+    email: String,
+    active: bool,
+}
+
+#[tokio::main]
+async fn main() -> CacheResult<()> {
+    // Create Redis cache config
+    let config = RedisCacheConfig {
+        url: "redis://localhost:6379".to_string(),
+        key_prefix: "navius:".to_string(),
+        connection_timeout_seconds: 5,
+        connection_retries: 3,
+        pool_size: 10,
+    };
+
+    // Create connection manager
+    let connection_manager = RedisConnectionManager::new(config)?;
     
-    // Create a cache instance
-    let cache = RedisCache::new(connection_manager);
+    // Create Redis cache
+    let cache = RedisCache::new(connection_manager.into());
     
-    // Basic operations
-    cache.set("my_key", "my_value", Some(Duration::from_secs(60))).await?;
-    let value: String = cache.get("my_key").await?;
+    // Store a user
+    let user = User {
+        id: 1,
+        name: "John Doe".to_string(),
+        email: "john@example.com".to_string(),
+        active: true,
+    };
     
-    // Delete a key
-    cache.delete("my_key").await?;
+    cache.set("user:1", &user, None).await?;
+    
+    // Retrieve the user
+    let retrieved_user: Option<User> = cache.get("user:1").await?;
+    
+    if let Some(user) = retrieved_user {
+        println!("Retrieved user: {}", user.name);
+    }
     
     Ok(())
 }
@@ -43,40 +72,46 @@ async fn example() -> Result<(), CacheError> {
 
 ### Set Operations
 
-Redis sets are unordered collections of unique strings, useful for tracking unique items and performing set operations:
-
 ```rust
-use navius_cache::{Cache, CacheError};
-use navius_cache_redis::{RedisCache, SetOperations};
-use std::collections::HashSet;
+use navius_cache::{operations::{Cache, CacheOperations}, error::CacheResult};
+use navius_cache_redis::{connection::{RedisConnectionManager, RedisCacheConfig}, operations::RedisCache};
 
-async fn set_example(cache: &RedisCache) -> Result<(), CacheError> {
+#[tokio::main]
+async fn main() -> CacheResult<()> {
+    // Setup cache (as shown in basic example)
+    let cache = setup_cache()?;
+    
     // Add items to a set
-    let items = vec!["apple", "banana", "cherry"];
-    let added_count = cache.set_add("fruits", items).await?;
-    println!("Added {} new items to the set", added_count);
+    let set_key = "users:active";
+    cache.set_add(set_key, vec![1, 2, 3, 4, 5]).await?;
     
-    // Check if an item exists in a set
-    let exists = cache.set_contains("fruits", "apple").await?;
+    // Check membership
+    let is_member = cache.set_contains(set_key, &3).await?;
+    println!("Is user 3 active? {}", is_member); // true
     
-    // Get all members of a set
-    let fruits: Vec<String> = cache.set_members("fruits").await?;
+    // Get all members
+    let members: Vec<u32> = cache.set_members(set_key).await?;
+    println!("Active users: {:?}", members);
     
-    // Remove items from a set
-    let removed = cache.set_remove("fruits", vec!["banana"]).await?;
+    // Remove items
+    cache.set_remove(set_key, vec![4, 5]).await?;
     
-    // Get the number of items in a set
-    let count = cache.set_length("fruits").await?;
+    // Set operations
+    cache.set_add("users:premium", vec![2, 3, 7, 8]).await?;
     
-    // Perform set operations
-    // Intersection: items that are in both set1 and set2
-    let common: Vec<String> = cache.set_intersection(vec!["set1", "set2"]).await?;
+    // Intersection (users who are both active and premium)
+    let intersection: Vec<u32> = cache.set_intersection(vec![
+        "users:active", 
+        "users:premium"
+    ]).await?;
     
-    // Union: items that are in either set1 or set2
-    let all: Vec<String> = cache.set_union(vec!["set1", "set2"]).await?;
+    println!("Active premium users: {:?}", intersection); // [2, 3]
     
-    // Difference: items in set1 that are not in set2
-    let difference: Vec<String> = cache.set_difference(vec!["set1", "set2"]).await?;
+    // Store intersection in a new set
+    cache.set_intersection_store(
+        "users:active_premium",
+        vec!["users:active", "users:premium"]
+    ).await?;
     
     Ok(())
 }
@@ -84,51 +119,53 @@ async fn set_example(cache: &RedisCache) -> Result<(), CacheError> {
 
 ### Sorted Set Operations
 
-Sorted sets are sets where each element has an associated score that allows for ordered operations, perfect for leaderboards and rankings:
-
 ```rust
-use navius_cache::{Cache, CacheError};
-use navius_cache_redis::{RedisCache, SortedSetOperations};
-use std::collections::HashMap;
+use navius_cache::{operations::{Cache, CacheOperations}, error::CacheResult};
+use navius_cache_redis::{connection::{RedisConnectionManager, RedisCacheConfig}, operations::RedisCache};
 
-async fn sorted_set_example(cache: &RedisCache) -> Result<(), CacheError> {
-    // Add items to a sorted set with scores
-    let mut scores = HashMap::new();
-    scores.insert("player1".to_string(), 100.0);
-    scores.insert("player2".to_string(), 85.5);
-    scores.insert("player3".to_string(), 95.0);
+#[tokio::main]
+async fn main() -> CacheResult<()> {
+    // Setup cache (as shown in basic example)
+    let cache = setup_cache()?;
     
-    let added = cache.zset_add("leaderboard", scores).await?;
+    // Add items to a sorted set (user scores)
+    let zset_key = "users:scores";
+    let scores = vec![
+        (95.5, 1),  // (score, user_id)
+        (80.0, 2),
+        (65.5, 3),
+        (90.0, 4),
+        (75.5, 5),
+    ];
     
-    // Get items by score range (ascending order)
-    let top_players: Vec<String> = cache.zset_range("leaderboard", 0, 2).await?;
+    cache.zset_add(zset_key, scores).await?;
     
-    // Get items with scores (descending order)
-    let players_with_scores: Vec<(String, f64)> = cache.zset_rev_range_with_scores("leaderboard", 0, -1).await?;
+    // Get top 3 users
+    let top_users: Vec<u32> = cache.zset_range(zset_key, -3, -1).await?;
+    println!("Top 3 users: {:?}", top_users); // [5, 4, 1] (highest scores)
     
-    // Get a player's rank (0-based, ascending by score)
-    let rank = cache.zset_rank("leaderboard", "player1").await?;
+    // Get users with their scores
+    let users_with_scores: Vec<(u32, f64)> = 
+        cache.zset_range_with_scores(zset_key, -3, -1).await?;
     
-    // Get a player's rank (0-based, descending by score)
-    let rev_rank = cache.zset_rev_rank("leaderboard", "player1").await?;
+    println!("Top users with scores:");
+    for (user_id, score) in users_with_scores {
+        println!("User {}: {}", user_id, score);
+    }
     
-    // Get a player's score
-    let score = cache.zset_score("leaderboard", "player1").await?;
+    // Get users with scores between 70 and 90
+    let mid_range: Vec<u32> = 
+        cache.zset_range_by_score(zset_key, 70.0, 90.0).await?;
     
-    // Count items within a score range
-    let count = cache.zset_count("leaderboard", 80.0, 100.0).await?;
+    println!("Users with scores between 70-90: {:?}", mid_range);
     
-    // Remove items from a sorted set
-    let removed = cache.zset_remove("leaderboard", vec!["player2"]).await?;
+    // Get user rank (0-based, lowest to highest)
+    let rank = cache.zset_rank(zset_key, &3).await?;
+    println!("Rank of user 3: {:?}", rank);
     
-    // Perform sorted set operations (union, intersection with aggregation)
-    let dest_key = "combined_scores";
-    cache.zset_union_store(
-        dest_key,
-        vec!["set1", "set2"],
-        &[1.0, 0.5], // Weight multipliers for each set
-        SortedSetOperations::AggregateSum // Sum the scores
-    ).await?;
+    // Increment a user's score
+    let new_score = cache.zset_increment_score(zset_key, &3, 15.0).await?;
+    println!("User 3's new score: {}", new_score); // 80.5
     
     Ok(())
 }
@@ -136,336 +173,186 @@ async fn sorted_set_example(cache: &RedisCache) -> Result<(), CacheError> {
 
 ### Pipeline Operations
 
-Pipelines allow executing multiple Redis commands in a single network roundtrip:
+Using pipelines can significantly improve performance when executing multiple operations by reducing network round trips:
 
 ```rust
-use navius_cache::{Cache, CacheError};
-use navius_cache_redis::{RedisConnectionManager, RedisCache};
-use redis::{Pipeline, AsyncCommands};
-use std::sync::Arc;
+use navius_cache::{operations::{Cache, CacheOperations}, error::CacheResult};
+use navius_cache_redis::{
+    connection::{RedisConnectionManager, RedisCacheConfig}, 
+    operations::RedisCache,
+    RedisCommandPipeline,
+};
 
-async fn pipeline_example(conn_manager: Arc<RedisConnectionManager>) -> Result<(), CacheError> {
-    // Execute multiple operations in a single network roundtrip
-    let results = conn_manager.execute_pipeline_command(|connection| {
-        let mut pipeline = Pipeline::new();
-        
-        // Add multiple operations to the pipeline
-        pipeline.set("key1", "value1");
-        pipeline.set("key2", "value2");
-        pipeline.set("key3", "value3");
-        pipeline.get("key1");
-        pipeline.get("key2");
-        
-        // Return the pipeline to be executed
-        Ok(pipeline)
-    }).await?;
+#[tokio::main]
+async fn main() -> CacheResult<()> {
+    // Setup cache (as shown in basic example)
+    let cache = setup_cache()?;
     
-    // Process the results (each operation returns a result in order)
-    if results.len() >= 5 {
-        println!("Value of key1: {}", results[3]);
-        println!("Value of key2: {}", results[4]);
+    // Create a pipeline
+    let mut pipeline = cache.pipeline();
+    
+    // Add multiple operations
+    pipeline = pipeline
+        .set("key1", &"value1")
+        .set("key2", &"value2")
+        .set("key3", &"value3")
+        .get("key1")
+        .delete("old_key");
+    
+    // Execute the pipeline
+    cache.execute_pipeline(pipeline).await?;
+    
+    // Performance comparison example
+    let users = generate_test_users(100);
+    
+    // Without pipeline
+    let start = std::time::Instant::now();
+    for user in &users {
+        cache.set(format!("user:{}", user.id), user, None).await?;
     }
+    let individual_duration = start.elapsed();
+    
+    // With pipeline
+    let start = std::time::Instant::now();
+    let mut pipeline = cache.pipeline();
+    for user in &users {
+        pipeline = pipeline.set(format!("user:{}", user.id), user);
+    }
+    cache.execute_pipeline(pipeline).await?;
+    let pipeline_duration = start.elapsed();
+    
+    println!("Individual operations: {:?}", individual_duration);
+    println!("Pipeline operations: {:?}", pipeline_duration);
+    println!("Speed improvement: {:.2}x", 
+        individual_duration.as_secs_f64() / pipeline_duration.as_secs_f64());
     
     Ok(())
 }
 ```
 
-### Lua Scripting Support
-
-Enable Lua scripting for atomic operations:
+### Lua Scripting
 
 ```rust
-// Create a cache with Lua scripting enabled
-let cache = RedisCache::new(connection_manager.clone())
-    .with_lua_scripting();
+use navius_cache::{operations::{Cache, CacheOperations}, error::CacheResult};
+use navius_cache_redis::{connection::{RedisConnectionManager, RedisCacheConfig}, operations::RedisCache};
 
-// Initialize common scripts
-cache.initialize_common_scripts().await?;
+#[tokio::main]
+async fn main() -> CacheResult<()> {
+    // Create Redis cache with Lua scripting enabled
+    let config = RedisCacheConfig {
+        url: "redis://localhost:6379".to_string(),
+        key_prefix: "navius:".to_string(),
+        connection_timeout_seconds: 5,
+        connection_retries: 3,
+        pool_size: 10,
+    };
 
-// Use atomic operations
-let result = cache.set_if_not_exists("lock_key", "owner_id", Some(Duration::from_secs(10))).await?;
-if result {
-    // Lock acquired
-    // ... do work ...
+    let connection_manager = RedisConnectionManager::new(config)?;
+    let cache = RedisCache::new(connection_manager.into()).with_lua_scripting();
     
-    // Release lock
-    cache.delete("lock_key").await?;
+    // Register a Lua script for atomic operations
+    let script = r#"
+    local current = redis.call('GET', KEYS[1])
+    if current and tonumber(current) < tonumber(ARGV[1]) then
+        redis.call('SET', KEYS[1], ARGV[1])
+        return 1
+    else
+        return 0
+    end
+    "#;
+    
+    cache.register_script("set_if_greater", script).await?;
+    
+    // Use the script
+    let result: i64 = cache.execute_script(
+        "set_if_greater",
+        &["test_key"],
+        &["100"]
+    ).await?;
+    
+    println!("Script result: {}", result);
+    
+    Ok(())
 }
-
-// Increment a counter atomically
-let new_value: i64 = cache.atomic_increment("counter", 1, None).await?;
-
-// Check and increment (useful for rate limiting)
-let can_proceed = cache.check_and_increment_counter(
-    "rate_limit:user:123", 
-    5,  // max allowed
-    Some(Duration::from_secs(60))
-).await?;
-
-// Register and use custom scripts
-let script_name = "my_custom_script";
-let script_content = r#"
-    return redis.call('SET', KEYS[1], ARGV[1])
-"#;
-
-cache.register_script(script_name, script_content).await?;
-let result: String = cache.execute_script(
-    script_name,
-    vec!["key1".to_string()],
-    vec!["value1".to_string()]
-).await?;
 ```
 
 ## Metrics
 
-The Navius Redis Cache provides comprehensive metrics for monitoring cache performance and health. These metrics are exposed via Prometheus and can be easily integrated with your monitoring infrastructure.
+The Redis cache implementation includes comprehensive metrics for monitoring cache operations and performance. All metrics are prefixed with `navius_` and include:
 
-### Metrics Categories
+### Operation Metrics
 
-1. **Operation Metrics**
-   - `navius_redis_cache_operation_duration_seconds`: Histogram of operation durations
-   - `navius_redis_cache_operation_errors_total`: Counter of operation errors
-   - `navius_redis_cache_operation_total`: Counter of operations executed
+- `{operation}_duration_ms` - Histogram of operation durations in milliseconds
+- `{operation}_success` - Counter of successful operations
+- `{operation}_error` - Counter of operation errors
+- `{operation}_error_{type}` - Counter of specific error types
 
-2. **Connection Pool Metrics**
-   - `navius_redis_cache_pool_size`: Current size of the connection pool
-   - `navius_redis_cache_connection_acquisition_time_seconds`: Time to acquire a connection
-   - `navius_redis_cache_connection_errors_total`: Counter of connection errors
-   - `navius_redis_cache_connection_health`: Health status of the Redis connection (0-1)
+Operations include: `get`, `set`, `delete`, `exists`, `expire`, etc.
 
-3. **Lua Script Metrics**
-   - `navius_redis_cache_script_execution_duration_seconds`: Histogram of script execution times
-   - `navius_redis_cache_script_errors_total`: Counter of script execution errors
+### Connection Metrics
 
-### Metrics Implementation Details
+- `connection_acquire` - Histogram of connection acquisition times
+- `connection_acquire_error` - Counter of connection acquisition errors
+- `connection_pool_size` - Gauge of the total connection pool size
+- `connection_pool_idle` - Gauge of idle connections in the pool
+- `connection_pool_used` - Gauge of currently used connections
 
-The metrics system in navius-cache-redis uses several technical approaches to provide comprehensive monitoring:
+### Health Check Metrics
 
-#### TimedOperation Utility
+- `health_check_healthy` - Counter of successful health checks
+- `health_check_degraded` - Counter of degraded health checks
+- `health_check_unhealthy` - Counter of failed health checks
+- `health_check_status` - Gauge of current health status (1.0 = healthy, 0.5 = degraded, 0.0 = unhealthy)
 
-For automatic metric collection, we use a `TimedOperation` struct that handles:
-- Recording operation start time
-- Tracking success or failure
-- Categorizing errors by type
-- Recording timing in appropriate histograms
+## Viewing Metrics
 
-Example usage:
-```rust
-let timer = TimedOperation::new(metrics::names::GET);
-let result = perform_operation();
-timer.record(&result);
-```
-
-#### Health Tracking
-
-Connection health is tracked using:
-- A three-state model: `Healthy`, `Degraded`, or `Unhealthy`
-- Detailed reason recording for degraded/unhealthy states
-- Gauges that reflect current health on a 0-1 scale
-
-#### Pool Statistics
-
-Connection pool metrics track:
-- Total connections created/closed
-- Current active/idle connections
-- Acquisition successes/failures/timeouts
-- Connection acquisition timing
-
-### Viewing Metrics
-
-To view metrics in real-time, run the metrics example:
+Metrics are exposed via the standard metrics interface. You can view them using the metrics endpoint or by using the `metrics_example.rs` example:
 
 ```bash
 cargo run --example metrics_example
 ```
 
-This will start a metrics server on port 9091. You can view the metrics at:
-```
-http://localhost:9091/metrics
-```
+## Testing Metrics
 
-### Grafana Dashboard
-
-For visualization, import the provided Grafana dashboard JSON:
-
-```
-docs/dashboards/redis_cache_metrics.json
-```
-
-The dashboard includes:
-- Operation rate and latency panels
-- Error rate tracking
-- Connection pool utilization
-- Script execution performance
-- Collection operation metrics
-
-### Integration with Monitoring Systems
-
-The metrics implementation is designed to work with:
-
-1. **Prometheus**: Direct export of metrics in Prometheus format
-   ```rust
-   // To set up a Prometheus metrics endpoint
-   use metrics_exporter_prometheus::PrometheusBuilder;
-   
-   let builder = PrometheusBuilder::new();
-   let handle = builder.install_recorder().expect("Failed to install recorder");
-   ```
-
-2. **Custom Monitoring**: You can implement your own recorder
-   ```rust
-   // Register your custom metrics recorder
-   metrics::set_boxed_recorder(Box::new(MyCustomRecorder::new()))?;
-   ```
-
-3. **Structured Logging**: Metrics data can be included in logs
-   ```rust
-   // Log current connection pool stats
-   let stats = connection_manager.get_stats().await;
-   tracing::info!(
-       pool_size = stats.current_active_connections + stats.current_idle_connections,
-       active = stats.current_active_connections,
-       idle = stats.current_idle_connections,
-       "Connection pool stats"
-   );
-   ```
-
-### Testing Metrics
-
-The crate includes comprehensive tests for metrics:
-- Verification of metric recording for all operations
-- Validation of connection pool metrics
-- Tests for error metrics recording
-
-See `tests/metrics_test.rs` for examples of how to test metrics.
-
-## Examples
-
-- `examples/basic_usage.rs`: Demonstrates basic cache operations
-- `examples/metrics_example.rs`: Shows metrics collection and visualization
-- `examples/lua_scripting.rs`: Demonstrates Lua scripting capabilities
-- `examples/set_operations.rs`: Showcases Set operations (add, remove, contains, union, intersection, difference)
-- `examples/sorted_set_operations.rs`: Demonstrates SortedSet operations for leaderboards, rankings, and time-series data
-- `examples/pipeline_commands.rs`: Illustrates performance improvements with pipeline commands for batch operations
-- `examples/connection_pooling.rs`: Demonstrates connection pool configuration and usage
-- `examples/serialization.rs`: Shows serialization/deserialization of complex objects
-- `examples/cache_invalidation.rs`: Demonstrates cache invalidation patterns
-
-## Running Tests
+You can test the metrics using the `metrics_test.rs` example:
 
 ```bash
-# Install redis-server if not already installed
-# On MacOS: brew install redis
-# On Ubuntu: apt-get install redis-server
-
-# Start Redis server
-redis-server --port 6379
-
-# Run tests
-cargo test
+cargo run --example metrics_test
 ```
-
-## Performance Considerations
-
-- Use connection pooling appropriately for your workload
-- Consider using pipeline operations for batch processing
-- Lua scripts provide atomic operations without network round-trips
-- Monitor metrics to identify bottlenecks and optimize accordingly
 
 ## Performance Benchmarking
 
-The Redis Cache implementation includes a comprehensive benchmarking suite to evaluate performance across various operations and scenarios. This enables you to understand the performance characteristics of the cache and make informed decisions about configuration and usage patterns.
-
-### Running Benchmarks
-
-To run the benchmarks:
+The crate includes benchmarks for measuring performance under various conditions. To run the benchmarks:
 
 ```bash
-# Run all benchmarks with default settings
-cargo bench --bench redis_benchmark
-
-# Run a specific benchmark group
-cargo bench --bench redis_benchmark -- "Basic Operations"
-
-# Run a specific benchmark
-cargo bench --bench redis_benchmark -- "Pipeline operations"
-
-# Output detailed results for visualization
-cargo bench --bench redis_benchmark -- --verbose > benchmark_results.txt
+cargo run --example benchmark
 ```
 
-### Visualizing Benchmark Results
-
-The package includes a benchmark visualizer to help interpret results:
+This will run a series of benchmarks and output the results. You can also use the benchmark visualizer to generate charts:
 
 ```bash
-# Run the visualizer on the benchmark results
-cargo run --example benchmark_visualizer -- benchmark_results.txt
+cargo run --example benchmark_visualizer
 ```
 
-This will generate bar charts and performance comparisons to help you understand the relative performance of different operations.
+## Performance Optimization Guidelines
 
-### Benchmark Categories
+Based on our benchmark findings, we recommend the following best practices:
 
-The benchmark suite covers the following categories:
+1. **Use Pipelining**: For batch operations, always use pipelining to reduce network round trips. Our benchmarks show up to 50x speedup for large batch operations.
 
-1. **Basic Operations**
-   - GET/SET operations for strings
-   - SET with expiration
-   - DELETE operations
-   - EXISTS checks
+2. **Optimize Connection Pool Size**: The optimal connection pool size depends on your workload:
+   - For read-heavy workloads: pool_size = num_cores * 2
+   - For write-heavy workloads: pool_size = num_cores * 4
+   - For mixed workloads: pool_size = num_cores * 3
 
-2. **Serialization Performance**
-   - Serialization of small objects
-   - Serialization of collections
-   - Deserialization performance
+3. **Use Lua Scripts for Atomic Operations**: When you need to perform multiple operations atomically, use Lua scripts instead of transactions for better performance.
 
-3. **Data Structure Operations**
-   - List operations (LPUSH, RPUSH, LPOP, LRANGE)
-   - Hash operations (HSET, HGET, HGETALL)
-   - Set operations (SADD, SISMEMBER, SMEMBERS, SINTER, SUNION)
-   - Sorted Set operations (ZADD, ZRANGE, ZRANGEBYSCORE)
+4. **Avoid Large Objects**: Redis performs best with smaller objects. Consider splitting large objects into smaller parts if possible.
 
-4. **Lua Scripting Performance**
-   - Simple Lua script execution
-   - Complex script operations
+5. **Use Appropriate TTLs**: Set reasonable TTLs for cache entries to avoid memory pressure.
 
-5. **Pipelining**
-   - Pipeline vs. individual operations comparison
-   - Scaling with operation count
-
-6. **Connection Pool Performance**
-   - Concurrent operation handling
-   - Pool size impact on throughput
-
-### Performance Optimization Guidelines
-
-Based on benchmark findings, here are some guidelines for optimizing Redis Cache performance:
-
-1. **Use pipelining for bulk operations**: The benchmarks demonstrate that pipelining can provide significant performance improvements (often 5-10x) when executing multiple Redis commands in sequence.
-
-2. **Optimize connection pool size**: Benchmark your specific workload to determine the optimal connection pool size. Too few connections can limit throughput, while too many might waste resources.
-
-3. **Consider serialization overhead**: For complex objects, serialization can become a bottleneck. Use compact serialization formats and consider caching frequently accessed objects.
-
-4. **Leverage Lua scripts**: For operations that require multiple commands, Lua scripts can reduce network roundtrips and provide atomic execution.
-
-5. **Balance TTL settings**: Setting expiration times adds some overhead. Only use TTL when necessary, and consider appropriate values based on your application's needs.
-
-### Interpreting Benchmark Results
-
-The benchmark results provide several key metrics:
-
-- **Average Time**: The mean execution time per operation
-- **Throughput**: Operations per second the cache can handle
-- **Min/Max Times**: Range of performance variation
-
-For most applications, the throughput (operations per second) is the most important metric to optimize for.
-
-### Customizing Benchmarks
-
-You can customize the benchmarks for your specific environment by modifying the Redis connection parameters in the `create_test_cache()` function in the benchmark code.
+6. **Monitor Metrics**: Regularly monitor the metrics to identify performance bottlenecks or issues.
 
 ## License
 
-Apache 2.0 
+This project is licensed under the Apache License 2.0 - see the LICENSE file for details. 
