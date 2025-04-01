@@ -237,14 +237,14 @@ impl RedisPipelineImpl {
     /// Add a RPOP command to the pipeline
     #[instrument(skip(self), level = "debug")]
     pub fn rpop(&mut self, key: &str) -> &mut Self {
-        self.pipeline.rpop(key);
+        self.pipeline.rpop(key, 1);
         self
     }
 
     /// Add a LPOP command to the pipeline
     #[instrument(skip(self), level = "debug")]
     pub fn lpop(&mut self, key: &str) -> &mut Self {
-        self.pipeline.lpop(key);
+        self.pipeline.lpop(key, 1);
         self
     }
 
@@ -287,7 +287,7 @@ impl RedisPipelineImpl {
 impl Pipeline for RedisPipelineImpl {
     /// Execute the pipeline
     #[instrument(skip(self), level = "debug")]
-    pub async fn execute(&self) -> RedisCacheResult<()> {
+    async fn execute(&self) -> RedisCacheResult<()> {
         let key = self.key.clone();
         let pipeline = self.pipeline.clone();
         let timer = metrics::TimedOperation::new(metrics::names::PIPELINE_EXECUTE);
