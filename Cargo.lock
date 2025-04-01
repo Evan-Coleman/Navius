@@ -2968,6 +2968,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "chrono",
+ "erased-serde",
  "futures",
  "metrics",
  "navius-core",

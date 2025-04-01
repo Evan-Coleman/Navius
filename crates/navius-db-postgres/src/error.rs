@@ -1,4 +1,5 @@
 use navius_db::error::DatabaseError;
+use sqlx::postgres::PgDatabaseError;
 use thiserror::Error;
 
 /// PostgreSQL-specific error types
@@ -45,6 +46,56 @@ pub enum PgError {
     Other(String),
 }
 
+/// A wrapper around sqlx::Error for Postgres
+#[derive(Debug)]
+pub struct PostgresError(sqlx::Error);
+
+impl From<sqlx::Error> for PostgresError {
+    fn from(err: sqlx::Error) -> Self {
+        Self(err)
+    }
+}
+
+impl From<PostgresError> for DatabaseError {
+    fn from(err: PostgresError) -> Self {
+        match err.0 {
+            sqlx::Error::Database(ref e) => {
+                if let Some(pg_err) = e.try_downcast_ref::<PgDatabaseError>() {
+                    match pg_err.code() {
+                        "23505" => DatabaseError::UniqueViolation {
+                            table: pg_err.table().unwrap_or("unknown").to_string(),
+                            column: pg_err.column().unwrap_or("unknown").to_string(),
+                            message: pg_err.message().to_string(),
+                        },
+                        "23503" => DatabaseError::ForeignKeyViolation {
+                            table: pg_err.table().unwrap_or("unknown").to_string(),
+                            column: pg_err.column().unwrap_or("unknown").to_string(),
+                            message: pg_err.message().to_string(),
+                        },
+                        "23502" => DatabaseError::NotNullViolation {
+                            table: pg_err.table().unwrap_or("unknown").to_string(),
+                            column: pg_err.column().unwrap_or("unknown").to_string(),
+                            message: pg_err.message().to_string(),
+                        },
+                        _ => DatabaseError::Other(pg_err.message().to_string()),
+                    }
+                } else {
+                    DatabaseError::Other(e.to_string())
+                }
+            }
+            sqlx::Error::RowNotFound => DatabaseError::NotFound("Row not found".to_string()),
+            sqlx::Error::PoolTimedOut => {
+                DatabaseError::ConnectionTimeout("Pool timeout".to_string())
+            }
+            sqlx::Error::PoolClosed => DatabaseError::ConnectionError("Pool closed".to_string()),
+            sqlx::Error::WorkerCrashed => {
+                DatabaseError::ConnectionError("Worker crashed".to_string())
+            }
+            _ => DatabaseError::Other(err.0.to_string()),
+        }
+    }
+}
+
 impl From<PgError> for DatabaseError {
     fn from(err: PgError) -> Self {
         match err {
@@ -58,31 +109,6 @@ impl From<PgError> for DatabaseError {
             PgError::Transaction(msg) => DatabaseError::TransactionError(msg),
             PgError::TypeConversion(msg) => DatabaseError::ConversionError(msg),
             PgError::Other(msg) => DatabaseError::UnknownError(msg),
-        }
-    }
-}
-
-impl From<sqlx::Error> for DatabaseError {
-    fn from(err: sqlx::Error) -> Self {
-        match err {
-            sqlx::Error::Database(e) => {
-                DatabaseError::ExecutionError(format!("Database error: {}", e))
-            }
-            sqlx::Error::Io(e) => DatabaseError::ConnectionError(format!("IO error: {}", e)),
-            sqlx::Error::RowNotFound => DatabaseError::NotFoundError("Row not found".to_string()),
-            sqlx::Error::ColumnNotFound(col) => {
-                DatabaseError::QueryError(format!("Column not found: {}", col))
-            }
-            sqlx::Error::PoolTimedOut => {
-                DatabaseError::ConnectionError("Connection pool timeout".to_string())
-            }
-            sqlx::Error::PoolClosed => {
-                DatabaseError::ConnectionError("Connection pool closed".to_string())
-            }
-            sqlx::Error::WorkerCrashed => {
-                DatabaseError::ConnectionError("Database worker crashed".to_string())
-            }
-            _ => DatabaseError::UnknownError(format!("Unknown database error: {}", err)),
         }
     }
 }

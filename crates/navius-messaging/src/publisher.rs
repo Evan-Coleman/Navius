@@ -148,20 +148,58 @@ pub struct PublishResult {
 #[async_trait]
 pub trait MessagePublisher: Send + Sync {
     /// Publish a message
-    async fn publish<T: serde::Serialize + Send + Sync>(
+    async fn publish_any(
         &self,
-        message: &Message<T>,
+        message: &Message<Box<dyn erased_serde::Serialize + Send + Sync>>,
         options: Option<PublishOptions>,
     ) -> MessagingResult<PublishResult>;
 
     /// Publish a message and wait for confirmation
+    async fn publish_any_with_confirm(
+        &self,
+        message: &Message<Box<dyn erased_serde::Serialize + Send + Sync>>,
+        options: Option<PublishOptions>,
+        timeout: Option<Duration>,
+    ) -> MessagingResult<PublishResult>;
+}
+
+/// Extension trait for type-safe publishing
+#[async_trait]
+pub trait TypedMessagePublisher: MessagePublisher {
+    /// Publish a message with a specific type
+    async fn publish<T: serde::Serialize + Send + Sync>(
+        &self,
+        message: &Message<T>,
+        options: Option<PublishOptions>,
+    ) -> MessagingResult<PublishResult> {
+        let boxed =
+            Box::new(message.payload.clone()) as Box<dyn erased_serde::Serialize + Send + Sync>;
+        let msg = Message {
+            payload: boxed,
+            ..message.clone()
+        };
+        self.publish_any(&msg, options).await
+    }
+
+    /// Publish a message with a specific type and wait for confirmation
     async fn publish_with_confirm<T: serde::Serialize + Send + Sync>(
         &self,
         message: &Message<T>,
         options: Option<PublishOptions>,
         timeout: Option<Duration>,
-    ) -> MessagingResult<PublishResult>;
+    ) -> MessagingResult<PublishResult> {
+        let boxed =
+            Box::new(message.payload.clone()) as Box<dyn erased_serde::Serialize + Send + Sync>;
+        let msg = Message {
+            payload: boxed,
+            ..message.clone()
+        };
+        self.publish_any_with_confirm(&msg, options, timeout).await
+    }
 }
+
+// Implement TypedMessagePublisher for all MessagePublisher types
+impl<P: MessagePublisher> TypedMessagePublisher for P {}
 
 /// A publisher that uses a message broker
 pub struct BrokerPublisher {
@@ -242,56 +280,26 @@ impl BrokerPublisher {
 
 #[async_trait]
 impl MessagePublisher for BrokerPublisher {
-    async fn publish<T: serde::Serialize + Send + Sync>(
+    async fn publish_any(
         &self,
-        message: &Message<T>,
+        message: &Message<Box<dyn erased_serde::Serialize + Send + Sync>>,
         options: Option<PublishOptions>,
     ) -> MessagingResult<PublishResult> {
         let opts = self.merge_options(options);
-        let start = std::time::Instant::now();
-
-        let result = if opts.wait_for_confirm {
-            self.broker
-                .publish_with_confirm(message, Some(opts.clone()), opts.confirm_timeout)
-                .await
-        } else {
-            self.broker.publish(message, Some(opts.clone())).await
-        };
-
-        let elapsed = start.elapsed();
-
-        match result {
-            Ok(()) => Ok(PublishResult {
-                success: true,
-                message_id: message.id.clone(),
-                error: None,
-                confirmation_id: None, // Broker doesn't provide this
-                publish_time: elapsed,
-            }),
-            Err(err) => Ok(PublishResult {
-                success: false,
-                message_id: message.id.clone(),
-                error: Some(err.to_string()),
-                confirmation_id: None,
-                publish_time: elapsed,
-            }),
-        }
+        self.broker.publish(message, &opts).await
     }
 
-    async fn publish_with_confirm<T: serde::Serialize + Send + Sync>(
+    async fn publish_any_with_confirm(
         &self,
-        message: &Message<T>,
+        message: &Message<Box<dyn erased_serde::Serialize + Send + Sync>>,
         options: Option<PublishOptions>,
         timeout: Option<Duration>,
     ) -> MessagingResult<PublishResult> {
-        let mut opts = self.merge_options(options);
-        opts.wait_for_confirm = true;
-
-        if let Some(t) = timeout {
-            opts.confirm_timeout = Some(t);
-        }
-
-        self.publish(message, Some(opts)).await
+        let opts = self.merge_options(options);
+        let timeout = timeout.unwrap_or_else(|| Duration::from_secs(5));
+        self.broker
+            .publish_with_confirm(message, &opts, Some(timeout))
+            .await
     }
 }
 
@@ -341,7 +349,13 @@ struct BatchableMessage<T: serde::Serialize + Send + Sync + 'static> {
 #[async_trait]
 impl<T: serde::Serialize + Send + Sync + 'static> BatchItem for BatchableMessage<T> {
     async fn publish(&self, publisher: &dyn MessagePublisher) -> MessagingResult<PublishResult> {
-        publisher.publish(&self.message, self.options.clone()).await
+        publisher
+            .publish_any(
+                &Box::new(self.message.payload.clone())
+                    as Box<dyn erased_serde::Serialize + Send + Sync>,
+                self.options.clone(),
+            )
+            .await
     }
 }
 
