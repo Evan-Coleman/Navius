@@ -32,5 +32,5 @@ pub use metrics::{
     record_connection_acquisition, record_connection_health, record_connection_pool_stats,
     TimedOperation,
 };
-pub use operations::RedisCache;
-pub use pipeline::{Pipeline, RedisPipeline, RedisPipelineBuilder};
+pub use operations::{CacheSerializer, JsonSerializer, RedisCache};
+pub use pipeline::{Pipeline, RedisCommandPipeline, RedisPipelineBuilder};

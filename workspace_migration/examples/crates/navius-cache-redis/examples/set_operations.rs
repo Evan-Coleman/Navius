@@ -14,6 +14,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use rand::{thread_rng, Rng};
 
 /**
  * This example demonstrates the use of Set operations in the Redis cache.
@@ -56,6 +57,19 @@ impl CacheKey for Product {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+struct User {
+    id: u32,
+    name: String,
+    score: f64,
+}
+
+impl CacheKey for User {
+    fn to_string(&self) -> String {
+        format!("user:{}", self.id)
+    }
+}
+
 #[tokio::main]
 async fn main() -> CacheResult<()> {
     // Configure Redis cache
@@ -79,31 +93,141 @@ async fn main() -> CacheResult<()> {
 
     println!("== Redis Set Operations Example ==");
 
-    // Basic Set Operations Example
-    println!("\n1. Basic Set Operations");
-    await basic_set_operations(&cache).await?;
-
-    // Set Membership Example
-    println!("\n2. Set Membership Tests");
-    await set_membership_test(&cache).await?;
-
-    // Complex Set Operations Example
-    println!("\n3. Complex Set Operations (Union, Intersection, Difference)");
-    await complex_set_operations(&cache).await?;
-
-    // Random Members Example
-    println!("\n4. Retrieving Random Set Members");
-    await random_members_example(&cache).await?;
-
-    // Complex Objects in Sets Example
-    println!("\n5. Using Complex Objects in Sets");
-    await complex_objects_example(&cache).await?;
-
+    // First, let's create some test data
+    let users = generate_test_users(20);
+    
+    // Basic Set Operations
+    println!("\n=== Basic Set Operations ===");
+    
+    // Add users to a set
+    let set_key = "users";
+    let user_ids: Vec<u32> = users.iter().map(|u| u.id).collect();
+    
+    println!("Adding users to set '{}'...", set_key);
+    let count = cache.set_add(set_key, user_ids.clone()).await?;
+    println!("Added {} users to set", count);
+    
+    // Verify set members
+    let members: Vec<u32> = cache.set_members(set_key).await?;
+    println!("Set members: {:?}", members);
+    
+    // Check set membership
+    let test_id = user_ids[0];
+    let contains = cache.set_contains(set_key, &test_id).await?;
+    println!("Set contains user {}: {}", test_id, contains);
+    
+    // Get set size
+    let size = cache.set_length(set_key).await?;
+    println!("Set size: {}", size);
+    
+    // Remove some members
+    let to_remove = vec![user_ids[0], user_ids[1]];
+    let removed = cache.set_remove(set_key, to_remove.clone()).await?;
+    println!("Removed {} users from set", removed);
+    
+    // Verify set members after removal
+    let members: Vec<u32> = cache.set_members(set_key).await?;
+    println!("Set members after removal: {:?}", members);
+    
+    // Create additional sets for set operations
+    let set_key2 = "users:premium";
+    let premium_ids: Vec<u32> = users.iter()
+        .filter(|u| u.score > 75.0)
+        .map(|u| u.id)
+        .collect();
+    
+    cache.set_add(set_key2, premium_ids.clone()).await?;
+    println!("\nCreated premium users set with {} members", premium_ids.len());
+    
+    // Set operations: intersection
+    let intersection: Vec<u32> = cache.set_intersection(vec![set_key, set_key2]).await?;
+    println!("Intersection of sets: {:?}", intersection);
+    
+    // Set operations: union
+    let union: Vec<u32> = cache.set_union(vec![set_key, set_key2]).await?;
+    println!("Union of sets: {:?}", union);
+    
+    // Set operations: difference
+    let difference: Vec<u32> = cache.set_difference(vec![set_key, set_key2]).await?;
+    println!("Difference of sets (set1 - set2): {:?}", difference);
+    
+    // Store operations results
+    cache.set_intersection_store("users:intersection", vec![set_key, set_key2]).await?;
+    cache.set_union_store("users:union", vec![set_key, set_key2]).await?;
+    cache.set_difference_store("users:difference", vec![set_key, set_key2]).await?;
+    
+    println!("\n=== SortedSet Operations ===");
+    
+    // Create a sorted set of users with their scores
+    let zset_key = "users:ranked";
+    let user_scores: Vec<(f64, u32)> = users.iter()
+        .map(|u| (u.score, u.id))
+        .collect();
+    
+    println!("Adding users to sorted set '{}'...", zset_key);
+    let count = cache.zset_add(zset_key, user_scores).await?;
+    println!("Added {} users to sorted set", count);
+    
+    // Get top 5 users
+    let top5: Vec<u32> = cache.zset_range(zset_key, -5, -1).await?;
+    println!("Top 5 users: {:?}", top5);
+    
+    // Get top 5 users with scores
+    let top5_with_scores: Vec<(u32, f64)> = cache.zset_range_with_scores(zset_key, -5, -1).await?;
+    println!("Top 5 users with scores:");
+    for (id, score) in top5_with_scores {
+        println!("  User ID: {}, Score: {}", id, score);
+    }
+    
+    // Get users with scores above 80
+    let high_scorers: Vec<u32> = cache.zset_range_by_score(zset_key, 80.0, 100.0).await?;
+    println!("Users with scores above 80: {:?}", high_scorers);
+    
+    // Get rank of a specific user
+    let test_user = user_ids[5];
+    if let Some(rank) = cache.zset_rank(zset_key, &test_user).await? {
+        println!("Rank of user {}: {}", test_user, rank);
+    }
+    
+    // Increment a user's score
+    let new_score = cache.zset_increment_score(zset_key, &test_user, 10.0).await?;
+    println!("Incremented score of user {} to {}", test_user, new_score);
+    
+    // Remove some users from the sorted set
+    let to_remove = vec![user_ids[0], user_ids[1]];
+    let removed = cache.zset_remove(zset_key, to_remove).await?;
+    println!("Removed {} users from sorted set", removed);
+    
+    // Count users within a score range
+    let count = cache.zset_count(zset_key, 60.0, 80.0).await?;
+    println!("Number of users with scores between 60 and 80: {}", count);
+    
     // Clean up
-    cleanup(&cache).await?;
-
-    println!("\nSet operations example completed successfully!");
+    cache.delete(set_key).await?;
+    cache.delete(set_key2).await?;
+    cache.delete(zset_key).await?;
+    cache.delete("users:intersection").await?;
+    cache.delete("users:union").await?;
+    cache.delete("users:difference").await?;
+    
+    println!("\nSuccessfully completed all set and sorted set operations!");
+    
     Ok(())
+}
+
+fn generate_test_users(count: usize) -> Vec<User> {
+    let mut rng = thread_rng();
+    let mut users = Vec::with_capacity(count);
+    
+    for i in 1..=count {
+        users.push(User {
+            id: i as u32,
+            name: format!("User {}", i),
+            score: rng.gen_range(0.0..100.0),
+        });
+    }
+    
+    users
 }
 
 async fn basic_set_operations(cache: &RedisCache) -> CacheResult<()> {

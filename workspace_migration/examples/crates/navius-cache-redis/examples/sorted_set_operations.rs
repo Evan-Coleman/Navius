@@ -15,6 +15,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use rand::{thread_rng, Rng};
 
 /**
  * This example demonstrates the use of Sorted Set (ZSet) operations in the Redis cache.
@@ -59,524 +60,278 @@ impl CacheKey for Player {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+struct Product {
+    id: u32,
+    name: String,
+    price: f64,
+    popularity: f64,
+    category: Category,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+enum Category {
+    Electronics,
+    Clothing,
+    Books,
+    HomeGoods,
+    Toys,
+}
+
+impl CacheKey for Product {
+    fn to_string(&self) -> String {
+        format!("product:{}", self.id)
+    }
+}
+
 #[tokio::main]
 async fn main() -> CacheResult<()> {
-    // Configure Redis cache
-    let config = RedisCacheConfig::builder()
-        .with_url("redis://127.0.0.1:6379")
-        .with_key_prefix("navius:example:zsets")
-        .with_default_ttl(Duration::from_secs(300))
-        .with_pool_size(5)
-        .build();
+    // Create Redis cache config
+    let config = RedisCacheConfig {
+        url: "redis://localhost:6379".to_string(),
+        key_prefix: "navius:example:zset".to_string(),
+        connection_timeout_seconds: 5,
+        connection_retries: 3,
+        pool_size: 10,
+    };
 
     // Create connection manager
-    let conn_manager = Arc::new(
-        RedisConnectionManager::new(config)
-            .await
-            .expect("Failed to create Redis connection manager"),
-    );
-
-    // Create cache instance
-    let cache = RedisCache::new(conn_manager)
-        .expect("Failed to create Redis cache");
-
-    println!("== Redis Sorted Set Operations Example ==");
-
-    // Basic Sorted Set Operations Example
-    println!("\n1. Basic Sorted Set Operations");
-    await basic_sorted_set_operations(&cache).await?;
-
-    // Score Range Example
-    println!("\n2. Score Range Operations");
-    await score_range_example(&cache).await?;
-
-    // Rank Operations Example
-    println!("\n3. Rank Operations");
-    await rank_operations_example(&cache).await?;
-
-    // Leaderboard Example
-    println!("\n4. Leaderboard Example");
-    await leaderboard_example(&cache).await?;
-
-    // Complex Object Example
-    println!("\n5. Complex Object Example");
-    await complex_object_example(&cache).await?;
-
-    // Union and Intersection Example
-    println!("\n6. Union and Intersection Example");
-    await union_intersection_example(&cache).await?;
-
-    // Clean up
-    cleanup(&cache).await?;
-
-    println!("\nSorted Set operations example completed successfully!");
-    Ok(())
-}
-
-async fn basic_sorted_set_operations(cache: &RedisCache) -> CacheResult<()> {
-    let zset_key = "simple_zset";
+    let connection_manager = RedisConnectionManager::new(config).expect("Failed to create connection manager");
     
-    // Add items to a sorted set
-    println!("Adding items to sorted set '{}'", zset_key);
+    // Create Redis cache
+    let cache = RedisCache::new(connection_manager.into()).with_lua_scripting();
     
-    // Create a HashMap of members with scores
-    let mut scores = HashMap::new();
-    scores.insert("apple".to_string(), 5.0);
-    scores.insert("banana".to_string(), 8.5);
-    scores.insert("cherry".to_string(), 7.0);
+    println!("=== Redis Sorted Set (ZSet) Operations Example ===");
     
-    // Add items with scores
-    let added = cache.zset_add(zset_key, scores).await?;
-    println!("Added {} new items to the sorted set", added);
+    // Generate test data
+    let products = generate_test_products(30);
     
-    // Add more items, including an update to an existing item
-    let mut more_scores = HashMap::new();
-    more_scores.insert("banana".to_string(), 9.0);  // Update score
-    more_scores.insert("dragonfruit".to_string(), 6.5);
-    more_scores.insert("elderberry".to_string(), 4.0);
+    // Example 1: Basic Sorted Set Operations
+    println!("\n=== Example 1: Basic Sorted Set Operations ===");
     
-    let added = cache.zset_add(zset_key, more_scores).await?;
-    println!("Added {} more unique items to the sorted set (plus updated 1 item)", added);
+    // Add products to a sorted set by price
+    let zset_key = "products:by_price";
+    let product_prices: Vec<(f64, u32)> = products.iter()
+        .map(|p| (p.price, p.id))
+        .collect();
     
-    // Check the sorted set's size
-    let count = cache.zset_size(zset_key).await?;
-    println!("Sorted set '{}' has {} items", zset_key, count);
+    println!("Adding {} products to sorted set by price...", products.len());
+    let count = cache.zset_add(zset_key, product_prices).await?;
+    println!("Added {} products to sorted set", count);
     
-    // Get all members of the sorted set (sorted by score, ascending)
-    let members_with_scores = cache.zset_range_with_scores::<String, _>(zset_key, 0, -1).await?;
-    println!("Sorted set members with scores (low to high):");
-    for (member, score) in &members_with_scores {
-        println!("- {}: {}", member, score);
+    // Get product count
+    let set_size = cache.zset_length(zset_key).await?;
+    println!("Total products in sorted set: {}", set_size);
+    
+    // Get 5 cheapest products
+    let cheapest: Vec<u32> = cache.zset_range(zset_key, 0, 4).await?;
+    println!("5 cheapest products: {:?}", cheapest);
+    
+    // Get 5 most expensive products
+    let most_expensive: Vec<u32> = cache.zset_range(zset_key, -5, -1).await?;
+    println!("5 most expensive products: {:?}", most_expensive);
+    
+    // Get 5 most expensive products with prices
+    let expensive_with_prices: Vec<(u32, f64)> = cache.zset_range_with_scores(zset_key, -5, -1).await?;
+    println!("5 most expensive products with prices:");
+    for (id, price) in expensive_with_prices {
+        let product = products.iter().find(|p| p.id == id).unwrap();
+        println!("  {}: ${:.2} - {}", id, price, product.name);
     }
     
-    // Get all members in reverse order (sorted by score, descending)
-    let members_with_scores = cache.zset_rev_range_with_scores::<String, _>(zset_key, 0, -1).await?;
-    println!("\nSorted set members with scores (high to low):");
-    for (member, score) in &members_with_scores {
-        println!("- {}: {}", member, score);
+    // Example 2: Range Queries
+    println!("\n=== Example 2: Range Queries ===");
+    
+    // Get products priced between $20 and $50
+    let mid_range: Vec<u32> = cache.zset_range_by_score(zset_key, 20.0, 50.0).await?;
+    println!("Products priced between $20 and $50 ({}): {:?}", mid_range.len(), mid_range);
+    
+    // Get products priced between $20 and $50 with prices
+    let mid_range_with_prices: Vec<(u32, f64)> = 
+        cache.zset_range_by_score_with_scores(zset_key, 20.0, 50.0).await?;
+    println!("Products priced between $20 and $50 with prices:");
+    for (id, price) in mid_range_with_prices {
+        let product = products.iter().find(|p| p.id == id).unwrap();
+        println!("  {}: ${:.2} - {}", id, price, product.name);
     }
     
-    // Get the score of a specific member
-    let banana_score = cache.zset_score::<String, _>(zset_key, "banana").await?;
-    println!("\nScore of 'banana': {:?}", banana_score);
+    // Count products in price ranges
+    let budget_count = cache.zset_count(zset_key, 0.0, 25.0).await?;
+    let mid_count = cache.zset_count(zset_key, 25.01, 75.0).await?;
+    let premium_count = cache.zset_count(zset_key, 75.01, 200.0).await?;
     
-    // Get the score of a non-existent member
-    let nonexistent_score = cache.zset_score::<String, _>(zset_key, "nonexistent").await?;
-    println!("Score of 'nonexistent': {:?}", nonexistent_score);
+    println!("Product count by price range:");
+    println!("  Budget ($0-$25): {}", budget_count);
+    println!("  Mid-range ($25-$75): {}", mid_count);
+    println!("  Premium ($75+): {}", premium_count);
     
-    // Remove an item
-    let removed = cache.zset_remove::<String, _>(zset_key, vec!["banana"]).await?;
-    println!("\nRemoved {} item(s) from the sorted set", removed);
+    // Example 3: Rank and Score Operations
+    println!("\n=== Example 3: Rank and Score Operations ===");
     
-    // Get the updated set
-    let updated_members = cache.zset_range::<String, _>(zset_key, 0, -1).await?;
-    println!("Updated sorted set members: {:?}", updated_members);
+    // Check rank of specific products
+    let cheapest_id = products.iter().min_by(|a, b| a.price.partial_cmp(&b.price).unwrap()).unwrap().id;
+    let most_expensive_id = products.iter().max_by(|a, b| a.price.partial_cmp(&b.price).unwrap()).unwrap().id;
     
-    Ok(())
-}
-
-async fn score_range_example(cache: &RedisCache) -> CacheResult<()> {
-    let zset_key = "temperature_readings";
+    let cheapest_rank = cache.zset_rank(zset_key, &cheapest_id).await?;
+    let most_expensive_rank = cache.zset_rank(zset_key, &most_expensive_id).await?;
     
-    // Add temperature readings with timestamps as scores
-    println!("Adding temperature readings with timestamps as scores");
+    println!("Rank of cheapest product (ID {}): {}", cheapest_id, cheapest_rank.unwrap());
+    println!("Rank of most expensive product (ID {}): {}", most_expensive_id, most_expensive_rank.unwrap());
     
-    // Let's simulate hourly temperature readings for a day (24 readings)
-    // We'll use Unix timestamps for a day, with each reading 1 hour apart
-    let base_timestamp = 1617235200.0;  // April 1, 2025, 00:00:00 UTC
-    let hour_in_seconds = 3600.0;
+    // Get reverse ranks (from highest to lowest)
+    let cheapest_reverse_rank = cache.zset_reverse_rank(zset_key, &cheapest_id).await?;
+    let most_expensive_reverse_rank = cache.zset_reverse_rank(zset_key, &most_expensive_id).await?;
     
-    let mut temperature_readings = HashMap::new();
+    println!("Reverse rank of cheapest product (ID {}): {}", cheapest_id, cheapest_reverse_rank.unwrap());
+    println!("Reverse rank of most expensive product (ID {}): {}", most_expensive_id, most_expensive_reverse_rank.unwrap());
     
-    // Create 24 hourly readings with varying temperatures
-    for hour in 0..24 {
-        let timestamp = base_timestamp + (hour as f64 * hour_in_seconds);
-        let temperature = 15.0 + (10.0 * (hour as f64 / 24.0 * std::f64::consts::PI).sin());
-        temperature_readings.insert(format!("temp:{}", hour), timestamp);
-        println!("Hour {}: {:.1}°C at timestamp {}", hour, temperature, timestamp);
-    }
+    // Get scores (prices) of specific products
+    let middle_id = products[products.len() / 2].id;
+    let price1 = cache.zset_score(zset_key, &cheapest_id).await?;
+    let price2 = cache.zset_score(zset_key, &most_expensive_id).await?;
+    let price3 = cache.zset_score(zset_key, &middle_id).await?;
     
-    // Add all readings to the sorted set
-    cache.zset_add(zset_key, temperature_readings).await?;
+    println!("Price of cheapest product (ID {}): ${:.2}", cheapest_id, price1.unwrap());
+    println!("Price of most expensive product (ID {}): ${:.2}", most_expensive_id, price2.unwrap());
+    println!("Price of middle product (ID {}): ${:.2}", middle_id, price3.unwrap());
     
-    // Query temperature readings by time range (e.g., between 6 AM and 12 PM)
-    let morning_start = base_timestamp + (6.0 * hour_in_seconds); // 6 AM
-    let noon = base_timestamp + (12.0 * hour_in_seconds); // 12 PM
+    // Example 4: Modifying Scores
+    println!("\n=== Example 4: Modifying Scores ===");
     
-    println!("\nTemperature readings between 6 AM and 12 PM:");
-    let morning_readings = cache.zset_range_by_score::<String, _>(
-        zset_key,
-        morning_start,
-        noon,
-    ).await?;
+    // Apply a 10% price increase to middle product
+    let original_price = price3.unwrap();
+    let price_increase = original_price * 0.1;
     
-    for reading in morning_readings {
-        println!("- Reading: {}", reading);
-    }
+    let new_price = cache.zset_increment_score(zset_key, &middle_id, price_increase).await?;
+    println!("Increased price of product {} by 10%: ${:.2} -> ${:.2}", 
+             middle_id, original_price, new_price);
     
-    // Query with scores to see the actual timestamps
-    println!("\nTemperature readings with timestamps between 6 AM and 12 PM:");
-    let morning_readings_with_times = cache.zset_range_by_score_with_scores::<String, _>(
-        zset_key,
-        morning_start,
-        noon,
-    ).await?;
+    // Apply a 15% discount to most expensive product
+    let original_price = price2.unwrap();
+    let price_discount = -1.0 * original_price * 0.15;
     
-    for (reading, timestamp) in morning_readings_with_times {
-        let hour = ((timestamp - base_timestamp) / hour_in_seconds) as i64;
-        println!("- Reading: {} at hour {}", reading, hour);
-    }
+    let new_price = cache.zset_increment_score(zset_key, &most_expensive_id, price_discount).await?;
+    println!("Applied 15% discount to product {}: ${:.2} -> ${:.2}", 
+             most_expensive_id, original_price, new_price);
     
-    // Count readings in afternoon hours (12 PM to 6 PM)
-    let noon = base_timestamp + (12.0 * hour_in_seconds);
-    let evening = base_timestamp + (18.0 * hour_in_seconds);
+    // Re-check ranks after price changes
+    let new_rank = cache.zset_rank(zset_key, &most_expensive_id).await?;
+    println!("New rank of product {} after discount: {}", most_expensive_id, new_rank.unwrap());
     
-    let afternoon_count = cache.zset_count(zset_key, noon, evening).await?;
-    println!("\nNumber of readings between 12 PM and 6 PM: {}", afternoon_count);
+    // Example 5: Popularity by Category
+    println!("\n=== Example 5: Popularity by Category ===");
     
-    Ok(())
-}
-
-async fn rank_operations_example(cache: &RedisCache) -> CacheResult<()> {
-    let zset_key = "student_scores";
-    
-    // Add student scores
-    println!("Adding student scores to sorted set");
-    
-    let mut scores = HashMap::new();
-    scores.insert("Alice".to_string(), 92.5);
-    scores.insert("Bob".to_string(), 85.0);
-    scores.insert("Charlie".to_string(), 91.0);
-    scores.insert("Dave".to_string(), 78.5);
-    scores.insert("Eve".to_string(), 95.0);
-    scores.insert("Frank".to_string(), 79.0);
-    scores.insert("Grace".to_string(), 88.0);
-    scores.insert("Hannah".to_string(), 94.0);
-    
-    cache.zset_add(zset_key, scores).await?;
-    
-    // Get ranks (0-based) for some students
-    // Lower ranks mean lower scores (ascending order)
-    println!("\nStudent ranks (0-based, ascending by score):");
-    
-    let students = vec!["Alice", "Bob", "Eve"];
-    for student in &students {
-        let rank = cache.zset_rank::<String, _>(zset_key, student).await?;
-        println!("- {}'s rank: {:?}", student, rank);
-    }
-    
-    // Get reverse ranks (0-based) for some students
-    // Lower reverse ranks mean higher scores (descending order)
-    println!("\nStudent reverse ranks (0-based, descending by score):");
-    
-    for student in &students {
-        let rev_rank = cache.zset_rev_rank::<String, _>(zset_key, student).await?;
-        println!("- {}'s reverse rank: {:?}", student, rev_rank);
-    }
-    
-    // Get top 3 students by score
-    println!("\nTop 3 students:");
-    let top_students = cache.zset_rev_range_with_scores::<String, _>(zset_key, 0, 2).await?;
-    
-    for (i, (student, score)) in top_students.iter().enumerate() {
-        println!("{}. {}: {:.1}", i + 1, student, score);
-    }
-    
-    // Get bottom 3 students by score
-    println!("\nBottom 3 students:");
-    let bottom_students = cache.zset_range_with_scores::<String, _>(zset_key, 0, 2).await?;
-    
-    for (i, (student, score)) in bottom_students.iter().enumerate() {
-        println!("{}. {}: {:.1}", i + 1, student, score);
-    }
-    
-    Ok(())
-}
-
-async fn leaderboard_example(cache: &RedisCache) -> CacheResult<()> {
-    let leaderboard_key = "game_leaderboard";
-    
-    // Add player scores
-    println!("Creating game leaderboard");
-    
-    let mut player_scores = HashMap::new();
-    player_scores.insert("player:1001".to_string(), 12750.0);
-    player_scores.insert("player:1002".to_string(), 9500.0);
-    player_scores.insert("player:1003".to_string(), 14250.0);
-    player_scores.insert("player:1004".to_string(), 8750.0);
-    player_scores.insert("player:1005".to_string(), 15500.0);
-    player_scores.insert("player:1006".to_string(), 10250.0);
-    player_scores.insert("player:1007".to_string(), 11000.0);
-    player_scores.insert("player:1008".to_string(), 13500.0);
-    
-    cache.zset_add(leaderboard_key, player_scores).await?;
-    
-    // Display top 5 players
-    println!("\nTop 5 players:");
-    let top_players = cache.zset_rev_range_with_scores::<String, _>(leaderboard_key, 0, 4).await?;
-    
-    for (i, (player_id, score)) in top_players.iter().enumerate() {
-        println!("{}. {}: {:,.0} pts", i + 1, player_id, score);
-    }
-    
-    // Update a player's score after they complete a new level
-    println!("\nUpdating player:1007's score after completing a level");
-    let mut update = HashMap::new();
-    update.insert("player:1007".to_string(), 13250.0);  // New total score
-    cache.zset_add(leaderboard_key, update).await?;
-    
-    // Check player:1007's new rank
-    let new_rank = cache.zset_rev_rank::<String, _>(leaderboard_key, "player:1007").await?;
-    println!("player:1007's new rank: {}", new_rank.map_or("Not found".to_string(), |r| (r + 1).to_string()));
-    
-    // Get nearby players (2 above and 2 below) for player:1007
-    println!("\nNearby players around player:1007:");
-    
-    if let Some(rank) = new_rank {
-        // Get the 2 players above (better scores)
-        let start_above = if rank >= 2 { rank - 2 } else { 0 };
-        let above_players = cache.zset_rev_range_with_scores::<String, _>(leaderboard_key, start_above, rank - 1).await?;
-        
-        // Get the 2 players below (worse scores)
-        let below_players = cache.zset_rev_range_with_scores::<String, _>(leaderboard_key, rank + 1, rank + 2).await?;
-        
-        // Get the target player
-        let target_player = cache.zset_rev_range_with_scores::<String, _>(leaderboard_key, rank, rank).await?;
-        
-        // Display nearby players
-        for (player_id, score) in above_players {
-            let player_rank = cache.zset_rev_rank::<String, _>(leaderboard_key, &player_id).await?;
-            println!("{}. {}: {:,.0} pts", player_rank.map_or(0, |r| r + 1), player_id, score);
-        }
-        
-        for (player_id, score) in target_player {
-            let player_rank = cache.zset_rev_rank::<String, _>(leaderboard_key, &player_id).await?;
-            println!("{}. {} (YOU): {:,.0} pts", player_rank.map_or(0, |r| r + 1), player_id, score);
-        }
-        
-        for (player_id, score) in below_players {
-            let player_rank = cache.zset_rev_rank::<String, _>(leaderboard_key, &player_id).await?;
-            println!("{}. {}: {:,.0} pts", player_rank.map_or(0, |r| r + 1), player_id, score);
-        }
-    }
-    
-    // Calculate percentile for a player
-    let target_player = "player:1004";
-    if let Some(rank) = cache.zset_rev_rank::<String, _>(leaderboard_key, target_player).await? {
-        let total_players = cache.zset_size(leaderboard_key).await?;
-        let percentile = 100.0 * (1.0 - (rank as f64 / total_players as f64));
-        let score = cache.zset_score::<String, _>(leaderboard_key, target_player).await?;
-        
-        println!("\nPlayer {} statistics:", target_player);
-        println!("- Score: {:,.0} pts", score.unwrap_or(0.0));
-        println!("- Rank: {} of {}", rank + 1, total_players);
-        println!("- Percentile: {:.1}%", percentile);
-    }
-    
-    Ok(())
-}
-
-async fn complex_object_example(cache: &RedisCache) -> CacheResult<()> {
-    // Create player objects
-    let players = vec![
-        Player::new("p1", "Michael Jordan", "Chicago Bulls"),
-        Player::new("p2", "LeBron James", "Los Angeles Lakers"),
-        Player::new("p3", "Stephen Curry", "Golden State Warriors"),
-        Player::new("p4", "Kevin Durant", "Phoenix Suns"),
-        Player::new("p5", "Giannis Antetokounmpo", "Milwaukee Bucks"),
-        Player::new("p6", "Nikola Jokic", "Denver Nuggets"),
+    // Create sorted sets for each category
+    let categories = [
+        "products:electronics", 
+        "products:clothing", 
+        "products:books", 
+        "products:homegoods", 
+        "products:toys"
     ];
     
-    // Season statistics (points per game)
-    println!("Creating player statistics sorted set");
-    let ppg_key = "stats:ppg:2024-25";
-    
-    let mut ppg_scores = HashMap::new();
-    ppg_scores.insert(&players[0], 30.1);  // Michael Jordan
-    ppg_scores.insert(&players[1], 28.7);  // LeBron James
-    ppg_scores.insert(&players[2], 27.2);  // Stephen Curry
-    ppg_scores.insert(&players[3], 29.3);  // Kevin Durant
-    ppg_scores.insert(&players[4], 27.8);  // Giannis Antetokounmpo
-    ppg_scores.insert(&players[5], 26.4);  // Nikola Jokic
-    
-    cache.zset_add(ppg_key, ppg_scores).await?;
-    
-    // MVP voting points
-    println!("Creating MVP voting sorted set");
-    let mvp_key = "award:mvp:2024-25";
-    
-    let mut mvp_scores = HashMap::new();
-    mvp_scores.insert(&players[0], 687.0);  // Michael Jordan
-    mvp_scores.insert(&players[1], 743.0);  // LeBron James
-    mvp_scores.insert(&players[2], 512.0);  // Stephen Curry
-    mvp_scores.insert(&players[3], 486.0);  // Kevin Durant
-    mvp_scores.insert(&players[4], 924.0);  // Giannis Antetokounmpo
-    mvp_scores.insert(&players[5], 823.0);  // Nikola Jokic
-    
-    cache.zset_add(mvp_key, mvp_scores).await?;
-    
-    // Get top scorers
-    println!("\nTop 3 scorers by points per game:");
-    let top_scorers = cache.zset_rev_range_with_scores::<Player, _>(ppg_key, 0, 2).await?;
-    
-    for (i, (player, ppg)) in top_scorers.iter().enumerate() {
-        println!("{}. {} ({}) - {:.1} PPG", i + 1, player.name, player.team, ppg);
+    // Add products to category-specific sorted sets
+    for product in &products {
+        let category_key = match product.category {
+            Category::Electronics => categories[0],
+            Category::Clothing => categories[1],
+            Category::Books => categories[2],
+            Category::HomeGoods => categories[3],
+            Category::Toys => categories[4],
+        };
+        
+        // Add product to category sorted set, scored by popularity
+        cache.zset_add(category_key, vec![(product.popularity, product.id)]).await?;
     }
     
-    // Get MVP voting results
-    println!("\nMVP Voting Results:");
-    let mvp_results = cache.zset_rev_range_with_scores::<Player, _>(mvp_key, 0, -1).await?;
-    
-    for (i, (player, points)) in mvp_results.iter().enumerate() {
-        println!("{}. {} ({}) - {:.0} points", i + 1, player.name, player.team, points);
+    // Get most popular product in each category
+    println!("Most popular products by category:");
+    for &category in &categories {
+        let popular: Vec<u32> = cache.zset_range(category, -1, -1).await?;
+        if !popular.is_empty() {
+            let id = popular[0];
+            let product = products.iter().find(|p| p.id == id).unwrap();
+            println!("  {}: {} (Popularity: {:.1})", 
+                    category, product.name, product.popularity);
+        }
     }
     
-    // Check if a player is a top scorer
-    let player_to_check = &players[5];  // Nikola Jokic
-    let rank = cache.zset_rev_rank::<Player, _>(ppg_key, player_to_check).await?;
-    let ppg = cache.zset_score::<Player, _>(ppg_key, player_to_check).await?;
+    // Example 6: Set Operations with Sorted Sets
+    println!("\n=== Example 6: Set Operations with Sorted Sets ===");
     
-    println!("\n{} statistics:", player_to_check.name);
-    println!("- PPG: {:.1}", ppg.unwrap_or(0.0));
-    println!("- PPG Rank: {} of 6", rank.map_or("Not ranked".to_string(), |r| (r + 1).to_string()));
-    
-    // Get a player's MVP voting points
-    let mvp_points = cache.zset_score::<Player, _>(mvp_key, player_to_check).await?;
-    let mvp_rank = cache.zset_rev_rank::<Player, _>(mvp_key, player_to_check).await?;
-    
-    println!("- MVP Voting Points: {:.0}", mvp_points.unwrap_or(0.0));
-    println!("- MVP Rank: {} of 6", mvp_rank.map_or("Not ranked".to_string(), |r| (r + 1).to_string()));
-    
-    Ok(())
-}
-
-async fn union_intersection_example(cache: &RedisCache) -> CacheResult<()> {
-    // Create sets to demonstrate aggregation operations
-    println!("Creating player stats for aggregation operations");
-    
-    // Points per game
-    let ppg_key = "player:stats:ppg";
-    let mut ppg_scores = HashMap::new();
-    ppg_scores.insert("player1".to_string(), 28.5);
-    ppg_scores.insert("player2".to_string(), 22.0);
-    ppg_scores.insert("player3".to_string(), 25.0);
-    ppg_scores.insert("player4".to_string(), 18.5);
-    cache.zset_add(ppg_key, ppg_scores).await?;
-    
-    // Rebounds per game
-    let rpg_key = "player:stats:rpg";
-    let mut rpg_scores = HashMap::new();
-    rpg_scores.insert("player1".to_string(), 6.2);
-    rpg_scores.insert("player2".to_string(), 11.5);
-    rpg_scores.insert("player3".to_string(), 8.0);
-    rpg_scores.insert("player5".to_string(), 9.5);
-    cache.zset_add(rpg_key, rpg_scores).await?;
-    
-    // Assists per game
-    let apg_key = "player:stats:apg";
-    let mut apg_scores = HashMap::new();
-    apg_scores.insert("player1".to_string(), 7.3);
-    apg_scores.insert("player3".to_string(), 5.5);
-    apg_scores.insert("player4".to_string(), 9.0);
-    apg_scores.insert("player5".to_string(), 4.2);
-    cache.zset_add(apg_key, apg_scores).await?;
-    
-    println!("\nPlayer Stats:");
-    println!("PPG: {:?}", cache.zset_range_with_scores::<String, _>(ppg_key, 0, -1).await?);
-    println!("RPG: {:?}", cache.zset_range_with_scores::<String, _>(rpg_key, 0, -1).await?);
-    println!("APG: {:?}", cache.zset_range_with_scores::<String, _>(apg_key, 0, -1).await?);
-    
-    // Union operation: Combine PPG and RPG, taking max score
-    println!("\nPerforming union operation (MAX) between PPG and RPG");
-    let dest_key_max = "player:stats:ppg_or_rpg_max";
+    // Find the union of electronics and toys, weighting electronics higher
+    let destination = "products:tech_and_toys";
     let count = cache.zset_union_store(
-        dest_key_max,
-        vec![ppg_key, rpg_key],
-        &[1.0, 1.0],
-        SortedSetOperations::AggregateMax
+        destination, 
+        vec![categories[0], categories[4]], 
+        Some(vec![1.5, 1.0]), 
+        Some("SUM".to_string())
     ).await?;
     
-    println!("Union (MAX) result with {} members:", count);
-    let result = cache.zset_range_with_scores::<String, _>(dest_key_max, 0, -1).await?;
-    for (member, score) in result {
-        println!("- {}: {}", member, score);
+    println!("Created union of electronics and toys with {} products", count);
+    
+    // Get top 3 items from the union with scores
+    let top_items: Vec<(u32, f64)> = cache.zset_range_with_scores(destination, -3, -1).await?;
+    println!("Top 3 items from tech_and_toys union:");
+    for (id, score) in top_items {
+        let product = products.iter().find(|p| p.id == id).unwrap();
+        println!("  {}: {} (Union Score: {:.1})", id, product.name, score);
     }
     
-    // Union operation: Combine PPG and RPG, summing scores
-    println!("\nPerforming union operation (SUM) between PPG and RPG");
-    let dest_key_sum = "player:stats:ppg_or_rpg_sum";
-    cache.zset_union_store(
-        dest_key_sum,
-        vec![ppg_key, rpg_key],
-        &[1.0, 1.0],
-        SortedSetOperations::AggregateSum
-    ).await?;
-    
-    println!("Union (SUM) result:");
-    let result = cache.zset_range_with_scores::<String, _>(dest_key_sum, 0, -1).await?;
-    for (member, score) in result {
-        println!("- {}: {}", member, score);
+    // Clean up
+    println!("\nCleaning up...");
+    cache.delete(zset_key).await?;
+    for &category in &categories {
+        cache.delete(category).await?;
     }
+    cache.delete(destination).await?;
     
-    // Weighted union: Combine PPG (weighted 0.7) and APG (weighted 0.3)
-    println!("\nPerforming weighted union between PPG (weight 0.7) and APG (weight 0.3)");
-    let dest_key_weighted = "player:stats:ppg_apg_weighted";
-    cache.zset_union_store(
-        dest_key_weighted,
-        vec![ppg_key, apg_key],
-        &[0.7, 0.3],
-        SortedSetOperations::AggregateSum
-    ).await?;
-    
-    println!("Weighted union result (offensive rating):");
-    let result = cache.zset_rev_range_with_scores::<String, _>(dest_key_weighted, 0, -1).await?;
-    for (i, (member, score)) in result.iter().enumerate() {
-        println!("{}. {}: {:.1}", i + 1, member, score);
-    }
-    
-    // Intersection: Players who have stats in all three categories
-    println!("\nPerforming intersection between PPG, RPG, and APG");
-    let dest_key_intersect = "player:stats:all_categories";
-    let count = cache.zset_intersection_store(
-        dest_key_intersect,
-        vec![ppg_key, rpg_key, apg_key],
-        &[1.0, 1.0, 1.0],
-        SortedSetOperations::AggregateSum
-    ).await?;
-    
-    println!("Players with stats in all categories ({}), with sum of stats:", count);
-    let result = cache.zset_rev_range_with_scores::<String, _>(dest_key_intersect, 0, -1).await?;
-    for (member, score) in result {
-        println!("- {}: {:.1}", member, score);
-    }
+    println!("Successfully completed all sorted set operations!");
     
     Ok(())
 }
 
-async fn cleanup(cache: &RedisCache) -> CacheResult<()> {
-    // Clean up all the keys created in this example
-    println!("\nCleaning up example keys...");
+fn generate_test_products(count: usize) -> Vec<Product> {
+    let mut rng = thread_rng();
+    let mut products = Vec::with_capacity(count);
     
-    let keys = vec![
-        "simple_zset",
-        "temperature_readings",
-        "student_scores",
-        "game_leaderboard",
-        "stats:ppg:2024-25",
-        "award:mvp:2024-25",
-        "player:stats:ppg",
-        "player:stats:rpg",
-        "player:stats:apg",
-        "player:stats:ppg_or_rpg_max",
-        "player:stats:ppg_or_rpg_sum",
-        "player:stats:ppg_apg_weighted",
-        "player:stats:all_categories",
+    let categories = [
+        Category::Electronics,
+        Category::Clothing,
+        Category::Books,
+        Category::HomeGoods,
+        Category::Toys,
     ];
     
-    for key in keys {
-        let _ = cache.delete(key).await;
+    let product_names = [
+        "Smartphone", "Laptop", "Headphones", "Camera", "Tablet", 
+        "T-shirt", "Jeans", "Dress", "Jacket", "Shoes",
+        "Novel", "Cookbook", "Biography", "Textbook", "Comic",
+        "Sofa", "Lamp", "Table", "Chair", "Vase",
+        "Action Figure", "Board Game", "Puzzle", "Doll", "Remote Car",
+    ];
+    
+    for i in 1..=count {
+        let category_idx = rng.gen_range(0..categories.len());
+        let name_base_idx = category_idx * 5 + rng.gen_range(0..5);
+        let name = format!("{} {}", product_names[name_base_idx % product_names.len()], i);
+        
+        let price = match categories[category_idx] {
+            Category::Electronics => rng.gen_range(50.0..200.0),
+            Category::Clothing => rng.gen_range(20.0..100.0),
+            Category::Books => rng.gen_range(10.0..50.0),
+            Category::HomeGoods => rng.gen_range(30.0..150.0),
+            Category::Toys => rng.gen_range(15.0..80.0),
+        };
+        
+        products.push(Product {
+            id: i as u32,
+            name,
+            price,
+            popularity: rng.gen_range(1.0..100.0),
+            category: categories[category_idx].clone(),
+        });
     }
     
-    println!("Cleanup complete.");
-    Ok(())
+    products
 } 
