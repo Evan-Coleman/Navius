@@ -482,6 +482,75 @@ impl RedisConnectionManager {
         }
     }
 
+    /// Execute a pipeline command on a Redis connection
+    ///
+    /// This method is similar to execute_command but is optimized for pipeline operations
+    /// which may operate on multiple keys.
+    #[instrument(skip(self, func), level = "debug")]
+    pub async fn execute_pipeline_command<F, T>(
+        &self,
+        operation: &str,
+        func: F,
+    ) -> RedisCacheResult<T>
+    where
+        F: FnOnce(Connection) -> Result<T, RedisError>,
+    {
+        let start_time = Instant::now();
+        
+        // Get a connection from the pool
+        let connection = match self.get_connection().await {
+            Ok(conn) => conn,
+            Err(e) => {
+                error!("Failed to get connection for pipeline operation {}: {}", operation, e);
+                metrics::record_operation_error(
+                    &format!("{}_pipeline", metrics::names::CONNECTION_ERROR),
+                    &e,
+                );
+                return Err(e);
+            }
+        };
+        
+        // Execute the command with timeout
+        let timeout_duration = Duration::from_secs(self.config.command_timeout_seconds);
+        let result = match timeout(timeout_duration, async {
+            func(connection)
+        })
+        .await
+        {
+            Ok(Ok(result)) => {
+                // Record successful operation
+                debug!("Pipeline operation {} completed successfully", operation);
+                Ok(result)
+            }
+            Ok(Err(redis_error)) => {
+                // Record Redis error
+                error!("Redis error during pipeline operation {}: {}", operation, redis_error);
+                self.record_connection_failure().await;
+                metrics::record_operation_error(operation, &RedisCacheError::from(redis_error.clone()));
+                Err(redis_error.into())
+            }
+            Err(timeout_error) => {
+                // Record timeout error
+                error!("Timeout during pipeline operation {}: {}", operation, timeout_error);
+                self.record_connection_failure().await;
+                let error = RedisCacheError::Timeout(format!(
+                    "Operation timed out after {:?}: {}",
+                    timeout_duration, timeout_error
+                ));
+                metrics::record_operation_error(operation, &error);
+                Err(error)
+            }
+        };
+        
+        // Record operation time
+        let elapsed = start_time.elapsed();
+        if let Ok(ref _) = result {
+            metrics::record_operation_duration(operation, elapsed);
+        }
+        
+        result
+    }
+
     /// Create a prefixed key
     pub fn prefixed_key<K: AsRef<str>>(&self, key: K) -> String {
         if self.config.key_prefix.is_empty() {

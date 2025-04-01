@@ -26,6 +26,26 @@ pub enum RedisCacheError {
     /// Unavailable error
     #[error("Redis unavailable: {0}")]
     Unavailable(String),
+
+    /// Timeout error
+    #[error("Redis operation timed out: {0}")]
+    Timeout(String),
+
+    /// Script error
+    #[error("Redis script error: {0}")]
+    ScriptError(String),
+
+    /// Key not found error
+    #[error("Key not found in Redis: {0}")]
+    KeyNotFound(String),
+
+    /// Command error
+    #[error("Redis command error: {0}")]
+    CommandError(String),
+
+    /// Deserialization error
+    #[error("Failed to deserialize Redis data: {0}")]
+    DeserializationError(String),
 }
 
 impl From<redis::RedisError> for RedisCacheError {
@@ -48,6 +68,11 @@ impl From<RedisCacheError> for CacheError {
             RedisCacheError::ConfigurationError(msg) => CacheError::ConfigurationError(msg),
             RedisCacheError::SerializationError(msg) => CacheError::SerializationError(msg),
             RedisCacheError::Unavailable(msg) => CacheError::UnavailableError(msg),
+            RedisCacheError::Timeout(msg) => CacheError::TimeoutError(msg),
+            RedisCacheError::ScriptError(msg) => CacheError::OperationError(msg),
+            RedisCacheError::KeyNotFound(msg) => CacheError::NotFoundError(msg),
+            RedisCacheError::CommandError(msg) => CacheError::OperationError(msg),
+            RedisCacheError::DeserializationError(msg) => CacheError::SerializationError(msg),
         }
     }
 }
