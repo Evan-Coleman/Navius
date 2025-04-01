@@ -15,6 +15,7 @@ use crate::{
 
 use crate::connection::RedisConnectionManager;
 use crate::metrics;
+use redis::RedisError;
 use std::time::Instant;
 
 /// Trait that defines pipeline operations
@@ -83,23 +84,19 @@ impl RedisPipelineBuilder {
     #[instrument(skip(self), level = "debug")]
     pub async fn execute(self, cache: &RedisCache) -> RedisCacheResult<()> {
         let timer = metrics::TimedOperation::new(metrics::names::PIPELINE_EXECUTE);
+        let pipeline = self.pipeline;
         let result = cache
             .connection_manager()
-            .execute_pipeline_command(metrics::names::PIPELINE_EXECUTE, |pipeline| async move {
-                match self.pipeline.query_async(&mut conn).await {
-                    Ok(_) => {
-                        timer.record_success();
-                        Ok((pipeline, ()))
-                    }
-                    Err(e) => {
-                        let err = RedisCacheError::from(e);
-                        timer.record_error(&err);
-                        Err(e)
-                    }
+            .execute_command(&self.key, metrics::names::PIPELINE_EXECUTE, |mut conn| {
+                let pipeline = pipeline.clone();
+                async move {
+                    let res: () = pipeline.query_async(&mut conn).await?;
+                    Ok(res)
                 }
             })
             .await;
 
+        timer.record(&result);
         result
     }
 }
@@ -119,15 +116,22 @@ pub struct RedisPipelineImpl {
     pipeline: RedisPipeline,
     /// Key for tracking which entity this pipeline is operating on
     key: String,
+    /// Cache reference
+    cache: Arc<RedisCache>,
 }
 
 impl RedisPipelineImpl {
     /// Create a new Redis pipeline
-    pub fn new(connection_manager: Arc<RedisConnectionManager>, key: &str) -> Self {
+    pub fn new(
+        connection_manager: Arc<RedisConnectionManager>,
+        key: &str,
+        cache: Arc<RedisCache>,
+    ) -> Self {
         Self {
             connection_manager,
             pipeline: pipe(),
             key: key.to_string(),
+            cache,
         }
     }
 
@@ -283,27 +287,18 @@ impl RedisPipelineImpl {
 impl Pipeline for RedisPipelineImpl {
     /// Execute the pipeline
     #[instrument(skip(self), level = "debug")]
-    async fn execute(self) -> RedisCacheResult<()> {
-        let timer = metrics::TimedOperation::new(metrics::names::PIPELINE_EXECUTE);
-        let start = Instant::now();
+    pub async fn execute(&self) -> RedisCacheResult<()> {
         let key = self.key.clone();
-        let pipeline = self.pipeline;
+        let prefixed_key = self.connection_manager.prefixed_key(&key);
+        let pipeline = self.pipeline.clone();
 
-        debug!("Executing Redis pipeline");
-
-        let result = self
+        self.cache
             .connection_manager
-            .execute_command(&key, "PIPELINE", move |mut conn| {
-                // Execute the pipeline
-                pipeline.query(&mut conn)?;
+            .execute_command(&prefixed_key, "PIPELINE_EXECUTE", |mut conn| async move {
+                pipeline.query_async(&mut conn).await?;
                 Ok(())
             })
-            .await;
-
-        // Record metrics
-        timer.record(&result);
-
-        result
+            .await
     }
 }
 
