@@ -1,13 +1,15 @@
 # Code Migration Finalization
 
+**⚠️ CRITICAL BLOCKER: Build failures must be resolved before continuing. See [Build Failures Resolution](./sub-process/build-failures-resolution.md) for details.**
+
 **Created:** March 29, 2025  
-**Last Modified:** March 29, 2025  
+**Last Modified:** May 30, 2025  
 **Status:** In Progress (85%)  
-**Target Completion:** April 1, 2025 (Urgent Priority)
+**Target Completion:** Blocked by build failures
 
 ## Overview
 
-While we've completed the API Consistency Review and all preparatory work for Phase 5, we've identified a critical gap in our workspace migration process. This roadmap outlines the immediate tasks needed to finalize the actual code migration by removing legacy code and establishing the final workspace structure.
+While we've completed the API Consistency Review and all preparatory work for Phase 5, we've encountered critical build failures that must be resolved. The new sub-process [Build Failures Resolution](./sub-process/build-failures-resolution.md) has been created to address these issues with highest priority. All other work in this roadmap is on hold until build issues are resolved.
 
 ## Objectives
 
