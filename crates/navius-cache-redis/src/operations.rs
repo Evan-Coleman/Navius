@@ -273,19 +273,22 @@ impl RedisCache {
         K: CacheKey + 'static + std::fmt::Debug,
     {
         let key_str = self.key_to_string(key).await?;
-        let prefixed_key_str = key_str.clone();
+        let prefixed_key = self.connection_manager.prefixed_key(&key_str);
+        let prefixed_key_clone = prefixed_key.clone();
 
-        let timer = metrics::TimedOperation::new(metrics::names::DELETE);
         let result = self
             .connection_manager
-            .execute_command(&prefixed_key_str, "DEL", |mut conn| async move {
-                let res: i32 = conn.del(&prefixed_key_str).await?;
-                Ok(res > 0)
-            })
-            .await;
+            .execute_command(&prefixed_key, "DEL", move |mut conn| async move {
+                let res: redis::RedisResult<i32> = redis::cmd("DEL")
+                    .arg(&prefixed_key_clone)
+                    .query_async(&mut conn)
+                    .await;
 
-        timer.record(&result);
-        result.map_err(|e| e.into())
+                res.map(|count| count > 0)
+            })
+            .await?;
+
+        Ok(result)
     }
 
     /// Set an expiration time for a key
@@ -404,7 +407,7 @@ impl RedisCache {
         K: CacheKey + 'static,
         V: DeserializeOwned + 'static,
     {
-        let key_str = self.key_to_string(&key)?;
+        let key_str = self.key_to_string(&key).await?;
         let prefixed_key = self.connection_manager.prefixed_key(&key_str);
         debug!("Getting list range for key: {}", prefixed_key);
 
@@ -452,19 +455,23 @@ impl RedisCache {
         K: CacheKey + 'static,
     {
         let key_str = self.key_to_string(&key).await?;
+        let prefixed_key_str = self.connection_manager.prefixed_key(&key_str);
+        let prefixed_key_clone = prefixed_key_str.clone();
 
-        // Clone for use in closure
-        let key_str_clone = key_str.clone();
+        self.connection_manager
+            .execute_command(&prefixed_key_str, "LTRIM", move |mut conn| async move {
+                let result: redis::RedisResult<()> = redis::cmd("LTRIM")
+                    .arg(&prefixed_key_clone)
+                    .arg(start)
+                    .arg(stop)
+                    .query_async(&mut conn)
+                    .await;
 
-        let result = self
-            .connection_manager
-            .execute_command(&key_str, "LTRIM", |mut conn| async move {
-                conn.ltrim(&key_str_clone, start, stop).await?;
-                Ok(())
+                result
             })
-            .await;
+            .await?;
 
-        result.map_err(|e| e.into())
+        Ok(())
     }
 
     // === Set operations ===
@@ -742,20 +749,27 @@ impl RedisCache {
     }
 
     #[instrument(skip(self), level = "debug")]
-    pub async fn set_length<K>(&self, key: &K) -> CacheResult<usize>
+    pub async fn set_length<K>(&self, key: K) -> CacheResult<usize>
     where
-        K: CacheKey + 'static + std::fmt::Debug,
+        K: CacheKey + 'static,
     {
-        let key_str = self.key_to_string(key).await?;
+        let key_str = self.key_to_string(&key).await?;
         let prefixed_key = self.connection_manager.prefixed_key(&key_str);
-        let prefixed_key_str = ToString::to_string(&prefixed_key);
+        let prefixed_key_clone = prefixed_key.clone();
 
-        self.connection_manager
-            .execute_command(&prefixed_key_str, "SCARD", |mut conn| async move {
-                conn.scard(&prefixed_key_str).await
+        let result = self
+            .connection_manager
+            .execute_command(&prefixed_key, "SCARD", move |mut conn| async move {
+                let result: redis::RedisResult<usize> = redis::cmd("SCARD")
+                    .arg(&prefixed_key_clone)
+                    .query_async(&mut conn)
+                    .await;
+
+                result
             })
-            .await
-            .map_err(|e| CacheError::OperationError(e.to_string()))
+            .await?;
+
+        Ok(result)
     }
 
     // Start Stubs for missing CacheOperations methods
@@ -820,12 +834,44 @@ impl RedisCache {
         todo!("set_random_members not implemented for RedisCache")
     }
 
-    async fn zset_add<K, V>(&self, _key: K, _members: Vec<(f64, V)>) -> CacheResult<usize>
+    async fn zset_add<K, V>(&self, key: K, items: Vec<(f64, V)>) -> CacheResult<usize>
     where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + std::fmt::Debug + 'static,
     {
-        todo!("zset_add not implemented for RedisCache")
+        if items.is_empty() {
+            return Ok(0);
+        }
+
+        let key_str = self.key_to_string(&key).await?;
+        let prefixed_key_str = self.connection_manager.prefixed_key(&key_str);
+
+        let mut added = 0;
+        for (score, value) in items {
+            let serialized = self.serialize(&value).await?;
+            let prefixed_key_clone = prefixed_key_str.clone();
+            let serialized_clone = serialized.clone();
+
+            let result: bool = self
+                .connection_manager
+                .execute_command(&prefixed_key_str, "ZADD", move |mut conn| async move {
+                    let result: redis::RedisResult<bool> = redis::cmd("ZADD")
+                        .arg(&prefixed_key_clone)
+                        .arg(score)
+                        .arg(serialized_clone)
+                        .query_async(&mut conn)
+                        .await;
+
+                    result
+                })
+                .await?;
+
+            if result {
+                added += 1;
+            }
+        }
+
+        Ok(added)
     }
 
     async fn zset_remove<K, V>(&self, _key: K, _members: Vec<V>) -> CacheResult<usize>
@@ -848,7 +894,7 @@ impl RedisCache {
         &self,
         _key: K,
         _member: &V,
-        _amount: f64,
+        _increment: f64,
     ) -> CacheResult<f64>
     where
         K: CacheKey + 'static,
@@ -958,6 +1004,43 @@ impl RedisCache {
     }
 
     // End Stubs for missing CacheOperations methods
+
+    async fn hash_get_all<K, V>(&self, key: K) -> CacheResult<Vec<(String, V)>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        let key_str = self.key_to_string(&key).await?;
+        let prefixed_key_str = self.connection_manager.prefixed_key(&key_str);
+        let prefixed_key_clone = prefixed_key_str.clone();
+
+        let result: HashMap<String, Vec<u8>> = self
+            .connection_manager
+            .execute_command(&prefixed_key_str, "HGETALL", move |mut conn| async move {
+                let result: redis::RedisResult<HashMap<String, Vec<u8>>> = redis::cmd("HGETALL")
+                    .arg(&prefixed_key_clone)
+                    .query_async(&mut conn)
+                    .await;
+
+                result
+            })
+            .await?;
+
+        let mut entries = Vec::with_capacity(result.len());
+        for (field, value_bytes) in result {
+            let value = self.deserialize(&value_bytes).await?;
+            entries.push((field, value));
+        }
+
+        Ok(entries)
+    }
+
+    async fn hash_keys<K>(&self, _key: K) -> CacheResult<Vec<String>>
+    where
+        K: CacheKey + 'static,
+    {
+        todo!("Implement hash_keys method")
+    }
 }
 
 impl Cache for RedisCache {}
@@ -971,20 +1054,24 @@ impl CacheOperations for RedisCache {
         V: Serialize + Send + Sync + 'static,
     {
         let key_str = self.key_to_string(&key).await?;
-        let value_bytes = self.serialize(value).await?;
+        let serialized = self.serialize(value).await?;
+        let prefixed_key_str = self.connection_manager.prefixed_key(&key_str);
+        let prefixed_key_clone = prefixed_key_str.clone();
 
-        // Clone for use in closure
-        let key_str_clone = key_str.clone();
-
-        // Execute SISMEMBER command
         let result = self
             .connection_manager
-            .execute_command(&key_str, "SISMEMBER", |mut conn| async move {
-                conn.sismember(&key_str_clone, value_bytes).await
-            })
-            .await;
+            .execute_command(&prefixed_key_str, "SISMEMBER", move |mut conn| async move {
+                let result: redis::RedisResult<bool> = redis::cmd("SISMEMBER")
+                    .arg(&prefixed_key_clone)
+                    .arg(&serialized)
+                    .query_async(&mut conn)
+                    .await;
 
-        result.map_err(|e| e.into())
+                result
+            })
+            .await?;
+
+        Ok(result)
     }
 
     /// Get a value from the cache
@@ -1101,7 +1188,7 @@ impl CacheOperations for RedisCache {
     {
         let mut count = 0;
         for key in keys {
-            if self.delete(key).await? {
+            if self.delete(&key).await? {
                 count += 1;
             }
         }
@@ -1266,11 +1353,28 @@ impl CacheOperations for RedisCache {
         todo!("Implement list_remove method")
     }
 
-    async fn list_trim<K>(&self, _key: K, _start: isize, _stop: isize) -> CacheResult<()>
+    async fn list_trim<K>(&self, key: K, start: isize, stop: isize) -> CacheResult<()>
     where
         K: CacheKey + 'static,
     {
-        todo!("Implement list_trim method")
+        let key_str = self.key_to_string(&key).await?;
+        let prefixed_key_str = self.connection_manager.prefixed_key(&key_str);
+        let prefixed_key_clone = prefixed_key_str.clone();
+
+        self.connection_manager
+            .execute_command(&prefixed_key_str, "LTRIM", move |mut conn| async move {
+                let result: redis::RedisResult<()> = redis::cmd("LTRIM")
+                    .arg(&prefixed_key_clone)
+                    .arg(start)
+                    .arg(stop)
+                    .query_async(&mut conn)
+                    .await;
+
+                result
+            })
+            .await?;
+
+        Ok(())
     }
 
     async fn list_set<K, V>(&self, _key: K, _index: isize, _value: &V) -> CacheResult<()>
@@ -1331,14 +1435,6 @@ impl CacheOperations for RedisCache {
         F: CacheKey + 'static,
     {
         todo!("Implement hash_delete method")
-    }
-
-    async fn hash_get_all<K, V>(&self, _key: K) -> CacheResult<Vec<(String, V)>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
-    {
-        todo!("Implement hash_get_all method")
     }
 
     async fn hash_keys<K>(&self, _key: K) -> CacheResult<Vec<String>>

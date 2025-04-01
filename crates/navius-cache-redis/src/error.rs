@@ -5,9 +5,9 @@ use thiserror::Error;
 pub type RedisCacheResult<T> = Result<T, RedisCacheError>;
 
 /// Redis cache specific errors
-#[derive(Error, Debug, Clone)]
+#[derive(Debug, Error, Clone)]
 pub enum RedisCacheError {
-    /// Connection error
+    /// Connection error with Redis
     #[error("Redis connection error: {0}")]
     ConnectionError(String),
 
@@ -35,11 +35,11 @@ pub enum RedisCacheError {
     #[error("Redis script error: {0}")]
     ScriptError(String),
 
-    /// Key not found error
-    #[error("Key not found in Redis: {0}")]
+    /// Key not found
+    #[error("Key not found: {0}")]
     KeyNotFound(String),
 
-    /// Command error
+    /// Command execution error
     #[error("Redis command error: {0}")]
     CommandError(String),
 
@@ -47,13 +47,33 @@ pub enum RedisCacheError {
     #[error("Failed to deserialize Redis data: {0}")]
     DeserializationError(String),
 
-    /// Operation timed out.
+    /// Operation timed out
     #[error("Operation timed out: {0}")]
     TimeoutError(String),
 
-    /// Generic internal error.
+    /// Circuit breaker error
+    #[error("Circuit breaker open: {0}")]
+    CircuitBreakerOpen(String),
+
+    /// Internal error
     #[error("Internal error: {0}")]
     InternalError(String),
+
+    /// Serialization error
+    #[error("Serialization error: {0}")]
+    Serialization(String),
+
+    /// Deserialization error
+    #[error("Deserialization error: {0}")]
+    Deserialization(String),
+
+    /// Unknown error
+    #[error("Unknown error: {0}")]
+    UnknownError(String),
+
+    /// Redis error
+    #[error("Redis error: {0}")]
+    RedisError(redis::RedisError),
 }
 
 impl From<redis::RedisError> for RedisCacheError {
@@ -84,6 +104,10 @@ impl From<RedisCacheError> for CacheError {
             RedisCacheError::CommandError(msg) => CacheError::OperationError(msg), // Map CommandError
             RedisCacheError::TimeoutError(msg) => CacheError::TimeoutError(msg), // Map TimeoutError (the one we added)
             RedisCacheError::InternalError(msg) => CacheError::InternalError(msg),
+            RedisCacheError::Serialization(msg) => CacheError::SerializationError(msg),
+            RedisCacheError::Deserialization(msg) => CacheError::SerializationError(msg),
+            RedisCacheError::UnknownError(msg) => CacheError::InternalError(msg),
+            RedisCacheError::RedisError(err) => CacheError::ConnectionError(err.to_string()),
         }
     }
 }
@@ -92,22 +116,36 @@ impl From<RedisCacheError> for redis::RedisError {
     fn from(err: RedisCacheError) -> Self {
         match err {
             RedisCacheError::ConnectionError(msg) => {
-                redis::RedisError::from((redis::ErrorKind::IoError, "Connection error", msg))
+                redis::RedisError::from((redis::ErrorKind::IoError, "Connection", msg))
             }
-            RedisCacheError::OperationError(msg) => {
-                redis::RedisError::from((redis::ErrorKind::ResponseError, "Operation error", msg))
-            }
-            RedisCacheError::ConfigurationError(msg) => {
-                redis::RedisError::from((redis::ErrorKind::ClientError, "Configuration error", msg))
-            }
-            RedisCacheError::SerializationError(msg) => {
-                redis::RedisError::from((redis::ErrorKind::ClientError, "Serialization error", msg))
-            }
-            RedisCacheError::Unavailable(msg) => {
-                redis::RedisError::from((redis::ErrorKind::IoError, "Service unavailable", msg))
-            }
-            RedisCacheError::Timeout(msg) => {
+            RedisCacheError::TimeoutError(msg) => {
                 redis::RedisError::from((redis::ErrorKind::IoError, "Timeout", msg))
+            }
+            RedisCacheError::RedisError(err) => err,
+            // Add missing cases
+            RedisCacheError::CommandError(msg) => {
+                redis::RedisError::from((redis::ErrorKind::ResponseError, "Command", msg))
+            }
+            RedisCacheError::ScriptError(msg) => {
+                redis::RedisError::from((redis::ErrorKind::ResponseError, "Script", msg))
+            }
+            RedisCacheError::KeyNotFound(msg) => {
+                redis::RedisError::from((redis::ErrorKind::ResponseError, "NotFound", msg))
+            }
+            RedisCacheError::CircuitBreakerOpen(msg) => {
+                redis::RedisError::from((redis::ErrorKind::IoError, "CircuitBreaker", msg))
+            }
+            RedisCacheError::InternalError(msg) => {
+                redis::RedisError::from((redis::ErrorKind::ResponseError, "Internal", msg))
+            }
+            RedisCacheError::Serialization(msg) => {
+                redis::RedisError::from((redis::ErrorKind::ResponseError, "Serialization", msg))
+            }
+            RedisCacheError::Deserialization(msg) => {
+                redis::RedisError::from((redis::ErrorKind::ResponseError, "Deserialization", msg))
+            }
+            RedisCacheError::UnknownError(msg) => {
+                redis::RedisError::from((redis::ErrorKind::ResponseError, "Unknown", msg))
             }
         }
     }
