@@ -290,25 +290,25 @@ impl RedisCache {
 
     /// Set an expiration time for a key
     #[instrument(skip(self), level = "debug")]
-    pub async fn expire<K>(&self, key: &K, ttl: Duration) -> CacheResult<bool>
-    where
-        K: CacheKey + 'static + std::fmt::Debug,
-    {
+    pub async fn expire_key<K: CacheKey + std::fmt::Debug + 'static>(
+        &self,
+        key: &K,
+        ttl_secs: i64,
+    ) -> CacheResult<bool> {
+        let timer = TimedOperation::new(metrics::names::EXPIRE);
         let key_str = self.key_to_string(key).await?;
         let key_str_clone = key_str.clone();
-
-        let timer = metrics::TimedOperation::new(metrics::names::EXPIRE);
-        let ttl_secs = ttl.as_secs() as i64;
 
         let result = self
             .connection_manager
             .execute_command(&key_str, "EXPIRE", |mut conn| async move {
-                conn.expire(&key_str_clone, ttl_secs).await
+                // Convert to usize as required by redis library
+                conn.expire(&key_str_clone, ttl_secs as usize).await
             })
             .await;
 
         timer.record(&result);
-        result.map_err(|e| e.into())
+        result.map_err(Into::into)
     }
 
     /// Get the time-to-live for a key in seconds
@@ -441,7 +441,7 @@ impl RedisCache {
             })
             .await;
 
-        timer.observe_result(&result);
+        timer.record(&result);
         result.map_err(|e| e.into())
     }
 
@@ -967,80 +967,631 @@ impl RedisCache {
 
 impl Cache for RedisCache {}
 
+#[async_trait]
 impl CacheOperations for RedisCache {
-    // Implement the set_contains method
-    fn set_contains<K, V>(
-        &self,
-        key: K,
-        value: &V,
-    ) -> Pin<Box<dyn Future<Output = Result<bool, CacheError>> + Send + '_>>
+    /// Implement the set_contains method to check if a member exists in a set
+    async fn set_contains<K, V>(&self, key: K, value: &V) -> CacheResult<bool>
     where
-        K: CacheKey,
-        V: Serialize + Send + Sync,
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
     {
-        Box::pin(async move {
-            let key_str = self.key_to_string(&key).await?;
-            let value_bytes = self.serialize(value).await?;
+        let key_str = self.key_to_string(&key).await?;
+        let value_bytes = self.serialize(value).await?;
 
-            // Execute SISMEMBER command
-            let key_str_clone = key_str.clone();
-            let result = self
-                .connection_manager
-                .execute_command(&key_str, "SISMEMBER", |mut conn| async move {
-                    conn.sismember(&key_str_clone, value_bytes).await
-                })
-                .await;
+        // Clone for use in closure
+        let key_str_clone = key_str.clone();
 
-            result.map_err(|e| e.into())
-        })
+        // Execute SISMEMBER command
+        let result = self
+            .connection_manager
+            .execute_command(&key_str, "SISMEMBER", |mut conn| async move {
+                conn.sismember(&key_str_clone, value_bytes).await
+            })
+            .await;
+
+        result.map_err(|e| e.into())
     }
 
-    fn set<K, V>(
-        &self,
-        key: K,
-        value: &V,
-        _options: Option<CacheOptions>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), CacheError>> + Send + '_>>
+    /// Get a value from the cache
+    async fn get<K, V>(&self, key: K) -> CacheResult<Option<V>>
     where
-        K: CacheKey,
-        V: Serialize + Send + Sync,
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
     {
-        Box::pin(async move {
-            let key_str = self.key_to_string(&key).await?;
-            let value_bytes = self.serialize(value).await?;
+        let key_str = self.key_to_string(&key).await?;
+        let result = self
+            .connection_manager
+            .execute_command(&key_str, "GET", |mut conn| async move {
+                let data: Option<Vec<u8>> = conn.get(&key_str).await?;
+                Ok(data)
+            })
+            .await?;
 
-            let key_str_clone = key_str.clone();
-            let result = self
-                .connection_manager
-                .execute_command(&key_str, "SET", |mut conn| async move {
-                    conn.set(&key_str_clone, value_bytes).await
-                })
-                .await;
-
-            result.map_err(|e| e.into())
-        })
+        match result {
+            Some(bytes) => {
+                let value = self.deserialize(&bytes).await?;
+                Ok(Some(value))
+            }
+            None => Ok(None),
+        }
     }
 
-    fn delete<K>(
+    /// Get multiple values from the cache
+    async fn get_many<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<Option<V>>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        let mut results = Vec::with_capacity(keys.len());
+        for key in keys {
+            results.push(self.get(key).await?);
+        }
+        Ok(results)
+    }
+
+    /// Set a value in the cache
+    async fn set<K, V>(&self, key: K, value: &V, options: Option<CacheOptions>) -> CacheResult<()>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        let key_str = self.key_to_string(&key).await?;
+        let value_bytes = self.serialize(value).await?;
+        let key_str_clone = key_str.clone();
+
+        self.connection_manager
+            .execute_command(&key_str, "SET", |mut conn| async move {
+                conn.set(&key_str_clone, value_bytes).await?;
+                Ok(())
+            })
+            .await?;
+
+        // If TTL is provided, set expiration
+        if let Some(options) = options {
+            if let Some(ttl) = options.ttl {
+                self.expire_key(&key, ttl.as_secs() as i64).await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Set multiple values in the cache
+    async fn set_many<K, V>(
+        &self,
+        entries: Vec<(K, V)>,
+        options: Option<CacheOptions>,
+    ) -> CacheResult<()>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        for (key, value) in entries {
+            self.set(key, &value, options.clone()).await?;
+        }
+        Ok(())
+    }
+
+    /// Delete a value from the cache
+    async fn delete<K>(&self, key: K) -> CacheResult<bool>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+    {
+        let timer = TimedOperation::new(metrics::names::DELETE);
+        let key_str = self.key_to_string(&key).await?;
+        let key_str_clone = key_str.clone();
+
+        let result = self
+            .connection_manager
+            .execute_command(&key_str, "DEL", |mut conn| async move {
+                let res: i32 = conn.del(&key_str_clone).await?;
+                Ok(res > 0)
+            })
+            .await;
+
+        timer.record(&result);
+        result.map_err(Into::into)
+    }
+
+    /// Delete multiple values from the cache
+    async fn delete_many<K>(&self, keys: Vec<K>) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+    {
+        let mut count = 0;
+        for key in keys {
+            if self.delete(key).await? {
+                count += 1;
+            }
+        }
+        Ok(count)
+    }
+
+    /// Check if a key exists in the cache
+    async fn exists<K>(&self, key: K) -> CacheResult<bool>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+    {
+        let key_str = self.key_to_string(&key).await?;
+        let key_str_clone = key_str.clone();
+
+        let result = self
+            .connection_manager
+            .execute_command(&key_str, "EXISTS", |mut conn| async move {
+                conn.exists(&key_str_clone).await
+            })
+            .await?;
+
+        Ok(result)
+    }
+
+    /// Increment a counter in the cache
+    async fn increment<K>(&self, key: K, amount: i64) -> CacheResult<i64>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+    {
+        let key_str = self.key_to_string(&key).await?;
+        let key_str_clone = key_str.clone();
+
+        let result = self
+            .connection_manager
+            .execute_command(&key_str, "INCRBY", |mut conn| async move {
+                conn.incr(&key_str_clone, amount).await
+            })
+            .await;
+
+        result.map_err(|e| e.into())
+    }
+
+    /// Expire a key in the cache
+    async fn expire<K>(&self, key: K, ttl: Duration) -> CacheResult<bool>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+    {
+        let ttl_secs = ttl.as_secs() as i64;
+        let key_str = self.key_to_string(&key).await?;
+        let key_str_clone = key_str.clone();
+        let timer = TimedOperation::new(metrics::names::EXPIRE);
+
+        let result = self
+            .connection_manager
+            .execute_command(&key_str, "EXPIRE", |mut conn| async move {
+                // Convert to usize as required by redis library
+                conn.expire(&key_str_clone, ttl_secs as usize).await
+            })
+            .await;
+
+        timer.record(&result);
+        result.map_err(Into::into)
+    }
+
+    /// Clear the entire cache
+    async fn clear(&self) -> CacheResult<()> {
+        self.connection_manager
+            .execute_command("", "FLUSHDB", |mut conn| async move {
+                let _: String = redis::cmd("FLUSHDB").query_async(&mut conn).await?;
+                Ok(())
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    /// Get the health status of the cache
+    async fn health_check(&self) -> CacheResult<()> {
+        self.connection_manager
+            .execute_command("", "PING", |mut conn| async move {
+                let response: String = redis::cmd("PING").query_async(&mut conn).await?;
+                if response == "PONG" {
+                    Ok(())
+                } else {
+                    Err(redis::RedisError::from(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("Unexpected response: {}", response),
+                    )))
+                }
+            })
+            .await
+            .map_err(Into::into)
+    }
+
+    // Add stub implementations for the remaining methods with todo!()
+    async fn list_push_right<K, V>(&self, _key: K, _value: &V) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        todo!("Implement list_push_right method")
+    }
+
+    async fn list_push_right_many<K, V>(&self, key: K, values: &[V]) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        todo!("Implement list_push_right_many method")
+    }
+
+    async fn list_push_left<K, V>(&self, key: K, value: &V) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        todo!("Implement list_push_left method")
+    }
+
+    async fn list_push_left_many<K, V>(&self, key: K, values: &[V]) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        todo!("Implement list_push_left_many method")
+    }
+
+    async fn list_pop_right<K, V>(&self, key: K) -> CacheResult<Option<V>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        todo!("Implement list_pop_right method")
+    }
+
+    async fn list_pop_left<K, V>(&self, key: K) -> CacheResult<Option<V>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        todo!("Implement list_pop_left method")
+    }
+
+    async fn list_range<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        todo!("Implement list_range method")
+    }
+
+    async fn list_length<K>(&self, key: K) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+    {
+        todo!("Implement list_length method")
+    }
+
+    async fn list_remove<K, V>(&self, key: K, count: isize, value: &V) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        todo!("Implement list_remove method")
+    }
+
+    async fn list_trim<K>(&self, key: K, start: isize, stop: isize) -> CacheResult<()>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+    {
+        todo!("Implement list_trim method")
+    }
+
+    async fn list_set<K, V>(&self, key: K, index: isize, value: &V) -> CacheResult<()>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        todo!("Implement list_set method")
+    }
+
+    async fn hash_get<K, F, V>(&self, key: K, field: F) -> CacheResult<Option<V>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        todo!("Implement hash_get method")
+    }
+
+    async fn hash_set<K, F, V>(&self, key: K, field: F, value: &V) -> CacheResult<bool>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        todo!("Implement hash_set method")
+    }
+
+    async fn hash_get_many<K, F, V>(&self, key: K, fields: Vec<F>) -> CacheResult<Vec<Option<V>>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        todo!("Implement hash_get_many method")
+    }
+
+    async fn hash_set_many<K, F, V>(&self, key: K, entries: Vec<(F, V)>) -> CacheResult<()>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        todo!("Implement hash_set_many method")
+    }
+
+    async fn hash_exists<K, F>(&self, key: K, field: F) -> CacheResult<bool>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + std::fmt::Debug + 'static,
+    {
+        todo!("Implement hash_exists method")
+    }
+
+    async fn hash_delete<K, F>(&self, key: K, fields: Vec<F>) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + std::fmt::Debug + 'static,
+    {
+        todo!("Implement hash_delete method")
+    }
+
+    async fn hash_get_all<K, V>(&self, key: K) -> CacheResult<Vec<(String, V)>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        todo!("Implement hash_get_all method")
+    }
+
+    async fn hash_keys<K>(&self, key: K) -> CacheResult<Vec<String>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+    {
+        todo!("Implement hash_keys method")
+    }
+
+    async fn hash_values<K, V>(&self, key: K) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        todo!("Implement hash_values method")
+    }
+
+    async fn hash_increment<K, F>(&self, key: K, field: F, amount: i64) -> CacheResult<i64>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + std::fmt::Debug + 'static,
+    {
+        todo!("Implement hash_increment method")
+    }
+
+    async fn hash_length<K>(&self, key: K) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+    {
+        todo!("Implement hash_length method")
+    }
+
+    async fn set_add<K, V>(&self, key: K, members: Vec<V>) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        todo!("Implement set_add method")
+    }
+
+    async fn set_remove<K, V>(&self, key: K, members: Vec<V>) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        todo!("Implement set_remove method")
+    }
+
+    async fn set_members<K, V>(&self, key: K) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        todo!("Implement set_members method")
+    }
+
+    async fn set_length<K>(&self, key: K) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+    {
+        todo!("Implement set_length method")
+    }
+
+    async fn set_intersection<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        todo!("Implement set_intersection method")
+    }
+
+    async fn set_intersection_store<K, D>(&self, destination: D, keys: Vec<K>) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        D: CacheKey + std::fmt::Debug + 'static,
+    {
+        todo!("Implement set_intersection_store method")
+    }
+
+    async fn set_union<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        todo!("Implement set_union method")
+    }
+
+    async fn set_union_store<K, D>(&self, destination: D, keys: Vec<K>) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        D: CacheKey + std::fmt::Debug + 'static,
+    {
+        todo!("Implement set_union_store method")
+    }
+
+    async fn set_difference<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        todo!("Implement set_difference method")
+    }
+
+    async fn set_difference_store<K, D>(&self, destination: D, keys: Vec<K>) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        D: CacheKey + std::fmt::Debug + 'static,
+    {
+        todo!("Implement set_difference_store method")
+    }
+
+    async fn set_random_members<K, V>(&self, key: K, count: usize) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        todo!("Implement set_random_members method")
+    }
+
+    async fn zset_add<K, V>(&self, key: K, items: Vec<(f64, V)>) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        todo!("Implement zset_add method")
+    }
+
+    async fn zset_remove<K, V>(&self, key: K, members: Vec<V>) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        todo!("Implement zset_remove method")
+    }
+
+    async fn zset_score<K, V>(&self, key: K, member: &V) -> CacheResult<Option<f64>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        todo!("Implement zset_score method")
+    }
+
+    async fn zset_increment_score<K, V>(
         &self,
         key: K,
-    ) -> Pin<Box<dyn Future<Output = Result<bool, CacheError>> + Send + '_>>
+        member: &V,
+        increment: f64,
+    ) -> CacheResult<f64>
     where
-        K: CacheKey,
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
     {
-        Box::pin(async move {
-            let key_str = self.key_to_string(&key).await?;
-            let key_str_clone = key_str.clone();
+        todo!("Implement zset_increment_score method")
+    }
 
-            let result = self
-                .connection_manager
-                .execute_command(&key_str, "DEL", |mut conn| async move {
-                    let res: i32 = conn.del(&key_str_clone).await?;
-                    Ok(res > 0)
-                })
-                .await;
+    async fn zset_range<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        todo!("Implement zset_range method")
+    }
 
-            result.map_err(|e| e.into())
-        })
+    async fn zset_range_with_scores<K, V>(
+        &self,
+        key: K,
+        start: isize,
+        stop: isize,
+    ) -> CacheResult<Vec<(V, f64)>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        todo!("Implement zset_range_with_scores method")
+    }
+
+    async fn zset_range_by_score<K, V>(&self, key: K, min: f64, max: f64) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        todo!("Implement zset_range_by_score method")
+    }
+
+    async fn zset_range_by_score_with_scores<K, V>(
+        &self,
+        key: K,
+        min: f64,
+        max: f64,
+    ) -> CacheResult<Vec<(V, f64)>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        todo!("Implement zset_range_by_score_with_scores method")
+    }
+
+    async fn zset_rank<K, V>(&self, key: K, member: &V) -> CacheResult<Option<usize>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        todo!("Implement zset_rank method")
+    }
+
+    async fn zset_reverse_rank<K, V>(&self, key: K, member: &V) -> CacheResult<Option<usize>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        todo!("Implement zset_reverse_rank method")
+    }
+
+    async fn zset_length<K>(&self, key: K) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+    {
+        todo!("Implement zset_length method")
+    }
+
+    async fn zset_count<K>(&self, key: K, min: f64, max: f64) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+    {
+        todo!("Implement zset_count method")
+    }
+
+    async fn zset_intersection_store<K, D>(
+        &self,
+        destination: D,
+        keys: Vec<K>,
+        weights: Option<Vec<f64>>,
+        aggregate: Option<String>,
+    ) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        D: CacheKey + std::fmt::Debug + 'static,
+    {
+        todo!("Implement zset_intersection_store method")
+    }
+
+    async fn zset_union_store<K, D>(
+        &self,
+        destination: D,
+        keys: Vec<K>,
+        weights: Option<Vec<f64>>,
+        aggregate: Option<String>,
+    ) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        D: CacheKey + std::fmt::Debug + 'static,
+    {
+        todo!("Implement zset_union_store method")
     }
 }
