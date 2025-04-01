@@ -1,5 +1,6 @@
 use crate::error::TemplateResult;
 use async_trait::async_trait;
+use erased_serde::Serialize as ErasedSerialize;
 use serde::Serialize;
 use std::sync::Arc;
 
@@ -7,14 +8,14 @@ use std::sync::Arc;
 #[async_trait]
 pub trait TemplateRenderer: Send + Sync {
     /// Render a template with the given context
-    async fn render<T>(&self, name: &str, context: &T) -> TemplateResult<String>
-    where
-        T: Serialize + Send + Sync;
+    async fn render(&self, name: &str, context: &dyn ErasedSerialize) -> TemplateResult<String>;
 
     /// Render a template string with the given context
-    async fn render_string<T>(&self, template: &str, context: &T) -> TemplateResult<String>
-    where
-        T: Serialize + Send + Sync;
+    async fn render_string(
+        &self,
+        template: &str,
+        context: &dyn ErasedSerialize,
+    ) -> TemplateResult<String>;
 }
 
 /// Represents a template engine
@@ -114,10 +115,7 @@ impl MetricsTemplateEngine {
 
 #[async_trait]
 impl TemplateRenderer for MetricsTemplateEngine {
-    async fn render<T>(&self, name: &str, context: &T) -> TemplateResult<String>
-    where
-        T: Serialize + Send + Sync,
-    {
+    async fn render(&self, name: &str, context: &dyn ErasedSerialize) -> TemplateResult<String> {
         use std::time::Instant;
 
         if let Some(metrics) = &self.metrics {
@@ -142,10 +140,11 @@ impl TemplateRenderer for MetricsTemplateEngine {
         }
     }
 
-    async fn render_string<T>(&self, template: &str, context: &T) -> TemplateResult<String>
-    where
-        T: Serialize + Send + Sync,
-    {
+    async fn render_string(
+        &self,
+        template: &str,
+        context: &dyn ErasedSerialize,
+    ) -> TemplateResult<String> {
         use std::time::Instant;
 
         if let Some(metrics) = &self.metrics {
@@ -235,25 +234,36 @@ mod tests {
 
     #[async_trait]
     impl TemplateRenderer for MockTemplateEngine {
-        async fn render<T>(&self, name: &str, context: &T) -> TemplateResult<String>
-        where
-            T: Serialize + Send + Sync,
-        {
-            if let Some(template) = self.templates.get(name) {
-                // In a real implementation, this would apply the context to the template
-                // Here we just return the template as-is
-                Ok(template.clone())
-            } else {
-                Err(TemplateError::template_not_found(name))
+        async fn render(
+            &self,
+            name: &str,
+            context: &dyn ErasedSerialize,
+        ) -> TemplateResult<String> {
+            match self.templates.get(name) {
+                Some(template) => {
+                    // Mock implementation, actual rendering logic might differ.
+                    // Here we just return the template string for simplicity.
+                    // We might need a way to serialize the erased context if needed.
+                    let mut buf = String::new();
+                    let mut serializer = serde_json::Serializer::new(&mut buf);
+                    context.erased_serialize(&mut serializer)?;
+                    // For mock, we just combine template and serialized context
+                    Ok(format!("Rendered: {} with {}", template, buf))
+                }
+                None => Err(TemplateError::TemplateNotFound(name.to_string())),
             }
         }
 
-        async fn render_string<T>(&self, template: &str, _context: &T) -> TemplateResult<String>
-        where
-            T: Serialize + Send + Sync,
-        {
-            // Just return the template string as-is
-            Ok(template.to_string())
+        async fn render_string(
+            &self,
+            template: &str,
+            context: &dyn ErasedSerialize,
+        ) -> TemplateResult<String> {
+            // Similar to render, use erased context
+            let mut buf = String::new();
+            let mut serializer = serde_json::Serializer::new(&mut buf);
+            context.erased_serialize(&mut serializer)?;
+            Ok(format!("Rendered string: {} with {}", template, buf))
         }
     }
 
