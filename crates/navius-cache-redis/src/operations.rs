@@ -583,8 +583,8 @@ impl RedisCache {
     #[instrument(skip(self), level = "debug")]
     async fn hash_exists<K, F>(&self, key: K, field: F) -> CacheResult<bool>
     where
-        K: CacheKey + 'static,
-        F: CacheKey + 'static,
+        K: CacheKey + 'static + std::fmt::Debug,
+        F: CacheKey + 'static + std::fmt::Debug,
     {
         let key_str = key.to_string();
         let field_str = field.to_string();
@@ -593,10 +593,11 @@ impl RedisCache {
         let result: bool = self
             .connection_manager
             .execute_command(&prefixed_key, "HEXISTS", |mut conn| {
-                redis::cmd("HEXISTS")
+                Ok(redis::cmd("HEXISTS")
                     .arg(&prefixed_key)
                     .arg(&field_str)
                     .query_async(&mut conn)
+                    .await?)
             })
             .await
             .map_err(|e| CacheError::from(e))?;
