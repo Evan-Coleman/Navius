@@ -358,23 +358,17 @@ impl RedisPipeline for RedisCache {
             .await
             .map_err(|e| CacheError::OperationError(e.to_string()))?;
 
-        match pipeline
-            .query_async::<_, Vec<redis::Value>>(&mut connection)
+        let results = pipeline
+            .query_async::<Vec<RedisValue>>(&mut connection)
             .await
-        {
-            Ok(results) => {
-                let result_bytes = serde_json::to_vec(&results)
-                    .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+            .map_err(|e| CacheError::OperationError(format!("Pipeline execution failed: {}", e)))?;
 
-                match self.serializer().deserialize(&result_bytes).await {
-                    Ok(value) => Ok(value),
-                    Err(e) => Err(e),
-                }
-            }
-            Err(e) => Err(CacheError::OperationError(format!(
-                "Pipeline execution failed: {}",
-                e
-            ))),
+        let result_bytes = serde_json::to_vec(&results)
+            .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+        match self.serializer().deserialize(&result_bytes).await {
+            Ok(value) => Ok(value),
+            Err(e) => Err(e),
         }
     }
 

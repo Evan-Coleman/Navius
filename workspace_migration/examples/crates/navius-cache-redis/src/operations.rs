@@ -1,9 +1,10 @@
 use async_trait::async_trait;
-use redis::{AsyncCommands, FromRedisValue, cmd};
+use redis::{AsyncCommands, FromRedisValue, cmd, aio::MultiplexedConnection as Connection, RedisError};
 use serde::{Serialize, de::DeserializeOwned};
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, error, instrument};
+use futures::Future;
 
 use navius_cache::{
     error::{CacheError, CacheResult},

@@ -1,59 +1,62 @@
-use navius_cache::CacheError;
-use redis::RedisError;
-use serde_json::Error as SerdeError;
-use std::fmt;
+use navius_cache::error::CacheError;
 use thiserror::Error;
 
 /// Result type for Redis cache operations
 pub type RedisCacheResult<T> = Result<T, RedisCacheError>;
 
 /// Redis cache specific errors
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum RedisCacheError {
+    /// Connection error
+    #[error("Redis connection error: {0}")]
     ConnectionError(String),
+
+    /// Operation error
+    #[error("Redis operation error: {0}")]
     OperationError(String),
-    SerializationError(SerdeError),
-    DeserializationError(SerdeError),
+
+    /// Configuration error
+    #[error("Redis configuration error: {0}")]
+    ConfigurationError(String),
+
+    /// Serialization error
+    #[error("Redis serialization error: {0}")]
+    SerializationError(String),
+
+    /// Unavailable error
+    #[error("Redis unavailable: {0}")]
+    Unavailable(String),
+
+    /// Timeout error
+    #[error("Redis operation timed out: {0}")]
     Timeout(String),
-    UnsupportedOperation(String),
+
+    /// Script error
+    #[error("Redis script error: {0}")]
+    ScriptError(String),
+
+    /// Key not found error
+    #[error("Key not found in Redis: {0}")]
+    KeyNotFound(String),
+
+    /// Command error
+    #[error("Redis command error: {0}")]
+    CommandError(String),
+
+    /// Deserialization error
+    #[error("Failed to deserialize Redis data: {0}")]
+    DeserializationError(String),
 }
 
-impl fmt::Display for RedisCacheError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            RedisCacheError::ConnectionError(msg) => write!(f, "Redis connection error: {}", msg),
-            RedisCacheError::OperationError(msg) => write!(f, "Redis operation error: {}", msg),
-            RedisCacheError::SerializationError(err) => write!(f, "Serialization error: {}", err),
-            RedisCacheError::DeserializationError(err) => {
-                write!(f, "Deserialization error: {}", err)
-            }
-            RedisCacheError::Timeout(msg) => write!(f, "Redis timeout: {}", msg),
-            RedisCacheError::UnsupportedOperation(msg) => {
-                write!(f, "Unsupported operation: {}", msg)
-            }
-        }
-    }
-}
-
-impl std::error::Error for RedisCacheError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            RedisCacheError::SerializationError(err) => Some(err),
-            RedisCacheError::DeserializationError(err) => Some(err),
-            _ => None,
-        }
-    }
-}
-
-impl From<RedisError> for RedisCacheError {
-    fn from(err: RedisError) -> Self {
+impl From<redis::RedisError> for RedisCacheError {
+    fn from(err: redis::RedisError) -> Self {
         RedisCacheError::OperationError(err.to_string())
     }
 }
 
-impl From<SerdeError> for RedisCacheError {
-    fn from(err: SerdeError) -> Self {
-        RedisCacheError::SerializationError(err)
+impl From<serde_json::Error> for RedisCacheError {
+    fn from(err: serde_json::Error) -> Self {
+        RedisCacheError::SerializationError(err.to_string())
     }
 }
 
@@ -62,15 +65,38 @@ impl From<RedisCacheError> for CacheError {
         match err {
             RedisCacheError::ConnectionError(msg) => CacheError::ConnectionError(msg),
             RedisCacheError::OperationError(msg) => CacheError::OperationError(msg),
-            RedisCacheError::SerializationError(err) => {
-                CacheError::SerializationError(err.to_string())
-            }
-            RedisCacheError::DeserializationError(err) => {
-                CacheError::SerializationError(err.to_string())
-            }
+            RedisCacheError::ConfigurationError(msg) => CacheError::ConfigurationError(msg),
+            RedisCacheError::SerializationError(msg) => CacheError::SerializationError(msg),
+            RedisCacheError::Unavailable(msg) => CacheError::UnavailableError(msg),
             RedisCacheError::Timeout(msg) => CacheError::TimeoutError(msg),
-            RedisCacheError::UnsupportedOperation(msg) => {
-                CacheError::OperationError(format!("Unsupported: {}", msg))
+            RedisCacheError::ScriptError(msg) => CacheError::OperationError(msg),
+            RedisCacheError::KeyNotFound(msg) => CacheError::NotFoundError(msg),
+            RedisCacheError::CommandError(msg) => CacheError::OperationError(msg),
+            RedisCacheError::DeserializationError(msg) => CacheError::SerializationError(msg),
+        }
+    }
+}
+
+impl From<RedisCacheError> for redis::RedisError {
+    fn from(err: RedisCacheError) -> Self {
+        match err {
+            RedisCacheError::ConnectionError(msg) => {
+                redis::RedisError::from((redis::ErrorKind::IoError, "Connection error", msg))
+            }
+            RedisCacheError::OperationError(msg) => {
+                redis::RedisError::from((redis::ErrorKind::ResponseError, "Operation error", msg))
+            }
+            RedisCacheError::ConfigurationError(msg) => {
+                redis::RedisError::from((redis::ErrorKind::ClientError, "Configuration error", msg))
+            }
+            RedisCacheError::SerializationError(msg) => {
+                redis::RedisError::from((redis::ErrorKind::ClientError, "Serialization error", msg))
+            }
+            RedisCacheError::Unavailable(msg) => {
+                redis::RedisError::from((redis::ErrorKind::IoError, "Service unavailable", msg))
+            }
+            RedisCacheError::Timeout(msg) => {
+                redis::RedisError::from((redis::ErrorKind::IoError, "Timeout", msg))
             }
         }
     }
@@ -95,7 +121,10 @@ pub mod error_helpers {
                     "Redis operation '{}' failed on key '{}': {}",
                     operation, key, err
                 );
-                Err(RedisCacheError::OperationError(err.to_string()))
+                Err(RedisCacheError::OperationError(format!(
+                    "Redis operation '{}' failed: {}",
+                    operation, err
+                )))
             }
         }
     }

@@ -18,9 +18,6 @@ pub mod names {
     pub const EXPIRE: &str = "redis_cache_expire";
     pub const TTL: &str = "redis_cache_ttl";
     pub const INVALIDATE: &str = "redis_cache_invalidate";
-    pub const GET_MANY: &str = "redis_cache_get_many";
-    pub const SET_MANY: &str = "redis_cache_set_many";
-    pub const DELETE_MANY: &str = "redis_cache_delete_many";
 
     // Collection operation metrics
     pub const LIST_PUSH: &str = "redis_cache_list_push";
@@ -30,6 +27,20 @@ pub mod names {
     pub const SET_ADD: &str = "redis_cache_set_add";
     pub const SET_REMOVE: &str = "redis_cache_set_remove";
     pub const SET_MEMBERS: &str = "redis_cache_set_members";
+    pub const SET_CONTAINS: &str = "redis_cache_set_contains";
+    pub const SET_LENGTH: &str = "redis_cache_set_length";
+    pub const SET_INTERSECTION: &str = "redis_cache_set_intersection";
+    pub const SET_UNION: &str = "redis_cache_set_union";
+    pub const SET_DIFFERENCE: &str = "redis_cache_set_difference";
+    pub const SET_RANDOM: &str = "redis_cache_set_random";
+    pub const ZSET_ADD: &str = "redis_cache_zset_add";
+    pub const ZSET_REMOVE: &str = "redis_cache_zset_remove";
+    pub const ZSET_SCORE: &str = "redis_cache_zset_score";
+    pub const ZSET_RANGE: &str = "redis_cache_zset_range";
+    pub const ZSET_RANK: &str = "redis_cache_zset_rank";
+    pub const ZSET_COUNT: &str = "redis_cache_zset_count";
+    pub const ZSET_INTERSTORE: &str = "redis_cache_zset_interstore";
+    pub const ZSET_UNIONSTORE: &str = "redis_cache_zset_unionstore";
     pub const HASH_SET: &str = "redis_cache_hash_set";
     pub const HASH_GET: &str = "redis_cache_hash_get";
     pub const HASH_DELETE: &str = "redis_cache_hash_delete";
@@ -84,26 +95,25 @@ pub fn record_operation_success(name: &str) {
 }
 
 /// Record operation error
-pub fn record_operation_error(name: &str, error: &crate::error::RedisCacheError) {
+pub fn record_operation_error<T>(name: &str, error: &crate::error::RedisCacheError) {
     let key = create_key(&format!("{}_error", name));
     counter!(key).increment(1);
 
-    // Record specific error types based on defined RedisCacheError variants
-    let error_type = get_error_type(error);
+    // Record specific error types
+    let error_type = match error {
+        crate::error::RedisCacheError::Redis(_) => "redis",
+        crate::error::RedisCacheError::Connection(_) => "connection",
+        crate::error::RedisCacheError::Serialization(_) => "serialization",
+        crate::error::RedisCacheError::Deserialization(_) => "deserialization",
+        crate::error::RedisCacheError::InvalidKey(_) => "invalid_key",
+        crate::error::RedisCacheError::ScriptError(_) => "script",
+        crate::error::RedisCacheError::Timeout(_) => "timeout",
+        crate::error::RedisCacheError::NoResult => "no_result",
+        crate::error::RedisCacheError::Other(_) => "other",
+    };
 
     let error_key = create_key(&format!("{}_error_{}", name, error_type));
     counter!(error_key).increment(1);
-}
-
-fn get_error_type(error: &crate::error::RedisCacheError) -> &'static str {
-    match error {
-        crate::error::RedisCacheError::ConnectionError(_) => "connection",
-        crate::error::RedisCacheError::OperationError(_) => "operation",
-        crate::error::RedisCacheError::SerializationError(_) => "serialization",
-        crate::error::RedisCacheError::DeserializationError(_) => "deserialization",
-        crate::error::RedisCacheError::Timeout(_) => "timeout",
-        crate::error::RedisCacheError::UnsupportedOperation(_) => "unsupported_operation",
-    }
 }
 
 /// Record connection pool stats
@@ -183,24 +193,6 @@ impl TimedOperation {
         record_operation_duration(&self.name, self.start.elapsed());
         record_operation_error(&self.name, error);
     }
-}
-
-/// Increment operation count
-pub fn increment_operation_count(name: &str) {
-    let key = create_key(&format!("{}_count", name));
-    counter!(key).increment(1);
-}
-
-/// Increment error count for an operation
-pub fn increment_error_count(name: &str) {
-    let key = create_key(&format!("{}_error", name));
-    counter!(key).increment(1);
-}
-
-/// Increment timeout count for an operation
-pub fn increment_timeout_count(name: &str) {
-    let key = create_key(&format!("{}_timeout", name));
-    counter!(key).increment(1);
 }
 
 #[cfg(test)]

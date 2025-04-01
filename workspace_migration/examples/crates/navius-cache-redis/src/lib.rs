@@ -36,3 +36,19 @@ pub use error::{RedisCacheError, RedisCacheResult};
 // Connection management
 pub mod connection;
 pub use connection::{ConnectionHealth, PoolStats, RedisConnectionManager};
+
+use navius_cache::{
+    CacheKey,
+    CacheOperations,
+    CacheOptions,
+    error::{CacheError, CacheResult},
+};
+
+// Remove stricter requirements where V: Send + Sync
+async fn get<K, V>(&self, key: K) -> CacheResult<Option<V>>
+where
+    K: CacheKey + 'static,
+    V: DeserializeOwned + 'static,
+{
+    // ... existing code ...
+}

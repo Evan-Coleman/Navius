@@ -41,6 +41,135 @@ async fn example() -> Result<(), CacheError> {
 }
 ```
 
+### Set Operations
+
+Redis sets are unordered collections of unique strings, useful for tracking unique items and performing set operations:
+
+```rust
+use navius_cache::{Cache, CacheError};
+use navius_cache_redis::{RedisCache, SetOperations};
+use std::collections::HashSet;
+
+async fn set_example(cache: &RedisCache) -> Result<(), CacheError> {
+    // Add items to a set
+    let items = vec!["apple", "banana", "cherry"];
+    let added_count = cache.set_add("fruits", items).await?;
+    println!("Added {} new items to the set", added_count);
+    
+    // Check if an item exists in a set
+    let exists = cache.set_contains("fruits", "apple").await?;
+    
+    // Get all members of a set
+    let fruits: Vec<String> = cache.set_members("fruits").await?;
+    
+    // Remove items from a set
+    let removed = cache.set_remove("fruits", vec!["banana"]).await?;
+    
+    // Get the number of items in a set
+    let count = cache.set_length("fruits").await?;
+    
+    // Perform set operations
+    // Intersection: items that are in both set1 and set2
+    let common: Vec<String> = cache.set_intersection(vec!["set1", "set2"]).await?;
+    
+    // Union: items that are in either set1 or set2
+    let all: Vec<String> = cache.set_union(vec!["set1", "set2"]).await?;
+    
+    // Difference: items in set1 that are not in set2
+    let difference: Vec<String> = cache.set_difference(vec!["set1", "set2"]).await?;
+    
+    Ok(())
+}
+```
+
+### Sorted Set Operations
+
+Sorted sets are sets where each element has an associated score that allows for ordered operations, perfect for leaderboards and rankings:
+
+```rust
+use navius_cache::{Cache, CacheError};
+use navius_cache_redis::{RedisCache, SortedSetOperations};
+use std::collections::HashMap;
+
+async fn sorted_set_example(cache: &RedisCache) -> Result<(), CacheError> {
+    // Add items to a sorted set with scores
+    let mut scores = HashMap::new();
+    scores.insert("player1".to_string(), 100.0);
+    scores.insert("player2".to_string(), 85.5);
+    scores.insert("player3".to_string(), 95.0);
+    
+    let added = cache.zset_add("leaderboard", scores).await?;
+    
+    // Get items by score range (ascending order)
+    let top_players: Vec<String> = cache.zset_range("leaderboard", 0, 2).await?;
+    
+    // Get items with scores (descending order)
+    let players_with_scores: Vec<(String, f64)> = cache.zset_rev_range_with_scores("leaderboard", 0, -1).await?;
+    
+    // Get a player's rank (0-based, ascending by score)
+    let rank = cache.zset_rank("leaderboard", "player1").await?;
+    
+    // Get a player's rank (0-based, descending by score)
+    let rev_rank = cache.zset_rev_rank("leaderboard", "player1").await?;
+    
+    // Get a player's score
+    let score = cache.zset_score("leaderboard", "player1").await?;
+    
+    // Count items within a score range
+    let count = cache.zset_count("leaderboard", 80.0, 100.0).await?;
+    
+    // Remove items from a sorted set
+    let removed = cache.zset_remove("leaderboard", vec!["player2"]).await?;
+    
+    // Perform sorted set operations (union, intersection with aggregation)
+    let dest_key = "combined_scores";
+    cache.zset_union_store(
+        dest_key,
+        vec!["set1", "set2"],
+        &[1.0, 0.5], // Weight multipliers for each set
+        SortedSetOperations::AggregateSum // Sum the scores
+    ).await?;
+    
+    Ok(())
+}
+```
+
+### Pipeline Operations
+
+Pipelines allow executing multiple Redis commands in a single network roundtrip:
+
+```rust
+use navius_cache::{Cache, CacheError};
+use navius_cache_redis::{RedisConnectionManager, RedisCache};
+use redis::{Pipeline, AsyncCommands};
+use std::sync::Arc;
+
+async fn pipeline_example(conn_manager: Arc<RedisConnectionManager>) -> Result<(), CacheError> {
+    // Execute multiple operations in a single network roundtrip
+    let results = conn_manager.execute_pipeline_command(|connection| {
+        let mut pipeline = Pipeline::new();
+        
+        // Add multiple operations to the pipeline
+        pipeline.set("key1", "value1");
+        pipeline.set("key2", "value2");
+        pipeline.set("key3", "value3");
+        pipeline.get("key1");
+        pipeline.get("key2");
+        
+        // Return the pipeline to be executed
+        Ok(pipeline)
+    }).await?;
+    
+    // Process the results (each operation returns a result in order)
+    if results.len() >= 5 {
+        println!("Value of key1: {}", results[3]);
+        println!("Value of key2: {}", results[4]);
+    }
+    
+    Ok(())
+}
+```
+
 ### Lua Scripting Support
 
 Enable Lua scripting for atomic operations:
@@ -215,6 +344,12 @@ See `tests/metrics_test.rs` for examples of how to test metrics.
 - `examples/basic_usage.rs`: Demonstrates basic cache operations
 - `examples/metrics_example.rs`: Shows metrics collection and visualization
 - `examples/lua_scripting.rs`: Demonstrates Lua scripting capabilities
+- `examples/set_operations.rs`: Showcases Set operations (add, remove, contains, union, intersection, difference)
+- `examples/sorted_set_operations.rs`: Demonstrates SortedSet operations for leaderboards, rankings, and time-series data
+- `examples/pipeline_commands.rs`: Illustrates performance improvements with pipeline commands for batch operations
+- `examples/connection_pooling.rs`: Demonstrates connection pool configuration and usage
+- `examples/serialization.rs`: Shows serialization/deserialization of complex objects
+- `examples/cache_invalidation.rs`: Demonstrates cache invalidation patterns
 
 ## Running Tests
 

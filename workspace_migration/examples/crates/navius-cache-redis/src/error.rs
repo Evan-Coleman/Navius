@@ -77,6 +77,31 @@ impl From<RedisCacheError> for CacheError {
     }
 }
 
+impl From<RedisCacheError> for redis::RedisError {
+    fn from(err: RedisCacheError) -> Self {
+        match err {
+            RedisCacheError::ConnectionError(msg) => {
+                redis::RedisError::from((redis::ErrorKind::IoError, "Connection error", msg))
+            }
+            RedisCacheError::OperationError(msg) => {
+                redis::RedisError::from((redis::ErrorKind::ResponseError, "Operation error", msg))
+            }
+            RedisCacheError::ConfigurationError(msg) => {
+                redis::RedisError::from((redis::ErrorKind::ClientError, "Configuration error", msg))
+            }
+            RedisCacheError::SerializationError(msg) => {
+                redis::RedisError::from((redis::ErrorKind::ClientError, "Serialization error", msg))
+            }
+            RedisCacheError::Unavailable(msg) => {
+                redis::RedisError::from((redis::ErrorKind::IoError, "Service unavailable", msg))
+            }
+            RedisCacheError::Timeout(msg) => {
+                redis::RedisError::from((redis::ErrorKind::IoError, "Timeout", msg))
+            }
+        }
+    }
+}
+
 /// Helper functions for error handling
 pub mod error_helpers {
     use super::{RedisCacheError, RedisCacheResult};
