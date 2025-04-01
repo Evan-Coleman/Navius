@@ -97,7 +97,7 @@ impl CacheOperations for RedisCache {
         self.operations
             .get::<T>(key.as_ref())
             .await
-            .map_err(|e: RedisCacheError| RedisOperations::<K, V>::into_cache_error(e))
+            .map_err(|err| RedisOperations::into_cache_error(err))
     }
 
     async fn get_many<T>(&self, keys: Vec<K>) -> Result<Vec<Option<T>>, CacheError>
@@ -109,7 +109,7 @@ impl CacheOperations for RedisCache {
         self.operations
             .get_many::<T>(&str_keys)
             .await
-            .map_err(|e| RedisOperations::into_cache_error(e))
+            .map_err(|err| RedisOperations::into_cache_error(err))
     }
 
     async fn set<K, V>(
@@ -125,7 +125,7 @@ impl CacheOperations for RedisCache {
         self.operations
             .set(key, value, options)
             .await
-            .map_err(|e| RedisOperations::into_cache_error(e))
+            .map_err(|err| RedisOperations::into_cache_error(err))
     }
 
     async fn set_many<K, V>(
@@ -150,7 +150,7 @@ impl CacheOperations for RedisCache {
         self.operations
             .delete(key)
             .await
-            .map_err(|e| RedisOperations::into_cache_error(e))
+            .map_err(|err| RedisOperations::into_cache_error(err))
     }
 
     async fn delete_many<K>(&self, keys: Vec<K>) -> CacheResult<usize>
@@ -160,7 +160,7 @@ impl CacheOperations for RedisCache {
         self.operations
             .delete_many(keys)
             .await
-            .map_err(|e| RedisOperations::into_cache_error(e))
+            .map_err(|err| RedisOperations::into_cache_error(err))
     }
 
     async fn exists<K>(&self, key: K) -> CacheResult<bool>
@@ -170,7 +170,7 @@ impl CacheOperations for RedisCache {
         self.operations
             .exists(key)
             .await
-            .map_err(|e| RedisOperations::into_cache_error(e))
+            .map_err(|err| RedisOperations::into_cache_error(err))
     }
 
     async fn increment<K>(&self, key: K, amount: i64) -> CacheResult<i64>
@@ -180,7 +180,7 @@ impl CacheOperations for RedisCache {
         self.operations
             .increment(key, amount)
             .await
-            .map_err(|e| RedisOperations::into_cache_error(e))
+            .map_err(|err| RedisOperations::into_cache_error(err))
     }
 
     async fn expire<K>(&self, key: K, ttl: Duration) -> CacheResult<bool>
@@ -190,7 +190,7 @@ impl CacheOperations for RedisCache {
         self.operations
             .expire(key, ttl)
             .await
-            .map_err(|e| RedisOperations::into_cache_error(e))
+            .map_err(|err| RedisOperations::into_cache_error(err))
     }
 
     async fn clear(&self) -> CacheResult<()> {
