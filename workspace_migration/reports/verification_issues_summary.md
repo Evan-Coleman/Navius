@@ -32,42 +32,48 @@ This document tracks issues discovered during the verification phase of the work
   - ✅ Fixed RedisPipeline trait implementation structure
   - ✅ Fixed closure usage for into_cache_error function
   - ✅ Implemented List and Hash operations for CacheOperations trait
+  - ✅ Fixed error handling in `error.rs`
+  - ✅ Added Debug implementation for RedisConnectionManager struct
 
 ## Current Blockers
 
 1. **Pipeline Implementation Issues**
-   - In the RedisPipeline implementation for RedisCache, there are mismatches with the query_async method parameters
-   - Connection manager access methods are missing from RedisCache
+   - Fixed the access method in RedisCache, but now having issues with the `query_async` parameter usage
+   - Redis Value serialization issues: RedisValue doesn't implement Serialize/Deserialize traits
+   - Pipeline commands having iterator issues with RedisArgs
 
-2. **Argument Type Mismatches**
-   - Multiple function argument type mismatches in error handling with closures in CacheOperations trait implementation
-   - The error types between navius-cache and navius-cache-redis are incorrectly passed in some instances
+2. **Type Mismatch Issues**
+   - CacheError vs RedisCacheError conversion problems in `map_err` calls
+   - Parameter type mismatches between operation signature declarations
+   - Method signature mismatches between trait implementations
 
 3. **Missing Interface Methods**
    - Need to implement remaining collection operation methods in the RedisOperations struct to fulfill the CacheOperations trait interface (Set and SortedSet operations)
    
-4. **Connection Type Debug Implementation**
-   - The Redis Connection type doesn't implement Debug, which is required for struct derivation
+4. **Debug Implementation**
+   - Fixed RedisConnectionManager but still need to fix PooledConnection Debug implementation
 
 ## Ongoing Work
 
-### navius-cache-redis (90% complete)
+### navius-cache-redis (95% complete)
 - **Completed**
   - ✅ Basic operations (get, set, delete, exists, etc.)
   - ✅ List operations (push, pop, range, length, etc.)
   - ✅ Hash operations (get, set, exists, delete, etc.)
   - ✅ Corrected RedisPipeline implementation
   - ✅ Fixed error closure handling patterns
+  - ✅ Fixed Debug trait implementation for RedisConnectionManager
+  - ✅ Corrected error type conversion in error.rs
 
 - **In Progress**
-  - 🔄 Fixing type conflicts between the trait implementations
-  - 🔄 Resolving issues with query_async in Pipeline implementation
-  - 🔄 Ensuring proper collection_manager access in RedisCache
+  - 🔄 Addressing type inconsistencies between trait implementations and actual parameter types
+  - 🔄 Pipeline execution with RedisValue serialization
+  - 🔄 Iterator fixes for to_redis_args calls
 
 - **Pending**
   - ⬜ Set operations
   - ⬜ SortedSet operations
-  - ⬜ Connection Debug implementation
+  - ⬜ Connection Debug implementation for PooledConnection
 
 ### Other Crates
 - ⬜ **navius-di**: ConfigProvider and Arc handling issues
@@ -75,24 +81,26 @@ This document tracks issues discovered during the verification phase of the work
 
 ## Remaining Issues
 
-1. **Type validation and error handling**
-   - Type inconsistencies between generic parameters and actual implementations
-   - Error handling patterns need to be consistent across all error mappings
+1. **RedisArgs Integration**
+   - Multiple issues with `to_redis_args()` which returns Vec<Vec<u8>> that needs to be converted to iterators
+   - Need to add `.into_iter()` to all calls to this method
 
-2. **Unused imports**
-   - Several unused imports need to be cleaned up once implementation is complete
+2. **Error Type Conversion**
+   - Consistency is needed across all error mapping functions
+   - Modify `map_err` calls to ensure the correct error type is being mapped
 
-3. **Debug implementation for Connection**
-   - Need to implement Debug for Redis Connection type or use newtype pattern
+3. **Parameter Type Alignment**
+   - Get/set/delete method signatures need to be aligned between trait and implementation
+   - Ensure consistent parameter types for collections operations
 
 ## Timeline Impact
 
 The number of issues discovered will affect the timeline for Phase 4.5 of the workspace migration project:
 
 1. **Critical Blockers (April 1)** 
-   - Fix remaining type mismatches in the error handling closures
-   - Resolve the Pipeline implementation issues
-   - Implement Connection Debug trait or use newtype pattern
+   - Fix remaining type mismatches in trait implementation
+   - Fix the iterator issues with RedisArgs
+   - Resolve RedisValue serialization issues in Pipeline
 
 2. **Set and SortedSet Operations (April 2-3)**
    - Implement remaining collection operations (~20 methods total)
@@ -104,16 +112,17 @@ The number of issues discovered will affect the timeline for Phase 4.5 of the wo
 
 ## Approach to Resolution
 
-1. **Focus on blockers first**
-   - Fix the type mismatch errors in error handling closures
-   - Resolve pipeline implementation issues
-   - Fix Connection Debug issues
+1. **Fix Pipeline Implementation**
+   - Either create a custom serialization for RedisValue or adjust the implementation strategy
+   - Fix all to_redis_args calls by adding the necessary into_iter()
+   - Complete proper error handling in the Pipeline implementation
 
-2. **Complete core functionality**
-   - Implement Set and SortedSet operations in RedisOperations
-   - Follow the established error handling pattern
+2. **Complete Method Implementations**
+   - Implement remaining Set and SortedSet operations
+   - Use consistent error handling patterns
+   - Align all type signatures correctly
 
-3. **Move to dependency crates**
+3. **Move to Dependency Crates**
    - After navius-cache-redis is stable, focus on navius-di and navius-test
 
 4. **Testing**
@@ -124,10 +133,9 @@ As we implement the remaining operations and fix the issues, we'll update this d
 
 ## Notes
 
-- The current focus is on fixing type mismatch errors in the error handling closures in the navius-cache-redis implementation
-- We need to ensure that error types between the trait and implementation match properly
-- We're making good progress with most of the structural issues resolved and now focusing on more detailed type issues
-- The Connection Debug implementation might require some creative workarounds since the Redis library doesn't provide this
+- The current focus is on fixing the type inconsistencies and iteration issues
+- The Redis crates require careful handling of iterator-related operations and conversions
+- We're making good progress with most of the structural issues resolved but need to address these specific pattern issues
 
 ---
 

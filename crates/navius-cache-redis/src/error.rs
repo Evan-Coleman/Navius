@@ -60,13 +60,18 @@ impl From<SerdeError> for RedisCacheError {
 impl From<RedisCacheError> for CacheError {
     fn from(err: RedisCacheError) -> Self {
         match err {
+            RedisCacheError::ConnectionError(msg) => CacheError::ConnectionError(msg),
+            RedisCacheError::OperationError(msg) => CacheError::OperationError(msg),
             RedisCacheError::SerializationError(err) => {
                 CacheError::SerializationError(err.to_string())
             }
             RedisCacheError::DeserializationError(err) => {
-                CacheError::DeserializationError(err.to_string())
+                CacheError::SerializationError(err.to_string())
             }
-            _ => CacheError::BackendError(err.to_string()),
+            RedisCacheError::Timeout(msg) => CacheError::TimeoutError(msg),
+            RedisCacheError::UnsupportedOperation(msg) => {
+                CacheError::OperationError(format!("Unsupported: {}", msg))
+            }
         }
     }
 }
