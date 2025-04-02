@@ -2,11 +2,9 @@ use async_trait::async_trait;
 use semver::Version;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
-use tracing::{debug, error, info, warn};
-use uuid::Uuid;
 
 use crate::error::{PluginError, PluginHealth, PluginResult};
-use crate::plugin::{Plugin, PluginConfig, PluginDependency, PluginLifecycleStage, PluginMetadata};
+use crate::plugin::{Plugin, PluginConfig, PluginLifecycleStage};
 
 /// Manages a collection of plugins and their lifecycle
 pub struct PluginRegistry {

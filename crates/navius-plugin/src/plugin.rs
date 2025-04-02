@@ -1,13 +1,9 @@
 use crate::error::{PluginHealth, PluginResult};
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::any::Any;
 use std::collections::HashMap;
-use std::fmt::{Debug, Display};
-use std::path::PathBuf;
+use std::fmt::Debug;
 use std::sync::Arc;
-use uuid::Uuid;
 
 /// Represents metadata about a plugin
 #[derive(Debug, Clone, Serialize, Deserialize)]
