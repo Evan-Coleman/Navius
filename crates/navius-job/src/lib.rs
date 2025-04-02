@@ -41,6 +41,9 @@ pub mod job;
 /// Job provider interfaces
 pub mod provider;
 
+/// Job store interfaces
+pub mod store;
+
 /// In-memory job queue implementation
 pub mod memory;
 
@@ -53,8 +56,11 @@ pub use error::{JobError, JobResult, JobStatus};
 // Re-export primary types from provider
 pub use provider::{JobProvider, JobProviderConfig, JobProviderExt, JobProviderFactory};
 
+// Re-export primary types from store
+pub use store::{JobId, JobStore, JobStoreConfig};
+
 // Re-export memory implementation
-pub use memory::InMemoryJobProvider;
+pub use memory::{InMemoryJobProvider, MemoryJobStore};
 
 /// Create a new in-memory job provider
 pub fn create_memory_provider() -> InMemoryJobProvider {

@@ -4,7 +4,6 @@
  * This crate provides command-line interface tools for the Navius framework.
  */
 
-use std::error::Error;
 use thiserror::Error;
 
 /// CLI-specific error types

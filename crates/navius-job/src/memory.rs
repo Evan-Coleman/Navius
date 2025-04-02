@@ -3,13 +3,13 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
-use crate::error::{JobError, JobResult};
-use crate::job::{Job, JobId, JobStatus};
-use crate::store::{JobStore, JobStoreConfig};
+use crate::error::{JobError, JobResult, JobStatus};
+use crate::job::Job;
+use crate::store::{JobId, JobStore, JobStoreConfig};
 
 /// In-memory job store implementation
 pub struct MemoryJobStore {
-    jobs: Arc<Mutex<HashMap<JobId, Job>>>,
+    jobs: Arc<Mutex<HashMap<JobId, Job<serde_json::Value>>>>,
     status_tx: broadcast::Sender<(JobId, JobStatus)>,
 }
 
@@ -26,22 +26,22 @@ impl MemoryJobStore {
 
 #[async_trait::async_trait]
 impl JobStore for MemoryJobStore {
-    async fn create(&self, job: Job) -> JobResult<JobId> {
+    async fn create(&self, job: Job<serde_json::Value>) -> JobResult<JobId> {
         let id = Uuid::new_v4().to_string();
         let mut jobs = self.jobs.lock().unwrap();
         jobs.insert(id.clone(), job);
         Ok(id)
     }
 
-    async fn get(&self, id: &str) -> JobResult<Option<Job>> {
+    async fn get(&self, id: &str) -> JobResult<Option<Job<serde_json::Value>>> {
         let jobs = self.jobs.lock().unwrap();
         Ok(jobs.get(id).cloned())
     }
 
-    async fn update(&self, id: &str, job: Job) -> JobResult<()> {
+    async fn update(&self, id: &str, job: Job<serde_json::Value>) -> JobResult<()> {
         let mut jobs = self.jobs.lock().unwrap();
         if !jobs.contains_key(id) {
-            return Err(JobError::NotFound(id.to_string()));
+            return Err(JobError::JobNotFound(id.to_string()));
         }
         jobs.insert(id.to_string(), job);
         Ok(())
@@ -50,12 +50,12 @@ impl JobStore for MemoryJobStore {
     async fn delete(&self, id: &str) -> JobResult<()> {
         let mut jobs = self.jobs.lock().unwrap();
         if jobs.remove(id).is_none() {
-            return Err(JobError::NotFound(id.to_string()));
+            return Err(JobError::JobNotFound(id.to_string()));
         }
         Ok(())
     }
 
-    async fn list(&self) -> JobResult<Vec<Job>> {
+    async fn list(&self) -> JobResult<Vec<Job<serde_json::Value>>> {
         let jobs = self.jobs.lock().unwrap();
         Ok(jobs.values().cloned().collect())
     }
@@ -65,7 +65,20 @@ impl JobStore for MemoryJobStore {
     }
 
     async fn publish_status(&self, id: &str, status: JobStatus) -> JobResult<()> {
-        self.status_tx.send((id.to_string(), status)).map_err(|e| {
-            JobError::Other(format!("Failed to publish job status: {}", e))
-        })?;
- 
+        self.status_tx
+            .send((id.to_string(), status))
+            .map_err(|e| JobError::Other(format!("Failed to publish job status: {}", e)))?;
+
+        Ok(())
+    }
+}
+
+/// In-memory job provider implementation
+pub struct InMemoryJobProvider;
+
+impl InMemoryJobProvider {
+    /// Create a new in-memory job provider with the given configuration
+    pub fn new(_config: crate::provider::JobProviderConfig) -> Self {
+        Self {}
+    }
+}
