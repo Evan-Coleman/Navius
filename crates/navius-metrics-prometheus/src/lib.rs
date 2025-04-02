@@ -99,7 +99,7 @@ impl MetricsExporter for PrometheusExporter {
 
 /// Builder for Prometheus metrics
 pub struct PrometheusMetricsBuilder {
-    service_name: String,
+    #[allow(dead_code)]    service_name: String,
     namespace: Option<String>,
     labels: Vec<(String, String)>,
     listen_address: Option<String>,
