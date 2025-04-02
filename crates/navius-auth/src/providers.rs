@@ -3,7 +3,6 @@
 //! This module defines the provider interface and implementations for different
 //! authentication methods such as JWT, OAuth, and basic authentication.
 
-use crate::error::Error;
 use crate::error::Result;
 use crate::types::{Identity, Subject};
 use async_trait::async_trait;

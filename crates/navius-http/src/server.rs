@@ -16,7 +16,7 @@ pub struct ShutdownSender(broadcast::Sender<()>);
 
 /// Wrapper around the broadcast receiver for shutdown signals
 #[derive(Debug)]
-pub struct ShutdownReceiver(broadcast::Receiver<()>);
+pub struct ShutdownReceiver(#[allow(dead_code)] broadcast::Receiver<()>);
 
 /// HTTP server for the Navius framework.
 #[derive(Debug)]

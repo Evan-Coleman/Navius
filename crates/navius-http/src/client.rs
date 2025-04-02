@@ -233,6 +233,7 @@ impl Default for HttpClientBuilder {
 /// Builder for creating HTTP requests.
 pub struct RequestBuilder {
     inner: reqwest::RequestBuilder,
+    #[allow(dead_code)]
     default_headers: HeaderMap,
 }
 

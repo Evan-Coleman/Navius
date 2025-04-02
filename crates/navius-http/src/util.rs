@@ -7,12 +7,14 @@ use std::fmt;
 use std::str::FromStr;
 
 /// Convert a string to a header value.
+#[allow(dead_code)]
 pub fn to_header_value<T: fmt::Display>(value: T) -> Result<HeaderValue> {
     HeaderValue::from_str(&value.to_string())
         .map_err(|e| Error::validation(format!("Invalid header value: {}", e)))
 }
 
 /// Convert a map of string key/values to a header map.
+#[allow(dead_code)]
 pub fn map_to_headers(map: &HashMap<String, String>) -> Result<HeaderMap> {
     let mut headers = HeaderMap::new();
     for (key, value) in map {
@@ -26,11 +28,13 @@ pub fn map_to_headers(map: &HashMap<String, String>) -> Result<HeaderMap> {
 }
 
 /// Parse a URL from a string.
+#[allow(dead_code)]
 pub fn parse_url(url: &str) -> Result<reqwest::Url> {
     reqwest::Url::parse(url).map_err(|e| Error::validation(format!("Invalid URL '{}': {}", url, e)))
 }
 
 /// Join a base URL with a path.
+#[allow(dead_code)]
 pub fn join_url(base: &str, path: &str) -> Result<reqwest::Url> {
     let base_url = parse_url(base)?;
     base_url
@@ -39,6 +43,7 @@ pub fn join_url(base: &str, path: &str) -> Result<reqwest::Url> {
 }
 
 /// Get the request ID from headers, or generate a new one if not present.
+#[allow(dead_code)]
 pub fn get_request_id(headers: &HeaderMap) -> String {
     headers
         .get(navius_core::constants::headers::REQUEST_ID)

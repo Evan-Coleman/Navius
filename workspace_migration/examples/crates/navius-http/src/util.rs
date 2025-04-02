@@ -114,7 +114,7 @@ impl FromStr for Method {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use navius_test::error::{TestResult, assert_eq, assert_true};
+    use navius_test::error::{assert_eq, assert_true, TestResult};
 
     #[test]
     fn test_to_header_value() -> TestResult<()> {

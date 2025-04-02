@@ -92,7 +92,7 @@ impl BasicProvider {
 
     /// Generate a simple token.
     fn generate_token(&self, subject_id: &str) -> String {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let rand_bytes: [u8; 32] = rng.random();
         let now = Utc::now().timestamp().to_string();
         let data = format!(

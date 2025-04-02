@@ -313,6 +313,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 /// Axum middleware function for request logging.
+#[allow(dead_code)]
 pub async fn logging_middleware(request: Request, next: Next) -> Response {
     let start_time = Instant::now();
     let path = request.uri().path().to_string();

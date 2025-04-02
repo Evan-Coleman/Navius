@@ -106,6 +106,7 @@ impl JWTProvider {
     }
 
     /// Create claims from a subject.
+    #[allow(dead_code)]
     fn create_claims(&self, sub: &str, roles: Option<Vec<String>>) -> Claims {
         let now = Utc::now();
         let exp = now + Duration::seconds(self.config.token_expiry as i64);
@@ -174,6 +175,7 @@ impl JWTProvider {
     }
 
     /// Encode JWT claims into a token.
+    #[allow(dead_code)]
     fn encode_token(&self, claims: &Claims) -> std::result::Result<String, Error> {
         let header = Header::default();
         let encoding_key = EncodingKey::from_secret(self.config.secret_key.as_bytes());
@@ -205,6 +207,7 @@ impl JWTProvider {
     }
 
     /// Find a mock user by username.
+    #[allow(dead_code)]
     fn find_mock_user_by_username(&self, username: &str) -> Option<MockUser> {
         self.config
             .mock_users
@@ -214,6 +217,7 @@ impl JWTProvider {
     }
 
     /// Find a mock user by ID.
+    #[allow(dead_code)]
     fn find_mock_user_by_id(&self, id: &str) -> Option<MockUser> {
         self.config.mock_users.iter().find(|u| u.id == id).cloned()
     }
@@ -228,6 +232,7 @@ impl JWTProvider {
     }
 
     /// Add a token to the blacklist.
+    #[allow(dead_code)]
     fn blacklist_token(&mut self, token: &str, expiry: chrono::DateTime<Utc>) {
         let mut blacklist = self
             .blacklist

@@ -7,13 +7,12 @@ use crate::error::Error;
 use crate::providers::AuthProvider;
 #[cfg(feature = "http")]
 use crate::types::Subject;
-#[cfg(feature = "http")]
-use axum;
 use std::sync::Arc;
 
 /// Authentication layer for HTTP requests.
 #[cfg(feature = "http")]
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct AuthLayer {
     provider: Arc<dyn AuthProvider>,
     config: AuthConfig,

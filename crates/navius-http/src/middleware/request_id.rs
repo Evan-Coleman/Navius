@@ -108,6 +108,7 @@ pub fn request_id_layer() -> RequestIdLayer {
 }
 
 /// Axum middleware function for adding request IDs.
+#[allow(dead_code)]
 pub async fn request_id_middleware<B>(mut request: Request<B>, next: Next) -> Response
 where
     B: axum::body::HttpBody + Send + 'static,
