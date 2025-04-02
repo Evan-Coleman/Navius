@@ -3,20 +3,16 @@
 //! Provides a comprehensive framework for organizing and running test suites.
 //! Supports test discovery, filtering, parallel execution, and detailed reporting.
 
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
-
-use futures::stream::{FuturesUnordered, StreamExt};
-use glob_match;
-use serde::{Deserialize, Serialize};
-use tokio::runtime::Runtime;
+use std::sync::Arc;
+use std::time::Duration;
 
 use crate::config::TestConfig;
 use crate::error::{TestError, TestResult};
-use crate::integration::{CIEnvironment, CIReportConfig, IntegrationContext, ReportFormat};
-use crate::runner::{IntegrationTest, TestReport, TestRunner};
+use crate::integration::ReportFormat;
+use crate::runner::{IntegrationTest, TestRunner};
 
 /// Test suite metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -162,11 +158,13 @@ pub struct TestSuiteSummary {
     pub failed_tests: Vec<String>,
 }
 
-/// Comprehensive test suite
+/// A test suite containing multiple test cases
 #[derive(Debug, Clone)]
 pub struct TestSuite {
     name: String,
+    #[allow(dead_code)]
     config: TestConfig,
+    #[allow(dead_code)]
     runner: Arc<TestRunner>,
 }
 

@@ -1,19 +1,18 @@
 use crate::error::{TestError, TestResult};
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
-use std::fmt;
-use std::marker::PhantomData;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex, RwLock};
-use tempfile::TempDir;
+use std::sync::{Arc, Mutex};
 
 /// Internal state of the test fixture
 pub struct FixtureState {
     /// Registered components by type ID
+    #[allow(dead_code)]
     components: HashMap<TypeId, Box<dyn Any + Send + Sync>>,
     /// Resources that need cleanup
+    #[allow(dead_code)]
     resources: Vec<Box<dyn Resource + Send + Sync>>,
     /// Configuration
+    #[allow(dead_code)]
     config: FixtureConfig,
 }
 

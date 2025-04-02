@@ -1,9 +1,15 @@
+use async_stream::stream;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use futures::Stream;
 use futures::future::BoxFuture;
 use futures::stream::BoxStream;
 use futures::stream::StreamExt;
-use futures::{Stream, StreamExt as _};
+use navius_event::{
+    Event as NaviusEvent,
+    broker::EventBroker,
+    error::{DeliveryStatus, EventPriority as NaviusEventPriority, EventResult},
+};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
@@ -62,22 +68,9 @@ impl Default for EventPriority {
     }
 }
 
-/// Status of event delivery
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DeliveryStatus {
-    /// Successfully delivered
-    Delivered,
-    /// Delivered to some subscribers
-    PartiallyDelivered,
-    /// Queued for later delivery
-    Queued,
-    /// Failed to deliver
-    Failed,
-}
-
 /// A serializable event with metadata and payload
 #[derive(Debug, Clone)]
-pub struct Event<T> {
+pub struct MockEvent<T> {
     /// Unique identifier
     pub id: Uuid,
     /// Type of event
@@ -98,7 +91,7 @@ pub struct Event<T> {
     pub payload: T,
 }
 
-impl<T> Event<T> {
+impl<T> MockEvent<T> {
     /// Create a new event
     pub fn new(
         event_type: impl Into<String>,
@@ -186,7 +179,7 @@ pub struct TopicInfo {
 }
 
 /// A type-erased stream of events
-pub type EventStream<T> = Pin<Box<dyn Stream<Item = Result<Event<T>>> + Send>>;
+pub type EventStream<T> = Pin<Box<dyn Stream<Item = Result<MockEvent<T>>> + Send>>;
 
 /// A mock event broker for testing
 #[derive(Debug, Clone)]
@@ -325,9 +318,9 @@ impl MockEventBroker {
     pub fn envelope_to_event<T: DeserializeOwned>(
         &self,
         envelope: &EventEnvelope,
-    ) -> Result<Event<T>> {
+    ) -> Result<MockEvent<T>> {
         match serde_json::from_value(envelope.payload.clone()) {
-            Ok(payload) => Ok(Event {
+            Ok(payload) => Ok(MockEvent {
                 id: envelope.id,
                 event_type: envelope.event_type.clone(),
                 topic: envelope.topic.clone(),
@@ -364,7 +357,7 @@ pub trait EventSubscriber: Send + Sync {
     >;
 }
 
-pub trait EventBroker: EventPublisher + EventSubscriber {
+pub trait MockEventBrokerTrait: EventPublisher + EventSubscriber {
     fn id(&self) -> &str;
     fn version(&self) -> &str;
 }
@@ -410,7 +403,7 @@ impl EventSubscriber for MockEventBroker {
     }
 }
 
-impl EventBroker for MockEventBroker {
+impl MockEventBrokerTrait for MockEventBroker {
     fn id(&self) -> &str {
         "mock_event_broker"
     }
@@ -478,7 +471,7 @@ mod tests {
         let broker = MockEventBroker::new();
 
         // Create event
-        let event = Event::new(
+        let event = MockEvent::new(
             "test-event",
             "test-topic",
             "test-source",

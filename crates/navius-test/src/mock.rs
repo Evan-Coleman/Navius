@@ -6,7 +6,6 @@ pub mod expect;
 // Define the Expectation type and other key types
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
-use std::marker::PhantomData;
 use std::sync::{Arc, RwLock};
 
 pub use self::config::{Expectation, ExpectedTimes};
@@ -202,6 +201,13 @@ impl MockRegistry {
         let method_str = method.clone().into();
         let key = format!("{}::{}", mock_name_str, method_str);
 
+        // Check call counts first
+        let call_counts = self.call_counts.read().unwrap();
+        let actual_calls = call_counts.get(&key).copied().unwrap_or(0);
+        if actual_calls == 0 {
+            return false;
+        }
+
         if let Some(mock_expectations) = self.expectations.read().unwrap().get(&mock_name_str) {
             for expectation in mock_expectations {
                 if expectation.method == method_str && expectation.args == args {
@@ -221,6 +227,13 @@ impl MockRegistry {
         let mock_name = mock_name.as_ref();
         let method = method.as_ref();
         let key = format!("{}::{}", mock_name, method);
+
+        // Check call counts first
+        let call_counts = self.call_counts.read().unwrap();
+        let actual_calls = call_counts.get(&key).copied().unwrap_or(0);
+        if actual_calls == 0 {
+            return false;
+        }
 
         if let Some(mock_expectations) = self.expectations.read().unwrap().get(mock_name) {
             for expectation in mock_expectations {

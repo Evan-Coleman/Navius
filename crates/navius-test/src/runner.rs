@@ -3,17 +3,21 @@
 //! This module provides a test runner for executing integration tests across crates.
 //! It supports running tests with fixtures, mocks, and environment configuration.
 
+use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt;
+use std::future::Future;
+use std::marker::PhantomData;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use futures::stream::StreamExt;
+
 use crate::config::TestConfig;
 use crate::error::{TestError, TestResult};
-use crate::fixture::TestFixture;
 use crate::integration::{IntegrationContext, IntegrationTestConfig, TestLifecycleHooks};
-use crate::mock::MockRegistry;
 
 /// Trait for integration tests
 pub trait IntegrationTest: Send + Sync {

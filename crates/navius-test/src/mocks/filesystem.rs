@@ -308,7 +308,7 @@ impl Seek for MockFileHandle {
 impl MockFileSystem {
     /// Create a new mock filesystem
     pub fn new() -> Self {
-        let mut fs = Self {
+        let fs = Self {
             state: Arc::new(Mutex::new(MockFileSystemState::default())),
         };
 

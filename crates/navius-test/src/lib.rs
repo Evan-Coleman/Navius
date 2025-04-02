@@ -1,3 +1,6 @@
+#![allow(unused_imports)]
+#![allow(dead_code)]
+
 //! # Navius Test Framework
 //!
 //! A comprehensive testing framework for the Navius application, focusing on
@@ -130,11 +133,7 @@ pub use mock::MockRegistry;
 pub use suite::{TestFilter, TestSuite, TestSuiteBuilder, TestSuiteMetadata, TestSuiteOptions};
 
 // Re-export common mocks types for convenience
-pub use mocks::{
-    CommonMocks, HasMockAuth, HasMockConfiguration, HasMockDatabase, HasMockEventBroker,
-    HasMockFileSystem, HasMockHttpClient, HasMockLogger, HasMockMessageBroker, HasMockMetrics,
-    HasMockRbac, MockFixture, setup_common_mocks,
-};
+pub use mocks::{MockEventBroker, MockMessageBroker, MockMessagingError, MockQueue};
 
 /// Error testing module for testing error handling
 ///

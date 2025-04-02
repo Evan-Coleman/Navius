@@ -1,6 +1,5 @@
 use std::error::Error as StdError;
 use std::fmt;
-use std::result;
 use thiserror::Error;
 
 /// Result type for test operations
@@ -282,6 +281,18 @@ impl TestError {
     pub fn io_error(err: std::io::Error) -> Self {
         Self::IoError(err)
     }
+
+    #[track_caller]
+    pub fn new_assertion_error(
+        assertion: &str,
+        message: &str,
+        _method: &str,
+        _args: Vec<String>,
+        _file: &str,
+        _line: u32,
+    ) -> Self {
+        Self::AssertionFailed(format!("{}: {}", assertion, message))
+    }
 }
 
 impl From<String> for TestError {
@@ -296,8 +307,9 @@ impl From<&str> for TestError {
     }
 }
 
-/// A simple error that can be created from a string
+/// Simple error type for testing purposes
 #[derive(Debug)]
+#[allow(dead_code)]
 struct SimpleError(String);
 
 impl fmt::Display for SimpleError {
@@ -308,10 +320,11 @@ impl fmt::Display for SimpleError {
 
 impl StdError for SimpleError {}
 
-/// Error injection point for testing error handling
+/// A configuration for error injection
 #[derive(Debug, Clone)]
 pub struct ErrorInjection {
     /// The name of the error injection point
+    #[allow(dead_code)]
     name: String,
 
     /// Whether the error should be injected
@@ -603,10 +616,10 @@ macro_rules! assert_mock_call {
 #[doc(hidden)]
 pub fn assert_mock_call_internal<T>(
     _mock: &T,
-    method: &str,
-    args: Vec<String>,
-    file: &str,
-    line: u32,
+    _method: &str,
+    _args: Vec<String>,
+    _file: &str,
+    _line: u32,
 ) -> TestResult<()> {
     // This would be implemented to check if the mock was called with the given method and args
     // For now, it's a placeholder

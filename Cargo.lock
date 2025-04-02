@@ -3134,12 +3134,14 @@ name = "navius-test"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "chrono",
  "criterion",
  "futures",
  "glob-match",
  "mockall",
+ "navius-event",
  "navius-messaging",
  "num_cpus",
  "once_cell",

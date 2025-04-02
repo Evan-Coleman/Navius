@@ -5,11 +5,9 @@
 //! test fixture, mock registry, and test harness components to provide
 //! a comprehensive testing environment.
 
-use std::any::TypeId;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Debug;
-use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
@@ -20,7 +18,7 @@ use crate::error::{TestError, TestResult};
 use crate::fixture::TestFixture;
 use crate::harness::{TestHarness, TestOptions};
 use crate::mock::MockRegistry;
-use crate::mocks::database::{DatabaseClient, MockDatabaseClient};
+use crate::mocks::database::MockDatabaseClient;
 
 /// Configuration for an integration test
 #[derive(Debug, Clone)]
@@ -677,7 +675,7 @@ impl IntegrationContext {
 
                 // Check for dependency on database
                 if config.dependencies.contains(&"database".to_string()) {
-                    let db_service = existing_services.get("database").ok_or_else(|| {
+                    let _db_service = existing_services.get("database").ok_or_else(|| {
                         TestError::dependency_error(format!(
                             "Cache service '{}' depends on 'database', but it doesn't exist",
                             name
@@ -995,9 +993,13 @@ impl Default for CrossCrateTestConfig {
 ///
 /// Provides a fluent interface for building cross-crate tests.
 pub struct CrossCrateTestBuilder {
+    /// Name of the test
+    name: String,
+    /// Registered fixtures
+    #[allow(dead_code)]
+    fixtures: HashMap<String, Arc<TestFixture>>,
     config: CrossCrateTestConfig,
     integration_config: IntegrationTestConfig,
-    fixtures: HashMap<String, Arc<TestFixture>>,
 }
 
 impl CrossCrateTestBuilder {
@@ -1005,6 +1007,8 @@ impl CrossCrateTestBuilder {
     pub fn new(name: impl Into<String>) -> Self {
         let name = name.into();
         Self {
+            name: name.clone(),
+            fixtures: HashMap::new(),
             config: CrossCrateTestConfig {
                 name: name.clone(),
                 crates: Vec::new(),
@@ -1027,7 +1031,6 @@ impl CrossCrateTestBuilder {
                 db_setup_scripts: Vec::new(),
                 lifecycle_hooks: TestLifecycleHooks::default(),
             },
-            fixtures: HashMap::new(),
         }
     }
 

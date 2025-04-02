@@ -1,8 +1,8 @@
+use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use mockall::predicate::*;
-use mockall::*;
 
 use crate::error::{TestError, TestResult};
 use crate::mock::MockRegistry;
@@ -45,6 +45,13 @@ pub struct LogEntry {
     pub context: HashMap<String, String>,
     /// Timestamp
     pub timestamp: chrono::DateTime<chrono::Utc>,
+}
+
+/// Internal state for the MockLogger
+#[derive(Debug, Default)]
+struct MockLoggerState {
+    /// Stored log entries
+    logs: Vec<LogEntry>,
 }
 
 impl LogEntry {
@@ -107,19 +114,16 @@ impl MockLogger {
         }
     }
 
-    /// Register the mock with a registry
-    pub fn register(self, registry: &MockRegistry) -> TestResult<Arc<Self>> {
-        let arc_self = Arc::new(self);
+    /// Register the mock logger with a mock registry
+    pub fn register(self, _registry: &MockRegistry) -> TestResult<Arc<Self>> {
+        // Create a basic logger with reasonable defaults
+        let state = Arc::new(Mutex::new(MockLoggerState::default()));
 
-        // Create a real logger implementation to register
-        let logger_impl = LoggerImpl {
-            mock: arc_self.clone(),
+        let _logger_impl = LoggerImpl {
+            state: state.clone(),
         };
 
-        // Comment out the registry.register call since MockRegistry doesn't implement this method
-        // registry.register::<dyn Logger, LoggerImpl>(Arc::new(logger_impl))?;
-
-        Ok(arc_self)
+        Ok(Arc::new(self))
     }
 
     /// Get all captured logs
@@ -381,39 +385,46 @@ impl Default for MockLogger {
 
 /// Logger implementation that uses MockLogger
 struct LoggerImpl {
-    mock: Arc<MockLogger>,
+    state: Arc<Mutex<MockLoggerState>>,
 }
 
 impl LoggerImpl {
     /// Create a new logger implementation that uses the given mock
-    fn new(mock: Arc<MockLogger>) -> Self {
-        Self { mock }
+    #[allow(dead_code)]
+    fn new(state: Arc<Mutex<MockLoggerState>>) -> Self {
+        Self { state }
     }
 }
 
 impl Logger for LoggerImpl {
     fn log(&self, level: LogLevel, message: &str, context: Option<HashMap<String, String>>) {
-        self.mock.log(level, message, context);
+        let mut state = self.state.lock().unwrap();
+        state.logs.push(LogEntry {
+            level,
+            message: message.to_string(),
+            context: context.unwrap_or_default(),
+            timestamp: chrono::Utc::now(),
+        });
     }
 
     fn trace(&self, message: &str, context: Option<HashMap<String, String>>) {
-        self.mock.trace(message, context);
+        self.log(LogLevel::Trace, message, context);
     }
 
     fn debug(&self, message: &str, context: Option<HashMap<String, String>>) {
-        self.mock.debug(message, context);
+        self.log(LogLevel::Debug, message, context);
     }
 
     fn info(&self, message: &str, context: Option<HashMap<String, String>>) {
-        self.mock.info(message, context);
+        self.log(LogLevel::Info, message, context);
     }
 
     fn warn(&self, message: &str, context: Option<HashMap<String, String>>) {
-        self.mock.warn(message, context);
+        self.log(LogLevel::Warn, message, context);
     }
 
     fn error(&self, message: &str, context: Option<HashMap<String, String>>) {
-        self.mock.error(message, context);
+        self.log(LogLevel::Error, message, context);
     }
 }
 

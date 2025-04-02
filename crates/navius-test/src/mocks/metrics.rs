@@ -181,12 +181,8 @@ impl MockMetrics {
     }
 
     /// Register the mock with a registry
-    pub fn register(self, registry: &MockRegistry) -> TestResult<Arc<Self>> {
-        let arc_self = Arc::new(self);
-        // Comment out the registry.register calls since MockRegistry doesn't implement this method
-        // registry.register::<dyn MetricsCollector, Self>(arc_self.clone())?;
-        // registry.register::<dyn MetricsExporter, Self>(arc_self.clone())?;
-        Ok(arc_self)
+    pub fn register(self, _registry: &MockRegistry) -> TestResult<Arc<Self>> {
+        Ok(Arc::new(self))
     }
 
     /// Set whether registering metrics should fail

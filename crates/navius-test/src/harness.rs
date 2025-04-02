@@ -1,14 +1,9 @@
 use crate::error::{TestError, TestResult};
 use crate::fixture::TestFixture;
 use crate::mock::MockRegistry;
-use crate::mocks;
-use std::fmt;
-use std::fmt::Debug;
-use std::future::Future;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::runtime::{Builder, Runtime};
 
 /// A test harness for running tests with dependencies
 #[derive(Debug)]
@@ -229,7 +224,7 @@ impl<T> TestHarnessBuilder<T, Missing> {
     }
 
     /// Set the system under test
-    pub fn with_subject(self, subject: T) -> TestHarnessBuilder<T, Present> {
+    pub fn with_subject(self, _subject: T) -> TestHarnessBuilder<T, Present> {
         TestHarnessBuilder {
             fixture: self.fixture,
             registry: self.registry,

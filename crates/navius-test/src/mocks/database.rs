@@ -3,7 +3,7 @@ use std::fmt;
 use std::sync::{Arc, Mutex};
 
 use crate::error::TestResult;
-use crate::mock::{Expectation, MockRegistry};
+use crate::mock::MockRegistry;
 
 /// A mock implementation of a database client interface
 #[derive(Debug, Default, Clone)]
@@ -197,7 +197,7 @@ impl MockDatabaseClient {
                     .or_insert_with(Vec::new)
                     .push(result);
             }
-            Err(err) => {
+            Err(_err) => {
                 state
                     .query_results
                     .entry(query)

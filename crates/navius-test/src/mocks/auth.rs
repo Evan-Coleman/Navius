@@ -1,13 +1,10 @@
 use std::collections::HashMap;
-use std::fmt;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use mockall::predicate::*;
-use mockall::*;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::error::{TestError, TestResult};
+use crate::error::TestResult;
 use crate::mock::MockRegistry;
 
 /// Error returned from mock auth provider

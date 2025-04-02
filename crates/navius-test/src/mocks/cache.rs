@@ -1,14 +1,10 @@
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::any::Any;
+use serde::{Serialize, de::DeserializeOwned};
 use std::collections::HashMap;
-use std::fmt::{self, Debug};
-use std::hash::Hash;
-use std::sync::{Arc, Mutex};
+use std::fmt::Debug;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-
-use crate::mock::MockRegistry;
 
 // Define the CacheConnection trait
 pub trait CacheConnection: Send + Sync {
@@ -380,6 +376,6 @@ impl CacheConnectionManager for MockCacheConnectionManager {
     }
 }
 
-pub fn set_up_mock_cache(cache_connection: &MockCacheConnection) {
-    // This functionality is moved to the MockCacheConnection methods
+pub fn set_up_mock_cache(_cache_connection: &MockCacheConnection) {
+    // Implementation would go here
 }
