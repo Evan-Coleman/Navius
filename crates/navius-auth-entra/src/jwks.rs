@@ -116,7 +116,7 @@ impl JsonWebKey {
                         }
                     };
 
-                    return DecodingKey::from_ec_components(x, y, curve).map_err(|e| {
+                    return DecodingKey::from_ec_components(x, y).map_err(|e| {
                         EntraError::jwks(format!("Failed to create EC decoding key: {}", e))
                     });
                 }

@@ -9,29 +9,37 @@ pub type MessagingResult<T> = Result<T, MessagingError>;
 /// Errors that can occur in messaging operations
 #[derive(Debug, thiserror::Error)]
 pub enum MessagingError {
-    /// Error connecting to the broker
-    #[error("Failed to connect to message broker: {0}")]
+    /// Error with connection
+    #[error("Connection error: {0}")]
     ConnectionError(String),
 
-    /// Error publishing a message
-    #[error("Failed to publish message: {0}")]
+    /// Error with queue operations
+    #[error("Queue error for '{0}': {1}")]
+    QueueError(String, String),
+
+    /// Error with exchange operations
+    #[error("Exchange error for '{0}': {1}")]
+    ExchangeError(String, String),
+
+    /// Error with publishing
+    #[error("Publish error: {0}")]
     PublishError(String),
 
-    /// Error consuming a message
-    #[error("Failed to consume message: {0}")]
+    /// Error with consuming
+    #[error("Consume error: {0}")]
     ConsumeError(String),
+
+    /// Error with consumer operations
+    #[error("Consumer error: {0}")]
+    ConsumerError(String),
+
+    /// Error with serialization
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
 
     /// Error acknowledging a message
     #[error("Failed to acknowledge message: {0}")]
     AcknowledgmentError(String),
-
-    /// Error declaring exchange
-    #[error("Failed to declare exchange '{0}': {1}")]
-    ExchangeError(String, String),
-
-    /// Error declaring queue
-    #[error("Failed to declare queue '{0}': {1}")]
-    QueueError(String, String),
 
     /// Error binding queue to exchange
     #[error("Failed to bind queue '{0}' to exchange '{1}': {2}")]
@@ -44,10 +52,6 @@ pub enum MessagingError {
     /// Channel closed
     #[error("Channel closed unexpectedly: {0}")]
     ChannelClosed(String),
-
-    /// Serialization error
-    #[error("Serialization error: {0}")]
-    SerializationError(String),
 
     /// Deserialization error
     #[error("Deserialization error: {0}")]

@@ -3,15 +3,17 @@
 //! This module provides a JWT-based authentication provider.
 
 #[cfg(feature = "jwt")]
-use crate::error::{Error, Result};
+use crate::error::Error;
 #[cfg(feature = "jwt")]
 use crate::providers::{AuthProvider, ProviderType};
 #[cfg(feature = "jwt")]
-use crate::types::{Claims, Credentials, Identity, Permission, Role, Subject};
+use crate::types::{Claims, Identity, Role, Subject};
 #[cfg(feature = "jwt")]
 use async_trait::async_trait;
 #[cfg(feature = "jwt")]
 use chrono::{Duration, Utc};
+#[cfg(feature = "jwt")]
+use futures::future::FutureExt;
 #[cfg(feature = "jwt")]
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 #[cfg(feature = "jwt")]
@@ -21,7 +23,7 @@ use std::collections::{HashMap, HashSet};
 #[cfg(feature = "jwt")]
 use std::sync::{Arc, Mutex};
 #[cfg(feature = "jwt")]
-use tracing::{debug, instrument};
+use tracing::{debug, error};
 #[cfg(feature = "jwt")]
 use uuid::Uuid;
 
@@ -174,7 +176,7 @@ impl JWTProvider {
     }
 
     /// Encode JWT claims into a token.
-    fn encode_token(&self, claims: &Claims) -> Result<String> {
+    fn encode_token(&self, claims: &Claims) -> std::result::Result<String, Error> {
         let header = Header::default();
         let encoding_key = EncodingKey::from_secret(self.config.secret_key.as_bytes());
 
@@ -183,7 +185,7 @@ impl JWTProvider {
     }
 
     /// Decode a JWT token into claims.
-    fn decode_token(&self, token: &str) -> Result<Claims> {
+    fn decode_token(&self, token: &str) -> std::result::Result<Claims, Error> {
         let decoding_key = DecodingKey::from_secret(self.config.secret_key.as_bytes());
         let mut validation = Validation::default();
         validation.set_issuer(&[&self.config.issuer]);
@@ -252,136 +254,139 @@ impl AuthProvider for JWTProvider {
         &self.name
     }
 
-    /// Authenticate using credentials and return an identity.
-    async fn authenticate(&self, credentials: &Credentials) -> Result<Identity> {
-        // Find user by username in mock store
-        let user = self
-            .find_mock_user_by_username(&credentials.username)
-            .ok_or_else(|| Error::authentication_failed("Invalid username"))?;
+    async fn authenticate(&self, _credentials: &str) -> Result<Identity, Error> {
+        Err(Error::authentication_failed(
+            "JWT provider does not support direct authentication",
+        ))
+    }
 
-        // Check password
-        if user.password != credentials.password {
-            return Err(Error::authentication_failed("Invalid password"));
+    async fn validate_token(&self, token: &str) -> Result<Subject, Error> {
+        // Use the predefined decode_token method which properly handles errors
+        let claims = match self.decode_token(token) {
+            Ok(claims) => claims,
+            Err(e) => return Err(e),
+        };
+
+        // Check if the token is blacklisted
+        if self.is_blacklisted(token) {
+            return Err(Error::token_invalid("Token has been revoked"));
         }
 
-        // Create identity
-        let identity = self.user_to_identity(&user);
+        // Check if the token is expired (as a backup check)
+        if self.is_token_expired(&claims) {
+            return Err(Error::token_expired());
+        }
 
-        Ok(identity)
-    }
-
-    /// Create an authentication token for a subject.
-    #[instrument(skip(self, subject), fields(provider = self.name()))]
-    async fn create_token(&self, subject: &Subject) -> Result<String> {
-        // Create claims
-        let role_names = subject
+        // Convert roles from claims to Subject's roles
+        let roles = claims
             .roles
-            .iter()
-            .map(|r| r.name.clone())
-            .collect::<Vec<String>>();
-        let claims = self.create_claims(&subject.id, Some(role_names));
+            .unwrap_or_default()
+            .into_iter()
+            .map(|name| Role {
+                id: Uuid::new_v4().to_string(),
+                name,
+                description: None,
+                permissions: None,
+            })
+            .collect();
 
-        // Encode token
-        self.encode_token(&claims)
+        Ok(Subject {
+            id: claims.sub.clone(),
+            name: claims.sub,
+            subject_type: "user".to_string(),
+            roles,
+            attributes: None,
+        })
     }
 
-    /// Revoke an authentication token.
-    #[instrument(skip(self, token), fields(provider = self.name()))]
-    async fn revoke_token(&self, token: &str) -> Result<()> {
-        // Decode the token to get the claims
-        let token_data = self.decode_token(token)?;
+    async fn create_token(&self, subject: &Subject) -> Result<String, Error> {
+        let role_names = subject.roles.iter().map(|r| r.name.clone()).collect();
+        let claims = Claims {
+            sub: subject.id.clone(),
+            iss: Some(self.config.issuer.clone()),
+            aud: Some(self.config.audience.clone()),
+            exp: Some(
+                (Utc::now() + Duration::seconds(self.config.token_expiry as i64)).timestamp()
+                    as u64,
+            ),
+            iat: Some(Utc::now().timestamp() as u64),
+            nbf: None,
+            jti: Some(Uuid::new_v4().to_string()),
+            roles: Some(role_names),
+            permissions: None,
+            custom: HashMap::new(),
+        };
 
-        // Add to blacklist until expiry
-        let expiry =
-            chrono::DateTime::<Utc>::from_timestamp(token_data.exp.unwrap_or_default() as i64, 0)
-                .unwrap_or_else(|| Utc::now() + Duration::hours(24));
+        let token = jsonwebtoken::encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(self.config.secret_key.as_bytes()),
+        )?;
 
-        // Use interior mutability with a lock to update the blacklist
-        let blacklist = Arc::clone(&self.blacklist);
-        let mut blacklist = blacklist
+        Ok(token)
+    }
+
+    async fn revoke_token(&self, token: &str) -> Result<(), Error> {
+        // Attempt to decode the token to get expiry
+        let claims = match self.decode_token(token) {
+            Ok(claims) => claims,
+            Err(e) => {
+                // If token is already invalid (expired, etc.), consider it revoked
+                match e {
+                    Error::TokenExpired { .. } | Error::TokenInvalid { .. } => return Ok(()),
+                    _ => return Err(e),
+                }
+            }
+        };
+
+        // Get expiry time or default to 1 hour from now
+        let expiry = match claims.exp {
+            Some(exp) => chrono::DateTime::from_timestamp(exp as i64, 0)
+                .unwrap_or_else(|| Utc::now() + Duration::hours(1)),
+            None => Utc::now() + Duration::hours(1),
+        };
+
+        // Add to blacklist
+        let mut blacklist = self
+            .blacklist
             .lock()
-            .expect("Failed to acquire lock on token blacklist");
-
-        // Insert token into blacklist with expiry time
+            .map_err(|_| Error::internal("Failed to acquire lock on token blacklist"))?;
         blacklist.insert(token.to_string(), expiry);
 
-        // Clean up expired tokens from the blacklist
+        // Clean up expired blacklist entries
         let now = Utc::now();
         blacklist.retain(|_, exp| *exp > now);
 
         Ok(())
     }
 
-    /// Refresh an authentication token.
-    #[instrument(skip(self, token), fields(provider = self.name()))]
-    async fn refresh_token(&self, token: &str) -> Result<String> {
-        // Decode the token to validate it
-        let decoded = self.decode_token(token)?;
-
-        // Check if the token is expired or will expire soon
-        if self.is_token_expired(&decoded) {
-            return Err(Error::token_expired());
-        }
-
-        // Find the user based on the subject claim
-        let user = self
-            .find_mock_user_by_id(&decoded.sub)
-            .ok_or_else(|| Error::token_invalid("Subject not found"))?;
-
-        // Create a new token
-        let roles: Vec<Role> = user
-            .roles
-            .iter()
-            .map(|r| Role {
-                id: Uuid::new_v4().to_string(),
-                name: r.clone(),
-                description: None,
-                permissions: None,
-            })
-            .collect();
-
-        let subject = self.user_to_subject(&user, roles);
-
-        // Create a new token
+    async fn refresh_token(&self, token: &str) -> Result<String, Error> {
+        let subject = self.validate_token(token).await?;
         self.create_token(&subject).await
     }
+}
 
-    /// Validate an authentication token.
-    #[instrument(skip(self, token), fields(provider = self.name()))]
-    async fn validate_token(&self, token: &str) -> Result<Subject> {
-        // Check if token is blacklisted
-        if self.is_blacklisted(token) {
-            return Err(Error::token_invalid("Token has been revoked"));
+#[cfg(feature = "jwt")]
+impl JWTProvider {
+    pub async fn authenticate_token(&self, token: &str) -> Result<String, Error> {
+        debug!(token = %token, "Authenticating with token");
+
+        let subject = self.validate_token(token).await?;
+
+        debug!(subject_id = %subject.id, "Token validated successfully");
+
+        match self.create_token(&subject).await {
+            Ok(new_token) => {
+                debug!(new_token = %new_token, "New token created successfully");
+                Ok(new_token)
+            }
+            Err(e) => {
+                error!(error = %e, "Failed to create new token");
+                Err(Error::token_invalid(format!(
+                    "Failed to create token: {}",
+                    e
+                )))
+            }
         }
-
-        // Decode token
-        let claims = self.decode_token(token)?;
-
-        // Validate claims
-        if self.is_token_expired(&claims) {
-            return Err(Error::token_expired());
-        }
-
-        // Find user by ID
-        let user = self
-            .find_mock_user_by_id(&claims.sub)
-            .ok_or_else(|| Error::internal("User not found for valid token"))?;
-
-        // Create subject
-        let roles = claims
-            .roles
-            .unwrap_or_default()
-            .iter()
-            .map(|r| Role {
-                id: Uuid::new_v4().to_string(),
-                name: r.clone(),
-                description: None,
-                permissions: None,
-            })
-            .collect::<Vec<_>>();
-
-        let subject = self.user_to_subject(&user, roles);
-
-        Ok(subject)
     }
 }

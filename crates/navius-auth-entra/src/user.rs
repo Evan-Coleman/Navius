@@ -57,7 +57,7 @@ impl EntraUser {
             object_id: claims.object_id.clone(),
             tenant_id: claims.tenant_id.clone(),
             roles,
-            additional_claims: claims.additional_claims.clone(),
+            additional_claims: claims.additional_claims.clone().into_iter().collect(),
         })
     }
 

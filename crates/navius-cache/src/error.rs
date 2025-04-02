@@ -39,6 +39,18 @@ pub enum CacheError {
     /// Unsupported operation
     #[error("Unsupported cache operation: {0}")]
     UnsupportedOperation(String),
+
+    #[error("Redis error: {0}")]
+    Redis(#[from] redis::RedisError),
+
+    #[error("Serialization error: {0}")]
+    Serialization(#[from] serde_json::Error),
+
+    #[error("Invalid argument: {0}")]
+    InvalidArgument(String),
+
+    #[error("Lua manager not initialized")]
+    LuaManagerNotInitialized,
 }
 
 /// Result type for cache operations
@@ -73,33 +85,12 @@ impl From<CacheError> for AppError {
             CacheError::UnsupportedOperation(msg) => {
                 AppError::internal(format!("Unsupported cache operation: {}", msg))
             }
-        }
-    }
-}
-
-/// Implement From<redis::RedisError> for CacheError
-#[cfg(feature = "redis")]
-impl From<redis::RedisError> for CacheError {
-    fn from(err: redis::RedisError) -> Self {
-        match err.kind() {
-            redis::ErrorKind::IoError => Self::ConnectionError(err.to_string()),
-            redis::ErrorKind::ResponseError => Self::OperationError(err.to_string()),
-            redis::ErrorKind::AuthenticationFailed => {
-                Self::ConnectionError(format!("Redis authentication failed: {}", err))
+            CacheError::Redis(err) => err.into(),
+            CacheError::Serialization(err) => err.into(),
+            CacheError::InvalidArgument(msg) => AppError::invalid_argument(msg),
+            CacheError::LuaManagerNotInitialized => {
+                AppError::internal("Lua manager not initialized")
             }
-            redis::ErrorKind::BusyLoadingError => {
-                Self::BackendError(format!("Redis busy loading: {}", err))
-            }
-            redis::ErrorKind::NoScriptError => {
-                Self::OperationError(format!("Redis script error: {}", err))
-            }
-            redis::ErrorKind::ExtensionError => {
-                Self::BackendError(format!("Redis extension error: {}", err))
-            }
-            redis::ErrorKind::ClientError => {
-                Self::OperationError(format!("Redis client error: {}", err))
-            }
-            _ => Self::BackendError(format!("Unknown Redis error: {}", err)),
         }
     }
 }

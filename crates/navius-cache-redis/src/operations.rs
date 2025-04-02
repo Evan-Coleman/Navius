@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use redis::{AsyncCommands, FromRedisValue};
 use serde::{de::DeserializeOwned, Serialize};
+use std::fmt::Debug;
 use std::time::Duration;
 use std::{collections::HashMap, collections::HashSet, hash::Hash, sync::Arc};
 use tracing::{debug, instrument, warn};
@@ -16,6 +17,15 @@ use crate::{
     lua::{RedisLuaManager, RedisLuaScripting},
     metrics,
 };
+
+use redis::Aggregate;
+
+#[derive(Debug, Clone, Copy)]
+pub enum AggregateOptions {
+    Sum,
+    Min,
+    Max,
+}
 
 // Replace the CacheSerializer trait with a concrete Box<dyn Fn> approach
 /// Cache serializer function type
@@ -39,17 +49,16 @@ impl JsonSerializer {
 }
 
 /// Redis cache implementation
-#[derive(Clone, Debug)]
 pub struct RedisCache {
     /// Connection manager for Redis
-    connection_manager: Arc<RedisConnectionManager>,
+    connection_manager: Arc<RedisConnectionManager<String>>,
     /// Lua script manager
     lua_manager: Option<Arc<RedisLuaManager>>,
 }
 
 impl RedisCache {
     /// Create a new Redis cache with default configuration
-    pub fn new(connection_manager: Arc<RedisConnectionManager>) -> Self {
+    pub async fn new(connection_manager: Arc<RedisConnectionManager<String>>) -> Self {
         // Create the Redis cache instance
         let mut cache = Self {
             connection_manager,
@@ -57,14 +66,14 @@ impl RedisCache {
         };
 
         // Initialize the Lua manager
-        let lua_manager = Arc::new(RedisLuaManager::new(cache.connection_manager().clone()));
+        let lua_manager = Arc::new(RedisLuaManager::new(cache.connection_manager().clone()).await);
         cache.lua_manager = Some(lua_manager);
 
         cache
     }
 
     /// Get the connection manager
-    pub fn connection_manager(&self) -> &Arc<RedisConnectionManager> {
+    pub fn connection_manager(&self) -> &Arc<RedisConnectionManager<String>> {
         &self.connection_manager
     }
 
@@ -74,48 +83,53 @@ impl RedisCache {
     }
 
     /// Enable Lua scripting support
-    pub fn with_lua_scripting(mut self) -> Self {
+    pub async fn with_lua_scripting(mut self) -> Self {
         if self.lua_manager.is_none() {
-            let lua_manager = Arc::new(RedisLuaManager::new(self.connection_manager().clone()));
+            let lua_manager = Arc::new(RedisLuaManager::new(self.connection_manager().clone()).await);
             self.lua_manager = Some(lua_manager);
         }
         self
     }
 
     /// Convert a key to a string
-    async fn key_to_string<K: CacheKey>(&self, key: &K) -> CacheResult<String> {
-        Ok(key.to_string())
+    fn key_to_string<K: CacheKey>(&self, key: &K) -> String {
+        key.to_string()
     }
 
     /// Serialize a value to bytes
     async fn serialize<T: Serialize + Send + Sync>(&self, value: &T) -> CacheResult<Vec<u8>> {
         serde_json::to_vec(value)
-            .map_err(|e| RedisCacheError::SerializationError(e.to_string()).into())
+            .map_err(|e| RedisCacheError::Serialization(e.to_string()))
+            .map_err(CacheError::from)
     }
 
     /// Deserialize bytes to a value
     async fn deserialize<T: DeserializeOwned>(&self, bytes: &[u8]) -> CacheResult<T> {
         serde_json::from_slice(bytes)
-            .map_err(|e| RedisCacheError::DeserializationError(e.to_string()).into())
+            .map_err(|e| RedisCacheError::Serialization(e.to_string()))
+            .map_err(CacheError::from)
     }
 
     /// Execute a raw Lua script with the given arguments
     #[instrument(skip(self, script, keys, args), level = "debug")]
-    pub async fn execute_raw_script<T: FromRedisValue + Send + Sync>(
-        &self,
-        script: &str,
-        keys: &[&str],
-        args: &[&str],
-    ) -> RedisCacheResult<T> {
-        if let Some(lua_manager) = &self.lua_manager {
-            match lua_manager.execute_script("raw", keys, args).await {
+    pub async fn execute_raw_script<'a, T>(
+        &'a self,
+        script: &'a str,
+        keys: &'a [&'a str],
+        args: &'a [&'a str],
+    ) -> CacheResult<T>
+    where
+        T: FromRedisValue + Send + Sync + 'static,
+    {
+        if let Some(lua_manager) = self.lua_manager() {
+            let keys: Vec<String> = keys.iter().map(|&k| k.to_string()).collect();
+            let args: Vec<String> = args.iter().map(|&a| a.to_string()).collect();
+            match lua_manager.execute_script::<T>("raw", &keys, &args).await {
                 Ok(result) => Ok(result),
-                Err(err) => Err(RedisCacheError::ScriptError(err.to_string())),
+                Err(e) => Err(e.into()),
             }
         } else {
-            Err(RedisCacheError::ScriptError(
-                "Lua scripting not enabled".to_string(),
-            ))
+            Err(CacheError::LuaManagerNotInitialized)
         }
     }
 
@@ -170,13 +184,11 @@ impl RedisCache {
 
             let prefixed_key = self.connection_manager.prefixed_key(key);
             let ttl_seconds = ttl.map(|t| t.as_secs().to_string()).unwrap_or_default();
+            let keys = vec![prefixed_key];
+            let args = vec![max_value.to_string(), ttl_seconds];
 
             match lua_manager
-                .execute_script::<i64>(
-                    "check_and_increment",
-                    &[&prefixed_key],
-                    &[&max_value.to_string(), &ttl_seconds],
-                )
+                .execute_script::<i64>("check_and_increment", &keys, &args)
                 .await
             {
                 Ok(result) => Ok(result == 1),
@@ -253,7 +265,7 @@ impl RedisCache {
     where
         K: CacheKey + 'static,
     {
-        let key_str = self.key_to_string(&key).await?;
+        let key_str = self.key_to_string(&key);
         let key_str_clone = key_str.clone();
 
         let result = self
@@ -272,7 +284,7 @@ impl RedisCache {
     where
         K: CacheKey + 'static + std::fmt::Debug,
     {
-        let key_str = self.key_to_string(key).await?;
+        let key_str = self.key_to_string(key);
         let prefixed_key = self.connection_manager.prefixed_key(&key_str);
         let prefixed_key_clone = prefixed_key.clone();
 
@@ -299,14 +311,13 @@ impl RedisCache {
         ttl_secs: i64,
     ) -> CacheResult<bool> {
         let timer = TimedOperation::new(metrics::names::EXPIRE);
-        let key_str = self.key_to_string(key).await?;
+        let key_str = self.key_to_string(key);
         let key_str_clone = key_str.clone();
 
         let result = self
             .connection_manager
             .execute_command(&key_str, "EXPIRE", |mut conn| async move {
-                // Convert to usize as required by redis library
-                conn.expire(&key_str_clone, ttl_secs as usize).await
+                conn.expire(&key_str_clone, ttl_secs as i64).await
             })
             .await;
 
@@ -320,7 +331,7 @@ impl RedisCache {
     where
         K: CacheKey + 'static + std::fmt::Debug,
     {
-        let key_str = self.key_to_string(key).await?;
+        let key_str = self.key_to_string(key);
 
         let result = self
             .connection_manager
@@ -347,129 +358,230 @@ impl RedisCache {
 
     // === List operations ===
 
-    /// Push a value to the end of a list
-    #[instrument(skip(self, value), level = "debug")]
-    pub async fn list_push<K, V>(&self, key: &K, value: &V) -> CacheResult<usize>
+    /// Push a value to the right end of a list
+    async fn list_push_right<K, V>(&self, key: K, value: &V) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
-        V: Serialize + Sync + Send + 'static,
+        V: Serialize + Send + Sync + 'static,
     {
-        let key_str = self.key_to_string(key).await?;
-        let value_ser = self.serialize(value).await?;
+        let key_str = key.to_string();
+        let serialized = serde_json::to_string(value)
+            .map_err(|e| CacheError::SerializationError(e.to_string()))?;
 
-        let result = self
-            .connection_manager
-            .execute_command(&key_str, "RPUSH", |mut conn| async move {
-                let len: usize = redis::cmd("RPUSH")
-                    .arg(&key_str)
-                    .arg(value_ser)
-                    .query_async(&mut conn)
-                    .await?;
-                Ok(len)
-            })
-            .await;
+        let mut conn = self.connection_manager.get_connection().await?;
 
-        match result {
-            Ok(len) => Ok(len),
-            Err(e) => Err(e.into()),
-        }
+        let result: i64 = conn
+            .rpush(&key_str, serialized)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
     }
 
-    /// Pop a value from the end of a list
-    #[instrument(skip(self), level = "debug")]
-    pub async fn list_pop<K>(&self, key: &K) -> CacheResult<Option<Vec<u8>>>
+    /// Push multiple values to the right end of a list
+    async fn list_push_right_many<K, V>(&self, key: K, values: &[V]) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
     {
-        let key_str = self.key_to_string(key).await?;
+        let key_str = key.to_string();
+        let serialized_values: Result<Vec<String>, _> = values
+            .iter()
+            .map(|v| serde_json::to_string(v).map_err(|e| CacheError::SerializationError(e.to_string())))
+            .collect();
+        let serialized_values = serialized_values?;
 
-        let result = self
-            .connection_manager
-            .execute_command(&key_str, "RPOP", |mut conn| async move {
-                let res: Option<Vec<u8>> = redis::cmd("RPOP")
-                    .arg(&key_str)
-                    .query_async(&mut conn)
-                    .await?;
-                Ok(res)
-            })
-            .await;
+        let mut conn = self.connection_manager.get_connection().await?;
 
-        match result {
-            Ok(popped) => Ok(popped),
-            Err(e) => Err(e.into()),
-        }
+        let result: i64 = conn
+            .rpush(&key_str, &serialized_values)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
     }
 
-    /// Get a range of values from a list
-    #[instrument(skip(self), level = "debug")]
-    pub async fn list_range<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<V>>
+    /// Push a value to the left end of a list
+    async fn list_push_left<K, V>(&self, key: K, value: &V) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        let key_str = key.to_string();
+        let serialized = serde_json::to_string(value)
+            .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: i64 = conn
+            .lpush(&key_str, serialized)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
+    }
+
+    /// Push multiple values to the left end of a list
+    async fn list_push_left_many<K, V>(&self, key: K, values: &[V]) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        let key_str = key.to_string();
+        let serialized_values: Result<Vec<String>, _> = values
+            .iter()
+            .map(|v| serde_json::to_string(v).map_err(|e| CacheError::SerializationError(e.to_string())))
+            .collect();
+        let serialized_values = serialized_values?;
+
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: i64 = conn
+            .lpush(&key_str, &serialized_values)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
+    }
+
+    /// Pop a value from the right end of a list
+    async fn list_pop_right<K, V>(&self, key: K) -> CacheResult<Option<V>>
     where
         K: CacheKey + 'static,
         V: DeserializeOwned + 'static,
     {
-        let key_str = self.key_to_string(&key).await?;
-        let prefixed_key = self.connection_manager.prefixed_key(&key_str);
-        debug!("Getting list range for key: {}", prefixed_key);
+        let key_str = key.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
 
-        let results_bytes: Vec<Vec<u8>> = self
-            .connection_manager
-            .execute_command(&prefixed_key, "LRANGE", |mut conn| async move {
-                conn.lrange(&prefixed_key, start, stop).await
-            })
-            .await?;
+        let result: Option<String> = conn
+            .rpop(&key_str, Some(1))
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
 
-        use futures::stream::{self, StreamExt};
-        let results = stream::iter(results_bytes)
-            .then(|bytes| async move { self.deserialize(&bytes).await })
-            .collect::<Vec<CacheResult<V>>>()
-            .await;
+        match result {
+            Some(value) => {
+                let deserialized = serde_json::from_str(&value)
+                    .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                Ok(Some(deserialized))
+            }
+            None => Ok(None),
+        }
+    }
 
-        results.into_iter().collect::<CacheResult<Vec<V>>>()
+    /// Pop a value from the left end of a list
+    async fn list_pop_left<K, V>(&self, key: K) -> CacheResult<Option<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        let key_str = key.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: Option<String> = conn
+            .lpop(&key_str, Some(1))
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        match result {
+            Some(value) => {
+                let deserialized = serde_json::from_str(&value)
+                    .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                Ok(Some(deserialized))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Get a range of values from a list
+    async fn list_range<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        let key_str = key.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let results: Vec<String> = conn
+            .lrange(&key_str, start, stop)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        let mut values = Vec::with_capacity(results.len());
+        for value in results {
+            let deserialized = serde_json::from_str(&value)
+                .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+            values.push(deserialized);
+        }
+
+        Ok(values)
     }
 
     /// Get the length of a list
-    #[instrument(skip(self), level = "debug")]
-    pub async fn list_length<K>(&self, key: &K) -> CacheResult<usize>
+    async fn list_length<K>(&self, key: K) -> CacheResult<usize>
     where
-        K: CacheKey + 'static + std::fmt::Debug,
+        K: CacheKey + 'static,
     {
-        let key_str = self.key_to_string(key).await?;
-        let key_str_clone = key_str.clone();
+        let key_str = key.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
 
-        let timer = metrics::TimedOperation::new(metrics::names::LIST_LENGTH);
-        let result = self
-            .connection_manager
-            .execute_command(&key_str, "LLEN", |mut conn| async move {
-                conn.llen(&key_str_clone).await
-            })
-            .await;
+        let result: i64 = conn
+            .llen(&key_str)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
 
-        timer.record(&result);
-        result.map_err(|e| e.into())
+        Ok(result as usize)
+    }
+
+    /// Remove elements equal to value from the list
+    async fn list_remove<K, V>(&self, key: K, value: &V, count: i64) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        let key_str = key.to_string();
+        let serialized = serde_json::to_string(value)
+            .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: i64 = conn
+            .lrem(&key_str, count, serialized)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
     }
 
     /// Trim a list to the specified range
-    #[instrument(skip(self), level = "debug")]
     async fn list_trim<K>(&self, key: K, start: isize, stop: isize) -> CacheResult<()>
     where
         K: CacheKey + 'static,
     {
-        let key_str = self.key_to_string(&key).await?;
-        let prefixed_key_str = self.connection_manager.prefixed_key(&key_str);
-        let prefixed_key_clone = prefixed_key_str.clone();
+        let key_str = key.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
 
-        self.connection_manager
-            .execute_command(&prefixed_key_str, "LTRIM", move |mut conn| async move {
-                let result: redis::RedisResult<()> = redis::cmd("LTRIM")
-                    .arg(&prefixed_key_clone)
-                    .arg(start)
-                    .arg(stop)
-                    .query_async(&mut conn)
-                    .await;
+        conn.ltrim(&key_str, start, stop)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
 
-                result
-            })
-            .await?;
+        Ok(())
+    }
+
+    /// Set a value at a specific index in a list
+    async fn list_set<K, V>(&self, key: K, index: isize, value: &V) -> CacheResult<()>
+    where
+        K: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        let key_str = key.to_string();
+        let serialized = serde_json::to_string(value)
+            .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        conn.lset(&key_str, index, serialized)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
 
         Ok(())
     }
@@ -478,1220 +590,2198 @@ impl RedisCache {
 
     /// Add a member to a set
     #[instrument(skip(self, member), level = "debug")]
-    pub async fn set_add<K, V>(&self, key: &K, member: &V) -> CacheResult<bool>
+    async fn set_remove<K, V>(&self, key: K, member: &V) -> CacheResult<bool>
     where
-        K: CacheKey + 'static + std::fmt::Debug,
-        V: Serialize + Sync + Send + 'static,
+        K: CacheKey + Debug + 'static,
+        V: Serialize + Send + Sync + Debug + 'static,
     {
-        let key_str = self.key_to_string(key).await?;
+        let key_str = self.key_to_string(&key);
         let member_ser = self.serialize(member).await?;
-
-        let result = self
-            .connection_manager
-            .execute_command(&key_str, "SADD", |mut conn| async move {
-                let added: i32 = conn.sadd(&key_str, member_ser).await?;
-                Ok(added > 0)
-            })
-            .await;
-
-        match result {
-            Ok(added) => Ok(added),
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    /// Remove a member from a set
-    #[instrument(skip(self, member), level = "debug")]
-    pub async fn set_remove<K, V>(&self, key: &K, member: &V) -> CacheResult<bool>
-    where
-        K: CacheKey + 'static + std::fmt::Debug,
-        V: Serialize + Sync + Send + 'static,
-    {
-        let key_str = self.key_to_string(key).await?;
-        let member_ser = self.serialize(member).await?;
-
-        let result = self
-            .connection_manager
-            .execute_command(&key_str, "SREM", |mut conn| async move {
-                let removed: i32 = conn.srem(&key_str, member_ser).await?;
-                Ok(removed > 0)
-            })
-            .await;
-
-        match result {
-            Ok(removed) => Ok(removed),
-            Err(e) => Err(e.into()),
-        }
+        let mut conn = self.connection_manager.get().await?;
+        let removed: i32 = conn.srem(&key_str, member_ser).await?;
+        Ok(removed > 0)
     }
 
     /// Get all members of a set
     #[instrument(skip(self), level = "debug")]
-    pub async fn set_members<K>(&self, key: &K) -> CacheResult<Vec<Vec<u8>>>
+    pub async fn set_members<K, V>(&self, key: &K) -> CacheResult<Vec<V>>
     where
-        K: CacheKey + 'static + std::fmt::Debug,
+        K: CacheKey + Debug + 'static,
+        V: DeserializeOwned + Debug + 'static,
     {
-        let key_str = self.key_to_string(key).await?;
+        let key_str = self.key_to_string(key);
         let key_str_clone = key_str.clone();
 
-        let result = self
+        let result: Vec<Vec<u8>> = self
             .connection_manager
             .execute_command(&key_str, "SMEMBERS", |mut conn| async move {
-                let members: Vec<Vec<u8>> = conn.smembers(&key_str_clone).await?;
-                Ok(members)
-            })
-            .await;
-
-        match result {
-            Ok(members) => Ok(members),
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    // === Hash operations ===
-
-    /// Set a field in a hash
-    #[instrument(skip(self, field, value), level = "debug")]
-    pub async fn hash_set(&self, key: &str, field: &str, value: Vec<u8>) -> RedisCacheResult<bool> {
-        let timer = metrics::TimedOperation::new(metrics::names::HASH_SET);
-        let result = self
-            .connection_manager
-            .execute_command(key, "HSET", |mut conn| {
-                let res: i32 = redis::cmd("HSET")
-                    .arg(key)
-                    .arg(field)
-                    .arg(value)
-                    .query(&mut conn)?;
-                Ok(res > 0)
-            })
-            .await;
-
-        timer.record(&result);
-        result
-    }
-
-    /// Get a field from a hash
-    #[instrument(skip(self), level = "debug")]
-    pub async fn hash_get<K, F, V>(&self, key: &K, field: &F) -> CacheResult<Option<V>>
-    where
-        K: CacheKey + Sync + Send + std::fmt::Debug + 'static,
-        F: Serialize + Sync + Send + std::fmt::Debug + 'static,
-        V: DeserializeOwned + Sync + Send + 'static,
-    {
-        let key_str = self.key_to_string(key)?;
-        let field_str = self.key_to_string(field)?;
-        let prefixed_key = self.connection_manager.prefixed_key(&key_str);
-
-        let result_bytes = self
-            .connection_manager
-            .execute_command(&prefixed_key, "HGET", |mut conn| async move {
-                let res: Option<Vec<u8>> = redis::cmd("HGET")
-                    .arg(&prefixed_key)
-                    .arg(&field_str)
+                redis::cmd("SMEMBERS")
+                    .arg(&key_str_clone)
                     .query_async(&mut conn)
-                    .await?;
-                Ok(res)
+                    .await
             })
             .await?;
 
-        match result_bytes {
-            Some(bytes) => self.deserialize(&bytes).await.map(Some),
-            None => Ok(None),
-        }
-    }
-
-    /// Delete a field from a hash
-    #[instrument(skip(self), level = "debug")]
-    pub async fn hash_delete<K, F>(&self, key: &K, field: &F) -> CacheResult<bool>
-    where
-        K: CacheKey + Sync + Send + std::fmt::Debug + 'static,
-        F: Serialize + Sync + Send + std::fmt::Debug + 'static,
-    {
-        let key_str = self.key_to_string(key)?;
-        let field_str = self.key_to_string(field)?;
-        let prefixed_key = self.connection_manager.prefixed_key(&key_str);
-
-        let result = self
-            .connection_manager
-            .execute_command(&prefixed_key, "HDEL", |mut conn| async move {
-                let res: i32 = redis::cmd("HDEL")
-                    .arg(&prefixed_key)
-                    .arg(&field_str)
-                    .query_async(&mut conn)
-                    .await?;
-                Ok(res > 0)
-            })
-            .await?;
-        Ok(result)
-    }
-
-    #[instrument(skip(self, fields), level = "debug")]
-    async fn hash_get_many<K, F, V>(&self, key: K, fields: Vec<F>) -> CacheResult<Vec<Option<V>>>
-    where
-        K: CacheKey + std::fmt::Debug + 'static,
-        F: CacheKey + std::fmt::Debug + 'static,
-        V: DeserializeOwned + 'static,
-    {
-        if fields.is_empty() {
-            return Ok(Vec::new());
+        let mut values = Vec::with_capacity(result.len());
+        for bytes in result {
+            values.push(self.deserialize(&bytes).await?);
         }
 
-        let key_str = self.key_to_string(&key)?;
-        let prefixed_key = self.connection_manager.prefixed_key(&key_str);
-        let field_strs: Vec<String> = fields.iter().map(|f| self.key_to_string(f)?).collect();
-
-        let mut cmd = redis::cmd("HMGET");
-        cmd.arg(&prefixed_key);
-        for field in &field_strs {
-            cmd.arg(field);
-        }
-
-        let results_bytes: Vec<Option<Vec<u8>>> = self
-            .connection_manager
-            .execute_command(&prefixed_key, "HMGET", |mut conn| async move {
-                cmd.query_async(&mut conn).await
-            })
-            .await?;
-
-        // Use futures::stream to handle async deserialization concurrently
-        use futures::stream::{self, StreamExt};
-        let results = stream::iter(results_bytes)
-            .then(|bytes_opt| async move {
-                match bytes_opt {
-                    Some(bytes) => self.deserialize(&bytes).await.map(Some),
-                    None => Ok(None),
-                }
-            })
-            .collect::<Vec<CacheResult<Option<V>>>>()
-            .await;
-
-        // Collect results, propagating the first error if any
-        results.into_iter().collect::<CacheResult<Vec<Option<V>>>>()
+        Ok(values)
     }
 
-    #[instrument(skip(self, entries), level = "debug")]
-    async fn hash_set_many<K, F, V>(&self, key: K, entries: Vec<(F, V)>) -> CacheResult<()>
-    where
-        K: CacheKey + std::fmt::Debug + 'static,
-        F: CacheKey + std::fmt::Debug + 'static,
-        V: Serialize + Send + Sync + std::fmt::Debug + 'static,
-    {
-        let key_str = self.key_to_string(&key)?;
-        let prefixed_key = self.connection_manager.prefixed_key(&key_str);
-
-        let mut cmd = redis::cmd("HMSET");
-        cmd.arg(&prefixed_key);
-
-        for (field, value) in entries {
-            let field_ser = self.serialize(&field).await?;
-            let value_ser = self.serialize(&value).await?;
-            cmd.arg(field_ser).arg(value_ser);
-        }
-
-        self.connection_manager
-            .execute_command(&prefixed_key, "HMSET", |mut conn| async move {
-                cmd.query_async(&mut conn).await
-            })
-            .await?;
-
-        Ok(())
-    }
-
-    #[instrument(skip(self, field), level = "debug")]
-    async fn hash_exists<K, F>(&self, key: K, field: F) -> CacheResult<bool>
-    where
-        K: CacheKey + 'static,
-        F: CacheKey + 'static,
-    {
-        let key_str = self.key_to_string(&key).await?;
-        let field_str = self.key_to_string(&field).await?;
-
-        // Clone the strings for use in the closure
-        let key_str_clone = key_str.clone();
-        let field_str_clone = field_str.clone();
-
-        let result = self
-            .connection_manager
-            .execute_command(&key_str, "HEXISTS", |mut conn| async move {
-                conn.hexists(&key_str_clone, &field_str_clone).await
-            })
-            .await;
-
-        result.map_err(|e| e.into())
-    }
-
-    #[instrument(skip(self, fields), level = "debug")]
-    async fn hash_delete<K, F>(&self, key: K, fields: Vec<F>) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-        F: CacheKey + 'static,
-    {
-        let key_str = self.key_to_string(&key).await?;
-
-        // Convert all fields to strings asynchronously
-        let mut field_strs = Vec::with_capacity(fields.len());
-        for field in fields {
-            let field_str = self.key_to_string(&field).await?;
-            field_strs.push(field_str);
-        }
-
-        // Clone for use in closure
-        let key_str_clone = key_str.clone();
-
-        let result = self
-            .connection_manager
-            .execute_command(&key_str, "HDEL", |mut conn| async move {
-                let count: i32 = conn.hdel(&key_str_clone, field_strs).await?;
-                Ok(count as usize)
-            })
-            .await;
-
-        result.map_err(|e| e.into())
-    }
-
+    /// Get the length of a set
     #[instrument(skip(self), level = "debug")]
     pub async fn set_length<K>(&self, key: K) -> CacheResult<usize>
     where
-        K: CacheKey + 'static,
+        K: CacheKey + Debug + 'static,
     {
-        let key_str = self.key_to_string(&key).await?;
-        let prefixed_key = self.connection_manager.prefixed_key(&key_str);
-        let prefixed_key_clone = prefixed_key.clone();
+        let key_str = self.key_to_string(&key);
+        let key_str_clone = key_str.clone();
 
         let result = self
             .connection_manager
-            .execute_command(&prefixed_key, "SCARD", move |mut conn| async move {
-                let result: redis::RedisResult<usize> = redis::cmd("SCARD")
-                    .arg(&prefixed_key_clone)
+            .execute_command(&key_str, "SCARD", |mut conn| async move {
+                redis::cmd("SCARD")
+                    .arg(&key_str_clone)
                     .query_async(&mut conn)
-                    .await;
-
-                result
+                    .await
             })
             .await?;
 
         Ok(result)
     }
 
-    // Start Stubs for missing CacheOperations methods
-
-    async fn set_intersection<K, V>(&self, _keys: Vec<K>) -> CacheResult<HashSet<V>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + Eq + Hash + Send + Sync + 'static,
-    {
-        todo!("set_intersection not implemented for RedisCache")
-    }
-
-    async fn set_intersection_store<K, D>(
-        &self,
-        _destination: D,
-        _keys: Vec<K>,
-    ) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-        D: CacheKey + 'static,
-    {
-        todo!("set_intersection_store not implemented for RedisCache")
-    }
-
-    async fn set_union<K, V>(&self, _keys: Vec<K>) -> CacheResult<HashSet<V>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + Eq + Hash + Send + Sync + 'static,
-    {
-        todo!("set_union not implemented for RedisCache")
-    }
-
-    async fn set_union_store<K, D>(&self, _destination: D, _keys: Vec<K>) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-        D: CacheKey + 'static,
-    {
-        todo!("set_union_store not implemented for RedisCache")
-    }
-
-    async fn set_difference<K, V>(&self, _keys: Vec<K>) -> CacheResult<HashSet<V>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + Eq + Hash + Send + Sync + 'static,
-    {
-        todo!("set_difference not implemented for RedisCache")
-    }
-
-    async fn set_difference_store<K, D>(&self, _destination: D, _keys: Vec<K>) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-        D: CacheKey + 'static,
-    {
-        todo!("set_difference_store not implemented for RedisCache")
-    }
-
-    async fn set_random_members<K, V>(&self, _key: K, _count: usize) -> CacheResult<Vec<V>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + Send + Sync + 'static,
-    {
-        todo!("set_random_members not implemented for RedisCache")
-    }
-
-    async fn zset_add<K, V>(&self, key: K, items: Vec<(f64, V)>) -> CacheResult<usize>
-    where
-        K: CacheKey + std::fmt::Debug + 'static,
-        V: Serialize + Send + Sync + std::fmt::Debug + 'static,
-    {
-        if items.is_empty() {
-            return Ok(0);
-        }
-
-        let key_str = self.key_to_string(&key).await?;
-        let prefixed_key_str = self.connection_manager.prefixed_key(&key_str);
-
-        let mut added = 0;
-        for (score, value) in items {
-            let serialized = self.serialize(&value).await?;
-            let prefixed_key_clone = prefixed_key_str.clone();
-            let serialized_clone = serialized.clone();
-
-            let result: bool = self
-                .connection_manager
-                .execute_command(&prefixed_key_str, "ZADD", move |mut conn| async move {
-                    let result: redis::RedisResult<bool> = redis::cmd("ZADD")
-                        .arg(&prefixed_key_clone)
-                        .arg(score)
-                        .arg(serialized_clone)
-                        .query_async(&mut conn)
-                        .await;
-
-                    result
-                })
-                .await?;
-
-            if result {
-                added += 1;
-            }
-        }
-
-        Ok(added)
-    }
-
-    async fn zset_remove<K, V>(&self, _key: K, _members: Vec<V>) -> CacheResult<usize>
+    /// Add values to a set
+    async fn set_add<K, V>(&self, key: K, values: &[V]) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
         V: Serialize + Send + Sync + 'static,
     {
-        todo!("zset_remove not implemented for RedisCache")
+        let key_str = key.to_string();
+        let serialized_values: Result<Vec<String>, _> = values
+            .iter()
+            .map(|v| serde_json::to_string(v).map_err(|e| CacheError::SerializationError(e.to_string())))
+            .collect();
+        let serialized_values = serialized_values?;
+
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: i64 = conn
+            .sadd(&key_str, &serialized_values)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
     }
 
-    async fn zset_score<K, V>(&self, _key: K, _member: &V) -> CacheResult<Option<f64>>
+    /// Remove values from a set
+    async fn set_remove<K, V>(&self, key: K, values: &[V]) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
         V: Serialize + Send + Sync + 'static,
     {
-        todo!("zset_score not implemented for RedisCache")
+        let key_str = key.to_string();
+        let serialized_values: Result<Vec<String>, _> = values
+            .iter()
+            .map(|v| serde_json::to_string(v).map_err(|e| CacheError::SerializationError(e.to_string())))
+            .collect();
+        let serialized_values = serialized_values?;
+
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: i64 = conn
+            .srem(&key_str, &serialized_values)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
     }
 
-    async fn zset_increment_score<K, V>(
-        &self,
-        _key: K,
-        _member: &V,
-        _increment: f64,
-    ) -> CacheResult<f64>
-    where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
-    {
-        todo!("zset_increment_score not implemented for RedisCache")
-    }
-
-    async fn zset_range<K, V>(&self, _key: K, _start: isize, _stop: isize) -> CacheResult<Vec<V>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + Send + Sync + 'static,
-    {
-        todo!("zset_range not implemented for RedisCache")
-    }
-
-    async fn zset_range_with_scores<K, V>(
-        &self,
-        _key: K,
-        _start: isize,
-        _stop: isize,
-    ) -> CacheResult<Vec<(V, f64)>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + Send + Sync + 'static,
-    {
-        todo!("zset_range_with_scores not implemented for RedisCache")
-    }
-
-    async fn zset_range_by_score<K, V>(&self, _key: K, _min: f64, _max: f64) -> CacheResult<Vec<V>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + Send + Sync + 'static,
-    {
-        todo!("zset_range_by_score not implemented for RedisCache")
-    }
-
-    async fn zset_range_by_score_with_scores<K, V>(
-        &self,
-        _key: K,
-        _min: f64,
-        _max: f64,
-    ) -> CacheResult<Vec<(V, f64)>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + Send + Sync + 'static,
-    {
-        todo!("zset_range_by_score_with_scores not implemented for RedisCache")
-    }
-
-    async fn zset_rank<K, V>(&self, _key: K, _member: &V) -> CacheResult<Option<usize>>
-    where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
-    {
-        todo!("zset_rank not implemented for RedisCache")
-    }
-
-    async fn zset_reverse_rank<K, V>(&self, _key: K, _member: &V) -> CacheResult<Option<usize>>
-    where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
-    {
-        todo!("zset_reverse_rank not implemented for RedisCache")
-    }
-
-    async fn zset_length<K>(&self, _key: K) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-    {
-        todo!("zset_length not implemented for RedisCache")
-    }
-
-    async fn zset_count<K>(&self, _key: K, _min: f64, _max: f64) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-    {
-        todo!("zset_count not implemented for RedisCache")
-    }
-
-    async fn zset_intersection_store<K, D>(
-        &self,
-        _destination: D,
-        _keys: Vec<K>,
-        _weights: Option<Vec<f64>>,
-        _aggregate: Option<String>,
-    ) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-        D: CacheKey + 'static,
-    {
-        todo!("zset_intersection_store not implemented for RedisCache")
-    }
-
-    async fn zset_union_store<K, D>(
-        &self,
-        _destination: D,
-        _keys: Vec<K>,
-        _weights: Option<Vec<f64>>,
-        _aggregate: Option<String>,
-    ) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-        D: CacheKey + 'static,
-    {
-        todo!("zset_union_store not implemented for RedisCache")
-    }
-
-    // End Stubs for missing CacheOperations methods
-
-    async fn hash_get_all<K, V>(&self, key: K) -> CacheResult<Vec<(String, V)>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
-    {
-        let key_str = self.key_to_string(&key).await?;
-        let prefixed_key_str = self.connection_manager.prefixed_key(&key_str);
-        let prefixed_key_clone = prefixed_key_str.clone();
-
-        let result: HashMap<String, Vec<u8>> = self
-            .connection_manager
-            .execute_command(&prefixed_key_str, "HGETALL", move |mut conn| async move {
-                let result: redis::RedisResult<HashMap<String, Vec<u8>>> = redis::cmd("HGETALL")
-                    .arg(&prefixed_key_clone)
-                    .query_async(&mut conn)
-                    .await;
-
-                result
-            })
-            .await?;
-
-        let mut entries = Vec::with_capacity(result.len());
-        for (field, value_bytes) in result {
-            let value = self.deserialize(&value_bytes).await?;
-            entries.push((field, value));
-        }
-
-        Ok(entries)
-    }
-
-    async fn hash_keys<K>(&self, _key: K) -> CacheResult<Vec<String>>
-    where
-        K: CacheKey + 'static,
-    {
-        todo!("Implement hash_keys method")
-    }
-}
-
-impl Cache for RedisCache {}
-
-#[async_trait]
-impl CacheOperations for RedisCache {
-    /// Implement the set_contains method to check if a member exists in a set
+    /// Check if a value is a member of a set
     async fn set_contains<K, V>(&self, key: K, value: &V) -> CacheResult<bool>
     where
         K: CacheKey + 'static,
         V: Serialize + Send + Sync + 'static,
     {
-        let key_str = self.key_to_string(&key).await?;
-        let serialized = self.serialize(value).await?;
-        let prefixed_key_str = self.connection_manager.prefixed_key(&key_str);
-        let prefixed_key_clone = prefixed_key_str.clone();
+        let key_str = key.to_string();
+        let serialized = serde_json::to_string(value)
+            .map_err(|e| CacheError::SerializationError(e.to_string()))?;
 
-        let result = self
-            .connection_manager
-            .execute_command(&prefixed_key_str, "SISMEMBER", move |mut conn| async move {
-                let result: redis::RedisResult<bool> = redis::cmd("SISMEMBER")
-                    .arg(&prefixed_key_clone)
-                    .arg(&serialized)
-                    .query_async(&mut conn)
-                    .await;
+        let mut conn = self.connection_manager.get_connection().await?;
 
-                result
-            })
-            .await?;
+        let result: bool = conn
+            .sismember(&key_str, serialized)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
 
         Ok(result)
     }
 
-    /// Get a value from the cache
-    async fn get<K, V>(&self, key: K) -> CacheResult<Option<V>>
+    /// Get all members of a set
+    async fn set_members<K, V>(&self, key: K) -> CacheResult<Vec<V>>
     where
         K: CacheKey + 'static,
         V: DeserializeOwned + 'static,
     {
-        let key_str = self.key_to_string(&key).await?;
-        let key_str_clone = key_str.clone();
+        let key_str = key.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
 
-        let result = self
-            .connection_manager
-            .execute_command(&key_str, "GET", |mut conn| async move {
-                let data: Option<Vec<u8>> = conn.get(&key_str_clone).await?;
-                Ok(data)
-            })
-            .await?;
+        let members: Vec<String> = conn
+            .smembers(&key_str)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        let mut values = Vec::with_capacity(members.len());
+        for member in members {
+            let deserialized = serde_json::from_str(&member)
+                .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+            values.push(deserialized);
+        }
+
+        Ok(values)
+    }
+
+    /// Get the number of members in a set
+    async fn set_length<K>(&self, key: K) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+    {
+        let key_str = key.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: i64 = conn
+            .scard(&key_str)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
+    }
+
+    /// Get the intersection of multiple sets
+    async fn set_intersection<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        let key_strs: Vec<String> = keys.into_iter().map(|k| k.to_string()).collect();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let members: Vec<String> = conn
+            .sinter(&key_strs)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        let mut values = Vec::with_capacity(members.len());
+        for member in members {
+            let deserialized = serde_json::from_str(&member)
+                .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+            values.push(deserialized);
+        }
+
+        Ok(values)
+    }
+
+    /// Store the intersection of multiple sets in a destination set
+    async fn set_intersection_store<K, D>(&self, destination: D, keys: Vec<K>) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        D: CacheKey + 'static,
+    {
+        let dest_str = destination.to_string();
+        let key_strs: Vec<String> = keys.into_iter().map(|k| k.to_string()).collect();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: i64 = conn
+            .sinterstore(&dest_str, &key_strs)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
+    }
+
+    /// Get the union of multiple sets
+    async fn set_union<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        let key_strs: Vec<String> = keys.into_iter().map(|k| k.to_string()).collect();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let members: Vec<String> = conn
+            .sunion(&key_strs)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        let mut values = Vec::with_capacity(members.len());
+        for member in members {
+            let deserialized = serde_json::from_str(&member)
+                .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+            values.push(deserialized);
+        }
+
+        Ok(values)
+    }
+
+    /// Store the union of multiple sets in a destination set
+    async fn set_union_store<K, D>(&self, destination: D, keys: Vec<K>) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        D: CacheKey + 'static,
+    {
+        let dest_str = destination.to_string();
+        let key_strs: Vec<String> = keys.into_iter().map(|k| k.to_string()).collect();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: i64 = conn
+            .sunionstore(&dest_str, &key_strs)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
+    }
+
+    /// Get the difference between multiple sets
+    async fn set_difference<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        let key_strs: Vec<String> = keys.into_iter().map(|k| k.to_string()).collect();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let members: Vec<String> = conn
+            .sdiff(&key_strs)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        let mut values = Vec::with_capacity(members.len());
+        for member in members {
+            let deserialized = serde_json::from_str(&member)
+                .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+            values.push(deserialized);
+        }
+
+        Ok(values)
+    }
+
+    /// Store the difference between multiple sets in a destination set
+    async fn set_difference_store<K, D>(&self, destination: D, keys: Vec<K>) -> CacheResult<usize>
+    where
+        K: CacheKey + 'static,
+        D: CacheKey + 'static,
+    {
+        let dest_str = destination.to_string();
+        let key_strs: Vec<String> = keys.into_iter().map(|k| k.to_string()).collect();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: i64 = conn
+            .sdiffstore(&dest_str, &key_strs)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
+    }
+
+    /// Get random members from a set
+    async fn set_random_members<K, V>(&self, key: K, count: usize) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        let key_str = key.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let members: Vec<String> = if count == 1 {
+            let result: Option<String> = conn
+                .srandmember(&key_str)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+            result.into_iter().collect()
+        } else {
+            conn.srandmember_multiple(&key_str, count as isize)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?
+        };
+
+        let mut values = Vec::with_capacity(members.len());
+        for member in members {
+            let deserialized = serde_json::from_str(&member)
+                .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+            values.push(deserialized);
+        }
+
+        Ok(values)
+    }
+
+    // === Hash operations ===
+
+    /// Get a value from a hash
+    async fn hash_get<K, F, V>(&self, key: K, field: F) -> CacheResult<Option<V>>
+    where
+        K: CacheKey + 'static,
+        F: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        let key_str = key.to_string();
+        let field_str = field.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: Option<String> = conn
+            .hget(&key_str, &field_str)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
 
         match result {
-            Some(bytes) => {
-                let value = self.deserialize(&bytes).await?;
-                Ok(Some(value))
+            Some(value) => {
+                let deserialized = serde_json::from_str(&value)
+                    .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                Ok(Some(deserialized))
             }
             None => Ok(None),
         }
     }
 
-    /// Get multiple values from the cache
-    async fn get_many<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<Option<V>>>
+    /// Set a value in a hash
+    async fn hash_set<K, F, V>(&self, key: K, field: F, value: &V) -> CacheResult<bool>
     where
         K: CacheKey + 'static,
+        F: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        let key_str = key.to_string();
+        let field_str = field.to_string();
+        let serialized = serde_json::to_string(value)
+            .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: bool = conn
+            .hset(&key_str, &field_str, serialized)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result)
+    }
+
+    /// Get multiple values from a hash
+    async fn hash_get_many<K, F, V>(&self, key: K, fields: Vec<F>) -> CacheResult<Vec<Option<V>>>
+    where
+        K: CacheKey + 'static,
+        F: CacheKey + 'static,
         V: DeserializeOwned + 'static,
     {
-        let mut results = Vec::with_capacity(keys.len());
-        for key in keys {
-            results.push(self.get(key).await?);
-        }
-        Ok(results)
-    }
+        let key_str = key.to_string();
+        let field_strs: Vec<String> = fields.into_iter().map(|f| f.to_string()).collect();
+        let mut conn = self.connection_manager.get_connection().await?;
 
-    /// Set a value in the cache
-    async fn set<K, V>(&self, key: K, value: &V, options: Option<CacheOptions>) -> CacheResult<()>
-    where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
-    {
-        let ttl = options.and_then(|opts| opts.ttl);
-        let key_str = self.key_to_string(&key).await?;
-        let value_bytes = self.serialize(value).await?;
+        let results: Vec<Option<String>> = conn
+            .hmget(&key_str, &field_strs)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
 
-        let key_str_clone = key_str.clone();
-
-        self.connection_manager
-            .execute_command(&key_str, "SET", |mut conn| async move {
-                match ttl {
-                    Some(ttl) => {
-                        conn.set_ex(&key_str_clone, value_bytes, ttl.as_secs() as usize)
-                            .await?;
-                    }
-                    None => {
-                        conn.set(&key_str_clone, value_bytes).await?;
-                    }
+        let mut values = Vec::with_capacity(results.len());
+        for result in results {
+            match result {
+                Some(value) => {
+                    let deserialized = serde_json::from_str(&value)
+                        .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                    values.push(Some(deserialized));
                 }
-                Ok(())
-            })
-            .await?;
-
-        Ok(())
-    }
-
-    /// Set multiple values in the cache
-    async fn set_many<K, V>(
-        &self,
-        entries: Vec<(K, V)>,
-        options: Option<CacheOptions>,
-    ) -> CacheResult<()>
-    where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
-    {
-        let ttl = options.and_then(|opts| opts.ttl);
-        for (key, value) in entries {
-            self.set(key, &value, ttl).await?;
-        }
-        Ok(())
-    }
-
-    /// Delete a value from the cache
-    async fn delete<K>(&self, key: K) -> CacheResult<bool>
-    where
-        K: CacheKey + 'static,
-    {
-        let timer = TimedOperation::new(metrics::names::DELETE);
-        let key_str = self.key_to_string(&key).await?;
-        let key_str_clone = key_str.clone();
-
-        let result = self
-            .connection_manager
-            .execute_command(&key_str, "DEL", |mut conn| async move {
-                let res: i32 = conn.del(&key_str_clone).await?;
-                Ok(res > 0)
-            })
-            .await;
-
-        timer.record(&result);
-        result.map_err(Into::into)
-    }
-
-    /// Delete multiple values from the cache
-    async fn delete_many<K>(&self, keys: Vec<K>) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-    {
-        let mut count = 0;
-        for key in keys {
-            if self.delete(&key).await? {
-                count += 1;
+                None => values.push(None),
             }
         }
-        Ok(count)
+
+        Ok(values)
     }
 
-    /// Check if a key exists in the cache
-    async fn exists<K>(&self, key: K) -> CacheResult<bool>
+    /// Set multiple values in a hash
+    async fn hash_set_many<K, F, V>(&self, key: K, entries: Vec<(F, V)>) -> CacheResult<()>
     where
         K: CacheKey + 'static,
+        F: CacheKey + 'static,
+        V: Serialize + Send + Sync + 'static,
     {
-        let key_str = self.key_to_string(&key).await?;
-        let key_str_clone = key_str.clone();
+        let key_str = key.to_string();
+        let mut field_values = Vec::with_capacity(entries.len() * 2);
 
-        let result = self
-            .connection_manager
-            .execute_command(&key_str, "EXISTS", |mut conn| async move {
-                conn.exists(&key_str_clone).await
-            })
-            .await;
+        for (field, value) in entries {
+            let field_str = field.to_string();
+            let serialized = serde_json::to_string(&value)
+                .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+            field_values.push((field_str, serialized));
+        }
 
-        result.map_err(|e| e.into())
-    }
+        let mut conn = self.connection_manager.get_connection().await?;
 
-    /// Increment a counter in the cache
-    async fn increment<K>(&self, key: K, amount: i64) -> CacheResult<i64>
-    where
-        K: CacheKey + 'static,
-    {
-        let key_str = self.key_to_string(&key).await?;
-        let key_str_clone = key_str.clone();
-
-        let result = self
-            .connection_manager
-            .execute_command(&key_str, "INCRBY", |mut conn| async move {
-                conn.incr(&key_str_clone, amount).await
-            })
-            .await;
-
-        result.map_err(|e| e.into())
-    }
-
-    /// Expire a key in the cache
-    async fn expire<K>(&self, key: K, ttl: Duration) -> CacheResult<bool>
-    where
-        K: CacheKey + 'static,
-    {
-        let ttl_secs = ttl.as_secs() as i64;
-        let key_str = self.key_to_string(&key).await?;
-        let key_str_clone = key_str.clone();
-        let timer = TimedOperation::new(metrics::names::EXPIRE);
-
-        let result = self
-            .connection_manager
-            .execute_command(&key_str, "EXPIRE", |mut conn| async move {
-                conn.expire(&key_str_clone, ttl_secs as usize).await
-            })
-            .await;
-
-        timer.record(&result);
-        result.map_err(Into::into)
-    }
-
-    /// Clear the entire cache
-    async fn clear(&self) -> CacheResult<()> {
-        self.connection_manager
-            .execute_command("", "FLUSHDB", |mut conn| async move {
-                let _: String = redis::cmd("FLUSHDB").query_async(&mut conn).await?;
-                Ok(())
-            })
+        conn.hset_multiple(&key_str, &field_values)
             .await
-            .map_err(Into::into)
-    }
-
-    /// Get the health status of the cache
-    async fn health_check(&self) -> CacheResult<()> {
-        self.connection_manager
-            .execute_command("", "PING", |mut conn| async move {
-                let response: String = redis::cmd("PING").query_async(&mut conn).await?;
-                if response == "PONG" {
-                    Ok(())
-                } else {
-                    Err(redis::RedisError::from(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("Unexpected response: {}", response),
-                    )))
-                }
-            })
-            .await
-            .map_err(Into::into)
-    }
-
-    // Add stub implementations for the remaining methods with todo!()
-    async fn list_push_right<K, V>(&self, _key: K, _value: &V) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
-    {
-        todo!("Implement list_push_right method")
-    }
-
-    async fn list_push_right_many<K, V>(&self, _key: K, _values: &[V]) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
-    {
-        todo!("Implement list_push_right_many method")
-    }
-
-    async fn list_push_left<K, V>(&self, _key: K, _value: &V) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
-    {
-        todo!("Implement list_push_left method")
-    }
-
-    async fn list_push_left_many<K, V>(&self, _key: K, _values: &[V]) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
-    {
-        todo!("Implement list_push_left_many method")
-    }
-
-    async fn list_pop_right<K, V>(&self, _key: K) -> CacheResult<Option<V>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
-    {
-        todo!("Implement list_pop_right method")
-    }
-
-    async fn list_pop_left<K, V>(&self, _key: K) -> CacheResult<Option<V>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
-    {
-        todo!("Implement list_pop_left method")
-    }
-
-    async fn list_range<K, V>(&self, _key: K, _start: isize, _stop: isize) -> CacheResult<Vec<V>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
-    {
-        todo!("Implement list_range method")
-    }
-
-    async fn list_length<K>(&self, _key: K) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-    {
-        todo!("Implement list_length method")
-    }
-
-    async fn list_remove<K, V>(&self, _key: K, _count: isize, _value: &V) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
-    {
-        todo!("Implement list_remove method")
-    }
-
-    async fn list_trim<K>(&self, key: K, start: isize, stop: isize) -> CacheResult<()>
-    where
-        K: CacheKey + 'static,
-    {
-        let key_str = self.key_to_string(&key).await?;
-        let prefixed_key_str = self.connection_manager.prefixed_key(&key_str);
-        let prefixed_key_clone = prefixed_key_str.clone();
-
-        self.connection_manager
-            .execute_command(&prefixed_key_str, "LTRIM", move |mut conn| async move {
-                let result: redis::RedisResult<()> = redis::cmd("LTRIM")
-                    .arg(&prefixed_key_clone)
-                    .arg(start)
-                    .arg(stop)
-                    .query_async(&mut conn)
-                    .await;
-
-                result
-            })
-            .await?;
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
 
         Ok(())
     }
 
-    async fn list_set<K, V>(&self, _key: K, _index: isize, _value: &V) -> CacheResult<()>
-    where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
-    {
-        todo!("Implement list_set method")
-    }
-
-    async fn hash_get<K, F, V>(&self, _key: K, _field: F) -> CacheResult<Option<V>>
-    where
-        K: CacheKey + 'static,
-        F: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
-    {
-        todo!("Implement hash_get method")
-    }
-
-    async fn hash_set<K, F, V>(&self, _key: K, _field: F, _value: &V) -> CacheResult<bool>
-    where
-        K: CacheKey + 'static,
-        F: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
-    {
-        todo!("Implement hash_set method")
-    }
-
-    async fn hash_get_many<K, F, V>(&self, _key: K, _fields: Vec<F>) -> CacheResult<Vec<Option<V>>>
-    where
-        K: CacheKey + 'static,
-        F: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
-    {
-        todo!("Implement hash_get_many method")
-    }
-
-    async fn hash_set_many<K, F, V>(&self, _key: K, _entries: Vec<(F, V)>) -> CacheResult<()>
-    where
-        K: CacheKey + 'static,
-        F: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
-    {
-        todo!("Implement hash_set_many method")
-    }
-
-    async fn hash_exists<K, F>(&self, _key: K, _field: F) -> CacheResult<bool>
+    /// Check if a field exists in a hash
+    async fn hash_exists<K, F>(&self, key: K, field: F) -> CacheResult<bool>
     where
         K: CacheKey + 'static,
         F: CacheKey + 'static,
     {
-        todo!("Implement hash_exists method")
+        let key_str = key.to_string();
+        let field_str = field.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: bool = conn
+            .hexists(&key_str, &field_str)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result)
     }
 
-    async fn hash_delete<K, F>(&self, _key: K, _fields: Vec<F>) -> CacheResult<usize>
+    /// Delete fields from a hash
+    async fn hash_delete<K, F>(&self, key: K, fields: Vec<F>) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
         F: CacheKey + 'static,
     {
-        todo!("Implement hash_delete method")
+        let key_str = key.to_string();
+        let field_strs: Vec<String> = fields.into_iter().map(|f| f.to_string()).collect();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: i64 = conn
+            .hdel(&key_str, &field_strs)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
     }
 
-    async fn hash_keys<K>(&self, _key: K) -> CacheResult<Vec<String>>
-    where
-        K: CacheKey + 'static,
-    {
-        todo!("Implement hash_keys method")
-    }
-
-    async fn hash_values<K, V>(&self, _key: K) -> CacheResult<Vec<V>>
+    /// Get all entries from a hash
+    async fn hash_get_all<K, V>(&self, key: K) -> CacheResult<Vec<(String, V)>>
     where
         K: CacheKey + 'static,
         V: DeserializeOwned + 'static,
     {
-        todo!("Implement hash_values method")
+        let key_str = key.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let entries: HashMap<String, String> = conn
+            .hgetall(&key_str)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        let mut values = Vec::with_capacity(entries.len());
+        for (field, value) in entries {
+            let deserialized = serde_json::from_str(&value)
+                .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+            values.push((field, deserialized));
+        }
+
+        Ok(values)
     }
 
-    async fn hash_increment<K, F>(&self, _key: K, _field: F, _amount: i64) -> CacheResult<i64>
+    /// Get all fields from a hash
+    async fn hash_keys<K>(&self, key: K) -> CacheResult<Vec<String>>
+    where
+        K: CacheKey + 'static,
+    {
+        let key_str = key.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let keys: Vec<String> = conn
+            .hkeys(&key_str)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(keys)
+    }
+
+    /// Get all values from a hash
+    async fn hash_values<K, V>(&self, key: K) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
+    {
+        let key_str = key.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let values: Vec<String> = conn
+            .hvals(&key_str)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        let mut deserialized_values = Vec::with_capacity(values.len());
+        for value in values {
+            let deserialized = serde_json::from_str(&value)
+                .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+            deserialized_values.push(deserialized);
+        }
+
+        Ok(deserialized_values)
+    }
+
+    /// Increment a field in a hash
+    async fn hash_increment<K, F>(&self, key: K, field: F, increment: i64) -> CacheResult<i64>
     where
         K: CacheKey + 'static,
         F: CacheKey + 'static,
     {
-        todo!("Implement hash_increment method")
+        let key_str = key.to_string();
+        let field_str = field.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: i64 = conn
+            .hincr(&key_str, &field_str, increment)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result)
     }
 
-    async fn hash_length<K>(&self, _key: K) -> CacheResult<usize>
+    /// Get the number of fields in a hash
+    async fn hash_length<K>(&self, key: K) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
     {
-        todo!("Implement hash_length method")
+        let key_str = key.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: i64 = conn
+            .hlen(&key_str)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
     }
 
-    async fn set_add<K, V>(&self, _key: K, _members: Vec<V>) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
-    {
-        todo!("Implement set_add method")
-    }
-
-    async fn set_remove<K, V>(&self, _key: K, _members: Vec<V>) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
-    {
-        todo!("Implement set_remove method")
-    }
-
-    async fn set_members<K, V>(&self, _key: K) -> CacheResult<Vec<V>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
-    {
-        todo!("Implement set_members method")
-    }
-
-    async fn set_length<K>(&self, _key: K) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-    {
-        todo!("Implement set_length method")
-    }
-
-    async fn set_intersection<K, V>(&self, _keys: Vec<K>) -> CacheResult<Vec<V>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
-    {
-        todo!("Implement set_intersection method")
-    }
-
-    async fn set_intersection_store<K, D>(
-        &self,
-        _destination: D,
-        _keys: Vec<K>,
-    ) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-        D: CacheKey + 'static,
-    {
-        todo!("Implement set_intersection_store method")
-    }
-
-    async fn set_union<K, V>(&self, _keys: Vec<K>) -> CacheResult<Vec<V>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
-    {
-        todo!("Implement set_union method")
-    }
-
-    async fn set_union_store<K, D>(&self, _destination: D, _keys: Vec<K>) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-        D: CacheKey + 'static,
-    {
-        todo!("Implement set_union_store method")
-    }
-
-    async fn set_difference<K, V>(&self, _keys: Vec<K>) -> CacheResult<Vec<V>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
-    {
-        todo!("Implement set_difference method")
-    }
-
-    async fn set_difference_store<K, D>(&self, _destination: D, _keys: Vec<K>) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-        D: CacheKey + 'static,
-    {
-        todo!("Implement set_difference_store method")
-    }
-
-    async fn set_random_members<K, V>(&self, _key: K, _count: usize) -> CacheResult<Vec<V>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
-    {
-        todo!("Implement set_random_members method")
-    }
-
-    async fn zset_add<K, V>(&self, _key: K, _items: Vec<(f64, V)>) -> CacheResult<usize>
+    /// Add members with scores to a sorted set
+    async fn zset_add<K, V>(&self, key: K, items: Vec<(f64, V)>) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
         V: Serialize + Send + Sync + 'static,
     {
-        todo!("Implement zset_add method")
+        let key_str = key.to_string();
+        let mut score_members = Vec::with_capacity(items.len() * 2);
+        for (score, member) in items {
+            let member_str = serde_json::to_string(&member)
+                .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+            score_members.push((score, member_str));
+        }
+
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: i64 = conn
+            .zadd_multiple(&key_str, &score_members)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
     }
 
-    async fn zset_remove<K, V>(&self, _key: K, _members: Vec<V>) -> CacheResult<usize>
+    /// Remove members from a sorted set
+    async fn zset_remove<K, V>(&self, key: K, members: Vec<V>) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
         V: Serialize + Send + Sync + 'static,
     {
-        todo!("Implement zset_remove method")
+        let key_str = key.to_string();
+        let member_strs: Result<Vec<String>, _> = members
+            .iter()
+            .map(|m| serde_json::to_string(m).map_err(|e| CacheError::SerializationError(e.to_string())))
+            .collect();
+        let member_strs = member_strs?;
+
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: i64 = conn
+            .zrem(&key_str, &member_strs)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
     }
 
-    async fn zset_score<K, V>(&self, _key: K, _member: &V) -> CacheResult<Option<f64>>
+    /// Get the score of a member in a sorted set
+    async fn zset_score<K, V>(&self, key: K, member: &V) -> CacheResult<Option<f64>>
     where
         K: CacheKey + 'static,
         V: Serialize + Send + Sync + 'static,
     {
-        todo!("Implement zset_score method")
+        let key_str = key.to_string();
+        let member_str = serde_json::to_string(member)
+            .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: Option<f64> = conn
+            .zscore(&key_str, member_str)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result)
     }
 
-    async fn zset_increment_score<K, V>(
-        &self,
-        _key: K,
-        _member: &V,
-        _increment: f64,
-    ) -> CacheResult<f64>
+    /// Increment the score of a member in a sorted set
+    async fn zset_increment_score<K, V>(&self, key: K, member: &V, increment: f64) -> CacheResult<f64>
     where
         K: CacheKey + 'static,
         V: Serialize + Send + Sync + 'static,
     {
-        todo!("Implement zset_increment_score method")
+        let key_str = key.to_string();
+        let member_str = serde_json::to_string(member)
+            .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: f64 = conn
+            .zincr(&key_str, member_str, increment)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result)
     }
 
-    async fn zset_range<K, V>(&self, _key: K, _start: isize, _stop: isize) -> CacheResult<Vec<V>>
+    /// Get a range of members from a sorted set by rank
+    async fn zset_range<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<V>>
     where
         K: CacheKey + 'static,
         V: DeserializeOwned + 'static,
     {
-        todo!("Implement zset_range method")
+        let key_str = key.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let members: Vec<String> = conn
+            .zrange(&key_str, start, stop)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        let mut values = Vec::with_capacity(members.len());
+        for member in members {
+            let deserialized = serde_json::from_str(&member)
+                .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+            values.push(deserialized);
+        }
+
+        Ok(values)
     }
 
-    async fn zset_range_with_scores<K, V>(
-        &self,
-        _key: K,
-        _start: isize,
-        _stop: isize,
-    ) -> CacheResult<Vec<(V, f64)>>
+    /// Get a range of members with scores from a sorted set by rank
+    async fn zset_range_with_scores<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<(V, f64)>>
     where
         K: CacheKey + 'static,
         V: DeserializeOwned + 'static,
     {
-        todo!("Implement zset_range_with_scores method")
+        let key_str = key.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let members: Vec<(String, f64)> = conn
+            .zrange_withscores(&key_str, start, stop)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        let mut values = Vec::with_capacity(members.len());
+        for (member, score) in members {
+            let deserialized = serde_json::from_str(&member)
+                .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+            values.push((deserialized, score));
+        }
+
+        Ok(values)
     }
 
-    async fn zset_range_by_score<K, V>(&self, _key: K, _min: f64, _max: f64) -> CacheResult<Vec<V>>
+    /// Get a range of members from a sorted set by score
+    async fn zset_range_by_score<K, V>(&self, key: K, min: f64, max: f64) -> CacheResult<Vec<V>>
     where
         K: CacheKey + 'static,
         V: DeserializeOwned + 'static,
     {
-        todo!("Implement zset_range_by_score method")
+        let key_str = key.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let members: Vec<String> = conn
+            .zrangebyscore(&key_str, min, max)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        let mut values = Vec::with_capacity(members.len());
+        for member in members {
+            let deserialized = serde_json::from_str(&member)
+                .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+            values.push(deserialized);
+        }
+
+        Ok(values)
     }
 
-    async fn zset_range_by_score_with_scores<K, V>(
-        &self,
-        _key: K,
-        _min: f64,
-        _max: f64,
-    ) -> CacheResult<Vec<(V, f64)>>
+    /// Get a range of members with scores from a sorted set by score
+    async fn zset_range_by_score_with_scores<K, V>(&self, key: K, min: f64, max: f64) -> CacheResult<Vec<(V, f64)>>
     where
         K: CacheKey + 'static,
         V: DeserializeOwned + 'static,
     {
-        todo!("Implement zset_range_by_score_with_scores method")
+        let key_str = key.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let members: Vec<(String, f64)> = conn
+            .zrangebyscore_withscores(&key_str, min, max)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        let mut values = Vec::with_capacity(members.len());
+        for (member, score) in members {
+            let deserialized = serde_json::from_str(&member)
+                .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+            values.push((deserialized, score));
+        }
+
+        Ok(values)
     }
 
-    async fn zset_rank<K, V>(&self, _key: K, _member: &V) -> CacheResult<Option<usize>>
+    /// Get the rank of a member in a sorted set
+    async fn zset_rank<K, V>(&self, key: K, member: &V) -> CacheResult<Option<usize>>
     where
         K: CacheKey + 'static,
         V: Serialize + Send + Sync + 'static,
     {
-        todo!("Implement zset_rank method")
+        let key_str = key.to_string();
+        let member_str = serde_json::to_string(member)
+            .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: Option<isize> = conn
+            .zrank(&key_str, member_str)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result.map(|r| r as usize))
     }
 
-    async fn zset_reverse_rank<K, V>(&self, _key: K, _member: &V) -> CacheResult<Option<usize>>
+    /// Get the reverse rank of a member in a sorted set
+    async fn zset_reverse_rank<K, V>(&self, key: K, member: &V) -> CacheResult<Option<usize>>
     where
         K: CacheKey + 'static,
         V: Serialize + Send + Sync + 'static,
     {
-        todo!("Implement zset_reverse_rank method")
+        let key_str = key.to_string();
+        let member_str = serde_json::to_string(member)
+            .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: Option<isize> = conn
+            .zrevrank(&key_str, member_str)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result.map(|r| r as usize))
     }
 
-    async fn zset_length<K>(&self, _key: K) -> CacheResult<usize>
+    /// Get the number of members in a sorted set
+    async fn zset_length<K>(&self, key: K) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
     {
-        todo!("Implement zset_length method")
+        let key_str = key.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: i64 = conn
+            .zcard(&key_str)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
     }
 
-    async fn zset_count<K>(&self, _key: K, _min: f64, _max: f64) -> CacheResult<usize>
+    /// Count the number of members in a sorted set with scores within the given range
+    async fn zset_count<K>(&self, key: K, min: f64, max: f64) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
     {
-        todo!("Implement zset_count method")
+        let key_str = key.to_string();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: i64 = conn
+            .zcount(&key_str, min, max)
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
     }
 
+    /// Store the intersection of multiple sorted sets in a destination sorted set
     async fn zset_intersection_store<K, D>(
         &self,
-        _destination: D,
-        _keys: Vec<K>,
-        _weights: Option<Vec<f64>>,
-        _aggregate: Option<String>,
+        destination: D,
+        keys: Vec<K>,
+        weights: Option<Vec<f64>>,
+        aggregate: Option<String>,
     ) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
         D: CacheKey + 'static,
     {
-        todo!("Implement zset_intersection_store method")
+        if keys.is_empty() {
+            return Ok(0);
+        }
+
+        let dest_str = destination.to_string();
+        let key_strs: Vec<String> = keys.into_iter().map(|k| k.to_string()).collect();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: i64 = conn
+            .zinterstore_weighted(&dest_str, &key_strs, weights.as_deref(), aggregate.as_deref())
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
     }
 
+    /// Store the union of multiple sorted sets in a destination sorted set
     async fn zset_union_store<K, D>(
         &self,
-        _destination: D,
-        _keys: Vec<K>,
-        _weights: Option<Vec<f64>>,
-        _aggregate: Option<String>,
+        destination: D,
+        keys: Vec<K>,
+        weights: Option<Vec<f64>>,
+        aggregate: Option<String>,
     ) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
         D: CacheKey + 'static,
     {
-        todo!("Implement zset_union_store method")
+        if keys.is_empty() {
+            return Ok(0);
+        }
+
+        let dest_str = destination.to_string();
+        let key_strs: Vec<String> = keys.into_iter().map(|k| k.to_string()).collect();
+        let mut conn = self.connection_manager.get_connection().await?;
+
+        let result: i64 = conn
+            .zunionstore_weighted(&dest_str, &key_strs, weights.as_deref(), aggregate.as_deref())
+            .await
+            .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+        Ok(result as usize)
+    }
+
+    #[async_trait]
+    impl CacheOperations for RedisCache {
+        /// Get a value from the cache
+        async fn get<K, V>(&self, key: K) -> CacheResult<Option<V>>
+        where
+            K: CacheKey + 'static,
+            V: DeserializeOwned + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: Option<String> = conn
+                .get(&key_str)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            match result {
+                Some(value) => {
+                    let deserialized = serde_json::from_str(&value)
+                        .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                    Ok(Some(deserialized))
+                }
+                None => Ok(None),
+            }
+        }
+
+        /// Get multiple values from the cache
+        async fn get_many<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<Option<V>>>
+        where
+            K: CacheKey + 'static,
+            V: DeserializeOwned + 'static,
+        {
+            let key_strs: Vec<String> = keys.into_iter().map(|k| k.to_string()).collect();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let results: Vec<Option<String>> = conn
+                .mget(&key_strs)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            let mut values = Vec::with_capacity(results.len());
+            for result in results {
+                match result {
+                    Some(value) => {
+                        let deserialized = serde_json::from_str(&value)
+                            .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                        values.push(Some(deserialized));
+                    }
+                    None => values.push(None),
+                }
+            }
+
+            Ok(values)
+        }
+
+        /// Set a value in the cache
+        async fn set<K, V>(&self, key: K, value: &V, options: Option<CacheOptions>) -> CacheResult<()>
+        where
+            K: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let key_str = key.to_string();
+            let serialized = serde_json::to_string(value)
+                .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            if let Some(opts) = options {
+                if let Some(ttl) = opts.ttl {
+                    conn.set_ex(&key_str, serialized, ttl.as_secs() as usize)
+                        .await
+                        .map_err(|e| CacheError::OperationError(e.to_string()))?;
+                } else {
+                    conn.set(&key_str, serialized)
+                        .await
+                        .map_err(|e| CacheError::OperationError(e.to_string()))?;
+                }
+            } else {
+                conn.set(&key_str, serialized)
+                    .await
+                    .map_err(|e| CacheError::OperationError(e.to_string()))?;
+            }
+
+            Ok(())
+        }
+
+        /// Set multiple values in the cache
+        async fn set_many<K, V>(
+            &self,
+            entries: Vec<(K, V)>,
+            options: Option<CacheOptions>,
+        ) -> CacheResult<()>
+        where
+            K: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let mut conn = self.connection_manager.get_connection().await?;
+            let mut pipeline = redis::pipe();
+
+            for (key, value) in entries {
+                let key_str = key.to_string();
+                let serialized = serde_json::to_string(&value)
+                    .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+                if let Some(opts) = &options {
+                    if let Some(ttl) = opts.ttl {
+                        pipeline.set_ex(&key_str, serialized, ttl.as_secs() as usize);
+                    } else {
+                        pipeline.set(&key_str, serialized);
+                    }
+                } else {
+                    pipeline.set(&key_str, serialized);
+                }
+            }
+
+            pipeline
+                .query_async(&mut conn)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(())
+        }
+
+        /// Delete a value from the cache
+        async fn delete<K>(&self, key: K) -> CacheResult<bool>
+        where
+            K: CacheKey + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .del(&key_str)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result > 0)
+        }
+
+        /// Delete multiple values from the cache
+        async fn delete_many<K>(&self, keys: Vec<K>) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+        {
+            let key_strs: Vec<String> = keys.into_iter().map(|k| k.to_string()).collect();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .del(&key_strs)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        /// Check if a key exists in the cache
+        async fn exists<K>(&self, key: K) -> CacheResult<bool>
+        where
+            K: CacheKey + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .exists(&key_str)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result > 0)
+        }
+
+        /// Increment a counter in the cache
+        async fn increment<K>(&self, key: K, amount: i64) -> CacheResult<i64>
+        where
+            K: CacheKey + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .incr(&key_str, amount)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result)
+        }
+
+        /// Set expiry for a key
+        async fn expire<K>(&self, key: K, ttl: Duration) -> CacheResult<bool>
+        where
+            K: CacheKey + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: bool = conn
+                .expire(&key_str, ttl.as_secs() as usize)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result)
+        }
+
+        /// Clear the entire cache
+        async fn clear(&self) -> CacheResult<()> {
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            conn.flushdb()
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(())
+        }
+
+        /// Check the health of the cache
+        async fn health_check(&self) -> CacheResult<()> {
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let _: String = conn
+                .ping()
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(())
+        }
+
+        #[instrument(skip(self, key, field, value))]
+        async fn hash_set<K, F, V>(&self, key: K, field: F, value: &V) -> CacheResult<bool>
+        where
+            K: CacheKey + 'static,
+            F: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let key_str = key.to_string();
+            let field_str = field.to_string();
+            let serialized = serde_json::to_string(value)
+                .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+            let mut conn = self
+                .connection_manager
+                .get_connection()
+                .await
+                .map_err(|e| CacheError::ConnectionError(e.to_string()))?;
+
+            let result: bool = conn
+                .hset(&key_str, &field_str, serialized)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result)
+        }
+
+        #[instrument(skip(self, key, field))]
+        async fn hash_get<K, F, V>(&self, key: K, field: F) -> CacheResult<Option<V>>
+        where
+            K: CacheKey + 'static,
+            F: CacheKey + 'static,
+            V: DeserializeOwned + 'static,
+        {
+            let key_str = key.to_string();
+            let field_str = field.to_string();
+
+            let mut conn = self
+                .connection_manager
+                .get_connection()
+                .await
+                .map_err(|e| CacheError::ConnectionError(e.to_string()))?;
+
+            let result: Option<String> = conn
+                .hget(&key_str, &field_str)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            match result {
+                Some(value) => {
+                    let deserialized = serde_json::from_str(&value)
+                        .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                    Ok(Some(deserialized))
+                }
+                None => Ok(None),
+            }
+        }
+
+        #[instrument(skip(self, key, fields))]
+        async fn hash_get_many<K, F, V>(&self, key: K, fields: Vec<F>) -> CacheResult<Vec<Option<V>>>
+        where
+            K: CacheKey + 'static,
+            F: CacheKey + 'static,
+            V: DeserializeOwned + 'static,
+        {
+            let key_str = key.to_string();
+            let field_strs: Vec<String> = fields.into_iter().map(|f| f.to_string()).collect();
+
+            let mut conn = self
+                .connection_manager
+                .get_connection()
+                .await
+                .map_err(|e| CacheError::ConnectionError(e.to_string()))?;
+
+            let results: Vec<Option<String>> = conn
+                .hmget(&key_str, &field_strs)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            let mut values = Vec::with_capacity(results.len());
+            for result in results {
+                match result {
+                    Some(value) => {
+                        let deserialized = serde_json::from_str(&value)
+                            .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                        values.push(Some(deserialized));
+                    }
+                    None => values.push(None),
+                }
+            }
+
+            Ok(values)
+        }
+
+        #[instrument(skip(self, key, entries))]
+        async fn hash_set_many<K, F, V>(&self, key: K, entries: Vec<(F, V)>) -> CacheResult<()>
+        where
+            K: CacheKey + 'static,
+            F: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let key_str = key.to_string();
+            let mut field_values = Vec::with_capacity(entries.len() * 2);
+
+            for (field, value) in entries {
+                let field_str = field.to_string();
+                let serialized = serde_json::to_string(&value)
+                    .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+                field_values.push((field_str, serialized));
+            }
+
+            let mut conn = self
+                .connection_manager
+                .get_connection()
+                .await
+                .map_err(|e| CacheError::ConnectionError(e.to_string()))?;
+
+            conn.hset_multiple(&key_str, &field_values)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(())
+        }
+
+        #[instrument(skip(self, key, field))]
+        async fn hash_exists<K, F>(&self, key: K, field: F) -> CacheResult<bool>
+        where
+            K: CacheKey + 'static,
+            F: CacheKey + 'static,
+        {
+            let key_str = key.to_string();
+            let field_str = field.to_string();
+
+            let mut conn = self
+                .connection_manager
+                .get_connection()
+                .await
+                .map_err(|e| CacheError::ConnectionError(e.to_string()))?;
+
+            let result: bool = conn
+                .hexists(&key_str, &field_str)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result)
+        }
+
+        #[instrument(skip(self, key, fields))]
+        async fn hash_delete<K, F>(&self, key: K, fields: Vec<F>) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+            F: CacheKey + 'static,
+        {
+            let key_str = key.to_string();
+            let field_strs: Vec<String> = fields.into_iter().map(|f| f.to_string()).collect();
+
+            let mut conn = self
+                .connection_manager
+                .get_connection()
+                .await
+                .map_err(|e| CacheError::ConnectionError(e.to_string()))?;
+
+            let result: i64 = conn
+                .hdel(&key_str, &field_strs)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        #[instrument(skip(self, key))]
+        async fn hash_get_all<K, V>(&self, key: K) -> CacheResult<Vec<(String, V)>>
+        where
+            K: CacheKey + 'static,
+            V: DeserializeOwned + 'static,
+        {
+            let key_str = key.to_string();
+
+            let mut conn = self
+                .connection_manager
+                .get_connection()
+                .await
+                .map_err(|e| CacheError::ConnectionError(e.to_string()))?;
+
+            let entries: HashMap<String, String> = conn
+                .hgetall(&key_str)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            let mut values = Vec::with_capacity(entries.len());
+            for (field, value) in entries {
+                let deserialized = serde_json::from_str(&value)
+                    .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                values.push((field, deserialized));
+            }
+
+            Ok(values)
+        }
+
+        #[instrument(skip(self, key))]
+        async fn hash_keys<K>(&self, key: K) -> CacheResult<Vec<String>>
+        where
+            K: CacheKey + 'static,
+        {
+            let key_str = key.to_string();
+
+            let mut conn = self
+                .connection_manager
+                .get_connection()
+                .await
+                .map_err(|e| CacheError::ConnectionError(e.to_string()))?;
+
+            let keys: Vec<String> = conn
+                .hkeys(&key_str)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(keys)
+        }
+
+        #[instrument(skip(self, key))]
+        async fn hash_values<K, V>(&self, key: K) -> CacheResult<Vec<V>>
+        where
+            K: CacheKey + 'static,
+            V: DeserializeOwned + 'static,
+        {
+            let key_str = key.to_string();
+
+            let mut conn = self
+                .connection_manager
+                .get_connection()
+                .await
+                .map_err(|e| CacheError::ConnectionError(e.to_string()))?;
+
+            let values: Vec<String> = conn
+                .hvals(&key_str)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            let mut deserialized_values = Vec::with_capacity(values.len());
+            for value in values {
+                let deserialized = serde_json::from_str(&value)
+                    .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                deserialized_values.push(deserialized);
+            }
+
+            Ok(deserialized_values)
+        }
+
+        #[instrument(skip(self, key, field))]
+        async fn hash_increment<K, F>(&self, key: K, field: F, increment: i64) -> CacheResult<i64>
+        where
+            K: CacheKey + 'static,
+            F: CacheKey + 'static,
+        {
+            let key_str = key.to_string();
+            let field_str = field.to_string();
+
+            let mut conn = self
+                .connection_manager
+                .get_connection()
+                .await
+                .map_err(|e| CacheError::ConnectionError(e.to_string()))?;
+
+            let result: i64 = conn
+                .hincr(&key_str, &field_str, increment)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result)
+        }
+
+        #[instrument(skip(self, key))]
+        async fn hash_length<K>(&self, key: K) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+        {
+            let key_str = key.to_string();
+
+            let mut conn = self
+                .connection_manager
+                .get_connection()
+                .await
+                .map_err(|e| CacheError::ConnectionError(e.to_string()))?;
+
+            let length: i64 = conn
+                .hlen(&key_str)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(length as usize)
+        }
+
+        // List operations
+        async fn list_push_right<K, V>(&self, key: K, value: &V) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let key_str = key.to_string();
+            let serialized = serde_json::to_string(value)
+                .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .rpush(&key_str, serialized)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        async fn list_push_right_many<K, V>(&self, key: K, values: &[V]) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let key_str = key.to_string();
+            let serialized_values: Result<Vec<String>, _> = values
+                .iter()
+                .map(|v| serde_json::to_string(v).map_err(|e| CacheError::SerializationError(e.to_string())))
+                .collect();
+            let serialized_values = serialized_values?;
+
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .rpush(&key_str, &serialized_values)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        async fn list_push_left<K, V>(&self, key: K, value: &V) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let key_str = key.to_string();
+            let serialized = serde_json::to_string(value)
+                .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .lpush(&key_str, serialized)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        async fn list_push_left_many<K, V>(&self, key: K, values: &[V]) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let key_str = key.to_string();
+            let serialized_values: Result<Vec<String>, _> = values
+                .iter()
+                .map(|v| serde_json::to_string(v).map_err(|e| CacheError::SerializationError(e.to_string())))
+                .collect();
+            let serialized_values = serialized_values?;
+
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .lpush(&key_str, &serialized_values)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        async fn list_pop_right<K, V>(&self, key: K) -> CacheResult<Option<V>>
+        where
+            K: CacheKey + 'static,
+            V: DeserializeOwned + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: Option<String> = conn
+                .rpop(&key_str, Some(1))
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            match result {
+                Some(value) => {
+                    let deserialized = serde_json::from_str(&value)
+                        .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                    Ok(Some(deserialized))
+                }
+                None => Ok(None),
+            }
+        }
+
+        async fn list_pop_left<K, V>(&self, key: K) -> CacheResult<Option<V>>
+        where
+            K: CacheKey + 'static,
+            V: DeserializeOwned + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: Option<String> = conn
+                .lpop(&key_str, Some(1))
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            match result {
+                Some(value) => {
+                    let deserialized = serde_json::from_str(&value)
+                        .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                    Ok(Some(deserialized))
+                }
+                None => Ok(None),
+            }
+        }
+
+        async fn list_range<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<V>>
+        where
+            K: CacheKey + 'static,
+            V: DeserializeOwned + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let results: Vec<String> = conn
+                .lrange(&key_str, start, stop)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            let mut values = Vec::with_capacity(results.len());
+            for value in results {
+                let deserialized = serde_json::from_str(&value)
+                    .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                values.push(deserialized);
+            }
+
+            Ok(values)
+        }
+
+        async fn list_length<K>(&self, key: K) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .llen(&key_str)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        async fn list_remove<K, V>(&self, key: K, value: &V, count: i64) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let key_str = key.to_string();
+            let serialized = serde_json::to_string(value)
+                .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .lrem(&key_str, count, serialized)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        async fn list_trim<K>(&self, key: K, start: isize, stop: isize) -> CacheResult<()>
+        where
+            K: CacheKey + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            conn.ltrim(&key_str, start, stop)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(())
+        }
+
+        async fn list_set<K, V>(&self, key: K, index: isize, value: &V) -> CacheResult<()>
+        where
+            K: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let key_str = key.to_string();
+            let serialized = serde_json::to_string(value)
+                .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            conn.lset(&key_str, index, serialized)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(())
+        }
+
+        // Set operations
+        async fn set_add<K, V>(&self, key: K, values: &[V]) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let key_str = key.to_string();
+            let serialized_values: Result<Vec<String>, _> = values
+                .iter()
+                .map(|v| serde_json::to_string(v).map_err(|e| CacheError::SerializationError(e.to_string())))
+                .collect();
+            let serialized_values = serialized_values?;
+
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .sadd(&key_str, &serialized_values)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        async fn set_remove<K, V>(&self, key: K, values: &[V]) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let key_str = key.to_string();
+            let serialized_values: Result<Vec<String>, _> = values
+                .iter()
+                .map(|v| serde_json::to_string(v).map_err(|e| CacheError::SerializationError(e.to_string())))
+                .collect();
+            let serialized_values = serialized_values?;
+
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .srem(&key_str, &serialized_values)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        async fn set_contains<K, V>(&self, key: K, value: &V) -> CacheResult<bool>
+        where
+            K: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let key_str = key.to_string();
+            let serialized = serde_json::to_string(value)
+                .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: bool = conn
+                .sismember(&key_str, serialized)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result)
+        }
+
+        async fn set_members<K, V>(&self, key: K) -> CacheResult<Vec<V>>
+        where
+            K: CacheKey + 'static,
+            V: DeserializeOwned + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let members: Vec<String> = conn
+                .smembers(&key_str)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            let mut values = Vec::with_capacity(members.len());
+            for member in members {
+                let deserialized = serde_json::from_str(&member)
+                    .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                values.push(deserialized);
+            }
+
+            Ok(values)
+        }
+
+        async fn set_length<K>(&self, key: K) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .scard(&key_str)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        async fn set_intersection<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<V>>
+        where
+            K: CacheKey + 'static,
+            V: DeserializeOwned + 'static,
+        {
+            let key_strs: Vec<String> = keys.into_iter().map(|k| k.to_string()).collect();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let members: Vec<String> = conn
+                .sinter(&key_strs)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            let mut values = Vec::with_capacity(members.len());
+            for member in members {
+                let deserialized = serde_json::from_str(&member)
+                    .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                values.push(deserialized);
+            }
+
+            Ok(values)
+        }
+
+        async fn set_intersection_store<K, D>(&self, destination: D, keys: Vec<K>) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+            D: CacheKey + 'static,
+        {
+            let dest_str = destination.to_string();
+            let key_strs: Vec<String> = keys.into_iter().map(|k| k.to_string()).collect();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .sinterstore(&dest_str, &key_strs)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        async fn set_union<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<V>>
+        where
+            K: CacheKey + 'static,
+            V: DeserializeOwned + 'static,
+        {
+            let key_strs: Vec<String> = keys.into_iter().map(|k| k.to_string()).collect();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let members: Vec<String> = conn
+                .sunion(&key_strs)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            let mut values = Vec::with_capacity(members.len());
+            for member in members {
+                let deserialized = serde_json::from_str(&member)
+                    .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                values.push(deserialized);
+            }
+
+            Ok(values)
+        }
+
+        async fn set_union_store<K, D>(&self, destination: D, keys: Vec<K>) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+            D: CacheKey + 'static,
+        {
+            let dest_str = destination.to_string();
+            let key_strs: Vec<String> = keys.into_iter().map(|k| k.to_string()).collect();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .sunionstore(&dest_str, &key_strs)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        async fn set_difference<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<V>>
+        where
+            K: CacheKey + 'static,
+            V: DeserializeOwned + 'static,
+        {
+            let key_strs: Vec<String> = keys.into_iter().map(|k| k.to_string()).collect();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let members: Vec<String> = conn
+                .sdiff(&key_strs)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            let mut values = Vec::with_capacity(members.len());
+            for member in members {
+                let deserialized = serde_json::from_str(&member)
+                    .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                values.push(deserialized);
+            }
+
+            Ok(values)
+        }
+
+        async fn set_difference_store<K, D>(&self, destination: D, keys: Vec<K>) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+            D: CacheKey + 'static,
+        {
+            let dest_str = destination.to_string();
+            let key_strs: Vec<String> = keys.into_iter().map(|k| k.to_string()).collect();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .sdiffstore(&dest_str, &key_strs)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        async fn set_random_members<K, V>(&self, key: K, count: usize) -> CacheResult<Vec<V>>
+        where
+            K: CacheKey + 'static,
+            V: DeserializeOwned + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let members: Vec<String> = if count == 1 {
+                let result: Option<String> = conn
+                    .srandmember(&key_str)
+                    .await
+                    .map_err(|e| CacheError::OperationError(e.to_string()))?;
+                result.into_iter().collect()
+            } else {
+                conn.srandmember_multiple(&key_str, count as isize)
+                    .await
+                    .map_err(|e| CacheError::OperationError(e.to_string()))?
+            };
+
+            let mut values = Vec::with_capacity(members.len());
+            for member in members {
+                let deserialized = serde_json::from_str(&member)
+                    .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                values.push(deserialized);
+            }
+
+            Ok(values)
+        }
+
+        // Sorted set operations
+        async fn zset_add<K, V>(&self, key: K, items: Vec<(f64, V)>) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let key_str = key.to_string();
+            let mut score_members = Vec::with_capacity(items.len() * 2);
+            for (score, member) in items {
+                let member_str = serde_json::to_string(&member)
+                    .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+                score_members.push((score, member_str));
+            }
+
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .zadd_multiple(&key_str, &score_members)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        async fn zset_remove<K, V>(&self, key: K, members: Vec<V>) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let key_str = key.to_string();
+            let member_strs: Result<Vec<String>, _> = members
+                .iter()
+                .map(|m| serde_json::to_string(m).map_err(|e| CacheError::SerializationError(e.to_string())))
+                .collect();
+            let member_strs = member_strs?;
+
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .zrem(&key_str, &member_strs)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        async fn zset_score<K, V>(&self, key: K, member: &V) -> CacheResult<Option<f64>>
+        where
+            K: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let key_str = key.to_string();
+            let member_str = serde_json::to_string(member)
+                .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: Option<f64> = conn
+                .zscore(&key_str, member_str)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result)
+        }
+
+        async fn zset_increment_score<K, V>(&self, key: K, member: &V, increment: f64) -> CacheResult<f64>
+        where
+            K: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let key_str = key.to_string();
+            let member_str = serde_json::to_string(member)
+                .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: f64 = conn
+                .zincr(&key_str, member_str, increment)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result)
+        }
+
+        async fn zset_range<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<V>>
+        where
+            K: CacheKey + 'static,
+            V: DeserializeOwned + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let members: Vec<String> = conn
+                .zrange(&key_str, start, stop)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            let mut values = Vec::with_capacity(members.len());
+            for member in members {
+                let deserialized = serde_json::from_str(&member)
+                    .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                values.push(deserialized);
+            }
+
+            Ok(values)
+        }
+
+        async fn zset_range_with_scores<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<(V, f64)>>
+        where
+            K: CacheKey + 'static,
+            V: DeserializeOwned + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let members: Vec<(String, f64)> = conn
+                .zrange_withscores(&key_str, start, stop)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            let mut values = Vec::with_capacity(members.len());
+            for (member, score) in members {
+                let deserialized = serde_json::from_str(&member)
+                    .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                values.push((deserialized, score));
+            }
+
+            Ok(values)
+        }
+
+        async fn zset_range_by_score<K, V>(&self, key: K, min: f64, max: f64) -> CacheResult<Vec<V>>
+        where
+            K: CacheKey + 'static,
+            V: DeserializeOwned + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let members: Vec<String> = conn
+                .zrangebyscore(&key_str, min, max)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            let mut values = Vec::with_capacity(members.len());
+            for member in members {
+                let deserialized = serde_json::from_str(&member)
+                    .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                values.push(deserialized);
+            }
+
+            Ok(values)
+        }
+
+        async fn zset_range_by_score_with_scores<K, V>(&self, key: K, min: f64, max: f64) -> CacheResult<Vec<(V, f64)>>
+        where
+            K: CacheKey + 'static,
+            V: DeserializeOwned + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let members: Vec<(String, f64)> = conn
+                .zrangebyscore_withscores(&key_str, min, max)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            let mut values = Vec::with_capacity(members.len());
+            for (member, score) in members {
+                let deserialized = serde_json::from_str(&member)
+                    .map_err(|e| CacheError::DeserializationError(e.to_string()))?;
+                values.push((deserialized, score));
+            }
+
+            Ok(values)
+        }
+
+        async fn zset_rank<K, V>(&self, key: K, member: &V) -> CacheResult<Option<usize>>
+        where
+            K: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let key_str = key.to_string();
+            let member_str = serde_json::to_string(member)
+                .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: Option<isize> = conn
+                .zrank(&key_str, member_str)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result.map(|r| r as usize))
+        }
+
+        async fn zset_reverse_rank<K, V>(&self, key: K, member: &V) -> CacheResult<Option<usize>>
+        where
+            K: CacheKey + 'static,
+            V: Serialize + Send + Sync + 'static,
+        {
+            let key_str = key.to_string();
+            let member_str = serde_json::to_string(member)
+                .map_err(|e| CacheError::SerializationError(e.to_string()))?;
+
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: Option<isize> = conn
+                .zrevrank(&key_str, member_str)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result.map(|r| r as usize))
+        }
+
+        async fn zset_length<K>(&self, key: K) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .zcard(&key_str)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        async fn zset_count<K>(&self, key: K, min: f64, max: f64) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+        {
+            let key_str = key.to_string();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .zcount(&key_str, min, max)
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        async fn zset_intersection_store<K, D>(
+            &self,
+            destination: D,
+            keys: Vec<K>,
+            weights: Option<Vec<f64>>,
+            aggregate: Option<String>,
+        ) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+            D: CacheKey + 'static,
+        {
+            if keys.is_empty() {
+                return Ok(0);
+            }
+
+            let dest_str = destination.to_string();
+            let key_strs: Vec<String> = keys.into_iter().map(|k| k.to_string()).collect();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .zinterstore_weighted(&dest_str, &key_strs, weights.as_deref(), aggregate.as_deref())
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+
+        async fn zset_union_store<K, D>(
+            &self,
+            destination: D,
+            keys: Vec<K>,
+            weights: Option<Vec<f64>>,
+            aggregate: Option<String>,
+        ) -> CacheResult<usize>
+        where
+            K: CacheKey + 'static,
+            D: CacheKey + 'static,
+        {
+            if keys.is_empty() {
+                return Ok(0);
+            }
+
+            let dest_str = destination.to_string();
+            let key_strs: Vec<String> = keys.into_iter().map(|k| k.to_string()).collect();
+            let mut conn = self.connection_manager.get_connection().await?;
+
+            let result: i64 = conn
+                .zunionstore_weighted(&dest_str, &key_strs, weights.as_deref(), aggregate.as_deref())
+                .await
+                .map_err(|e| CacheError::OperationError(e.to_string()))?;
+
+            Ok(result as usize)
+        }
+    }
+
+    #[instrument(skip(self, value), level = "debug")]
+    async fn set<K, V>(&self, key: K, value: &V, options: Option<CacheOptions>) -> Result<(), CacheError>
+    where
+        K: CacheKey + Send + 'static,
+        V: Serialize + Send + Sync + 'static,
+    {
+        let key_str = key.to_string();
+        let value_str = serde_json::to_string(value)
+            .map_err(|e| RedisCacheError::Serialization(e.to_string()))?;
+
+        match self.connection_manager.execute_command(&key_str, "SET", |mut conn| async move {
+            if let Some(opts) = options {
+                if let Some(ttl) = opts.ttl {
+                    conn.set_ex(&key_str, &value_str, ttl.as_secs() as usize).await
+                } else {
+                    conn.set(&key_str, &value_str).await
+                }
+            } else {
+                conn.set(&key_str, &value_str).await
+            }
+        }).await {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                Err(RedisCacheError::Operation(format!(
+                    "Failed to set key {}: {}",
+                    key_str, err
+                )).into())
+            }
+        }
     }
 }

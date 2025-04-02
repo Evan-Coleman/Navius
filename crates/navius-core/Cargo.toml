@@ -14,7 +14,7 @@ repository = "https://github.com/navius/navius"
 # Core dependencies
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = { version = "1.0.140" }
-serde_yaml = { version = "0.9.34+deprecated" }
+serde_yaml = { version = "0.9.33" }
 tokio = { version = "1.44.1", features = ["full"] }
 tracing = "0.1.41"
 uuid = { version = "1.16.0", features = ["v4", "serde"] }
@@ -22,6 +22,7 @@ async-trait = "0.1.88"
 thiserror = { version = "2.0.12" }
 # Added regex dependency
 regex = { version = "1.11.1" } 
+redis = { workspace = true }
 # Configuration
 config = { version = "0.15.11" }
 dotenvy = { version = "0.15.7" }
@@ -44,4 +45,6 @@ tokio = { version = "1.44.1", features = ["rt", "macros", "sync", "time", "rt-mu
 [features]
 default = []
 test-utils = [] # Enable test utilities when testing
+
+
 

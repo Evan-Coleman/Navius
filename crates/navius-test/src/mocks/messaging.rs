@@ -1,15 +1,30 @@
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 use thiserror::Error;
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use futures::future::BoxFuture;
 use futures::stream::BoxStream;
+
+use navius_messaging::{
+    broker::{MessageBroker, TypedMessageBroker},
+    config::{
+        BrokerConfig, ConnectionConfig, ConsumerDefaultConfig, EventConfig, PoolConfig,
+        PublisherDefaultConfig, RecoveryConfig,
+    },
+    consumer::{ConsumerHandle, ConsumerOptions},
+    error::{ConnectionStatus, MessagingError, MessagingResult},
+    message::{Message, MessageFilter, MessageHandler, MessageProcessingResult, ReceivedMessage},
+    publisher::PublishOptions,
+    topology::{Binding, BindingDestination, Exchange, ExchangeType, Queue},
+};
 
 /// Error type for mock messaging operations
 #[derive(Error, Debug, Clone)]
@@ -198,12 +213,18 @@ impl<T> ReceivedMessage<T> {
 pub struct Queue {
     /// Queue name
     pub name: String,
-    /// Whether durable
+
+    /// Whether the queue is durable (survives broker restart)
     pub durable: bool,
-    /// Whether exclusive
+
+    /// Whether the queue is exclusive to one connection
     pub exclusive: bool,
-    /// Whether auto-delete
+
+    /// Whether the queue is auto-deleted when no longer in use
     pub auto_delete: bool,
+
+    /// Additional arguments
+    pub arguments: HashMap<String, String>,
 }
 
 impl Queue {
@@ -214,6 +235,7 @@ impl Queue {
             durable: true,
             exclusive: false,
             auto_delete: false,
+            arguments: HashMap::new(),
         }
     }
 }
@@ -256,28 +278,40 @@ impl Exchange {
     }
 }
 
+/// Binding destination type
+#[derive(Debug, Clone)]
+pub enum BindingDestination {
+    /// Binding to a queue
+    Queue(String),
+    /// Binding to an exchange
+    Exchange(String),
+}
+
 /// Binding between exchange and queue
 #[derive(Debug, Clone)]
 pub struct Binding {
-    /// Queue name
-    pub queue: String,
-    /// Exchange name
-    pub exchange: String,
+    /// Source exchange
+    pub source: String,
+    /// Destination (queue or exchange)
+    pub destination: BindingDestination,
     /// Routing key
     pub routing_key: String,
+    /// Additional arguments
+    pub arguments: HashMap<String, String>,
 }
 
 impl Binding {
     /// Create a new binding
     pub fn new(
-        queue: impl Into<String>,
-        exchange: impl Into<String>,
+        source: impl Into<String>,
+        destination: BindingDestination,
         routing_key: impl Into<String>,
     ) -> Self {
         Self {
-            queue: queue.into(),
-            exchange: exchange.into(),
+            source: source.into(),
+            destination,
             routing_key: routing_key.into(),
+            arguments: HashMap::new(),
         }
     }
 }
@@ -296,14 +330,82 @@ pub struct BrokerMetrics {
 }
 
 /// Handle for a consumer
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ConsumerHandle {
-    /// Consumer ID
-    pub id: String,
     /// Consumer tag
     pub tag: String,
+
     /// Queue being consumed
     pub queue: String,
+
+    /// Control channel for the consumer
+    control_tx: mpsc::Sender<ConsumerControl>,
+}
+
+impl ConsumerHandle {
+    /// Create a new consumer handle
+    pub fn new(
+        tag: impl Into<String>,
+        queue: impl Into<String>,
+        control_tx: mpsc::Sender<ConsumerControl>,
+    ) -> Self {
+        Self {
+            tag: tag.into(),
+            queue: queue.into(),
+            control_tx,
+        }
+    }
+
+    /// Cancel the consumer
+    pub async fn cancel(&self) -> MessagingResult<()> {
+        self.control_tx
+            .send(ConsumerControl::Cancel)
+            .await
+            .map_err(|_| MessagingError::ConsumerError("Failed to send cancel command".into()))?;
+        Ok(())
+    }
+
+    /// Pause the consumer
+    pub async fn pause(&self) -> MessagingResult<()> {
+        self.control_tx
+            .send(ConsumerControl::Pause)
+            .await
+            .map_err(|_| MessagingError::ConsumerError("Failed to send pause command".into()))?;
+        Ok(())
+    }
+
+    /// Resume the consumer
+    pub async fn resume(&self) -> MessagingResult<()> {
+        self.control_tx
+            .send(ConsumerControl::Resume)
+            .await
+            .map_err(|_| MessagingError::ConsumerError("Failed to send resume command".into()))?;
+        Ok(())
+    }
+
+    /// Update consumer prefetch count
+    pub async fn set_prefetch(&self, prefetch: u16) -> MessagingResult<()> {
+        self.control_tx
+            .send(ConsumerControl::SetPrefetch(prefetch))
+            .await
+            .map_err(|_| {
+                MessagingError::ConsumerError("Failed to send set prefetch command".into())
+            })?;
+        Ok(())
+    }
+}
+
+/// Control commands for consumers
+#[derive(Debug)]
+pub enum ConsumerControl {
+    /// Cancel the consumer
+    Cancel,
+    /// Pause consuming
+    Pause,
+    /// Resume consuming
+    Resume,
+    /// Set prefetch count
+    SetPrefetch(u16),
 }
 
 /// A type-erased stream of messages
@@ -469,49 +571,7 @@ pub trait MessageConsumer: Send + Sync {
     >;
 }
 
-pub trait MessageBroker: MessagePublisher + MessageConsumer {
-    fn id(&self) -> &str;
-    fn name(&self) -> &str;
-    fn version(&self) -> &str;
-}
-
 #[async_trait]
-impl MessagePublisher for MockMessageBroker {
-    fn publish_raw(
-        &self,
-        queue: String,
-        payload: serde_json::Value,
-    ) -> BoxFuture<'static, std::result::Result<(), MockMessagingError>> {
-        Box::pin(async move {
-            // Implementation here
-            Ok(())
-        })
-    }
-}
-
-#[async_trait]
-impl MessageConsumer for MockMessageBroker {
-    fn consume_raw(
-        &self,
-        queue: String,
-    ) -> BoxFuture<
-        'static,
-        std::result::Result<
-            BoxStream<'static, std::result::Result<serde_json::Value, MockMessagingError>>,
-            MockMessagingError,
-        >,
-    > {
-        Box::pin(async move {
-            // Implementation here
-            let empty_stream: BoxStream<
-                'static,
-                std::result::Result<serde_json::Value, MockMessagingError>,
-            > = Box::pin(futures::stream::empty());
-            Ok(empty_stream)
-        })
-    }
-}
-
 impl MessageBroker for MockMessageBroker {
     fn id(&self) -> &str {
         &self.id
@@ -521,8 +581,282 @@ impl MessageBroker for MockMessageBroker {
         &self.name
     }
 
-    fn version(&self) -> &str {
-        "1.0.0"
+    fn broker_type(&self) -> &str {
+        "mock"
+    }
+
+    fn config(&self) -> &BrokerConfig {
+        static DEFAULT_CONFIG: Lazy<BrokerConfig> = Lazy::new(|| BrokerConfig {
+            id: "mock".to_string(),
+            name: "mock".to_string(),
+            broker_type: "mock".to_string(),
+            connection: ConnectionConfig::default(),
+            pool: PoolConfig::default(),
+            recovery: RecoveryConfig::default(),
+            consumer: ConsumerDefaultConfig::default(),
+            publisher: PublisherDefaultConfig::default(),
+            default_exchange: None,
+            events: EventConfig::default(),
+            options: HashMap::new(),
+        });
+        &DEFAULT_CONFIG
+    }
+
+    async fn connect(&self) -> MessagingResult<()> {
+        let mut connected = self.connected.lock().unwrap();
+        let fail = self.fail_connect.lock().unwrap();
+        if *fail {
+            return Err(MessagingError::ConnectionError(
+                "Simulated connection failure".to_string(),
+            ));
+        }
+        *connected = true;
+        Ok(())
+    }
+
+    async fn disconnect(&self) -> MessagingResult<()> {
+        let mut connected = self.connected.lock().unwrap();
+        *connected = false;
+        Ok(())
+    }
+
+    async fn is_connected(&self) -> bool {
+        *self.connected.lock().unwrap()
+    }
+
+    async fn connection_status(&self) -> ConnectionStatus {
+        if self.is_connected().await {
+            ConnectionStatus::Connected
+        } else {
+            ConnectionStatus::Disconnected
+        }
+    }
+
+    async fn metrics(&self) -> BrokerMetrics {
+        self.metrics.lock().unwrap().clone()
+    }
+
+    async fn declare_queue(&self, queue: &Queue) -> MessagingResult<Queue> {
+        let mut queues = self.queues.lock().unwrap();
+        queues.insert(queue.name.clone(), queue.clone());
+        Ok(queue.clone())
+    }
+
+    async fn delete_queue(
+        &self,
+        name: &str,
+        if_unused: bool,
+        if_empty: bool,
+    ) -> MessagingResult<()> {
+        let mut queues = self.queues.lock().unwrap();
+        if if_unused {
+            // Check if queue has consumers
+            let consumer_count = self
+                .consumers
+                .lock()
+                .unwrap()
+                .values()
+                .filter(|&q| q == name)
+                .count();
+            if consumer_count > 0 {
+                return Err(MessagingError::QueueError(
+                    name.to_string(),
+                    "Queue has active consumers".to_string(),
+                ));
+            }
+        }
+        if if_empty {
+            // In a mock implementation, we assume queues are always empty
+            queues.remove(name);
+            Ok(())
+        } else {
+            queues.remove(name);
+            Ok(())
+        }
+    }
+
+    async fn purge_queue(&self, name: &str) -> MessagingResult<()> {
+        Ok(())
+    }
+
+    async fn declare_exchange(&self, exchange: &Exchange) -> MessagingResult<Exchange> {
+        let mut exchanges = self.exchanges.lock().unwrap();
+        exchanges.insert(exchange.name.clone(), exchange.clone());
+        Ok(exchange.clone())
+    }
+
+    async fn delete_exchange(&self, name: &str, if_unused: bool) -> MessagingResult<()> {
+        let mut exchanges = self.exchanges.lock().unwrap();
+        if if_unused {
+            // Check if exchange has bindings
+            let has_bindings = self
+                .bindings
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|b| b.source == name);
+            if has_bindings {
+                return Err(MessagingError::ExchangeError(
+                    name.to_string(),
+                    "Exchange has active bindings".to_string(),
+                ));
+            }
+        }
+        exchanges.remove(name);
+        Ok(())
+    }
+
+    async fn bind_queue(
+        &self,
+        queue: &str,
+        exchange: &str,
+        routing_key: &str,
+        arguments: Option<HashMap<String, String>>,
+    ) -> MessagingResult<Binding> {
+        // Check if queue exists
+        if !self.queues.lock().unwrap().contains_key(queue) {
+            return Err(MessagingError::QueueError(
+                queue.to_string(),
+                "Queue does not exist".to_string(),
+            ));
+        }
+        // Check if exchange exists
+        if !self.exchanges.lock().unwrap().contains_key(exchange) {
+            return Err(MessagingError::ExchangeError(
+                exchange.to_string(),
+                "Exchange does not exist".to_string(),
+            ));
+        }
+
+        let binding = Binding {
+            source: exchange.to_string(),
+            destination: BindingDestination::Queue(queue.to_string()),
+            routing_key: routing_key.to_string(),
+            arguments: arguments.unwrap_or_default(),
+        };
+        self.bindings.lock().unwrap().push(binding.clone());
+        Ok(binding)
+    }
+
+    async fn unbind_queue(
+        &self,
+        queue: &str,
+        exchange: &str,
+        routing_key: &str,
+    ) -> MessagingResult<()> {
+        let mut bindings = self.bindings.lock().unwrap();
+        bindings.retain(|b| {
+            b.source != exchange
+                || !matches!(b.destination, BindingDestination::Queue(ref q) if q == queue)
+                || b.routing_key != routing_key
+        });
+        Ok(())
+    }
+
+    async fn bind_exchange(
+        &self,
+        destination: &str,
+        source: &str,
+        routing_key: &str,
+        arguments: Option<HashMap<String, String>>,
+    ) -> MessagingResult<Binding> {
+        // Check if exchanges exist
+        if !self.exchanges.lock().unwrap().contains_key(source) {
+            return Err(MessagingError::ExchangeError(
+                source.to_string(),
+                "Source exchange does not exist".to_string(),
+            ));
+        }
+        if !self.exchanges.lock().unwrap().contains_key(destination) {
+            return Err(MessagingError::ExchangeError(
+                destination.to_string(),
+                "Destination exchange does not exist".to_string(),
+            ));
+        }
+
+        let binding = Binding {
+            source: source.to_string(),
+            destination: BindingDestination::Exchange(destination.to_string()),
+            routing_key: routing_key.to_string(),
+            arguments: arguments.unwrap_or_default(),
+        };
+        self.bindings.lock().unwrap().push(binding.clone());
+        Ok(binding)
+    }
+
+    async fn unbind_exchange(
+        &self,
+        destination: &str,
+        source: &str,
+        routing_key: &str,
+    ) -> MessagingResult<()> {
+        let mut bindings = self.bindings.lock().unwrap();
+        bindings.retain(|b| {
+            b.source != source
+                || !matches!(b.destination, BindingDestination::Exchange(ref e) if e == destination)
+                || b.routing_key != routing_key
+        });
+        Ok(())
+    }
+
+    async fn ack(&self, delivery_tag: u64, multiple: bool) -> MessagingResult<()> {
+        // Mock implementation - just return Ok
+        Ok(())
+    }
+
+    async fn reject(&self, delivery_tag: u64, requeue: bool) -> MessagingResult<()> {
+        // Mock implementation - just return Ok
+        Ok(())
+    }
+
+    async fn nack(&self, delivery_tag: u64, multiple: bool, requeue: bool) -> MessagingResult<()> {
+        // Mock implementation - just return Ok
+        Ok(())
+    }
+
+    async fn message_count(&self, queue_name: &str) -> MessagingResult<u32> {
+        // Check if queue exists
+        if !self.queues.lock().unwrap().contains_key(queue_name) {
+            return Err(MessagingError::QueueError(
+                queue_name.to_string(),
+                "Queue does not exist".to_string(),
+            ));
+        }
+        // Mock implementation - return 0
+        Ok(0)
+    }
+
+    async fn consumer_count(&self, queue_name: &str) -> MessagingResult<u32> {
+        // Check if queue exists
+        if !self.queues.lock().unwrap().contains_key(queue_name) {
+            return Err(MessagingError::QueueError(
+                queue_name.to_string(),
+                "Queue does not exist".to_string(),
+            ));
+        }
+        // Return number of consumers for the queue
+        Ok(self
+            .consumers
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|&q| q == queue_name)
+            .count() as u32)
+    }
+
+    async fn create_reply_queue(&self) -> MessagingResult<Queue> {
+        let queue = Queue {
+            name: format!("reply-{}", Uuid::new_v4()),
+            durable: false,
+            auto_delete: true,
+            exclusive: true,
+            arguments: HashMap::new(),
+        };
+        self.declare_queue(&queue).await
+    }
+
+    async fn ping(&self) -> MessagingResult<Duration> {
+        Ok(Duration::from_millis(0))
     }
 }
 
@@ -664,5 +998,164 @@ mod tests {
         // Verify published message
         assert!(broker.assert_published_to_topic("test-topic").await.is_ok());
         assert_eq!(broker.get_all_published_messages().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_bind_queue() {
+        let broker = MockMessageBroker::new();
+        broker.connect().await.unwrap();
+
+        let binding = Binding::new(
+            "test-exchange",
+            BindingDestination::Queue("test-queue".to_string()),
+            "test-topic",
+        );
+        assert!(
+            broker
+                .bind_queue("test-queue", "test-exchange", "test-topic", None)
+                .await
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_bind_exchange() {
+        let broker = MockMessageBroker::new();
+        broker.connect().await.unwrap();
+
+        let binding = Binding::new(
+            "source-exchange",
+            BindingDestination::Exchange("dest-exchange".to_string()),
+            "test-topic",
+        );
+        assert!(
+            broker
+                .bind_exchange("dest-exchange", "source-exchange", "test-topic", None)
+                .await
+                .is_ok()
+        );
+    }
+}
+
+#[async_trait]
+impl<T> TypedMessageBroker<T> for MockMessageBroker
+where
+    T: serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
+{
+    async fn publish(
+        &self,
+        message: &Message<T>,
+        options: Option<PublishOptions>,
+    ) -> MessagingResult<()> {
+        if !self.is_connected().await {
+            return Err(MessagingError::ConnectionError("Not connected".to_string()));
+        }
+
+        let fail = self.fail_publish.lock().unwrap();
+        if *fail {
+            return Err(MessagingError::PublishError(
+                "Simulated publish failure".to_string(),
+            ));
+        }
+
+        let serialized = serde_json::to_vec(&message.payload)
+            .map_err(|e| MessagingError::SerializationError(e.to_string()))?;
+
+        let mut messages = self.published_messages.lock().unwrap();
+        messages.push((
+            message.topic.clone(),
+            message.correlation_id.clone().unwrap_or_default(),
+            serialized,
+        ));
+
+        let mut metrics = self.metrics.lock().unwrap();
+        metrics.published_messages += 1;
+
+        Ok(())
+    }
+
+    async fn publish_with_confirm(
+        &self,
+        message: &Message<T>,
+        options: Option<PublishOptions>,
+        timeout: Option<Duration>,
+    ) -> MessagingResult<()> {
+        self.publish(message, options).await
+    }
+
+    async fn subscribe<F>(
+        &self,
+        queue_name: &str,
+        handler: F,
+        options: Option<ConsumerOptions>,
+    ) -> MessagingResult<ConsumerHandle>
+    where
+        F: MessageHandler<T> + 'static,
+    {
+        if !self.is_connected().await {
+            return Err(MessagingError::ConnectionError("Not connected".to_string()));
+        }
+
+        let queues = self.queues.lock().unwrap();
+        if !queues.contains_key(queue_name) {
+            return Err(MessagingError::QueueError(
+                queue_name.to_string(),
+                "Queue does not exist".to_string(),
+            ));
+        }
+
+        let consumer_id = Uuid::new_v4().to_string();
+        let consumer_tag = format!("mock-consumer-{}", consumer_id);
+
+        let (control_tx, _control_rx) = mpsc::channel(1);
+
+        let mut consumers = self.consumers.lock().unwrap();
+        consumers.insert(consumer_id.clone(), queue_name.to_string());
+
+        let mut metrics = self.metrics.lock().unwrap();
+        metrics.active_consumers += 1;
+
+        Ok(ConsumerHandle {
+            tag: consumer_tag,
+            queue: queue_name.to_string(),
+            control_tx,
+        })
+    }
+
+    async fn subscribe_filtered<F, M>(
+        &self,
+        queue_name: &str,
+        handler: F,
+        filter: M,
+        options: Option<ConsumerOptions>,
+    ) -> MessagingResult<ConsumerHandle>
+    where
+        F: MessageHandler<T> + 'static,
+        M: MessageFilter<T> + 'static,
+    {
+        self.subscribe(queue_name, handler, options).await
+    }
+
+    async fn consume(
+        &self,
+        queue_name: &str,
+        options: Option<ConsumerOptions>,
+    ) -> MessagingResult<
+        Box<dyn Stream<Item = Result<ReceivedMessage<T>, MessagingError>> + Send + Unpin>,
+    > {
+        if !self.is_connected().await {
+            return Err(MessagingError::ConnectionError("Not connected".to_string()));
+        }
+
+        let queues = self.queues.lock().unwrap();
+        if !queues.contains_key(queue_name) {
+            return Err(MessagingError::QueueError(
+                queue_name.to_string(),
+                "Queue does not exist".to_string(),
+            ));
+        }
+
+        // Return an empty stream since this is a mock
+        Ok(Box::new(futures::stream::empty()))
     }
 }

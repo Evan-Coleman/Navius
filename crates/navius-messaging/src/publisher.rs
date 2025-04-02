@@ -335,7 +335,7 @@ trait BatchItem: Send + Sync {
 }
 
 /// A message to be batched
-struct BatchableMessage<T: serde::Serialize + Send + Sync + 'static> {
+struct BatchableMessage<T: serde::Serialize + Send + Sync + Clone + 'static> {
     /// The message
     message: Message<T>,
 
@@ -347,7 +347,7 @@ struct BatchableMessage<T: serde::Serialize + Send + Sync + 'static> {
 }
 
 #[async_trait]
-impl<T: serde::Serialize + Send + Sync + 'static> BatchItem for BatchableMessage<T> {
+impl<T: serde::Serialize + Send + Sync + Clone + 'static> BatchItem for BatchableMessage<T> {
     async fn publish(&self, publisher: &dyn MessagePublisher) -> MessagingResult<PublishResult> {
         publisher
             .publish_any(

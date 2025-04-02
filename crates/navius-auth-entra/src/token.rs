@@ -284,7 +284,7 @@ impl EntraToken {
 
     /// Get the algorithm from the token header
     pub fn algorithm(&self) -> Option<Algorithm> {
-        self.header.alg
+        Some(self.header.alg)
     }
 
     /// Get the key ID from the token header

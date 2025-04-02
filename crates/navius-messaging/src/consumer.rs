@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -355,5 +356,77 @@ where
         Err(last_error.unwrap_or_else(|| {
             crate::error::MessagingError::ConsumerError("Maximum retries exceeded".into())
         }))
+    }
+}
+
+/// A wrapper for the retry calculator function that implements Debug
+#[derive(Clone)]
+struct RetryCalculator {
+    calculator: Arc<dyn Fn(u32) -> Duration + Send + Sync>,
+}
+
+impl RetryCalculator {
+    fn new<F>(calculator: F) -> Self
+    where
+        F: Fn(u32) -> Duration + Send + Sync + 'static,
+    {
+        Self {
+            calculator: Arc::new(calculator),
+        }
+    }
+
+    fn calculate(&self, attempt: u32) -> Duration {
+        (self.calculator)(attempt)
+    }
+}
+
+impl fmt::Debug for RetryCalculator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RetryCalculator")
+            .field("calculator", &"<function>")
+            .finish()
+    }
+}
+
+/// Configuration for a message consumer
+#[derive(Debug, Clone)]
+pub struct ConsumerConfig {
+    /// The topic to consume from
+    pub topic: String,
+
+    /// The consumer group ID
+    pub group_id: String,
+
+    /// The maximum number of messages to process in parallel
+    pub max_parallel: usize,
+
+    /// The maximum number of retries for failed messages
+    pub max_retries: u32,
+
+    /// The retry calculator function
+    calculator: RetryCalculator,
+}
+
+impl ConsumerConfig {
+    /// Create a new consumer configuration
+    pub fn new(
+        topic: impl Into<String>,
+        group_id: impl Into<String>,
+        max_parallel: usize,
+        max_retries: u32,
+        calculator: impl Fn(u32) -> Duration + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            topic: topic.into(),
+            group_id: group_id.into(),
+            max_parallel,
+            max_retries,
+            calculator: RetryCalculator::new(calculator),
+        }
+    }
+
+    /// Get the retry delay for a given attempt
+    pub fn retry_delay(&self, attempt: u32) -> Duration {
+        self.calculator.calculate(attempt)
     }
 }

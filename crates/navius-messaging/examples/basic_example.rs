@@ -398,442 +398,11 @@ mod memory_broker {
             Ok(())
         }
 
-        async fn publish<T: serde::Serialize + Send + Sync>(
-            &self,
-            message: &Message<T>,
-            options: Option<PublishOptions>,
-        ) -> MessagingResult<()> {
-            let options = options.unwrap_or_default();
-            let exchange = options.exchange;
-            let routing_key = options.routing_key.unwrap_or_else(|| message.topic.clone());
-
-            // Serialize the message
-            let data = self.json_serializer.serialize(message)?;
-
-            // Route the message
-            let headers = message.headers.all().clone();
-            self.route_message(&exchange, &routing_key, headers, data)
-                .await?;
-
-            // Update metrics
-            let mut metrics = self.metrics.write().await;
-            metrics.published_messages += 1;
-
-            Ok(())
-        }
-
-        async fn publish_with_confirm<T: serde::Serialize + Send + Sync>(
-            &self,
-            message: &Message<T>,
-            options: Option<PublishOptions>,
-            _timeout: Option<Duration>,
-        ) -> MessagingResult<()> {
-            // For the simple example, just call publish
-            self.publish(message, options).await
-        }
-
-        async fn subscribe<T, F>(
-            &self,
-            queue_name: &str,
-            handler: F,
-            options: Option<ConsumerOptions>,
-        ) -> MessagingResult<ConsumerHandle>
-        where
-            T: for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
-            F: MessageHandler<T> + 'static,
-        {
-            let options = options.unwrap_or_default();
-            let tag = options
-                .consumer_tag
-                .unwrap_or_else(|| format!("consumer-{}", Uuid::new_v4()));
-
-            let queue = self
-                .queues
-                .get(queue_name)
-                .ok_or_else(|| MessagingError::QueueNotFound(queue_name.to_string()))?;
-
-            let (control_tx, mut control_rx) = mpsc::channel(10);
-            let queue_clone = queue.clone();
-            let json_serializer = self.json_serializer.clone();
-            let metrics_clone = self.metrics.clone();
-
-            // Spawn a task to consume messages
-            tokio::spawn(async move {
-                let mut running = true;
-                let mut delivery_tag: u64 = 0;
-
-                while running {
-                    tokio::select! {
-                        control_cmd = control_rx.recv() => {
-                            match control_cmd {
-                                Some(ConsumerControl::Cancel) => {
-                                    running = false;
-                                },
-                                Some(ConsumerControl::Pause) => {
-                                    // Wait for Resume control command
-                                    while let Some(cmd) = control_rx.recv().await {
-                                        if let ConsumerControl::Resume = cmd {
-                                            break;
-                                        }
-                                        if let ConsumerControl::Cancel = cmd {
-                                            running = false;
-                                            break;
-                                        }
-                                    }
-                                },
-                                Some(ConsumerControl::Resume) => {
-                                    // Already running, do nothing
-                                },
-                                Some(ConsumerControl::SetPrefetch(_)) => {
-                                    // Not implemented for in-memory broker
-                                },
-                                None => {
-                                    running = false;
-                                }
-                            }
-                        },
-
-                        _ = sleep(Duration::from_millis(100)), if running => {
-                            if let Some(data) = queue_clone.pop().await {
-                                delivery_tag += 1;
-
-                                // Deserialize and process
-                                match json_serializer.deserialize::<Message<T>>(&data) {
-                                    Ok(msg) => {
-                                        let received = ReceivedMessage {
-                                            message: msg.clone(),
-                                            delivery_tag,
-                                            redelivered: false,
-                                            exchange: "".to_string(),
-                                            routing_key: msg.topic.clone(),
-                                            consumer_tag: tag.clone(),
-                                        };
-
-                                        // Update metrics
-                                        let mut metrics = metrics_clone.write().await;
-                                        metrics.consumed_messages += 1;
-
-                                        // Process the message
-                                        let result = handler.handle(&received);
-                                        if let Ok(ack) = result {
-                                            match ack {
-                                                MessageAcknowledgment::Ack => {
-                                                    metrics.acknowledged_messages += 1;
-                                                },
-                                                MessageAcknowledgment::Reject { requeue } => {
-                                                    metrics.rejected_messages += 1;
-                                                    if requeue {
-                                                        queue_clone.push(data).await;
-                                                    }
-                                                },
-                                                MessageAcknowledgment::Nack { requeue, .. } => {
-                                                    metrics.rejected_messages += 1;
-                                                    if requeue {
-                                                        queue_clone.push(data).await;
-                                                    }
-                                                },
-                                            }
-                                        } else {
-                                            metrics.consume_errors += 1;
-                                        }
-                                    },
-                                    Err(err) => {
-                                        let mut metrics = metrics_clone.write().await;
-                                        metrics.consume_errors += 1;
-                                        eprintln!("Error deserializing message: {}", err);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Remove consumer from queue
-                queue_clone.consumers.remove(&tag);
-            });
-
-            // Register consumer
-            queue.consumers.insert(tag.clone(), control_tx.clone());
-
-            // Update metrics
-            let mut metrics = self.metrics.write().await;
-            metrics.active_consumers += 1;
-
-            Ok(ConsumerHandle::new(tag, queue_name, control_tx))
-        }
-
-        async fn subscribe_filtered<T, F, M>(
-            &self,
-            queue_name: &str,
-            handler: F,
-            filter: M,
-            options: Option<ConsumerOptions>,
-        ) -> MessagingResult<ConsumerHandle>
-        where
-            T: for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
-            F: MessageHandler<T> + 'static,
-            M: MessageFilter<T> + 'static,
-        {
-            let options = options.unwrap_or_default();
-            let tag = options
-                .consumer_tag
-                .unwrap_or_else(|| format!("consumer-{}", Uuid::new_v4()));
-
-            let queue = self
-                .queues
-                .get(queue_name)
-                .ok_or_else(|| MessagingError::QueueNotFound(queue_name.to_string()))?;
-
-            let (control_tx, mut control_rx) = mpsc::channel(10);
-            let queue_clone = queue.clone();
-            let json_serializer = self.json_serializer.clone();
-            let metrics_clone = self.metrics.clone();
-
-            // Spawn a task to consume messages
-            tokio::spawn(async move {
-                let mut running = true;
-                let mut delivery_tag: u64 = 0;
-
-                while running {
-                    tokio::select! {
-                        control_cmd = control_rx.recv() => {
-                            match control_cmd {
-                                Some(ConsumerControl::Cancel) => {
-                                    running = false;
-                                },
-                                Some(ConsumerControl::Pause) => {
-                                    // Wait for Resume control command
-                                    while let Some(cmd) = control_rx.recv().await {
-                                        if let ConsumerControl::Resume = cmd {
-                                            break;
-                                        }
-                                        if let ConsumerControl::Cancel = cmd {
-                                            running = false;
-                                            break;
-                                        }
-                                    }
-                                },
-                                Some(ConsumerControl::Resume) => {
-                                    // Already running, do nothing
-                                },
-                                Some(ConsumerControl::SetPrefetch(_)) => {
-                                    // Not implemented for in-memory broker
-                                },
-                                None => {
-                                    running = false;
-                                }
-                            }
-                        },
-
-                        _ = sleep(Duration::from_millis(100)), if running => {
-                            if let Some(data) = queue_clone.pop().await {
-                                delivery_tag += 1;
-
-                                // Deserialize and process
-                                match json_serializer.deserialize::<Message<T>>(&data) {
-                                    Ok(msg) => {
-                                        // Apply the filter
-                                        if filter.matches(&msg) {
-                                            let received = ReceivedMessage {
-                                                message: msg.clone(),
-                                                delivery_tag,
-                                                redelivered: false,
-                                                exchange: "".to_string(),
-                                                routing_key: msg.topic.clone(),
-                                                consumer_tag: tag.clone(),
-                                            };
-
-                                            // Update metrics
-                                            let mut metrics = metrics_clone.write().await;
-                                            metrics.consumed_messages += 1;
-
-                                            // Process the message
-                                            let result = handler.handle(&received);
-                                            if let Ok(ack) = result {
-                                                match ack {
-                                                    MessageAcknowledgment::Ack => {
-                                                        metrics.acknowledged_messages += 1;
-                                                    },
-                                                    MessageAcknowledgment::Reject { requeue } => {
-                                                        metrics.rejected_messages += 1;
-                                                        if requeue {
-                                                            queue_clone.push(data).await;
-                                                        }
-                                                    },
-                                                    MessageAcknowledgment::Nack { requeue, .. } => {
-                                                        metrics.rejected_messages += 1;
-                                                        if requeue {
-                                                            queue_clone.push(data).await;
-                                                        }
-                                                    },
-                                                }
-                                            } else {
-                                                metrics.consume_errors += 1;
-                                            }
-                                        } else {
-                                            // Message doesn't match the filter, put it back
-                                            queue_clone.push(data).await;
-                                        }
-                                    },
-                                    Err(err) => {
-                                        let mut metrics = metrics_clone.write().await;
-                                        metrics.consume_errors += 1;
-                                        eprintln!("Error deserializing message: {}", err);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Remove consumer from queue
-                queue_clone.consumers.remove(&tag);
-            });
-
-            // Register consumer
-            queue.consumers.insert(tag.clone(), control_tx.clone());
-
-            // Update metrics
-            let mut metrics = self.metrics.write().await;
-            metrics.active_consumers += 1;
-
-            Ok(ConsumerHandle::new(tag, queue_name, control_tx))
-        }
-
-        async fn consume<T>(
-            &self,
-            queue_name: &str,
-            options: Option<ConsumerOptions>,
-        ) -> MessagingResult<
-            Box<dyn Stream<Item = Result<ReceivedMessage<T>, MessagingError>> + Send + Unpin>,
-        >
-        where
-            T: for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
-        {
-            let options = options.unwrap_or_default();
-            let tag = options
-                .consumer_tag
-                .unwrap_or_else(|| format!("consumer-{}", Uuid::new_v4()));
-
-            let queue = self
-                .queues
-                .get(queue_name)
-                .ok_or_else(|| MessagingError::QueueNotFound(queue_name.to_string()))?;
-
-            let (control_tx, mut control_rx) = mpsc::channel(10);
-            let (message_tx, message_rx) = mpsc::channel(100);
-
-            let queue_clone = queue.clone();
-            let json_serializer = self.json_serializer.clone();
-            let metrics_clone = self.metrics.clone();
-
-            // Spawn a task to consume messages
-            tokio::spawn(async move {
-                let mut running = true;
-                let mut delivery_tag: u64 = 0;
-
-                while running {
-                    tokio::select! {
-                        control_cmd = control_rx.recv() => {
-                            match control_cmd {
-                                Some(ConsumerControl::Cancel) => {
-                                    running = false;
-                                },
-                                Some(ConsumerControl::Pause) => {
-                                    // Wait for Resume control command
-                                    while let Some(cmd) = control_rx.recv().await {
-                                        if let ConsumerControl::Resume = cmd {
-                                            break;
-                                        }
-                                        if let ConsumerControl::Cancel = cmd {
-                                            running = false;
-                                            break;
-                                        }
-                                    }
-                                },
-                                Some(ConsumerControl::Resume) => {
-                                    // Already running, do nothing
-                                },
-                                Some(ConsumerControl::SetPrefetch(_)) => {
-                                    // Not implemented for in-memory broker
-                                },
-                                None => {
-                                    running = false;
-                                }
-                            }
-                        },
-
-                        _ = sleep(Duration::from_millis(100)), if running => {
-                            if let Some(data) = queue_clone.pop().await {
-                                delivery_tag += 1;
-
-                                // Deserialize and process
-                                match json_serializer.deserialize::<Message<T>>(&data) {
-                                    Ok(msg) => {
-                                        let received = ReceivedMessage {
-                                            message: msg.clone(),
-                                            delivery_tag,
-                                            redelivered: false,
-                                            exchange: "".to_string(),
-                                            routing_key: msg.topic.clone(),
-                                            consumer_tag: tag.clone(),
-                                        };
-
-                                        // Update metrics
-                                        let mut metrics = metrics_clone.write().await;
-                                        metrics.consumed_messages += 1;
-
-                                        // Send to the stream
-                                        if message_tx.send(Ok(received)).await.is_err() {
-                                            // Receiver dropped, stop consuming
-                                            running = false;
-                                        }
-                                    },
-                                    Err(err) => {
-                                        let mut metrics = metrics_clone.write().await;
-                                        metrics.consume_errors += 1;
-
-                                        // Send error to the stream
-                                        if message_tx.send(Err(err)).await.is_err() {
-                                            // Receiver dropped, stop consuming
-                                            running = false;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Remove consumer from queue
-                queue_clone.consumers.remove(&tag);
-            });
-
-            // Register consumer
-            queue.consumers.insert(tag.clone(), control_tx);
-
-            // Update metrics
-            let mut metrics = self.metrics.write().await;
-            metrics.active_consumers += 1;
-
-            // Convert channel to stream
-            let stream = Box::pin(futures::stream::unfold(message_rx, |mut rx| async move {
-                rx.recv().await.map(|msg| (msg, rx))
-            }));
-
-            Ok(Box::new(stream)
-                as Box<
-                    dyn Stream<Item = Result<ReceivedMessage<T>, MessagingError>> + Send + Unpin,
-                >)
-        }
-
         async fn ack(&self, _delivery_tag: u64, _multiple: bool) -> MessagingResult<()> {
-            // For simplicity, ACK is handled in the consume loop
             Ok(())
         }
 
         async fn reject(&self, _delivery_tag: u64, _requeue: bool) -> MessagingResult<()> {
-            // For simplicity, reject is handled in the consume loop
             Ok(())
         }
 
@@ -843,44 +412,39 @@ mod memory_broker {
             _multiple: bool,
             _requeue: bool,
         ) -> MessagingResult<()> {
-            // For simplicity, nack is handled in the consume loop
             Ok(())
         }
 
         async fn message_count(&self, queue_name: &str) -> MessagingResult<u32> {
-            let queue = self
-                .queues
-                .get(queue_name)
-                .ok_or_else(|| MessagingError::QueueNotFound(queue_name.to_string()))?;
-
-            Ok(queue.len() as u32)
+            if let Some(queue) = self.queues.get(queue_name) {
+                let messages = queue.messages.lock().await;
+                Ok(messages.len() as u32)
+            } else {
+                Err(MessagingError::QueueNotFound(queue_name.to_string()))
+            }
         }
 
         async fn consumer_count(&self, queue_name: &str) -> MessagingResult<u32> {
-            let queue = self
-                .queues
-                .get(queue_name)
-                .ok_or_else(|| MessagingError::QueueNotFound(queue_name.to_string()))?;
-
-            Ok(queue.consumers.len() as u32)
+            if let Some(queue) = self.queues.get(queue_name) {
+                Ok(queue.consumers.len() as u32)
+            } else {
+                Err(MessagingError::QueueNotFound(queue_name.to_string()))
+            }
         }
 
         async fn create_reply_queue(&self) -> MessagingResult<Queue> {
-            let queue_name = format!("reply-{}", Uuid::new_v4());
-            let queue = Queue::new(&queue_name)
-                .exclusive(true)
-                .auto_delete(true)
-                .durable(false);
-
+            let queue = Queue {
+                name: format!("reply-{}", Uuid::new_v4()),
+                durable: false,
+                auto_delete: true,
+                exclusive: true,
+                arguments: HashMap::new(),
+            };
             self.declare_queue(&queue).await
         }
 
         async fn ping(&self) -> MessagingResult<Duration> {
-            // Simulate a ping by measuring the time it takes to execute
-            let start = Instant::now();
-            // Dummy operation
-            let _status = self.is_connected().await;
-            Ok(start.elapsed())
+            Ok(Duration::from_millis(0))
         }
     }
 

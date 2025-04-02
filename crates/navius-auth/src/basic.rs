@@ -2,15 +2,20 @@
 //!
 //! This module provides a simple username/password authentication provider.
 
-use crate::error::{Error, Result};
+use crate::error::Error;
 use crate::providers::{AuthProvider, ProviderType};
-use crate::types::{Credentials, Identity, Subject};
+use crate::types::{Identity, Subject};
 use async_trait::async_trait;
+use base64::Engine;
 use chrono::{Duration, Utc};
+use futures::future::FutureExt;
+use hex;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
-use tracing::{debug, instrument};
+use tracing::debug;
 use uuid::Uuid;
 
 /// Configuration for the basic authentication provider.
@@ -89,10 +94,8 @@ impl BasicProvider {
 
     /// Generate a simple token.
     fn generate_token(&self, subject_id: &str) -> String {
-        use rand::{thread_rng, Rng};
-        use sha2::{Digest, Sha256};
-
-        let rand_bytes: [u8; 32] = thread_rng().gen();
+        let mut rng = rand::thread_rng();
+        let rand_bytes: [u8; 32] = rng.gen();
         let now = Utc::now().timestamp().to_string();
         let data = format!(
             "{}{}{}{}",
@@ -130,7 +133,7 @@ impl BasicProvider {
     }
 
     /// Store a token.
-    fn store_token(&self, token: &str, subject_id: &str) -> Result<()> {
+    fn store_token(&self, token: &str, subject_id: &str) -> Result<(), Error> {
         let expires_at = Utc::now() + Duration::seconds(self.config.token_expiry as i64);
         let token_info = TokenInfo {
             subject_id: subject_id.to_string(),
@@ -151,7 +154,7 @@ impl BasicProvider {
     }
 
     /// Lookup a token.
-    fn lookup_token(&self, token: &str) -> Result<Option<TokenInfo>> {
+    fn lookup_token(&self, token: &str) -> Result<Option<TokenInfo>, Error> {
         let tokens = match self.tokens.read() {
             Ok(tokens) => tokens,
             Err(_) => {
@@ -165,7 +168,7 @@ impl BasicProvider {
     }
 
     /// Remove a token.
-    fn remove_token(&self, token: &str) -> Result<()> {
+    fn remove_token(&self, token: &str) -> Result<(), Error> {
         let mut tokens = match self.tokens.write() {
             Ok(tokens) => tokens,
             Err(_) => {
@@ -227,6 +230,17 @@ impl BasicProvider {
             attributes: Some(HashMap::new()),
         }
     }
+
+    // Helper method for authenticating with basic auth directly
+    pub async fn authenticate_basic(&self, credentials: &str) -> Result<Subject, Error> {
+        let token = credentials;
+        let subject = self.validate_token(token).await?;
+
+        // Refresh the token
+        self.create_token(&subject).await?;
+
+        Ok(subject)
+    }
 }
 
 #[async_trait]
@@ -239,89 +253,75 @@ impl AuthProvider for BasicProvider {
         &self.name
     }
 
-    #[instrument(skip(self, credentials), fields(provider = self.name()))]
-    async fn authenticate(&self, credentials: &Credentials) -> Result<Identity> {
-        debug!("Authenticating user {}", credentials.username);
+    async fn authenticate(&self, credentials: &str) -> Result<Identity, Error> {
+        // Use the Engine API instead of deprecated decode function
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(credentials)
+            .map_err(|e| Error::authentication_failed(format!("Invalid base64: {}", e)))?;
 
-        // Find the user in mock store
+        let credentials_str = String::from_utf8(decoded)
+            .map_err(|e| Error::authentication_failed(format!("Invalid UTF-8: {}", e)))?;
+        let parts: Vec<&str> = credentials_str.split(':').collect();
+        if parts.len() != 2 {
+            return Err(Error::authentication_failed("Invalid credentials format"));
+        }
+        let username = parts[0];
+        let password = parts[1];
+
         let user = self
-            .find_mock_user(&credentials.username)
-            .ok_or_else(|| Error::authentication_failed("Invalid username or password"))?;
+            .find_mock_user(username)
+            .ok_or_else(|| Error::authentication_failed("User not found"))?;
 
-        // Verify password
-        if !self.verify_password(&credentials.password, &user.password) {
-            return Err(Error::authentication_failed("Invalid username or password"));
+        if !self.verify_password(password, &user.password) {
+            return Err(Error::authentication_failed("Invalid password"));
         }
 
-        // Create identity
-        let identity = self.user_to_identity(&user);
-
-        Ok(identity)
+        Ok(self.user_to_identity(&user))
     }
 
-    #[instrument(skip(self, token), fields(provider = self.name()))]
-    async fn validate_token(&self, token: &str) -> Result<Subject> {
-        debug!("Validating token");
+    async fn validate_token(&self, token: &str) -> Result<Subject, Error> {
+        let token_info = self
+            .lookup_token(token)?
+            .ok_or_else(|| Error::token_invalid("Token not found"))?;
 
-        // Look up token
-        let token_info = match self.lookup_token(token)? {
-            Some(info) => info,
-            None => return Err(Error::token_invalid("Token not found")),
-        };
-
-        // Check expiry
         if token_info.expires_at < Utc::now() {
             return Err(Error::token_expired());
         }
 
-        // Find user by ID
         let user = self
-            .config
-            .mock_users
-            .iter()
-            .find(|u| u.id == token_info.subject_id)
+            .find_mock_user(&token_info.subject_id)
             .ok_or_else(|| Error::internal("User not found for valid token"))?;
 
-        // Create subject
-        let subject = self.user_to_subject(user);
-
-        Ok(subject)
+        Ok(Subject {
+            id: token_info.subject_id,
+            name: user.username,
+            subject_type: "user".to_string(),
+            roles: user
+                .roles
+                .iter()
+                .map(|r| crate::types::Role {
+                    id: Uuid::new_v4().to_string(),
+                    name: r.clone(),
+                    description: None,
+                    permissions: None,
+                })
+                .collect(),
+            attributes: None,
+        })
     }
 
-    #[instrument(skip(self, subject), fields(provider = self.name()))]
-    async fn create_token(&self, subject: &Subject) -> Result<String> {
-        debug!("Creating token for subject {}", subject.id);
-
-        // Generate token
-        let token = self.generate_token(&subject.id.to_string());
-
-        // Store token
-        self.store_token(&token, &subject.id.to_string())?;
-
+    async fn create_token(&self, subject: &Subject) -> Result<String, Error> {
+        let token = self.generate_token(&subject.id);
+        self.store_token(&token, &subject.id)?;
         Ok(token)
     }
 
-    #[instrument(skip(self, token), fields(provider = self.name()))]
-    async fn revoke_token(&self, token: &str) -> Result<()> {
-        debug!("Revoking token");
-
-        // Remove token
-        self.remove_token(token)?;
-
-        Ok(())
+    async fn revoke_token(&self, token: &str) -> Result<(), Error> {
+        self.remove_token(token)
     }
 
-    #[instrument(skip(self, token), fields(provider = self.name()))]
-    async fn refresh_token(&self, token: &str) -> Result<String> {
-        debug!("Refreshing token");
-
-        // Validate old token
+    async fn refresh_token(&self, token: &str) -> Result<String, Error> {
         let subject = self.validate_token(token).await?;
-
-        // Revoke old token
-        self.revoke_token(token).await?;
-
-        // Create new token
         self.create_token(&subject).await
     }
 }

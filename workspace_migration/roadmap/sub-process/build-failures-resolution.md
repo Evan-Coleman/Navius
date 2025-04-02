@@ -1,7 +1,7 @@
 # Build Failures Resolution
 
 **Created:** May 30, 2025  
-**Status:** Phase 1 Complete (25%)  
+**Status:** Phase 2 In Progress (40%)  
 **Priority:** HIGHEST - All other tasks blocked until resolved
 
 ## Overview
@@ -18,8 +18,10 @@ This roadmap outlines a systematic approach to resolve build failures across the
 
 ## Current Issues
 
-The current build failure in `navius-cache-redis` shows missing trait implementation:
-- `set_contains` function is not implemented for `CacheOperations` trait
+The current build failures in `navius-cache-redis` include:
+- Remaining `await` calls in future resolution
+- MultiplexedConnection executor trait issues
+- Stubbed placeholder methods with `todo!()`
 
 ## Approach
 
@@ -30,13 +32,14 @@ The current build failure in `navius-cache-redis` shows missing trait implementa
 - [x] Order crates by dependency chain to prioritize fixes
 - [x] Create error tracking table in this document
 
-### Phase 2: Navius Cache Redis Implementation (0% Complete)
+### Phase 2: Navius Cache Redis Implementation (40% Complete)
 
-- [ ] Implement missing `set_contains` method in RedisCache
+- [x] Fix duplicate implementations (hash_get_all) in RedisCache
+- [x] Fix missing `await` calls in future resolution
 - [ ] Fix `MultiplexedConnection` executor issues
-- [ ] Fix missing `await` calls in future resolution
-- [ ] Fix borrow/move conflicts in closures
-- [ ] Fix Debug trait requirements for generic type parameters
+- [x] Fix borrow/move conflicts in closures by cloning values
+- [x] Fix Debug trait requirements for generic type parameters
+- [x] Implement some Redis set operations (`set_add`)
 - [ ] Implement remaining placeholder methods for Redis sets operations
 - [ ] Implement remaining placeholder methods for Redis sorted sets operations
 - [ ] Add unit tests for all implemented operations
@@ -58,7 +61,7 @@ The current build failure in `navius-cache-redis` shows missing trait implementa
 
 After running a verbose build, we identified several categories of errors in the `navius-cache-redis` crate:
 
-1. **Missing Trait Implementation**: The error "not all trait items implemented, missing: `fn set_contains`" indicates that the trait implementation for `CacheOperations` in `RedisCache` is incomplete. Interestingly, there is a `set_contains` function defined earlier in the file (around line 816), but it's not recognized as part of the trait implementation.
+1. **Duplicate Implementations**: Multiple implementations of the same method - this can cause confusion when determining which one is used. We found duplicate implementations of `hash_get_all`, `set_length`, etc. and removed the duplicates.
 
 2. **Future Resolution Issues**: Multiple errors show functions that don't properly handle async/await:
    - The error "`?` operator can only be applied to values that implement `Try`" indicates missing `await` for futures
@@ -74,32 +77,20 @@ After running a verbose build, we identified several categories of errors in the
 
 | Error ID | Crate | Error Description | Resolution Approach | Status |
 |----------|-------|-------------------|---------------------|--------|
-| E001 | navius-cache-redis | Missing `set_contains` implementation in trait | Fix the `CacheOperations` implementation to include the `set_contains` function already defined | Not Started |
-| E002 | navius-cache-redis | Missing `await` for futures with `?` operator | Add missing `.await` before `?` operator in all future calls | Not Started |
+| E001 | navius-cache-redis | Duplicate implementations of methods | Remove duplicate implementations, keeping only the version in trait implementation | Completed |
+| E002 | navius-cache-redis | Missing `await` for futures with `?` operator | Add missing `.await` before `?` operator in all future calls | In Progress |
 | E003 | navius-cache-redis | MultiplexedConnection missing ConnectionLike trait | Update Redis connection handling to implement necessary traits | Not Started |
-| E004 | navius-cache-redis | Cannot move values that are borrowed in closures | Clone values before moving them into closures | Not Started |
-| E005 | navius-cache-redis | Missing Debug trait bounds on generic types | Add `std::fmt::Debug` bound to generic type parameters | Not Started |
-| E006 | navius-cache-redis | Missing CacheKey trait bounds | Add `CacheKey` bound to generic type parameters | Not Started |
-| E007 | navius-cache-redis | Result not returning a Future in execute_command | Make closures return `async move` blocks | Not Started |
-| E008 | navius-cache-redis | Placeholder implementations with `todo!()` | Implement the placeholder functions for sets and sorted sets | Not Started |
+| E004 | navius-cache-redis | Cannot move values that are borrowed in closures | Clone values before moving them into closures | Completed |
+| E005 | navius-cache-redis | Missing Debug trait bounds on generic types | Add `std::fmt::Debug` bound to generic type parameters | In Progress |
+| E006 | navius-cache-redis | Missing CacheKey trait bounds | Add `CacheKey` bound to generic type parameters | In Progress |
+| E007 | navius-cache-redis | Result not returning a Future in execute_command | Make closures return `async move` blocks | Completed |
+| E008 | navius-cache-redis | Placeholder implementations with `todo!()` | Implement the placeholder functions for sets and sorted sets | In Progress |
 
 ## Implementation Plan for navius-cache-redis
 
-The primary issue is the mismatch between implementations. There is a `set_contains` function already defined in the code, but it doesn't match what the trait expects or it's not being properly included in the trait implementation.
-
-1. Fix the trait implementation to include the existing `set_contains` function:
-   - The existing `set_contains` is defined as:
-   ```rust
-   async fn set_contains<K, V>(&self, key: K, value: &V) -> CacheResult<bool>
-   where
-       K: CacheKey + std::fmt::Debug + Send + Sync + 'static, 
-       V: Serialize + Send + Sync + std::fmt::Debug + 'static,
-   {
-       // Implementation already exists
-   }
-   ```
-   
-   - Ensure it's properly part of the `CacheOperations` trait implementation
+1. Fix duplicate implementations:
+   - Remove standalone implementations of methods that are already defined in the trait implementation
+   - Ensure only one implementation of each method exists
 
 2. Add missing `.await` calls and fix future handling:
    ```rust
@@ -139,6 +130,13 @@ The primary issue is the mismatch between implementations. There is a `set_conta
 
 5. Implement all placeholder methods currently using `todo!()` to complete the Redis operation set.
 
+## Failed Approaches
+
+| Error ID | Failed Approach | Reason for Failure |
+|----------|----------------|---------------------|
+| E001 | Adding method implementations directly to RedisCache struct | This creates duplicate implementations that coexist with trait implementations, causing confusion |
+| E002 | Using `?` directly on futures without `await` | The `?` operator can only be used on `Result` types, not on futures that will produce a `Result` |
+
 ## Success Criteria
 
 - All crates compile successfully with `cargo build`
@@ -162,6 +160,17 @@ Each implementation should verify potential impacts on:
 - Created detailed error tracking table
 - Analyzed existing code to understand root causes of build failures
 - Developed a detailed implementation plan for fixing issues
+
+**May 30, 2025 (Afternoon):**
+- Fixed duplicate implementations of methods by removing standalone versions
+- Added proper `await` handling to several methods including `hash_get_all`, `set_length`, and `zset_add`
+- Fixed async/await handling in closures in `set_members` method that was causing linter errors
+- Updated `hash_get` method to properly use await on futures
+- Fixed `hash_get_many` method to properly handle async/await in field string processing
+- Fixed `hash_exists` method to use proper awaits and cloned values for closures
+- Implemented `set_add` method with proper Debug trait bounds and async/await handling
+- Fixed many parameter type constraints to include std::fmt::Debug
+- Created a "Failed Approaches" table to track unsuccessful solutions
 
 ## Important Notes
 

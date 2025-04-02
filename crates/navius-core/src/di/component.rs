@@ -41,22 +41,26 @@ pub trait Lifecycle: Send + Sync {
     }
 }
 
-/// Trait for components with async lifecycle hooks
-#[async_trait::async_trait]
+/// Asynchronous lifecycle hooks for components
 pub trait AsyncLifecycle: Send + Sync {
     /// Called when the component is initialized asynchronously
-    async fn on_initialize_async(&self) -> Result<()> {
-        Ok(())
+    fn on_initialize_async<'a>(
+        &'a self,
+    ) -> impl std::future::Future<Output = Result<()>> + Send + 'a {
+        async { Ok(()) }
     }
 
     /// Called when the component is destroyed asynchronously
-    async fn on_destroy_async(&self) -> Result<()> {
-        Ok(())
+    fn on_destroy_async<'a>(&'a self) -> impl std::future::Future<Output = Result<()>> + Send + 'a {
+        async { Ok(()) }
     }
 
     /// Execute a lifecycle phase asynchronously
-    async fn execute_phase_async(&self, _phase: LifecyclePhase) -> Result<()> {
-        Ok(())
+    fn execute_phase_async<'a>(
+        &'a self,
+        _phase: LifecyclePhase,
+    ) -> impl std::future::Future<Output = Result<()>> + Send + 'a {
+        async { Ok(()) }
     }
 }
 
@@ -183,21 +187,32 @@ pub trait ComponentFactory: Send + Sync {
 
 /// Async factory extension for executing async lifecycle methods
 pub trait AsyncComponentFactory: ComponentFactory {
-    /// Execute async initialization lifecycle hook
-    async fn initialize_async(&self, component: &DynComponentRef) -> Result<()> {
-        component
-            .execute_async_lifecycle(LifecyclePhase::Initialize)
-            .await
+    /// Initialize a component asynchronously
+    fn initialize_async(
+        &self,
+        component: &DynComponentRef,
+    ) -> impl std::future::Future<Output = Result<()>> + Send {
+        async move {
+            component
+                .execute_async_lifecycle(LifecyclePhase::Initialize)
+                .await
+        }
     }
-    /// Execute async destruction lifecycle hook
-    async fn destroy_async(&self, component: &DynComponentRef) -> Result<()> {
-        component
-            .execute_async_lifecycle(LifecyclePhase::Destroy)
-            .await
+
+    /// Destroy a component asynchronously
+    fn destroy_async(
+        &self,
+        component: &DynComponentRef,
+    ) -> impl std::future::Future<Output = Result<()>> + Send {
+        async move {
+            component
+                .execute_async_lifecycle(LifecyclePhase::Destroy)
+                .await
+        }
     }
 }
 
-// Implement AsyncComponentFactory for all ComponentFactory implementors
+// Implement for all types that implement ComponentFactory
 impl<T: ComponentFactory> AsyncComponentFactory for T {}
 
 /// Factory for creating instances of a specific component type

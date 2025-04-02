@@ -6,7 +6,7 @@ use navius_cache::error::{CacheError, CacheResult};
 use redis::{AsyncCommands, FromRedisValue, RedisError, Script, ScriptInvocation};
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 use tracing::{debug, error, instrument, trace, warn};
 
@@ -70,55 +70,83 @@ pub struct ScriptInfo {
     pub hash: String,
 }
 
+/// Trait for executing Lua scripts
+#[async_trait::async_trait]
+pub trait LuaScript {
+    /// Execute a Lua script
+    async fn execute_script<T: FromRedisValue + Send + 'static>(
+        &self,
+        script_index: usize,
+        keys: &[&str],
+        args: &[&str],
+    ) -> Result<T, CacheError>;
+}
+
 /// Redis Lua script manager
 pub struct RedisLuaManager {
-    /// Connection manager
-    pub(crate) connection_manager: Arc<RedisConnectionManager>,
-    /// Registered scripts
-    pub(crate) scripts: Mutex<HashMap<String, ScriptInfo>>,
+    /// Redis connection manager
+    connection_manager: Arc<RedisConnectionManager<String>>,
+    /// Lua scripts
+    scripts: Arc<RwLock<HashMap<String, Script>>>,
 }
 
 impl RedisLuaManager {
     /// Create a new Lua script manager
-    pub fn new(connection_manager: Arc<RedisConnectionManager>) -> Self {
+    pub async fn new(config: RedisCacheConfig) -> Self {
+        let connection_manager = Arc::new(RedisConnectionManager::new(config).await.unwrap());
         Self {
             connection_manager,
-            scripts: Mutex::new(HashMap::new()),
+            scripts: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    /// Register a script
-    pub fn register(&self, name: &str, script: &str) -> ScriptInfo {
-        let script_obj = Script::new(script);
-        let hash = script_obj.get_hash().to_string();
-        let script_info = ScriptInfo {
-            script: script.to_string(),
-            hash,
-        };
-
-        let mut scripts = self.scripts.lock().unwrap();
-        scripts.insert(name.to_string(), script_info.clone());
-        script_info
-    }
-
-    /// Get a script
-    pub fn get_script(&self, name: &str) -> Option<ScriptInfo> {
-        let scripts = self.scripts.lock().unwrap();
-        scripts.get(name).cloned()
-    }
-
-    /// Check if a script exists
-    pub fn script_exists(&self, script_name: &str) -> bool {
-        self.scripts.lock().unwrap().contains_key(script_name)
-    }
-
-    /// Get a script hash
-    pub fn get_script_hash(&self, script_name: &str) -> Option<String> {
+    /// Add a Lua script
+    pub fn add_script(&mut self, script: &str) -> Result<(), RedisCacheError> {
+        let script = Script::new(script);
         self.scripts
-            .lock()
+            .write()
             .unwrap()
-            .get(script_name)
-            .map(|s| s.hash.clone())
+            .insert(script.get_name().to_string(), script);
+        Ok(())
+    }
+
+    /// Execute a Lua script
+    #[instrument(skip(self, keys, args))]
+    pub async fn execute_script<T: FromRedisValue + Send + 'static>(
+        &self,
+        script_index: usize,
+        keys: &[&str],
+        args: &[&str],
+    ) -> Result<T, CacheError> {
+        let scripts = self.scripts.read().unwrap();
+        if script_index >= scripts.len() {
+            return Err(RedisCacheError::ScriptError(format!(
+                "Invalid script index: {}",
+                script_index
+            ))
+            .into());
+        }
+
+        let script = scripts.iter().nth(script_index).unwrap().1;
+        debug!(
+            "Executing script {} with keys {:?} and args {:?}",
+            script_index, keys, args
+        );
+
+        match self
+            .connection_manager
+            .execute_command("script", "EVALSHA", |mut conn| async move {
+                script.key(keys).arg(args).invoke_async(&mut conn).await
+            })
+            .await
+        {
+            Ok(result) => Ok(result),
+            Err(err) => Err(RedisCacheError::ScriptError(format!(
+                "Failed to execute script {}: {}",
+                script_index, err
+            ))
+            .into()),
+        }
     }
 }
 
@@ -127,7 +155,7 @@ impl RedisLuaManager {
 /// This is a helper function to execute a Lua script and record metrics
 /// for the execution time and result.
 pub async fn execute_script_with_metrics<'a, T: FromRedisValue + std::marker::Send + 'static>(
-    connection_manager: &Arc<RedisConnectionManager>,
+    connection_manager: &Arc<RedisConnectionManager<redis::Value>>,
     script_name: &str,
     script: &'a Script,
     key: &'a str,
@@ -151,7 +179,7 @@ impl RedisLuaScripting for RedisLuaManager {
     #[instrument(skip(self), level = "debug")]
     async fn register_script(&self, name: &str, script_body: &str) -> CacheResult<()> {
         // Register the script with the manager
-        self.register(name, script_body);
+        self.add_script(script_body)?;
 
         // Load the script into Redis to validate syntax
         let script = Script::new(script_body);
@@ -180,22 +208,22 @@ impl RedisLuaScripting for RedisLuaManager {
         keys: &[&str],
         args: &[&str],
     ) -> RedisCacheResult<T> {
-        let script = match self.scripts.lock().unwrap().get(script_name) {
-            Some(script) => script.clone(), // Clone Arc<Script>
-            None => {
-                return Err(RedisCacheError::ScriptError(format!(
-                    "Script '{}' not registered.",
-                    script_name
-                )));
-            }
-        };
+        let script_index = self
+            .scripts
+            .read()
+            .unwrap()
+            .iter()
+            .position(|(name, _)| name == script_name)
+            .ok_or_else(|| {
+                RedisCacheError::ScriptError(format!("Script '{}' not registered.", script_name))
+            })?;
 
         // Pass &script instead of script
         execute_script_with_metrics(
             &self.connection_manager,
             script_name,
-            &script,                           // Pass reference to the script
-            keys.first().unwrap_or(&"script"), // Use first key for routing or default
+            self.scripts.read().unwrap().get(script_name).unwrap(),
+            keys.first().unwrap_or(&"script"),
             keys,
             args,
         )
@@ -211,7 +239,7 @@ impl RedisLuaScripting for RedisLuaManager {
         trace!("Executing atomic get for key: {}", key);
 
         // Set up the script if not already registered
-        if !self.script_exists(script_name) {
+        if self.scripts.read().unwrap().is_empty() {
             let script = r#"
             local value = redis.call('GET', KEYS[1])
             if not value then
@@ -220,7 +248,7 @@ impl RedisLuaScripting for RedisLuaManager {
             return value
             "#;
 
-            self.register_script(script_name, script).await?;
+            self.register_script(script_name, script)?;
         }
 
         let prefixed_key = self.connection_manager.prefixed_key(key);
@@ -253,7 +281,7 @@ impl RedisLuaScripting for RedisLuaManager {
         trace!("Executing atomic set for key: {}", key);
 
         // Set up the script if not already registered
-        if !self.script_exists(script_name) {
+        if self.scripts.read().unwrap().is_empty() {
             let script = r#"
             if ARGV[2] ~= '' then
                 redis.call('SETEX', KEYS[1], ARGV[2], ARGV[1])
@@ -263,7 +291,7 @@ impl RedisLuaScripting for RedisLuaManager {
             return 1
             "#;
 
-            self.register_script(script_name, script).await?;
+            self.register_script(script_name, script)?;
         }
 
         let prefixed_key = self.connection_manager.prefixed_key(key);
@@ -304,7 +332,7 @@ impl RedisLuaScripting for RedisLuaManager {
         let script_name = "atomic_update";
 
         // Set up the script if not already registered
-        if !self.script_exists(script_name) {
+        if self.scripts.read().unwrap().is_empty() {
             let script = r#"
             if ARGV[2] ~= '' then
                 redis.call('SETEX', KEYS[1], ARGV[2], ARGV[1])
@@ -314,7 +342,7 @@ impl RedisLuaScripting for RedisLuaManager {
             return ARGV[1]
             "#;
 
-            self.register_script(script_name, script).await?;
+            self.register_script(script_name, script)?;
         }
 
         let prefixed_key = self.connection_manager.prefixed_key(key);
@@ -342,12 +370,12 @@ impl RedisLuaScripting for RedisLuaManager {
         trace!("Executing atomic increment for key: {} by {}", key, amount);
 
         // Set up the script if not already registered
-        if !self.script_exists(script_name) {
+        if self.scripts.read().unwrap().is_empty() {
             let script = r#"
             return redis.call('INCRBY', KEYS[1], ARGV[1])
             "#;
 
-            self.register_script(script_name, script).await?;
+            self.register_script(script_name, script)?;
         }
 
         let prefixed_key = self.connection_manager.prefixed_key(key);
@@ -370,7 +398,7 @@ impl RedisLuaScripting for RedisLuaManager {
         trace!("Executing atomic set_nx for key: {}", key);
 
         // Set up the script if not already registered
-        if !self.script_exists(script_name) {
+        if self.scripts.read().unwrap().is_empty() {
             let script = r#"
             local result = redis.call('SETNX', KEYS[1], ARGV[1])
             if result == 1 then
@@ -380,7 +408,7 @@ impl RedisLuaScripting for RedisLuaManager {
             return 0
             "#;
 
-            self.register_script(script_name, script).await?;
+            self.register_script(script_name, script)?;
         }
 
         let prefixed_key = self.connection_manager.prefixed_key(key);
@@ -496,28 +524,29 @@ mod tests {
     }
 
     // Helper function to create a mock Redis connection manager for tests
-    async fn create_test_manager() -> Arc<RedisConnectionManager> {
+    async fn create_test_manager() -> Arc<RedisConnectionManager<redis::Value>> {
         let config = RedisCacheConfig {
             url: "redis://127.0.0.1:6379".to_string(),
             key_prefix: "test_lua:".to_string(),
-            default_ttl: Duration::from_secs(60),
-            max_connections: 5,
+            default_ttl: Duration::from_secs(300),
+            max_connections: 20,
+            min_connections: 5,
             database: 0,
             password: None,
             use_tls: false,
-            connection_timeout_seconds: 2,
+            connection_timeout_seconds: 3,
             command_timeout_seconds: 1,
+            idle_timeout_seconds: 30,
+            max_lifetime_seconds: 120,
             retry_commands: true,
             max_retries: 3,
-            min_connections: 1,
-            idle_timeout_seconds: 300,
-            max_lifetime_seconds: 600,
-            health_check_interval_seconds: 60,
-            circuit_breaker_threshold: 5,
-            circuit_reset_timeout_seconds: 30,
-            enable_metrics: false,
+            health_check_interval_seconds: 15,
+            circuit_breaker_threshold: 3,
+            circuit_reset_timeout_seconds: 3,
+            enable_metrics: true,
         };
-        RedisConnectionManager::new(config).await.unwrap()
+
+        Arc::new(RedisConnectionManager::new(config).await.unwrap())
     }
 
     #[tokio::test]
@@ -528,14 +557,21 @@ mod tests {
             url: "redis://127.0.0.1:6379".to_string(),
             key_prefix: "test:lua:".to_string(),
             default_ttl: Duration::from_secs(300),
-            max_connections: 10,
+            max_connections: 20,
+            min_connections: 5,
             database: 0,
             password: None,
             use_tls: false,
-            connection_timeout_seconds: 5,
-            command_timeout_seconds: 2,
+            connection_timeout_seconds: 3,
+            command_timeout_seconds: 1,
+            idle_timeout_seconds: 30,
+            max_lifetime_seconds: 120,
             retry_commands: true,
             max_retries: 3,
+            health_check_interval_seconds: 15,
+            circuit_breaker_threshold: 3,
+            circuit_reset_timeout_seconds: 3,
+            enable_metrics: true,
         };
 
         // Create connection manager and cache

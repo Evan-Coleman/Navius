@@ -75,8 +75,7 @@ impl MockFactory {
     }
 
     /// Create a simple mock that returns the specified value
-    pub fn create_value_mock<T: Clone + 'static>(
-        &self,
+    pub fn create_value_mock<T: Clone + Send + Sync + 'static>(
         value: T,
     ) -> Arc<dyn Fn() -> T + Send + Sync> {
         let mock_fn = move || value.clone();

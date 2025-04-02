@@ -4,7 +4,7 @@ use crate::error::CacheResult;
 use crate::operations::redis::RedisCache;
 use crate::operations::{Cache, CacheOperations};
 use std::sync::Arc;
-use tracing::{debug, error, instrument};
+use tracing::{debug, instrument};
 
 /// Wrapper for cache connections that handles initialization and provides a unified interface
 #[derive(Debug, Clone)]

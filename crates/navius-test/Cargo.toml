@@ -34,6 +34,8 @@ regex = "1.11.1"
 # Additional dependencies
 num_cpus = { workspace = true }
 glob-match = "0.2.1"
+once_cell = "1.21.3"
+navius-messaging = { path = "../navius-messaging" }
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"

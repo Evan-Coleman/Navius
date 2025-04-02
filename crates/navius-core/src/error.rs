@@ -47,6 +47,8 @@ pub enum ErrorCode {
     Io,
     /// Unknown errors (fallback)
     Unknown,
+    /// Invalid argument errors
+    InvalidArgument,
 }
 
 impl ErrorCode {
@@ -63,6 +65,7 @@ impl ErrorCode {
             Self::External => 502,
             Self::Database | Self::Cache | Self::Plugin | Self::Serialization | Self::Io => 500,
             Self::Configuration => 500,
+            Self::InvalidArgument => 400,
         }
     }
 
@@ -85,6 +88,7 @@ impl ErrorCode {
             Self::Serialization => "Serialization error",
             Self::Io => "I/O error",
             Self::Unknown => "Unknown error",
+            Self::InvalidArgument => "Invalid argument",
         }
     }
 }
@@ -202,6 +206,11 @@ impl Error {
         Self::new(ErrorCode::Component, message)
     }
 
+    /// Create a new invalid argument error
+    pub fn invalid_argument(message: impl Into<String>) -> Self {
+        Self::new(ErrorCode::InvalidArgument, message)
+    }
+
     /// Convert this error to a JSON response.
     pub fn to_json(&self) -> Value {
         let mut error = json!({
@@ -297,6 +306,12 @@ impl From<serde_json::Error> for Error {
             format!("JSON serialization error: {}", err),
         )
         .with_source(err)
+    }
+}
+
+impl From<redis::RedisError> for Error {
+    fn from(err: redis::RedisError) -> Self {
+        Error::new(ErrorCode::Cache, err.to_string())
     }
 }
 

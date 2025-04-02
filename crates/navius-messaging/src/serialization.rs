@@ -4,151 +4,118 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{MessagingError, MessagingResult};
 
-/// Trait for message serializers
-pub trait MessageSerializer: Send + Sync {
+/// Trait for type-specific message serializers
+pub trait TypedMessageSerializer<T>: Send + Sync {
     /// Serialize a value to bytes
-    fn serialize<T: Serialize + ?Sized>(&self, value: &T) -> MessagingResult<Vec<u8>>;
+    fn serialize(&self, value: &T) -> MessagingResult<Vec<u8>>;
 
     /// Deserialize bytes to a value
-    fn deserialize<'a, T: Deserialize<'a>>(&self, bytes: &'a [u8]) -> MessagingResult<T>;
+    fn deserialize(&self, bytes: &[u8]) -> MessagingResult<T>;
 
     /// Get the content type of serialized data
     fn content_type(&self) -> &'static str;
 }
 
-/// JSON serializer using serde_json
+/// Trait for message serialization
+pub trait MessageSerializer: Send + Sync {
+    /// Serialize a value to bytes
+    fn serialize<T: Serialize>(&self, value: &T) -> MessagingResult<Vec<u8>>;
+
+    /// Deserialize bytes to a value
+    fn deserialize<T: DeserializeOwned>(&self, bytes: &[u8]) -> MessagingResult<T>;
+}
+
+/// Available serialization formats
+#[derive(Debug, Clone, Copy)]
+pub enum SerializationFormat {
+    /// JSON serialization
+    Json,
+    /// CBOR serialization
+    Cbor,
+    /// MessagePack serialization
+    MessagePack,
+    /// Bincode serialization
+    Bincode,
+}
+
+/// JSON serializer implementation
 pub struct JsonSerializer;
 
 impl MessageSerializer for JsonSerializer {
-    fn serialize<T: Serialize + ?Sized>(&self, value: &T) -> MessagingResult<Vec<u8>> {
+    fn serialize<T: Serialize>(&self, value: &T) -> MessagingResult<Vec<u8>> {
         serde_json::to_vec(value).map_err(|e| {
             MessagingError::SerializationError(format!("Failed to serialize to JSON: {}", e))
         })
     }
 
-    fn deserialize<'a, T: Deserialize<'a>>(&self, bytes: &'a [u8]) -> MessagingResult<T> {
+    fn deserialize<T: DeserializeOwned>(&self, bytes: &[u8]) -> MessagingResult<T> {
         serde_json::from_slice(bytes).map_err(|e| {
-            MessagingError::DeserializationError(format!("Failed to deserialize from JSON: {}", e))
+            MessagingError::SerializationError(format!("Failed to deserialize from JSON: {}", e))
         })
-    }
-
-    fn content_type(&self) -> &'static str {
-        "application/json"
     }
 }
 
-/// CBOR serializer using serde_cbor
+/// CBOR serializer implementation
 pub struct CborSerializer;
 
 impl MessageSerializer for CborSerializer {
-    fn serialize<T: Serialize + ?Sized>(&self, value: &T) -> MessagingResult<Vec<u8>> {
+    fn serialize<T: Serialize>(&self, value: &T) -> MessagingResult<Vec<u8>> {
         serde_cbor::to_vec(value).map_err(|e| {
             MessagingError::SerializationError(format!("Failed to serialize to CBOR: {}", e))
         })
     }
 
-    fn deserialize<'a, T: Deserialize<'a>>(&self, bytes: &'a [u8]) -> MessagingResult<T> {
+    fn deserialize<T: DeserializeOwned>(&self, bytes: &[u8]) -> MessagingResult<T> {
         serde_cbor::from_slice(bytes).map_err(|e| {
-            MessagingError::DeserializationError(format!("Failed to deserialize from CBOR: {}", e))
+            MessagingError::SerializationError(format!("Failed to deserialize from CBOR: {}", e))
         })
-    }
-
-    fn content_type(&self) -> &'static str {
-        "application/cbor"
     }
 }
 
-/// MessagePack serializer using rmp_serde
+/// MessagePack serializer implementation
 pub struct MessagePackSerializer;
 
 impl MessageSerializer for MessagePackSerializer {
-    fn serialize<T: Serialize + ?Sized>(&self, value: &T) -> MessagingResult<Vec<u8>> {
+    fn serialize<T: Serialize>(&self, value: &T) -> MessagingResult<Vec<u8>> {
         rmp_serde::to_vec(value).map_err(|e| {
             MessagingError::SerializationError(format!("Failed to serialize to MessagePack: {}", e))
         })
     }
 
-    fn deserialize<'a, T: Deserialize<'a>>(&self, bytes: &'a [u8]) -> MessagingResult<T> {
+    fn deserialize<T: DeserializeOwned>(&self, bytes: &[u8]) -> MessagingResult<T> {
         rmp_serde::from_slice(bytes).map_err(|e| {
-            MessagingError::DeserializationError(format!(
+            MessagingError::SerializationError(format!(
                 "Failed to deserialize from MessagePack: {}",
                 e
             ))
         })
     }
-
-    fn content_type(&self) -> &'static str {
-        "application/msgpack"
-    }
 }
 
-/// Binary serializer using bincode
+/// Bincode serializer implementation
 pub struct BincodeSerializer;
 
 impl MessageSerializer for BincodeSerializer {
-    fn serialize<T: Serialize + ?Sized>(&self, value: &T) -> MessagingResult<Vec<u8>> {
+    fn serialize<T: Serialize>(&self, value: &T) -> MessagingResult<Vec<u8>> {
         bincode::serialize(value).map_err(|e| {
-            MessagingError::SerializationError(format!("Failed to serialize with bincode: {}", e))
+            MessagingError::SerializationError(format!("Failed to serialize to Bincode: {}", e))
         })
     }
 
-    fn deserialize<'a, T: Deserialize<'a>>(&self, bytes: &'a [u8]) -> MessagingResult<T> {
+    fn deserialize<T: DeserializeOwned>(&self, bytes: &[u8]) -> MessagingResult<T> {
         bincode::deserialize(bytes).map_err(|e| {
-            MessagingError::DeserializationError(format!(
-                "Failed to deserialize with bincode: {}",
-                e
-            ))
-        })
-    }
-
-    fn content_type(&self) -> &'static str {
-        "application/octet-stream"
-    }
-}
-
-/// Serializer that can serialize to string
-pub trait StringSerializer {
-    /// Serialize a value to a string
-    fn serialize_to_string<T: Serialize>(&self, value: &T) -> MessagingResult<String>;
-
-    /// Deserialize a value from a string
-    fn deserialize_from_string<T: for<'de> Deserialize<'de>>(
-        &self,
-        value: &str,
-    ) -> MessagingResult<T>;
-}
-
-impl StringSerializer for JsonSerializer {
-    fn serialize_to_string<T: Serialize>(&self, value: &T) -> MessagingResult<String> {
-        serde_json::to_string(value).map_err(|e| {
-            MessagingError::SerializationError(format!("Failed to serialize to JSON string: {}", e))
-        })
-    }
-
-    fn deserialize_from_string<T: for<'de> Deserialize<'de>>(
-        &self,
-        value: &str,
-    ) -> MessagingResult<T> {
-        serde_json::from_str(value).map_err(|e| {
-            MessagingError::DeserializationError(format!(
-                "Failed to deserialize from JSON string: {}",
-                e
-            ))
+            MessagingError::SerializationError(format!("Failed to deserialize from Bincode: {}", e))
         })
     }
 }
 
-/// Create a serializer based on the content type
-pub fn create_serializer(content_type: &str) -> MessagingResult<Box<dyn MessageSerializer>> {
-    match content_type {
-        "application/json" => Ok(Box::new(JsonSerializer)),
-        "application/cbor" => Ok(Box::new(CborSerializer)),
-        "application/msgpack" => Ok(Box::new(MessagePackSerializer)),
-        "application/octet-stream" => Ok(Box::new(BincodeSerializer)),
-        _ => Err(MessagingError::SerializationError(format!(
-            "Unsupported content type: {}",
-            content_type
-        ))),
+/// Create a serializer for the given format
+pub fn create_serializer(format: SerializationFormat) -> Box<dyn MessageSerializer> {
+    match format {
+        SerializationFormat::Json => Box::new(JsonSerializer),
+        SerializationFormat::Cbor => Box::new(CborSerializer),
+        SerializationFormat::MessagePack => Box::new(MessagePackSerializer),
+        SerializationFormat::Bincode => Box::new(BincodeSerializer),
     }
 }
 
@@ -174,7 +141,7 @@ impl BinaryData {
     /// Create binary data from a serializable value using the specified serializer
     pub fn from_value<T: Serialize>(
         value: &T,
-        serializer: &dyn MessageSerializer,
+        serializer: &Box<dyn MessageSerializer>,
     ) -> MessagingResult<Self> {
         let data = serializer.serialize(value)?;
         let content_type = serializer.content_type().to_string();
@@ -184,14 +151,14 @@ impl BinaryData {
 
     /// Deserialize the binary data to a value using the content type
     pub fn to_value<T: for<'de> Deserialize<'de>>(&self) -> MessagingResult<T> {
-        let serializer = create_serializer(&self.content_type)?;
+        let serializer = create_serializer(SerializationFormat::Json);
         serializer.deserialize(&self.data)
     }
 
     /// Deserialize the binary data using a specific serializer
     pub fn deserialize<T: for<'de> Deserialize<'de>>(
         &self,
-        serializer: &dyn MessageSerializer,
+        serializer: &Box<dyn MessageSerializer>,
     ) -> MessagingResult<T> {
         serializer.deserialize(&self.data)
     }
@@ -214,13 +181,13 @@ pub struct AnyMessage {
 }
 
 impl AnyMessage {
-    /// Create a new message from serializable data
+    /// Create a new message from a serializable value
     pub fn new<T: Serialize>(
         payload: &T,
         topic: impl Into<String>,
         serializer: Box<dyn MessageSerializer>,
     ) -> MessagingResult<Self> {
-        let data = BinaryData::from_value(payload, serializer.as_ref())?;
+        let data = BinaryData::from_value(payload, &serializer)?;
 
         Ok(Self {
             data,
@@ -230,7 +197,7 @@ impl AnyMessage {
         })
     }
 
-    /// Deserialize the message to a specific type
+    /// Deserialize the message payload to a specific type
     pub fn deserialize<T: for<'de> Deserialize<'de>>(&self) -> MessagingResult<T> {
         self.serializer.deserialize(&self.data.data)
     }
@@ -247,7 +214,8 @@ impl AnyMessage {
     }
 }
 
-/// A wrapper that can deserialize to different message types at runtime
+/// A typed message deserializer that can deserialize messages of a specific type
+#[derive(Debug, Clone)]
 pub struct TypedMessageDeserializer<T> {
     /// The serializer to use
     serializer: Box<dyn MessageSerializer>,
@@ -265,12 +233,12 @@ impl<T: for<'de> Deserialize<'de>> TypedMessageDeserializer<T> {
         }
     }
 
-    /// Deserialize bytes to the target type
+    /// Deserialize a message payload
     pub fn deserialize(&self, data: &[u8]) -> MessagingResult<T> {
         self.serializer.deserialize(data)
     }
 
-    /// Get the serializer content type
+    /// Get the content type of serialized data
     pub fn content_type(&self) -> &'static str {
         self.serializer.content_type()
     }

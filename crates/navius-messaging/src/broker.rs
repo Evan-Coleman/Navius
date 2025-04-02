@@ -15,9 +15,9 @@ use crate::message::{
 use crate::publisher::PublishOptions;
 use crate::topology::{Binding, Exchange, ExchangeType, Queue};
 
-/// Trait defining a message broker that can send and receive messages
+/// Base trait for message broker operations that don't require type parameters
 #[async_trait]
-pub trait MessageBroker: Send + Sync + 'static {
+pub trait MessageBroker: Send + Sync {
     /// Get the broker ID
     fn id(&self) -> &str;
 
@@ -99,56 +99,6 @@ pub trait MessageBroker: Send + Sync + 'static {
         routing_key: &str,
     ) -> MessagingResult<()>;
 
-    /// Publish a message
-    async fn publish<T: serde::Serialize + Send + Sync>(
-        &self,
-        message: &Message<T>,
-        options: Option<PublishOptions>,
-    ) -> MessagingResult<()>;
-
-    /// Publish a message and wait for confirmation
-    async fn publish_with_confirm<T: serde::Serialize + Send + Sync>(
-        &self,
-        message: &Message<T>,
-        options: Option<PublishOptions>,
-        timeout: Option<Duration>,
-    ) -> MessagingResult<()>;
-
-    /// Subscribe to messages
-    async fn subscribe<T, F>(
-        &self,
-        queue_name: &str,
-        handler: F,
-        options: Option<ConsumerOptions>,
-    ) -> MessagingResult<ConsumerHandle>
-    where
-        T: for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
-        F: MessageHandler<T> + 'static;
-
-    /// Subscribe to messages with a filter
-    async fn subscribe_filtered<T, F, M>(
-        &self,
-        queue_name: &str,
-        handler: F,
-        filter: M,
-        options: Option<ConsumerOptions>,
-    ) -> MessagingResult<ConsumerHandle>
-    where
-        T: for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
-        F: MessageHandler<T> + 'static,
-        M: MessageFilter<T> + 'static;
-
-    /// Get a stream of messages
-    async fn consume<T>(
-        &self,
-        queue_name: &str,
-        options: Option<ConsumerOptions>,
-    ) -> MessagingResult<
-        Box<dyn Stream<Item = Result<ReceivedMessage<T>, MessagingError>> + Send + Unpin>,
-    >
-    where
-        T: for<'de> serde::Deserialize<'de> + Send + Sync + 'static;
-
     /// Acknowledge a message
     async fn ack(&self, delivery_tag: u64, multiple: bool) -> MessagingResult<()>;
 
@@ -169,6 +119,59 @@ pub trait MessageBroker: Send + Sync + 'static {
 
     /// Ping the broker to check connectivity
     async fn ping(&self) -> MessagingResult<Duration>;
+}
+
+/// Trait for type-specific message broker operations
+#[async_trait]
+pub trait TypedMessageBroker<T>: MessageBroker
+where
+    T: serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
+{
+    /// Publish a message
+    async fn publish(
+        &self,
+        message: &Message<T>,
+        options: Option<PublishOptions>,
+    ) -> MessagingResult<()>;
+
+    /// Publish a message and wait for confirmation
+    async fn publish_with_confirm(
+        &self,
+        message: &Message<T>,
+        options: Option<PublishOptions>,
+        timeout: Option<Duration>,
+    ) -> MessagingResult<()>;
+
+    /// Subscribe to messages
+    async fn subscribe<F>(
+        &self,
+        queue_name: &str,
+        handler: F,
+        options: Option<ConsumerOptions>,
+    ) -> MessagingResult<ConsumerHandle>
+    where
+        F: MessageHandler<T> + 'static;
+
+    /// Subscribe to messages with a filter
+    async fn subscribe_filtered<F, M>(
+        &self,
+        queue_name: &str,
+        handler: F,
+        filter: M,
+        options: Option<ConsumerOptions>,
+    ) -> MessagingResult<ConsumerHandle>
+    where
+        F: MessageHandler<T> + 'static,
+        M: MessageFilter<T> + 'static;
+
+    /// Get a stream of messages
+    async fn consume(
+        &self,
+        queue_name: &str,
+        options: Option<ConsumerOptions>,
+    ) -> MessagingResult<
+        Box<dyn Stream<Item = Result<ReceivedMessage<T>, MessagingError>> + Send + Unpin>,
+    >;
 }
 
 /// Metrics about the broker and its connections

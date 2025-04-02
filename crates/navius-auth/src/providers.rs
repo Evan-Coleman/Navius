@@ -3,6 +3,7 @@
 //! This module defines the provider interface and implementations for different
 //! authentication methods such as JWT, OAuth, and basic authentication.
 
+use crate::error::Error;
 use crate::error::Result;
 use crate::types::{Credentials, Identity, Subject};
 use async_trait::async_trait;
@@ -11,17 +12,20 @@ use std::fmt;
 use std::sync::Arc;
 
 /// Authentication provider type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderType {
-    /// Basic username/password authentication.
+    /// Basic authentication provider.
     Basic,
-    /// JSON Web Token authentication.
+    /// JWT token provider.
     JWT,
-    /// OAuth 2.0 authentication.
-    #[cfg(feature = "oauth")]
-    OAuth,
-    /// Custom authentication provider.
-    Custom,
+    /// OAuth2 provider.
+    OAuth2,
+    /// OIDC provider.
+    OIDC,
+    /// SAML provider.
+    SAML,
+    /// External provider.
+    External,
 }
 
 impl fmt::Display for ProviderType {
@@ -29,9 +33,10 @@ impl fmt::Display for ProviderType {
         match self {
             ProviderType::Basic => write!(f, "basic"),
             ProviderType::JWT => write!(f, "jwt"),
-            #[cfg(feature = "oauth")]
-            ProviderType::OAuth => write!(f, "oauth"),
-            ProviderType::Custom => write!(f, "custom"),
+            ProviderType::OAuth2 => write!(f, "oauth2"),
+            ProviderType::OIDC => write!(f, "oidc"),
+            ProviderType::SAML => write!(f, "saml"),
+            ProviderType::External => write!(f, "external"),
         }
     }
 }
@@ -48,29 +53,31 @@ pub struct ProviderConfig {
     pub config: serde_json::Value,
 }
 
-/// Authentication provider interface.
+/// Authentication provider trait.
+///
+/// This trait provides methods for authentication and token management.
 #[async_trait]
-pub trait AuthProvider: Send + Sync + 'static {
+pub trait AuthProvider: Send + Sync {
     /// Get the provider type.
     fn provider_type(&self) -> ProviderType;
 
     /// Get the provider name.
     fn name(&self) -> &str;
 
-    /// Authenticate a user using credentials.
-    async fn authenticate(&self, credentials: &Credentials) -> Result<Identity>;
+    /// Authenticate using the provided credentials.
+    async fn authenticate(&self, credentials: &str) -> Result<Identity, Error>;
 
-    /// Validate an authentication token.
-    async fn validate_token(&self, token: &str) -> Result<Subject>;
+    /// Validate a token and return the subject.
+    async fn validate_token(&self, token: &str) -> Result<Subject, Error>;
 
-    /// Create an authentication token for a subject.
-    async fn create_token(&self, subject: &Subject) -> Result<String>;
+    /// Create a token for the provided subject.
+    async fn create_token(&self, subject: &Subject) -> Result<String, Error>;
 
-    /// Revoke an authentication token.
-    async fn revoke_token(&self, token: &str) -> Result<()>;
+    /// Revoke a token.
+    async fn revoke_token(&self, token: &str) -> Result<(), Error>;
 
-    /// Refresh an authentication token.
-    async fn refresh_token(&self, token: &str) -> Result<String>;
+    /// Refresh a token.
+    async fn refresh_token(&self, token: &str) -> Result<String, Error>;
 }
 
 /// Factory for creating authentication providers.
@@ -103,7 +110,7 @@ impl ProviderFactory {
                 )))
             }
             #[cfg(feature = "oauth")]
-            ProviderType::OAuth => {
+            ProviderType::OAuth2 => {
                 let oauth_config = serde_json::from_value::<crate::oauth::OAuthProviderConfig>(
                     config.config.clone(),
                 )?;
@@ -112,8 +119,14 @@ impl ProviderFactory {
                     oauth_config,
                 )))
             }
-            ProviderType::Custom => Err(Error::configuration(
-                "Custom providers must be created manually",
+            ProviderType::OIDC => Err(Error::configuration(
+                "OIDC providers are not supported in the current implementation",
+            )),
+            ProviderType::SAML => Err(Error::configuration(
+                "SAML providers are not supported in the current implementation",
+            )),
+            ProviderType::External => Err(Error::configuration(
+                "External providers are not supported in the current implementation",
             )),
             #[allow(unreachable_patterns)]
             _ => Err(Error::configuration(format!(

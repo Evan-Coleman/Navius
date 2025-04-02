@@ -1,5 +1,6 @@
 use crate::engine::{TemplateEngine, TemplateEngineFactory};
 use crate::error::{TemplateError, TemplateResult};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -180,23 +181,15 @@ impl DelegatingTemplateEngine {
     }
 }
 
-#[async_trait::async_trait]
 impl TemplateRenderer for DelegatingTemplateEngine {
-    async fn render<T>(&self, name: &str, context: &T) -> TemplateResult<String>
-    where
-        T: serde::Serialize + Send + Sync,
-    {
-        // Find the right engine and delegate the render call
-        let engine = self.get_engine_for_template(name);
-        engine.render(name, context).await
+    fn render<T: Serialize>(&self, template: &str, data: &T) -> Result<String> {
+        let engine = self.get_engine_for_template(template)?;
+        engine.render(template, data)
     }
 
-    async fn render_string<T>(&self, template: &str, context: &T) -> TemplateResult<String>
-    where
-        T: serde::Serialize + Send + Sync,
-    {
-        // Always use the default engine for string templates
-        self.default_engine.render_string(template, context).await
+    fn render_string<T: Serialize>(&self, template: &str, data: &T) -> Result<String> {
+        let engine = self.get_engine_for_string()?;
+        engine.render_string(template, data)
     }
 }
 

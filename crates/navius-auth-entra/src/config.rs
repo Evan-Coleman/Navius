@@ -326,6 +326,24 @@ pub struct EntraConfig {
     /// Additional configuration options
     #[serde(default)]
     pub additional_options: HashMap<String, String>,
+
+    /// JWKS URI for token validation
+    pub jwks_uri: String,
+
+    /// Duration to cache JWKS keys
+    pub jwks_cache_duration: Duration,
+
+    /// Duration before cache expiry to refresh JWKS
+    pub jwks_refresh_ahead_duration: Duration,
+
+    /// Expected issuer for tokens
+    pub issuer: String,
+
+    /// Expected audience for tokens
+    pub audience: String,
+
+    /// Allowed clock skew for token validation
+    pub clock_skew: Duration,
 }
 
 fn default_scopes() -> Vec<String> {
@@ -516,6 +534,12 @@ impl Default for EntraConfig {
             role_mapping: RoleMappingConfig::default(),
             metrics_enabled: default_metrics_enabled(),
             additional_options: HashMap::new(),
+            jwks_uri: String::new(),
+            jwks_cache_duration: Duration::from_secs(3600),
+            jwks_refresh_ahead_duration: Duration::from_secs(300),
+            issuer: String::new(),
+            audience: String::new(),
+            clock_skew: Duration::from_secs(300),
         }
     }
 }
