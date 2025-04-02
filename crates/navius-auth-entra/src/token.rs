@@ -1,5 +1,7 @@
 use crate::error::{EntraError, EntraResult};
-use chrono::{DateTime, NaiveDateTime, Utc};
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use chrono::{DateTime, Utc};
 use jsonwebtoken::{Algorithm, DecodingKey, TokenData, Validation, decode, decode_header};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -80,28 +82,18 @@ pub struct EntraTokenClaims {
 impl EntraTokenClaims {
     /// Get the expiration time as a DateTime
     pub fn expiration_time(&self) -> DateTime<Utc> {
-        DateTime::<Utc>::from_utc(
-            NaiveDateTime::from_timestamp_opt(self.exp, 0).unwrap_or_default(),
-            Utc,
-        )
+        DateTime::from_timestamp(self.exp, 0).unwrap_or_default()
     }
 
     /// Get the issuance time as a DateTime
     pub fn issued_at(&self) -> DateTime<Utc> {
-        DateTime::<Utc>::from_utc(
-            NaiveDateTime::from_timestamp_opt(self.iat, 0).unwrap_or_default(),
-            Utc,
-        )
+        DateTime::from_timestamp(self.iat, 0).unwrap_or_default()
     }
 
     /// Get the not before time as a DateTime if available
     pub fn not_before(&self) -> Option<DateTime<Utc>> {
-        self.nbf.map(|nbf| {
-            DateTime::<Utc>::from_utc(
-                NaiveDateTime::from_timestamp_opt(nbf, 0).unwrap_or_default(),
-                Utc,
-            )
-        })
+        self.nbf
+            .map(|nbf| DateTime::from_timestamp(nbf, 0).unwrap_or_default())
     }
 
     /// Check if the token is expired, taking into account the clock skew
@@ -250,8 +242,9 @@ impl EntraToken {
             return Err(EntraError::jwt("Invalid JWT token format"));
         }
 
-        // Decode the payload
-        let payload = base64::decode_config(parts[1], base64::URL_SAFE_NO_PAD)
+        // Decode the payload using the updated base64 API
+        let payload = URL_SAFE_NO_PAD
+            .decode(parts[1])
             .map_err(|e| EntraError::jwt(format!("Failed to decode token payload: {}", e)))?;
 
         // Parse the claims

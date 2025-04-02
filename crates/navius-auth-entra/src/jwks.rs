@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
 
 /// JSON Web Key (JWK) structure as defined in RFC 7517
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,7 +106,7 @@ impl JsonWebKey {
                 if let (Some(x), Some(y), Some(crv)) =
                     (&self.x_coordinate, &self.y_coordinate, &self.curve)
                 {
-                    let curve = match crv.as_str() {
+                    let _curve = match crv.as_str() {
                         "P-256" => jsonwebtoken::jwk::EllipticCurve::P256,
                         "P-384" => jsonwebtoken::jwk::EllipticCurve::P384,
                         "P-521" => jsonwebtoken::jwk::EllipticCurve::P521,

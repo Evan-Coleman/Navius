@@ -12,19 +12,14 @@ pub mod provider;
 pub mod token;
 pub mod user;
 
-pub use crate::config::{EntraConfig, EntraConfigBuilder};
+pub use crate::config::EntraConfig;
 pub use crate::error::{EntraError, EntraResult};
 pub use crate::provider::EntraProvider;
-pub use crate::token::{EntraTokenClaims, EntraTokenValidator};
+pub use crate::token::EntraTokenClaims;
 pub use crate::user::EntraUser;
 
 // Re-export required traits from navius-auth
-pub use navius_auth::{AuthProvider, AuthResult};
-
-// Modules
-mod auth_flow;
-mod client;
-mod util;
+pub use navius_auth::{AuthProvider, ProviderType, Result as AuthResult};
 
 /// Version of the crate
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

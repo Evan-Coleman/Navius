@@ -1,5 +1,4 @@
-use navius_auth::error::AuthError;
-use std::fmt;
+use navius_auth::Error as AuthError;
 use thiserror::Error;
 
 /// Errors specific to the Microsoft Entra authentication provider
@@ -169,32 +168,34 @@ impl From<EntraError> for AuthError {
     fn from(error: EntraError) -> Self {
         match error {
             EntraError::Config(msg) => {
-                AuthError::Configuration(format!("Entra config error: {}", msg))
+                AuthError::configuration(format!("Entra config error: {}", msg))
             }
             EntraError::TokenValidation(msg) => {
-                AuthError::TokenValidation(format!("Entra token error: {}", msg))
+                AuthError::token_invalid(format!("Entra token error: {}", msg))
             }
-            EntraError::Jwt(msg) => AuthError::TokenValidation(format!("Entra JWT error: {}", msg)),
-            EntraError::Jwks(msg) => {
-                AuthError::TokenValidation(format!("Entra JWKS error: {}", msg))
-            }
+            EntraError::Jwt(msg) => AuthError::token_invalid(format!("Entra JWT error: {}", msg)),
+            EntraError::Jwks(msg) => AuthError::token_invalid(format!("Entra JWKS error: {}", msg)),
             EntraError::Http(msg) => {
-                AuthError::ExternalService(format!("Entra HTTP error: {}", msg))
+                AuthError::external_service(format!("Entra HTTP error: {}", msg))
             }
-            EntraError::Data(msg) => AuthError::Data(format!("Entra data error: {}", msg)),
+            EntraError::Data(msg) => AuthError::serialization(format!("Entra data error: {}", msg)),
             EntraError::Unauthorized(msg) => {
-                AuthError::Unauthorized(format!("Entra unauthorized: {}", msg))
+                AuthError::authentication_failed(format!("Entra unauthorized: {}", msg))
             }
             EntraError::Api { code, message } => {
-                AuthError::ExternalService(format!("Entra API error {}: {}", code, message))
+                AuthError::external_service(format!("Entra API error {}: {}", code, message))
             }
-            EntraError::AuthFlow(msg) => AuthError::Flow(format!("Entra auth flow error: {}", msg)),
+            EntraError::AuthFlow(msg) => {
+                AuthError::provider(format!("Entra auth flow error: {}", msg))
+            }
             EntraError::UserProfile(msg) => {
-                AuthError::UserProfile(format!("Entra user profile error: {}", msg))
+                AuthError::provider(format!("Entra user profile error: {}", msg))
             }
-            EntraError::Timeout(msg) => AuthError::Timeout(format!("Entra timeout: {}", msg)),
+            EntraError::Timeout(msg) => {
+                AuthError::external_service(format!("Entra timeout: {}", msg))
+            }
             EntraError::Internal(msg) => {
-                AuthError::Internal(format!("Entra internal error: {}", msg))
+                AuthError::internal(format!("Entra internal error: {}", msg))
             }
         }
     }
