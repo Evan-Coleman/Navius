@@ -58,6 +58,7 @@ pub trait MetricsExporter: Send + Sync {
 
 /// Builder for metrics configuration
 pub struct MetricsBuilder {
+    #[allow(dead_code)]
     service_name: String,
     namespace: Option<String>,
     labels: Vec<(String, String)>,
