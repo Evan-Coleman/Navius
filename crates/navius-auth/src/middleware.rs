@@ -8,10 +8,8 @@ use crate::providers::AuthProvider;
 #[cfg(feature = "http")]
 use crate::types::Subject;
 #[cfg(feature = "http")]
-use axum::http::HeaderMap;
+use axum;
 use std::sync::Arc;
-#[cfg(feature = "http")]
-use tracing::warn;
 
 /// Authentication layer for HTTP requests.
 #[cfg(feature = "http")]

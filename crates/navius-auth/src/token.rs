@@ -13,8 +13,6 @@ use async_trait::async_trait;
 #[cfg(feature = "jwt")]
 use chrono::{Duration, Utc};
 #[cfg(feature = "jwt")]
-use futures::future::FutureExt;
-#[cfg(feature = "jwt")]
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 #[cfg(feature = "jwt")]
 use serde::{Deserialize, Serialize};

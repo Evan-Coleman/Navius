@@ -5,14 +5,15 @@
 
 use crate::error::Error;
 use crate::error::Result;
-use crate::types::{Credentials, Identity, Subject};
+use crate::types::{Identity, Subject};
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::fmt;
 use std::sync::Arc;
 
 /// Authentication provider type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ProviderType {
     /// Basic authentication provider.
     Basic,
@@ -65,19 +66,19 @@ pub trait AuthProvider: Send + Sync {
     fn name(&self) -> &str;
 
     /// Authenticate using the provided credentials.
-    async fn authenticate(&self, credentials: &str) -> Result<Identity, Error>;
+    async fn authenticate(&self, credentials: &str) -> Result<Identity>;
 
     /// Validate a token and return the subject.
-    async fn validate_token(&self, token: &str) -> Result<Subject, Error>;
+    async fn validate_token(&self, token: &str) -> Result<Subject>;
 
     /// Create a token for the provided subject.
-    async fn create_token(&self, subject: &Subject) -> Result<String, Error>;
+    async fn create_token(&self, subject: &Subject) -> Result<String>;
 
     /// Revoke a token.
-    async fn revoke_token(&self, token: &str) -> Result<(), Error>;
+    async fn revoke_token(&self, token: &str) -> Result<()>;
 
     /// Refresh a token.
-    async fn refresh_token(&self, token: &str) -> Result<String, Error>;
+    async fn refresh_token(&self, token: &str) -> Result<String>;
 }
 
 /// Factory for creating authentication providers.

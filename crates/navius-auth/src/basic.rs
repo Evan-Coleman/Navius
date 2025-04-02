@@ -8,14 +8,12 @@ use crate::types::{Identity, Subject};
 use async_trait::async_trait;
 use base64::Engine;
 use chrono::{Duration, Utc};
-use futures::future::FutureExt;
 use hex;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
-use tracing::debug;
 use uuid::Uuid;
 
 /// Configuration for the basic authentication provider.
@@ -95,7 +93,7 @@ impl BasicProvider {
     /// Generate a simple token.
     fn generate_token(&self, subject_id: &str) -> String {
         let mut rng = rand::thread_rng();
-        let rand_bytes: [u8; 32] = rng.gen();
+        let rand_bytes: [u8; 32] = rng.random();
         let now = Utc::now().timestamp().to_string();
         let data = format!(
             "{}{}{}{}",

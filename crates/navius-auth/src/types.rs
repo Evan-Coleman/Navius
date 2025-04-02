@@ -6,7 +6,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use uuid::Uuid;
 
 /// Authentication configuration.
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]

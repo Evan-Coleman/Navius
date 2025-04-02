@@ -4,7 +4,7 @@
 //! for authentication and authorization operations.
 
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use std::error::Error as StdError;
 use thiserror::Error;
 
 /// A specialized Result type for authentication operations.

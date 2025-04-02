@@ -4,7 +4,7 @@
 //! for authenticated subjects.
 
 use crate::error::{Error, Result};
-use crate::types::{Permission, Role, Subject};
+use crate::types::{Permission, Subject};
 use std::collections::HashMap;
 use tracing::{debug, instrument};
 
