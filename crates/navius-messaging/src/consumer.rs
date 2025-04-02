@@ -180,6 +180,37 @@ pub enum MessageOffset {
     Timestamp(i64),
 }
 
+/// A wrapper for the retry calculator function that implements Debug
+#[derive(Clone)]
+pub struct RetryCalculator {
+    calculator: Arc<dyn Fn(u32) -> Duration + Send + Sync>,
+}
+
+impl RetryCalculator {
+    /// Create a new retry calculator
+    pub fn new<F>(calculator: F) -> Self
+    where
+        F: Fn(u32) -> Duration + Send + Sync + 'static,
+    {
+        Self {
+            calculator: Arc::new(calculator),
+        }
+    }
+
+    /// Calculate the delay for a retry attempt
+    pub fn calculate(&self, attempt: u32) -> Duration {
+        (self.calculator)(attempt)
+    }
+}
+
+impl fmt::Debug for RetryCalculator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RetryCalculator")
+            .field("calculator", &"<function>")
+            .finish()
+    }
+}
+
 /// Retry strategy for failed message processing
 #[derive(Debug, Clone)]
 pub enum RetryStrategy {
@@ -210,11 +241,21 @@ pub enum RetryStrategy {
     /// Custom retry strategy
     Custom {
         /// Function to calculate delay for a given retry attempt
-        calculator: Arc<dyn Fn(u32) -> Duration + Send + Sync>,
+        calculator: RetryCalculator,
     },
 }
 
 impl RetryStrategy {
+    /// Create a new custom retry strategy
+    pub fn custom<F>(calculator: F) -> Self
+    where
+        F: Fn(u32) -> Duration + Send + Sync + 'static,
+    {
+        RetryStrategy::Custom {
+            calculator: RetryCalculator::new(calculator),
+        }
+    }
+
     /// Calculate the delay for a specific retry attempt
     pub fn calculate_delay(&self, attempt: u32) -> Duration {
         match self {
@@ -248,7 +289,7 @@ impl RetryStrategy {
                 Duration::from_millis(delay_ms as u64)
             }
 
-            RetryStrategy::Custom { calculator } => calculator(attempt),
+            RetryStrategy::Custom { calculator } => calculator.calculate(attempt),
         }
     }
 }
@@ -356,35 +397,6 @@ where
         Err(last_error.unwrap_or_else(|| {
             crate::error::MessagingError::ConsumerError("Maximum retries exceeded".into())
         }))
-    }
-}
-
-/// A wrapper for the retry calculator function that implements Debug
-#[derive(Clone)]
-struct RetryCalculator {
-    calculator: Arc<dyn Fn(u32) -> Duration + Send + Sync>,
-}
-
-impl RetryCalculator {
-    fn new<F>(calculator: F) -> Self
-    where
-        F: Fn(u32) -> Duration + Send + Sync + 'static,
-    {
-        Self {
-            calculator: Arc::new(calculator),
-        }
-    }
-
-    fn calculate(&self, attempt: u32) -> Duration {
-        (self.calculator)(attempt)
-    }
-}
-
-impl fmt::Debug for RetryCalculator {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("RetryCalculator")
-            .field("calculator", &"<function>")
-            .finish()
     }
 }
 

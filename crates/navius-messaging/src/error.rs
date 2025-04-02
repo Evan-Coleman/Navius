@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::io;
 use tokio::sync::mpsc::error::SendError;
@@ -62,8 +63,8 @@ pub enum MessagingError {
     ConfigurationError(String),
 
     /// Timeout error
-    #[error("Operation timed out after {0} ms")]
-    TimeoutError(u64),
+    #[error("Operation timed out: {0}")]
+    TimeoutError(String),
 
     /// Authentication error
     #[error("Authentication error: {0}")]
@@ -120,7 +121,7 @@ where
 }
 
 /// Delivery mode for messages
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum DeliveryMode {
     /// Non-persistent message
     NonPersistent = 1,

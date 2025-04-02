@@ -2,11 +2,12 @@ use std::collections::HashMap;
 use std::fmt;
 use std::time::{Duration, SystemTime};
 
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::error::{DeliveryMode, MessagingError, MessagingResult};
-use crate::serialization::MessageSerializer;
+use crate::serialization::Serializer;
 
 /// Unique identifier for messages
 pub type MessageId = String;
@@ -48,7 +49,7 @@ pub struct Message<T> {
     pub reply_to: Option<String>,
 }
 
-impl<T> Message<T> {
+impl<T: Serialize + Clone> Message<T> {
     /// Create a new message with the given payload and topic
     pub fn new(payload: T, topic: impl Into<String>) -> Self {
         Self {
@@ -149,17 +150,13 @@ impl<T> Message<T> {
             .and_then(|exp| exp.duration_since(SystemTime::now()).ok())
     }
 
-    /// Convert message to another payload type using the provided serializer
-    pub fn convert<U>(&self, serializer: &dyn MessageSerializer) -> MessagingResult<Message<U>>
-    where
-        T: Serialize,
-        U: for<'de> Deserialize<'de>,
-    {
-        // Serialize current payload
-        let bytes = serializer.serialize(&self.payload)?;
-
-        // Deserialize to new type
-        let new_payload = serializer.deserialize(&bytes)?;
+    /// Convert this message to a message with a different payload type
+    pub fn convert<U: DeserializeOwned>(
+        &self,
+        serializer: &Serializer,
+    ) -> MessagingResult<Message<U>> {
+        let bytes = serializer.serialize_value(&self.payload)?;
+        let new_payload = serializer.deserialize_value(&bytes)?;
 
         Ok(Message {
             id: self.id.clone(),
@@ -306,7 +303,7 @@ pub struct ReceivedMessage<T> {
     pub consumer_tag: String,
 }
 
-impl<T> ReceivedMessage<T> {
+impl<T: Serialize + Clone> ReceivedMessage<T> {
     /// Create a new received message
     pub fn new(
         message: Message<T>,
@@ -331,24 +328,20 @@ impl<T> ReceivedMessage<T> {
         &self.message
     }
 
-    /// Convert to a different payload type
-    pub fn convert<U>(
+    /// Convert this message to a message with a different payload type
+    pub fn convert<U: DeserializeOwned>(
         &self,
-        serializer: &dyn MessageSerializer,
-    ) -> MessagingResult<ReceivedMessage<U>>
-    where
-        T: Serialize,
-        U: for<'de> Deserialize<'de>,
-    {
+        serializer: &Serializer,
+    ) -> MessagingResult<ReceivedMessage<U>> {
         let converted_message = self.message.convert(serializer)?;
 
         Ok(ReceivedMessage {
             message: converted_message,
+            consumer_tag: self.consumer_tag.clone(),
             delivery_tag: self.delivery_tag,
             redelivered: self.redelivered,
             exchange: self.exchange.clone(),
             routing_key: self.routing_key.clone(),
-            consumer_tag: self.consumer_tag.clone(),
         })
     }
 }
@@ -360,10 +353,18 @@ pub enum MessageAcknowledgment {
     Ack,
 
     /// Reject and requeue message
-    Reject { requeue: bool },
+    Reject {
+        /// Whether to put the message back in the queue (true) or discard it (false)
+        requeue: bool,
+    },
 
     /// Negative acknowledgment
-    Nack { requeue: bool, multiple: bool },
+    Nack {
+        /// Whether to put the message back in the queue (true) or discard it (false)
+        requeue: bool,
+        /// Whether to nack multiple messages (true) or just the current one (false)
+        multiple: bool,
+    },
 }
 
 /// Result of message processing
@@ -388,6 +389,26 @@ where
 pub trait MessageFilter<T>: Send + Sync {
     /// Check if a message should be processed
     fn matches(&self, message: &Message<T>) -> bool;
+
+    /// Clone the filter box
+    fn clone_box(&self) -> Box<dyn MessageFilter<T> + Send + Sync>
+    where
+        Self: 'static;
+}
+
+// Implement clone_box for all types that implement Clone
+impl<T, F> MessageFilter<T> for F
+where
+    F: Clone + Send + Sync + 'static,
+    F: Fn(&Message<T>) -> bool,
+{
+    fn matches(&self, message: &Message<T>) -> bool {
+        self(message)
+    }
+
+    fn clone_box(&self) -> Box<dyn MessageFilter<T> + Send + Sync> {
+        Box::new(self.clone())
+    }
 }
 
 /// Filter messages by topic
@@ -418,6 +439,10 @@ impl<T> MessageFilter<T> for TopicFilter {
     fn matches(&self, message: &Message<T>) -> bool {
         self.matches_topic(&message.topic)
     }
+
+    fn clone_box(&self) -> Box<dyn MessageFilter<T> + Send + Sync> {
+        Box::new(self.clone())
+    }
 }
 
 /// Header-based message filter
@@ -447,43 +472,97 @@ impl<T> MessageFilter<T> for HeaderFilter {
         }
         true
     }
+
+    fn clone_box(&self) -> Box<dyn MessageFilter<T> + Send + Sync> {
+        Box::new(self.clone())
+    }
 }
 
-/// Combine multiple filters with AND logic
-#[derive(Debug, Clone)]
-pub struct AndFilter<T> {
+/// A filter that requires all of its filters to match
+pub struct AndFilter<T: 'static> {
     filters: Vec<Box<dyn MessageFilter<T> + Send + Sync>>,
 }
 
-impl<T> AndFilter<T> {
-    /// Create a new composite filter
+impl<T: 'static> Clone for AndFilter<T> {
+    fn clone(&self) -> Self {
+        let cloned_filters = self
+            .filters
+            .iter()
+            .map(|filter| filter.clone_box())
+            .collect();
+
+        Self {
+            filters: cloned_filters,
+        }
+    }
+}
+
+impl<T: 'static> std::fmt::Debug for AndFilter<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AndFilter")
+            .field("filters", &format!("{} filters", self.filters.len()))
+            .finish()
+    }
+}
+
+impl<T: 'static> AndFilter<T> {
+    /// Create a new AND filter
     pub fn new(filters: Vec<Box<dyn MessageFilter<T> + Send + Sync>>) -> Self {
         Self { filters }
     }
 }
 
-impl<T> MessageFilter<T> for AndFilter<T> {
+impl<T: 'static> MessageFilter<T> for AndFilter<T> {
     fn matches(&self, message: &Message<T>) -> bool {
         self.filters.iter().all(|filter| filter.matches(message))
     }
+
+    fn clone_box(&self) -> Box<dyn MessageFilter<T> + Send + Sync> {
+        Box::new(self.clone())
+    }
 }
 
-/// Combine multiple filters with OR logic
-#[derive(Debug, Clone)]
-pub struct OrFilter<T> {
+/// A filter that requires any of its filters to match
+pub struct OrFilter<T: 'static> {
     filters: Vec<Box<dyn MessageFilter<T> + Send + Sync>>,
 }
 
-impl<T> OrFilter<T> {
-    /// Create a new composite filter
+impl<T: 'static> Clone for OrFilter<T> {
+    fn clone(&self) -> Self {
+        let cloned_filters = self
+            .filters
+            .iter()
+            .map(|filter| filter.clone_box())
+            .collect();
+
+        Self {
+            filters: cloned_filters,
+        }
+    }
+}
+
+impl<T: 'static> std::fmt::Debug for OrFilter<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OrFilter")
+            .field("filters", &format!("{} filters", self.filters.len()))
+            .finish()
+    }
+}
+
+impl<T: 'static> OrFilter<T> {
+    /// Create a new OR filter
     pub fn new(filters: Vec<Box<dyn MessageFilter<T> + Send + Sync>>) -> Self {
         Self { filters }
     }
 }
 
-impl<T> MessageFilter<T> for OrFilter<T> {
+impl<T: 'static> MessageFilter<T> for OrFilter<T> {
     fn matches(&self, message: &Message<T>) -> bool {
         self.filters.iter().any(|filter| filter.matches(message))
+    }
+
+    fn clone_box(&self) -> Box<dyn MessageFilter<T> + Send + Sync> {
+        Box::new(self.clone())
     }
 }
 

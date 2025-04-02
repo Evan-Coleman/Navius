@@ -38,10 +38,10 @@ pub mod config;
 pub mod util;
 
 // Re-export important types
-pub use broker::{MessageBroker, MessageBrokerFactory};
-pub use config::BrokerConfig;
-pub use consumer::{Consumer, ConsumerConfig, DeliveryResult};
-pub use error::{MessagingError, MessagingResult};
-pub use message::{Message, MessageBuilder, MessageHeaders, MessageProperties};
-pub use publisher::{PublishStatus, Publisher, PublisherConfig};
-pub use topology::{Exchange, ExchangeType, Queue};
+pub use broker::{MessageBroker, TypedMessageBroker};
+pub use consumer::ConsumerConfig;
+pub use error::{
+    AcknowledgmentMode, ConnectionStatus, DeliveryMode, MessagingError, MessagingResult,
+};
+pub use message::{Message, MessageHeaders};
+pub use publisher::{PublishOptions, PublishResult};

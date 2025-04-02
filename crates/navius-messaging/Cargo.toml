@@ -13,7 +13,7 @@ chrono = { version = "0.4.40", features = ["serde"] }
 futures = "0.3.31"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-serde_cbor = "0.10.2"
+serde_cbor = "0.10.1"
 rmp-serde = "1.3.0"
 bincode = "2.0.1"
 erased-serde = "0.4.6"
@@ -44,4 +44,4 @@ path = "examples/pub_sub_pattern.rs"
 
 [[example]]
 name = "request_reply"
-path = "examples/request_reply.rs" 
+path = "examples/request_reply.rs"

@@ -6,14 +6,14 @@ use async_trait::async_trait;
 use futures::Stream;
 use tokio::sync::mpsc;
 
-use crate::config::BrokerConfig;
-use crate::consumer::ConsumerOptions;
-use crate::error::{ConnectionStatus, MessagingError, MessagingResult};
-use crate::message::{
-    Message, MessageFilter, MessageHandler, MessageProcessingResult, ReceivedMessage,
+use crate::{
+    config::BrokerConfig,
+    consumer::ConsumerOptions,
+    error::{ConnectionStatus, MessagingError, MessagingResult},
+    message::{Message, MessageFilter, MessageHandler, ReceivedMessage},
+    publisher::PublishOptions,
+    topology::{Binding, Exchange, ExchangeType, Queue},
 };
-use crate::publisher::PublishOptions;
-use crate::topology::{Binding, Exchange, ExchangeType, Queue};
 
 /// Base trait for message broker operations that don't require type parameters
 #[async_trait]
@@ -391,5 +391,230 @@ impl TopologyBuilder {
 
         self.broker.declare_queue(&queue).await?;
         Ok(())
+    }
+}
+
+/// A typed broker adapter for use with generic types
+pub struct TypedBrokerAdapter<T>
+where
+    T: serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
+{
+    inner: Arc<dyn MessageBroker>,
+    _phantom: std::marker::PhantomData<T>,
+}
+
+impl<T> TypedBrokerAdapter<T>
+where
+    T: serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
+{
+    /// Create a new typed broker adapter
+    pub fn new(broker: Arc<dyn MessageBroker>) -> Self {
+        Self {
+            inner: broker,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+#[async_trait]
+impl<T> MessageBroker for TypedBrokerAdapter<T>
+where
+    T: serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
+{
+    fn id(&self) -> &str {
+        self.inner.id()
+    }
+
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+
+    fn broker_type(&self) -> &str {
+        self.inner.broker_type()
+    }
+
+    fn config(&self) -> &BrokerConfig {
+        self.inner.config()
+    }
+
+    async fn connect(&self) -> MessagingResult<()> {
+        self.inner.connect().await
+    }
+
+    async fn disconnect(&self) -> MessagingResult<()> {
+        self.inner.disconnect().await
+    }
+
+    async fn is_connected(&self) -> bool {
+        self.inner.is_connected().await
+    }
+
+    async fn connection_status(&self) -> ConnectionStatus {
+        self.inner.connection_status().await
+    }
+
+    async fn metrics(&self) -> BrokerMetrics {
+        self.inner.metrics().await
+    }
+
+    async fn declare_queue(&self, queue: &Queue) -> MessagingResult<Queue> {
+        self.inner.declare_queue(queue).await
+    }
+
+    async fn delete_queue(
+        &self,
+        name: &str,
+        if_unused: bool,
+        if_empty: bool,
+    ) -> MessagingResult<()> {
+        self.inner.delete_queue(name, if_unused, if_empty).await
+    }
+
+    async fn purge_queue(&self, name: &str) -> MessagingResult<()> {
+        self.inner.purge_queue(name).await
+    }
+
+    async fn declare_exchange(&self, exchange: &Exchange) -> MessagingResult<Exchange> {
+        self.inner.declare_exchange(exchange).await
+    }
+
+    async fn delete_exchange(&self, name: &str, if_unused: bool) -> MessagingResult<()> {
+        self.inner.delete_exchange(name, if_unused).await
+    }
+
+    async fn bind_queue(
+        &self,
+        queue: &str,
+        exchange: &str,
+        routing_key: &str,
+        arguments: Option<HashMap<String, String>>,
+    ) -> MessagingResult<Binding> {
+        self.inner
+            .bind_queue(queue, exchange, routing_key, arguments)
+            .await
+    }
+
+    async fn unbind_queue(
+        &self,
+        queue: &str,
+        exchange: &str,
+        routing_key: &str,
+    ) -> MessagingResult<()> {
+        self.inner.unbind_queue(queue, exchange, routing_key).await
+    }
+
+    async fn bind_exchange(
+        &self,
+        destination: &str,
+        source: &str,
+        routing_key: &str,
+        arguments: Option<HashMap<String, String>>,
+    ) -> MessagingResult<Binding> {
+        self.inner
+            .bind_exchange(destination, source, routing_key, arguments)
+            .await
+    }
+
+    async fn unbind_exchange(
+        &self,
+        destination: &str,
+        source: &str,
+        routing_key: &str,
+    ) -> MessagingResult<()> {
+        self.inner
+            .unbind_exchange(destination, source, routing_key)
+            .await
+    }
+
+    async fn ack(&self, delivery_tag: u64, multiple: bool) -> MessagingResult<()> {
+        self.inner.ack(delivery_tag, multiple).await
+    }
+
+    async fn reject(&self, delivery_tag: u64, requeue: bool) -> MessagingResult<()> {
+        self.inner.reject(delivery_tag, requeue).await
+    }
+
+    async fn nack(&self, delivery_tag: u64, multiple: bool, requeue: bool) -> MessagingResult<()> {
+        self.inner.nack(delivery_tag, multiple, requeue).await
+    }
+
+    async fn message_count(&self, queue_name: &str) -> MessagingResult<u32> {
+        self.inner.message_count(queue_name).await
+    }
+
+    async fn consumer_count(&self, queue_name: &str) -> MessagingResult<u32> {
+        self.inner.consumer_count(queue_name).await
+    }
+
+    async fn create_reply_queue(&self) -> MessagingResult<Queue> {
+        self.inner.create_reply_queue().await
+    }
+
+    async fn ping(&self) -> MessagingResult<Duration> {
+        self.inner.ping().await
+    }
+}
+
+#[async_trait]
+impl<T> TypedMessageBroker<T> for TypedBrokerAdapter<T>
+where
+    T: serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
+{
+    async fn publish(
+        &self,
+        _message: &Message<T>,
+        _options: Option<PublishOptions>,
+    ) -> MessagingResult<()> {
+        // Implementation omitted
+        unimplemented!()
+    }
+
+    async fn publish_with_confirm(
+        &self,
+        _message: &Message<T>,
+        _options: Option<PublishOptions>,
+        _timeout: Option<Duration>,
+    ) -> MessagingResult<()> {
+        // Implementation omitted
+        unimplemented!()
+    }
+
+    async fn subscribe<F>(
+        &self,
+        _queue_name: &str,
+        _handler: F,
+        _options: Option<ConsumerOptions>,
+    ) -> MessagingResult<ConsumerHandle>
+    where
+        F: MessageHandler<T> + 'static,
+    {
+        // Implementation omitted
+        unimplemented!()
+    }
+
+    async fn subscribe_filtered<F, M>(
+        &self,
+        _queue_name: &str,
+        _handler: F,
+        _filter: M,
+        _options: Option<ConsumerOptions>,
+    ) -> MessagingResult<ConsumerHandle>
+    where
+        F: MessageHandler<T> + 'static,
+        M: MessageFilter<T> + 'static,
+    {
+        // Implementation omitted
+        unimplemented!()
+    }
+
+    async fn consume(
+        &self,
+        _queue_name: &str,
+        _options: Option<ConsumerOptions>,
+    ) -> MessagingResult<
+        Box<dyn Stream<Item = Result<ReceivedMessage<T>, MessagingError>> + Send + Unpin>,
+    > {
+        // Implementation omitted
+        unimplemented!()
     }
 }
