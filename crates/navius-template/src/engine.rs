@@ -1,21 +1,23 @@
 use crate::error::TemplateResult;
 use async_trait::async_trait;
 use erased_serde::Serialize as ErasedSerialize;
-use serde::Serialize;
 use std::sync::Arc;
 
 /// Trait for rendering templates with custom contexts
-#[async_trait]
 pub trait TemplateRenderer: Send + Sync {
     /// Render a template with the given context
-    async fn render(&self, name: &str, context: &dyn ErasedSerialize) -> TemplateResult<String>;
+    fn render<'a, 'b>(
+        &'a self,
+        name: &'b str,
+        context: &'b dyn ErasedSerialize,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = TemplateResult<String>> + Send + 'a>>;
 
     /// Render a template string with the given context
-    async fn render_string(
-        &self,
-        template: &str,
-        context: &dyn ErasedSerialize,
-    ) -> TemplateResult<String>;
+    fn render_string<'a, 'b>(
+        &'a self,
+        template: &'b str,
+        context: &'b dyn ErasedSerialize,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = TemplateResult<String>> + Send + 'a>>;
 }
 
 /// Represents a template engine
@@ -113,61 +115,118 @@ impl MetricsTemplateEngine {
     }
 }
 
-#[async_trait]
+// Helper function to make dyn ErasedSerialize Send across threads by converting to json
+fn to_json_value(context: &dyn ErasedSerialize) -> TemplateResult<serde_json::Value> {
+    // Serialize to a Vec<u8> using serde_json
+    let mut buffer = Vec::new();
+    {
+        let mut serializer = serde_json::Serializer::new(&mut buffer);
+        let mut erased = <dyn erased_serde::Serializer>::erase(&mut serializer);
+        context.erased_serialize(&mut erased).map_err(|e| {
+            crate::error::TemplateError::render_error(
+                "<context>",
+                format!("Failed to serialize context: {}", e),
+            )
+        })?;
+    }
+
+    // Deserialize from the buffer
+    serde_json::from_slice(&buffer).map_err(|e| {
+        crate::error::TemplateError::render_error(
+            "<context>",
+            format!("Failed to deserialize context: {}", e),
+        )
+    })
+}
+
 impl TemplateRenderer for MetricsTemplateEngine {
-    async fn render(&self, name: &str, context: &dyn ErasedSerialize) -> TemplateResult<String> {
-        use std::time::Instant;
+    fn render<'a, 'b>(
+        &'a self,
+        name: &'b str,
+        context: &'b dyn ErasedSerialize,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = TemplateResult<String>> + Send + 'a>>
+    {
+        let name_owned = name.to_string();
+        let metrics_ref = self.metrics.clone();
+        let engine_ref = &self.engine;
 
-        if let Some(metrics) = &self.metrics {
-            let start = Instant::now();
-            let result = self.engine.render(name, context).await;
-            let duration = start.elapsed();
+        // Convert context to JSON value to make it Send
+        let context_result = to_json_value(context);
+        match context_result {
+            Ok(context_value) => Box::pin(async move {
+                use std::time::Instant;
 
-            match &result {
-                Ok(_) => {
-                    metrics
-                        .record_render_time(name, duration.as_secs_f64() * 1000.0)
-                        .await;
+                if let Some(metrics) = &metrics_ref {
+                    let start = Instant::now();
+                    let result = engine_ref.render(&name_owned, &context_value).await;
+                    let duration = start.elapsed();
+
+                    match &result {
+                        Ok(_) => {
+                            metrics
+                                .record_render_time(&name_owned, duration.as_secs_f64() * 1000.0)
+                                .await;
+                        }
+                        Err(e) => {
+                            metrics
+                                .record_render_error(&name_owned, &e.to_string())
+                                .await;
+                        }
+                    }
+
+                    result
+                } else {
+                    engine_ref.render(&name_owned, &context_value).await
                 }
-                Err(e) => {
-                    metrics.record_render_error(name, &e.to_string()).await;
-                }
-            }
-
-            result
-        } else {
-            self.engine.render(name, context).await
+            }),
+            Err(e) => Box::pin(async move { Err(e) }),
         }
     }
 
-    async fn render_string(
-        &self,
-        template: &str,
-        context: &dyn ErasedSerialize,
-    ) -> TemplateResult<String> {
-        use std::time::Instant;
+    fn render_string<'a, 'b>(
+        &'a self,
+        template: &'b str,
+        context: &'b dyn ErasedSerialize,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = TemplateResult<String>> + Send + 'a>>
+    {
+        let template_owned = template.to_string();
+        let metrics_ref = self.metrics.clone();
+        let engine_ref = &self.engine;
 
-        if let Some(metrics) = &self.metrics {
-            let start = Instant::now();
-            let result = self.engine.render_string(template, context).await;
-            let duration = start.elapsed();
+        // Convert context to JSON value to make it Send
+        let context_result = to_json_value(context);
+        match context_result {
+            Ok(context_value) => Box::pin(async move {
+                use std::time::Instant;
 
-            match &result {
-                Ok(_) => {
-                    metrics
-                        .record_render_time("<inline>", duration.as_secs_f64() * 1000.0)
+                if let Some(metrics) = &metrics_ref {
+                    let start = Instant::now();
+                    let result = engine_ref
+                        .render_string(&template_owned, &context_value)
                         .await;
-                }
-                Err(e) => {
-                    metrics
-                        .record_render_error("<inline>", &e.to_string())
-                        .await;
-                }
-            }
+                    let duration = start.elapsed();
 
-            result
-        } else {
-            self.engine.render_string(template, context).await
+                    match &result {
+                        Ok(_) => {
+                            metrics
+                                .record_render_time("<inline>", duration.as_secs_f64() * 1000.0)
+                                .await;
+                        }
+                        Err(e) => {
+                            metrics
+                                .record_render_error("<inline>", &e.to_string())
+                                .await;
+                        }
+                    }
+
+                    result
+                } else {
+                    engine_ref
+                        .render_string(&template_owned, &context_value)
+                        .await
+                }
+            }),
+            Err(e) => Box::pin(async move { Err(e) }),
         }
     }
 }

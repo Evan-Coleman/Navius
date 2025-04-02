@@ -1,6 +1,6 @@
-use crate::engine::{TemplateEngine, TemplateEngineFactory};
+use crate::engine::{TemplateEngine, TemplateEngineFactory, TemplateRenderer};
 use crate::error::{TemplateError, TemplateResult};
-use serde::Serialize;
+use erased_serde::Serialize as ErasedSerialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -179,17 +179,10 @@ impl DelegatingTemplateEngine {
         // If no prefix matches, use the default engine
         &mut self.default_engine
     }
-}
 
-impl TemplateRenderer for DelegatingTemplateEngine {
-    fn render<T: Serialize>(&self, template: &str, data: &T) -> Result<String> {
-        let engine = self.get_engine_for_template(template)?;
-        engine.render(template, data)
-    }
-
-    fn render_string<T: Serialize>(&self, template: &str, data: &T) -> Result<String> {
-        let engine = self.get_engine_for_string()?;
-        engine.render_string(template, data)
+    /// Get the engine for a string template (always returns the default engine)
+    fn get_engine_for_string(&self) -> &Box<dyn TemplateEngine + Send + Sync> {
+        &self.default_engine
     }
 }
 
@@ -262,12 +255,74 @@ impl TemplateEngine for DelegatingTemplateEngine {
     }
 }
 
+// Helper function to make dyn ErasedSerialize Send across threads by converting to json
+fn to_json_value(context: &dyn ErasedSerialize) -> TemplateResult<serde_json::Value> {
+    // Serialize to a Vec<u8> using serde_json
+    let mut buffer = Vec::new();
+    {
+        let mut serializer = serde_json::Serializer::new(&mut buffer);
+        let mut erased = <dyn erased_serde::Serializer>::erase(&mut serializer);
+        context.erased_serialize(&mut erased).map_err(|e| {
+            crate::error::TemplateError::render_error(
+                "<context>",
+                format!("Failed to serialize context: {}", e),
+            )
+        })?;
+    }
+
+    // Deserialize from the buffer
+    serde_json::from_slice(&buffer).map_err(|e| {
+        crate::error::TemplateError::render_error(
+            "<context>",
+            format!("Failed to deserialize context: {}", e),
+        )
+    })
+}
+
+impl TemplateRenderer for DelegatingTemplateEngine {
+    fn render<'a, 'b>(
+        &'a self,
+        name: &'b str,
+        context: &'b dyn ErasedSerialize,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = TemplateResult<String>> + Send + 'a>>
+    {
+        let engine = self.get_engine_for_template(name);
+        let name_owned = name.to_string();
+
+        // Convert context to JSON value to make it Send
+        let context_result = to_json_value(context);
+        match context_result {
+            Ok(context_value) => {
+                Box::pin(async move { engine.render(&name_owned, &context_value).await })
+            }
+            Err(e) => Box::pin(async move { Err(e) }),
+        }
+    }
+
+    fn render_string<'a, 'b>(
+        &'a self,
+        template: &'b str,
+        context: &'b dyn ErasedSerialize,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = TemplateResult<String>> + Send + 'a>>
+    {
+        let engine = self.get_engine_for_string();
+        let template_owned = template.to_string();
+
+        // Convert context to JSON value to make it Send
+        let context_result = to_json_value(context);
+        match context_result {
+            Ok(context_value) => {
+                Box::pin(async move { engine.render_string(&template_owned, &context_value).await })
+            }
+            Err(e) => Box::pin(async move { Err(e) }),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::error::TemplateError;
-    use serde::Serialize;
-    use std::collections::HashMap;
 
     #[derive(Default)]
     struct MockTemplateEngine {
