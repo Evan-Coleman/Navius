@@ -177,7 +177,9 @@ impl RedisCache {
             // Use FLUSHDB if no prefix is set (dangerous operation)
             let result: Result<(), RedisCacheError> = self
                 .pool
-                .execute(|conn| Box::pin(redis::cmd("FLUSHDB").query_async(conn)))
+                .execute(|conn| {
+                    Box::pin(async move { redis::cmd("FLUSHDB").query_async(conn).await })
+                })
                 .await;
 
             match result {
@@ -214,15 +216,16 @@ impl RedisCache {
                     .execute({
                         let pattern = pattern.clone();
                         move |conn| {
-                            let mut cmd = redis::cmd("SCAN");
-                            Box::pin(
-                                cmd.arg(cursor)
+                            Box::pin(async move {
+                                redis::cmd("SCAN")
+                                    .arg(cursor)
                                     .arg("MATCH")
                                     .arg(&pattern)
                                     .arg("COUNT")
                                     .arg(batch_size)
-                                    .query_async::<(u64, Vec<String>)>(conn),
-                            )
+                                    .query_async::<(u64, Vec<String>)>(conn)
+                                    .await
+                            })
                         }
                     })
                     .await;
@@ -426,7 +429,7 @@ impl CacheOperations for RedisCache {
     async fn get<K, V>(&self, key: K) -> CacheResult<Option<V>>
     where
         K: CacheKey + 'static,
-        V: DeserializeOwned + Send + Sync + 'static,
+        V: DeserializeOwned + 'static,
     {
         self._get_internal(key).await.map_err(|e| e.into())
     }
