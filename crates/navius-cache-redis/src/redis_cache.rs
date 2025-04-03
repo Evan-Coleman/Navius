@@ -175,24 +175,20 @@ impl RedisCache {
             .map_or(true, |p| p.is_empty())
         {
             // Use FLUSHDB if no prefix is set (dangerous operation)
-            let result: Result<redis::RedisResult<String>, RedisCacheError> = self
+            let result: Result<(), RedisCacheError> = self
                 .pool
                 .execute(|conn| Box::pin(redis::cmd("FLUSHDB").query_async(conn)))
                 .await;
 
             match result {
-                Ok(Ok(_)) => {
+                Ok(_) => {
                     timer.record_success();
                     Ok(())
                 }
-                Ok(Err(redis_err)) => {
+                Err(redis_err) => {
                     let err = RedisCacheError::from(redis_err);
                     timer.record_error(&err);
                     Err(err.into())
-                }
-                Err(cache_err) => {
-                    timer.record_error(&cache_err);
-                    Err(cache_err.into())
                 }
             }
         } else {
@@ -213,7 +209,7 @@ impl RedisCache {
 
             loop {
                 // Use SCAN to find keys with prefix
-                let result: Result<redis::RedisResult<(u64, Vec<String>)>, RedisCacheError> = self
+                let result: Result<(u64, Vec<String>), RedisCacheError> = self
                     .pool
                     .execute({
                         let pattern = pattern.clone();
@@ -225,14 +221,14 @@ impl RedisCache {
                                     .arg(&pattern)
                                     .arg("COUNT")
                                     .arg(batch_size)
-                                    .query_async(conn),
+                                    .query_async::<(u64, Vec<String>)>(conn),
                             )
                         }
                     })
                     .await;
 
                 match result {
-                    Ok(Ok((next_cursor, keys))) => {
+                    Ok((next_cursor, keys)) => {
                         cursor = next_cursor;
 
                         // Delete the found keys if any
@@ -241,9 +237,12 @@ impl RedisCache {
                                 self.pool
                                     .execute(move |conn| {
                                         let keys_clone = keys.clone();
-                                        Box::pin(
-                                            redis::cmd("DEL").arg(&keys_clone).query_async(conn),
-                                        )
+                                        Box::pin(async move {
+                                            redis::cmd("DEL")
+                                                .arg(&keys_clone)
+                                                .query_async(conn)
+                                                .await
+                                        })
                                     })
                                     .await;
 
