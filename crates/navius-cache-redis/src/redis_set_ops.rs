@@ -430,9 +430,10 @@ impl RedisCache {
             match self.delete(destination_str.clone()).await {
                 Ok(_) => { /* Key deleted or didn't exist */ }
                 Err(e) => {
-                    timer.record_error(&e);
+                    let redis_err = RedisCacheError::Command(e.to_string());
+                    timer.record_error(&redis_err);
                     metrics::counter!("cache.set_intersection_store.error").increment(1);
-                    return Err(e);
+                    return Err(redis_err.into());
                 }
             };
             timer.record_success();
@@ -444,10 +445,11 @@ impl RedisCache {
             match self.key_to_string(key) {
                 Ok(key_str) => key_strings.push(key_str),
                 Err(e) => {
-                    timer.record_error(&e);
+                    let redis_err = RedisCacheError::Command(e.to_string());
+                    timer.record_error(&redis_err);
                     metrics::counter!("cache.set_intersection_store.error").increment(1);
                     // Return Err instead of Ok(0)
-                    return Err(e.into());
+                    return Err(redis_err.into());
                 }
             }
         }
@@ -475,7 +477,7 @@ impl RedisCache {
             Err(cache_err) => {
                 timer.record_error(&cache_err);
                 metrics::counter!("cache.set_intersection_store.error").increment(1);
-                Err(cache_err)
+                Err(cache_err.into())
             }
         }
     }
@@ -575,9 +577,10 @@ impl RedisCache {
             match self.delete(destination_str.clone()).await {
                 Ok(_) => { /* Key deleted or didn't exist */ }
                 Err(e) => {
-                    timer.record_error(&e);
+                    let redis_err = RedisCacheError::Command(e.to_string());
+                    timer.record_error(&redis_err);
                     metrics::counter!("cache.set_union_store.error").increment(1);
-                    return Err(e);
+                    return Err(redis_err.into());
                 }
             };
             timer.record_success();
@@ -589,10 +592,10 @@ impl RedisCache {
             match self.key_to_string(key) {
                 Ok(key_str) => key_strings.push(key_str),
                 Err(e) => {
-                    timer.record_error(&e);
+                    let redis_err = RedisCacheError::Command(e.to_string());
+                    timer.record_error(&redis_err);
                     metrics::counter!("cache.set_union_store.error").increment(1);
-                    // Return Err instead of Ok(0)
-                    return Err(e.into());
+                    return Err(redis_err.into());
                 }
             }
         }
@@ -620,7 +623,7 @@ impl RedisCache {
             Err(cache_err) => {
                 timer.record_error(&cache_err);
                 metrics::counter!("cache.set_union_store.error").increment(1);
-                Err(cache_err)
+                Err(cache_err.into())
             }
         }
     }
@@ -719,9 +722,8 @@ impl RedisCache {
         // Convert keys to strings and validate
         if keys.is_empty() {
             // SDIFFSTORE requires at least one source key
-            let err = RedisCacheError::InvalidArgument(
-                "SDIFFSTORE requires at least one key".to_string(),
-            );
+            let err =
+                RedisCacheError::InvalidKey("SDIFFSTORE requires at least one key".to_string());
             timer.record_error(&err);
             metrics::counter!("cache.set_difference_store.error").increment(1);
             return Err(err.into());
