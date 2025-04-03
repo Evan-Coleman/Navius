@@ -1,13 +1,12 @@
 use crate::connection::RedisConnectionPool;
 use crate::error::RedisCacheError;
-use crate::key::validate_key;
 use crate::metrics::MetricNames;
 use crate::metrics::OperationTimer;
 use redis::{AsyncCommands, FromRedisValue, RedisResult, ToRedisArgs};
 use std::fmt::Debug;
 use std::future::Future;
 use std::time::Duration;
-use tracing::{debug, trace};
+use tracing::trace;
 
 /// Basic Redis operations
 ///
@@ -76,7 +75,7 @@ pub trait RedisOperations {
     ) -> Result<i64, RedisCacheError>
     where
         K: AsRef<str> + Debug + Send + Sync,
-        V: ToRedisArgs + Send + Sync + Clone,
+        V: ToRedisArgs + Send + Sync + Clone + 'static,
     {
         let op_name = if right {
             MetricNames::LIST_PUSH
@@ -93,10 +92,11 @@ pub trait RedisOperations {
             "Redis list push operation"
         );
 
+        let right_clone = right;
         let result = self
-            .execute(|mut conn| {
+            .execute(move |conn| {
                 Box::pin(async move {
-                    let result: RedisResult<i64> = if right {
+                    let result: RedisResult<i64> = if right_clone {
                         conn.rpush(&key, value).await
                     } else {
                         conn.lpush(&key, value).await
@@ -198,9 +198,9 @@ impl RedisOperations for RedisConnectionPool {
                 .pool
                 .get()
                 .await
-                .map_err(|e| RedisCacheError::ConnectionError(e.to_string()))?;
+                .map_err(|e| RedisCacheError::Connection(e.to_string()))?;
             let result = f(&mut conn).await;
-            result.map_err(|e| RedisCacheError::CommandError(e.to_string()))
+            result.map_err(|e| RedisCacheError::Command(e.to_string()))
         })
     }
 
@@ -214,7 +214,7 @@ impl RedisOperations for RedisConnectionPool {
 
         trace!(key = %key, "Redis GET operation");
         let result = self
-            .execute(|mut conn| {
+            .execute(|conn| {
                 Box::pin(async move {
                     let result: RedisResult<Option<V>> = conn.get(&key).await;
                     result
@@ -700,9 +700,11 @@ mod tests {
 
             // Clear any existing test data
             let _ = pool
-                .execute(|mut conn| async move {
-                    let _: RedisResult<()> = redis::cmd("FLUSHDB").query_async(&mut conn).await;
-                    Ok(())
+                .execute(|conn| {
+                    Box::pin(async move {
+                        let _: RedisResult<()> = redis::cmd("FLUSHDB").query_async(conn).await;
+                        Ok(())
+                    })
                 })
                 .await;
 
