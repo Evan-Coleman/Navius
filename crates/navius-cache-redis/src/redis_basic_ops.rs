@@ -673,7 +673,7 @@ impl RedisCache {
                 let cache_err = RedisCacheError::InvalidKey(e.to_string());
                 timer.record_error(&cache_err);
                 metrics::counter!("cache.clear.error");
-                Err(CacheError::Other(e.to_string()))
+                Err(CacheError::BackendError(e.to_string()))
             }
         }
     }
