@@ -2,7 +2,7 @@ use crate::config::RedisCacheConfig;
 use crate::error::{RedisCacheError, RedisCacheResult};
 use bb8::Pool;
 use bb8_redis::{RedisConnectionManager, bb8::PooledConnection};
-use redis::aio::Connection;
+use redis::aio::MultiplexedConnection;
 use redis::{Client, RedisError};
 use std::sync::Arc;
 use std::time::Duration;
@@ -65,7 +65,7 @@ impl RedisConnectionPool {
 
         // Test the connection
         let pool_clone = pool.clone();
-        let conn = timeout(config.connection_timeout, pool_clone.get())
+        let _conn = timeout(config.connection_timeout, pool_clone.get())
             .await
             .map_err(|_| {
                 RedisCacheError::Timeout(
@@ -81,11 +81,12 @@ impl RedisConnectionPool {
 
         debug!("Redis connection pool initialized successfully");
 
+        let config_clone = config.clone();
         Ok(Self {
             config,
             pool,
             url,
-            prefix: config.key_prefix,
+            prefix: config_clone.key_prefix,
         })
     }
 
