@@ -240,7 +240,7 @@ impl RedisCache {
                                         Box::pin(async move {
                                             redis::cmd("DEL")
                                                 .arg(&keys_clone)
-                                                .query_async(conn)
+                                                .query_async::<usize>(conn)
                                                 .await
                                         })
                                     })
