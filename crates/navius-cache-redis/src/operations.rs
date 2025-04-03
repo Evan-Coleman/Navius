@@ -254,7 +254,7 @@ impl RedisOperations for RedisConnectionPool {
         );
 
         let result = self
-            .execute(move |mut conn| {
+            .execute(move |conn| {
                 Box::pin(async move {
                     let result: RedisResult<()> = match ttl {
                         Some(ttl) => conn.set_ex(&key, value, ttl.as_secs() as u64).await,
@@ -286,7 +286,7 @@ impl RedisOperations for RedisConnectionPool {
 
         trace!(key = %key, "Redis EXISTS operation");
         let result = self
-            .execute(|mut conn| {
+            .execute(|conn| {
                 Box::pin(async move {
                     let result: RedisResult<bool> = conn.exists(&key).await;
                     result
@@ -315,7 +315,7 @@ impl RedisOperations for RedisConnectionPool {
 
         trace!(key = %key, "Redis DEL operation");
         let result = self
-            .execute(|mut conn| {
+            .execute(|conn| {
                 Box::pin(async move {
                     let result: RedisResult<i64> = conn.del(&key).await;
                     result
@@ -349,7 +349,7 @@ impl RedisOperations for RedisConnectionPool {
         );
 
         let result = self
-            .execute(move |mut conn| {
+            .execute(move |conn| {
                 Box::pin(async move {
                     let result: RedisResult<bool> = conn.expire(&key, ttl.as_secs() as i64).await;
                     result
@@ -378,7 +378,7 @@ impl RedisOperations for RedisConnectionPool {
 
         trace!(key = %key, by = by, "Redis INCRBY operation");
         let result = self
-            .execute(move |mut conn| {
+            .execute(move |conn| {
                 Box::pin(async move {
                     let result: RedisResult<i64> = conn.incr(&key, by).await;
                     result
@@ -444,7 +444,7 @@ impl RedisOperations for RedisConnectionPool {
         );
 
         let result = self
-            .execute(move |mut conn| {
+            .execute(move |conn| {
                 Box::pin(async move {
                     let result: RedisResult<Option<V>> = if right {
                         conn.rpop(&key, None).await
@@ -489,7 +489,7 @@ impl RedisOperations for RedisConnectionPool {
         );
 
         let result = self
-            .execute(move |mut conn| {
+            .execute(move |conn| {
                 Box::pin(async move {
                     let result: RedisResult<Vec<V>> = conn.lrange(&key, start, stop).await;
                     result
@@ -518,7 +518,7 @@ impl RedisOperations for RedisConnectionPool {
 
         trace!(key = %key, "Redis LLEN operation");
         let result = self
-            .execute(|mut conn| {
+            .execute(|conn| {
                 Box::pin(async move {
                     let result: RedisResult<i64> = conn.llen(&key).await;
                     result
@@ -554,7 +554,7 @@ impl RedisOperations for RedisConnectionPool {
         );
 
         let result = self
-            .execute(|mut conn| {
+            .execute(|conn| {
                 Box::pin(async move {
                     let result: RedisResult<Option<V>> = conn.hget(&key, field.as_ref()).await;
                     result
@@ -595,7 +595,7 @@ impl RedisOperations for RedisConnectionPool {
         );
 
         let result = self
-            .execute(|mut conn| {
+            .execute(|conn| {
                 Box::pin(async move {
                     let result: RedisResult<bool> = conn.hset_nx(&key, field.as_ref(), value).await;
                     result
@@ -630,7 +630,7 @@ impl RedisOperations for RedisConnectionPool {
         );
 
         let result = self
-            .execute(|mut conn| {
+            .execute(|conn| {
                 Box::pin(async move {
                     let result: RedisResult<i64> = conn.hdel(&key, field.as_ref()).await;
                     result
@@ -661,7 +661,7 @@ impl RedisOperations for RedisConnectionPool {
         trace!(key = %key, "Redis HGETALL operation");
 
         let result = self
-            .execute(|mut conn| {
+            .execute(|conn| {
                 Box::pin(async move {
                     let result: RedisResult<Vec<(String, V)>> = conn.hgetall(&key).await;
                     result
