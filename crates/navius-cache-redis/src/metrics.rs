@@ -1,197 +1,198 @@
-// Redis cache metrics implementation
-//
-// This module provides metrics collection and reporting for the Redis cache implementation.
-// It works with the metrics crate to record various performance and operational metrics.
-
-use crate::connection::ConnectionHealth;
-use crate::error::RedisCacheResult;
-use metrics::{counter, gauge, histogram};
+use crate::error::RedisCacheError;
 use std::time::{Duration, Instant};
+use tracing::{debug, info, warn};
 
 /// Metric names for Redis cache operations
-pub mod names {
-    // Operation metrics
-    pub const GET: &str = "redis_cache_get";
-    pub const SET: &str = "redis_cache_set";
-    pub const DELETE: &str = "redis_cache_delete";
-    pub const EXISTS: &str = "redis_cache_exists";
-    pub const EXPIRE: &str = "redis_cache_expire";
-    pub const TTL: &str = "redis_cache_ttl";
-    pub const INVALIDATE: &str = "redis_cache_invalidate";
+pub struct MetricNames;
 
-    // Collection operation metrics
-    pub const LIST_PUSH: &str = "redis_cache_list_push";
-    pub const LIST_POP: &str = "redis_cache_list_pop";
-    pub const LIST_RANGE: &str = "redis_cache_list_range";
-    pub const LIST_LENGTH: &str = "redis_cache_list_length";
-    pub const SET_ADD: &str = "redis_cache_set_add";
-    pub const SET_REMOVE: &str = "redis_cache_set_remove";
-    pub const SET_MEMBERS: &str = "redis_cache_set_members";
-    pub const SET_CONTAINS: &str = "redis_cache_set_contains";
-    pub const SET_LENGTH: &str = "redis_cache_set_length";
-    pub const SET_INTERSECTION: &str = "redis_cache_set_intersection";
-    pub const SET_UNION: &str = "redis_cache_set_union";
-    pub const SET_DIFFERENCE: &str = "redis_cache_set_difference";
-    pub const SET_RANDOM: &str = "redis_cache_set_random";
-    pub const ZSET_ADD: &str = "redis_cache_zset_add";
-    pub const ZSET_REMOVE: &str = "redis_cache_zset_remove";
-    pub const ZSET_SCORE: &str = "redis_cache_zset_score";
-    pub const ZSET_RANGE: &str = "redis_cache_zset_range";
-    pub const ZSET_RANK: &str = "redis_cache_zset_rank";
-    pub const ZSET_COUNT: &str = "redis_cache_zset_count";
-    pub const ZSET_INTERSTORE: &str = "redis_cache_zset_interstore";
-    pub const ZSET_UNIONSTORE: &str = "redis_cache_zset_unionstore";
-    pub const HASH_SET: &str = "redis_cache_hash_set";
-    pub const HASH_GET: &str = "redis_cache_hash_get";
-    pub const HASH_DELETE: &str = "redis_cache_hash_delete";
+impl MetricNames {
+    // Basic operations
+    /// Metric for get operations
+    pub const GET: &'static str = "cache_redis_get";
+    /// Metric for set operations
+    pub const SET: &'static str = "cache_redis_set";
+    /// Metric for delete operations
+    pub const DELETE: &'static str = "cache_redis_delete";
+    /// Metric for exists operations
+    pub const EXISTS: &'static str = "cache_redis_exists";
+    /// Metric for expire operations
+    pub const EXPIRE: &'static str = "cache_redis_expire";
+    /// Metric for increment operations
+    pub const INCREMENT: &'static str = "cache_redis_increment";
+    /// Metric for clear operations
+    pub const CLEAR: &'static str = "redis_cache_clear";
 
-    // Advanced operation metrics
-    pub const PIPELINE_EXECUTE: &str = "redis_cache_pipeline_execute";
-    pub const SCRIPT_EXECUTE: &str = "redis_cache_script_execute";
+    // List operations
+    /// Metric for list push operations
+    pub const LIST_PUSH: &'static str = "redis_cache_list_push";
+    /// Metric for list pop operations
+    pub const LIST_POP: &'static str = "redis_cache_list_pop";
+    /// Metric for list range operations
+    pub const LIST_RANGE: &'static str = "redis_cache_list_range";
+    /// Metric for list length operations
+    pub const LIST_LENGTH: &'static str = "redis_cache_list_length";
+
+    // Hash operations
+    /// Metric for hash get operations
+    pub const HASH_GET: &'static str = "redis_cache_hash_get";
+    /// Metric for hash set operations
+    pub const HASH_SET: &'static str = "redis_cache_hash_set";
+    /// Metric for hash delete operations
+    pub const HASH_DELETE: &'static str = "redis_cache_hash_delete";
 
     // Connection metrics
-    pub const CONNECTION_ACQUIRE: &str = "redis_cache_connection_acquire";
-    pub const CONNECTION_RELEASE: &str = "redis_cache_connection_release";
-    pub const CONNECTION_ERROR: &str = "redis_cache_connection_error";
-    pub const CONNECTION_TIMEOUT: &str = "redis_cache_connection_timeout";
-    pub const CONNECTION_POOL_SIZE: &str = "redis_cache_connection_pool_size";
-    pub const CONNECTION_POOL_IDLE: &str = "redis_cache_connection_pool_idle";
-    pub const CONNECTION_POOL_USED: &str = "redis_cache_connection_pool_used";
+    /// Metric for connection pool size
+    pub const POOL_SIZE: &'static str = "cache_redis_pool_size";
+    /// Metric for active connections
+    pub const ACTIVE_CONNECTIONS: &'static str = "redis_cache_active_connections";
+    /// Metric for idle connections
+    pub const IDLE_CONNECTIONS: &'static str = "redis_cache_idle_connections";
 
-    // Health metrics
-    pub const HEALTH_CHECK: &str = "redis_cache_health_check";
+    // Result metrics
+    /// Metric for cache hits
+    pub const CACHE_HIT: &'static str = "cache_redis_hit";
+    /// Metric for cache misses
+    pub const CACHE_MISS: &'static str = "cache_redis_miss";
+    /// Metric for cache errors
+    pub const CACHE_ERROR: &'static str = "redis_cache_error";
+
+    // New constants
+    pub const PING: &'static str = "cache_redis_ping";
+    pub const SCAN: &'static str = "cache_redis_scan";
+    pub const FLUSH: &'static str = "cache_redis_flush";
+    pub const CACHE: &'static str = "cache_redis";
 }
 
-/// Prefix used for all Redis cache metrics
-const METRIC_PREFIX: &str = "navius_";
-
-/// Create a prefixed metric name
-fn create_key(name: &str) -> String {
-    format!("{}{}", METRIC_PREFIX, name)
-}
-
-/// Record a Redis operation with timing and result
-pub fn record_operation<T>(name: &str, start: Instant, result: &RedisCacheResult<T>) {
-    let duration = start.elapsed();
-    record_operation_duration(name, duration);
-
-    match result {
-        Ok(_) => record_operation_success(name),
-        Err(err) => record_operation_error(name, err),
-    }
-}
-
-/// Record operation timing
-pub fn record_operation_duration(name: &str, duration: Duration) {
-    let key = create_key(&format!("{}_duration_ms", name));
-    let duration_ms = duration.as_secs_f64() * 1000.0;
-    histogram!(key).record(duration_ms);
-}
-
-/// Record successful operation
-pub fn record_operation_success(name: &str) {
-    let key = create_key(&format!("{}_success", name));
-    counter!(key).increment(1);
-}
-
-/// Record operation error
-pub fn record_operation_error<T>(name: &str, error: &crate::error::RedisCacheError) {
-    let key = create_key(&format!("{}_error", name));
-    counter!(key).increment(1);
-
-    // Record specific error types
-    let error_type = match error {
-        crate::error::RedisCacheError::Redis(_) => "redis",
-        crate::error::RedisCacheError::Connection(_) => "connection",
-        crate::error::RedisCacheError::Serialization(_) => "serialization",
-        crate::error::RedisCacheError::Deserialization(_) => "deserialization",
-        crate::error::RedisCacheError::InvalidKey(_) => "invalid_key",
-        crate::error::RedisCacheError::ScriptError(_) => "script",
-        crate::error::RedisCacheError::Timeout(_) => "timeout",
-        crate::error::RedisCacheError::NoResult => "no_result",
-        crate::error::RedisCacheError::Other(_) => "other",
-    };
-
-    let error_key = create_key(&format!("{}_error_{}", name, error_type));
-    counter!(error_key).increment(1);
-}
-
-/// Record connection pool stats
-pub fn record_connection_pool_stats(size: usize, idle: usize, used: usize) {
-    gauge!(create_key(names::CONNECTION_POOL_SIZE)).set(size as f64);
-    gauge!(create_key(names::CONNECTION_POOL_IDLE)).set(idle as f64);
-    gauge!(create_key(names::CONNECTION_POOL_USED)).set(used as f64);
-}
-
-/// Record connection acquisition time
-pub fn record_connection_acquisition(duration: Duration) {
-    let key = create_key(names::CONNECTION_ACQUIRE);
-    let duration_ms = duration.as_secs_f64() * 1000.0;
-    histogram!(key).record(duration_ms);
-}
-
-/// Record connection health
-pub fn record_connection_health(health: &ConnectionHealth) {
-    let key = create_key(names::HEALTH_CHECK);
-
-    match health {
-        ConnectionHealth::Healthy => {
-            counter!(format!("{}_healthy", key)).increment(1);
-            gauge!(format!("{}_status", key)).set(1.0);
-        }
-        ConnectionHealth::Degraded(reason) => {
-            counter!(format!("{}_degraded", key)).increment(1);
-            counter!(format!(
-                "{}_degraded_{}",
-                key,
-                reason.to_lowercase().replace(' ', "_")
-            ))
-            .increment(1);
-            gauge!(format!("{}_status", key)).set(0.5);
-        }
-        ConnectionHealth::Unhealthy(reason) => {
-            counter!(format!("{}_unhealthy", key)).increment(1);
-            counter!(format!(
-                "{}_unhealthy_{}",
-                key,
-                reason.to_lowercase().replace(' ', "_")
-            ))
-            .increment(1);
-            gauge!(format!("{}_status", key)).set(0.0);
+/// Record operation timing metrics
+pub fn record_operation_timing(operation: &str, duration: Duration) {
+    if cfg!(feature = "metrics") {
+        // Implementation with real metrics library would go here
+        // For now, we'll just log the timing
+        if duration > Duration::from_millis(100) {
+            warn!(
+                operation = operation,
+                duration_ms = duration.as_millis(),
+                "Slow Redis operation"
+            );
+        } else {
+            debug!(
+                operation = operation,
+                duration_ms = duration.as_millis(),
+                "Redis operation timing"
+            );
         }
     }
 }
 
-/// A utility struct to time operations and record metrics automatically
-pub struct TimedOperation {
-    name: String,
+/// Record cache hit metrics
+pub fn record_cache_hit(operation: &str) {
+    if cfg!(feature = "metrics") {
+        // Implementation with real metrics library would go here
+        // For now, we'll just log the hit
+        debug!(operation = operation, "Cache hit");
+
+        #[cfg(feature = "metrics")]
+        {
+            metrics::counter!(MetricNames::CACHE_HIT);
+        }
+    }
+}
+
+/// Record cache miss metrics
+pub fn record_cache_miss(operation: &str) {
+    if cfg!(feature = "metrics") {
+        // Implementation with real metrics library would go here
+        // For now, we'll just log the miss
+        debug!(operation = operation, "Cache miss");
+
+        #[cfg(feature = "metrics")]
+        {
+            metrics::counter!(MetricNames::CACHE_MISS);
+        }
+    }
+}
+
+/// Record cache error metrics
+pub fn record_cache_error(operation: &str, error: &RedisCacheError) {
+    if cfg!(feature = "metrics") {
+        // Implementation with real metrics library would go here
+        // For now, we'll just log the error
+        warn!(
+            operation = operation,
+            error = %error,
+            "Cache operation error"
+        );
+
+        #[cfg(feature = "metrics")]
+        {
+            metrics::counter!(MetricNames::CACHE_ERROR);
+        }
+    }
+}
+
+/// Record connection pool metrics
+pub(crate) fn record_pool_metrics(pool_size: u32, active_connections: u32, idle_connections: u32) {
+    #[cfg(feature = "metrics")]
+    {
+        let pool_size_key = format!("{}.pool_size", MetricNames::CACHE);
+        metrics::counter!(pool_size_key);
+        let active_key = format!("{}.active_connections", MetricNames::CACHE);
+        metrics::counter!(active_key);
+        let idle_key = format!("{}.idle_connections", MetricNames::CACHE);
+        metrics::counter!(idle_key);
+
+        // Log the metrics values for now
+        debug!(
+            pool_size = pool_size,
+            active_connections = active_connections,
+            idle_connections = idle_connections,
+            "Connection pool stats"
+        );
+    }
+}
+
+/// Timer for measuring operation durations
+pub struct OperationTimer {
+    /// Start time of the operation
     start: Instant,
+    /// Name of the operation
+    operation: String,
 }
 
-impl TimedOperation {
-    /// Create a new timed operation
-    pub fn new(name: &str) -> Self {
+impl OperationTimer {
+    /// Create a new timer for the given operation
+    pub fn new(operation: &str) -> Self {
         Self {
-            name: name.to_string(),
             start: Instant::now(),
+            operation: operation.to_string(),
         }
     }
 
-    /// Record the result of the operation
-    pub fn record<T>(&self, result: &RedisCacheResult<T>) {
-        record_operation(&self.name, self.start, result);
+    /// Record the timing of the operation and log it if it was slow
+    pub fn record(&self) {
+        let duration = self.start.elapsed();
+        record_operation_timing(&self.operation, duration);
+
+        #[cfg(feature = "metrics")]
+        {
+            metrics::counter!(format!("{}_duration", self.operation.clone()));
+        }
     }
 
-    /// Record a successful operation
+    /// Record the timing of the operation with success status
     pub fn record_success(&self) {
-        record_operation_duration(&self.name, self.start.elapsed());
-        record_operation_success(&self.name);
+        self.record();
+
+        #[cfg(feature = "metrics")]
+        {
+            metrics::counter!(self.operation.clone());
+        }
     }
 
-    /// Record a failed operation
-    pub fn record_error(&self, error: &crate::error::RedisCacheError) {
-        record_operation_duration(&self.name, self.start.elapsed());
-        record_operation_error(&self.name, error);
+    /// Record the timing of the operation with error status
+    pub fn record_error(&self, error: &RedisCacheError) {
+        self.record();
+        record_cache_error(&self.operation, error);
     }
 }
 
@@ -201,27 +202,17 @@ mod tests {
     use crate::error::RedisCacheError;
 
     #[test]
-    fn test_create_key() {
-        let key = create_key("test_metric");
-        assert_eq!(key, "navius_test_metric");
-    }
+    fn test_operation_timer() {
+        let timer = OperationTimer::new(MetricNames::GET);
+        timer.record();
 
-    #[test]
-    fn test_timed_operation() {
-        let timer = TimedOperation::new(names::GET);
+        // Add small delay to test timing
+        std::thread::sleep(Duration::from_millis(10));
 
-        // Test success case
+        let timer = OperationTimer::new(MetricNames::SET);
         timer.record_success();
 
-        // Test error case
-        let error = RedisCacheError::NoResult;
-        timer.record_error(&error);
-
-        // Test result case
-        let result: RedisCacheResult<()> = Ok(());
-        timer.record(&result);
-
-        let error_result: RedisCacheResult<()> = Err(RedisCacheError::NoResult);
-        timer.record(&error_result);
+        let timer = OperationTimer::new(MetricNames::DELETE);
+        timer.record_error(&RedisCacheError::Timeout("Test timeout".to_string()));
     }
 }

@@ -1,23 +1,18 @@
 use navius_cache::error::CacheError;
+use redis::RedisError;
+use std::fmt::{self, Display, Formatter};
 use thiserror::Error;
 
-/// Result type for Redis cache operations
-pub type RedisCacheResult<T> = Result<T, RedisCacheError>;
-
-/// Redis cache specific errors
-#[derive(Debug, Error)]
+/// Redis cache error type
+#[derive(Debug, Error, Clone)]
 pub enum RedisCacheError {
-    /// Connection error with Redis
-    #[error("Redis error: {0}")]
-    Redis(String),
-
-    /// Connection error
-    #[error("Connection error: {0}")]
+    /// Redis connection error
+    #[error("Redis connection error: {0}")]
     Connection(String),
 
-    /// Operation error
-    #[error("Operation error: {0}")]
-    Operation(String),
+    /// Redis command error
+    #[error("Redis command error: {0}")]
+    Command(String),
 
     /// Serialization error
     #[error("Serialization error: {0}")]
@@ -31,105 +26,133 @@ pub enum RedisCacheError {
     #[error("Timeout error: {0}")]
     Timeout(String),
 
-    /// Invalid key
+    /// Invalid key error
     #[error("Invalid key: {0}")]
     InvalidKey(String),
 
-    /// Circuit breaker error
-    #[error("Circuit breaker open: {0}")]
-    CircuitBreakerOpen(String),
-
     /// Configuration error
     #[error("Configuration error: {0}")]
-    ConfigurationError(String),
-
-    /// Internal error
-    #[error("Internal error: {0}")]
-    InternalError(String),
-
-    /// Script error
-    #[error("Script error: {0}")]
-    ScriptError(String),
-
-    /// Key not found
-    #[error("Key not found: {0}")]
-    KeyNotFound(String),
-
-    /// Command execution error
-    #[error("Command error: {0}")]
-    CommandError(String),
-
-    /// Unknown error
-    #[error("Unknown error: {0}")]
-    UnknownError(String),
-
-    /// Service unavailable
-    #[error("Service unavailable: {0}")]
-    Unavailable(String),
+    Configuration(String),
 }
 
-impl From<RedisCacheError> for CacheError {
-    fn from(err: RedisCacheError) -> Self {
-        match err {
-            RedisCacheError::Redis(e) => CacheError::Redis(e),
-            RedisCacheError::Serialization(e) => CacheError::Serialization(e),
-            RedisCacheError::Timeout(e) => CacheError::Timeout(e),
-            RedisCacheError::InvalidKey(e) => CacheError::InvalidKey(e),
-            RedisCacheError::CircuitBreakerOpen(e) => CacheError::CircuitBreakerOpen(e),
-            RedisCacheError::Operation(e) => CacheError::OperationError(e),
-            RedisCacheError::ConfigurationError(e) => CacheError::ConfigurationError(e),
-            RedisCacheError::InternalError(e) => CacheError::InternalError(e),
-            RedisCacheError::Connection(e) => CacheError::ConnectionError(e),
-            RedisCacheError::ScriptError(e) => CacheError::OperationError(e),
-            RedisCacheError::KeyNotFound(e) => CacheError::NotFoundError(e),
-            RedisCacheError::CommandError(e) => CacheError::OperationError(e),
-            RedisCacheError::UnknownError(e) => CacheError::InternalError(e),
-            RedisCacheError::Unavailable(e) => CacheError::UnavailableError(e),
+impl From<RedisError> for RedisCacheError {
+    fn from(err: RedisError) -> Self {
+        if err.is_io_error() {
+            RedisCacheError::Connection(err.to_string())
+        } else if err.is_timeout() {
+            RedisCacheError::Timeout(err.to_string())
+        } else {
+            RedisCacheError::Command(err.to_string())
         }
-    }
-}
-
-impl From<redis::RedisError> for RedisCacheError {
-    fn from(err: redis::RedisError) -> Self {
-        RedisCacheError::Redis(err.to_string())
     }
 }
 
 impl From<serde_json::Error> for RedisCacheError {
     fn from(err: serde_json::Error) -> Self {
+        if err.is_data() {
+            RedisCacheError::Deserialization(err.to_string())
+        } else {
+            RedisCacheError::Serialization(err.to_string())
+        }
+    }
+}
+
+impl From<rmp_serde::encode::Error> for RedisCacheError {
+    fn from(err: rmp_serde::encode::Error) -> Self {
         RedisCacheError::Serialization(err.to_string())
     }
 }
 
-impl From<std::io::Error> for RedisCacheError {
-    fn from(err: std::io::Error) -> Self {
-        RedisCacheError::Operation(err.to_string())
+impl From<rmp_serde::decode::Error> for RedisCacheError {
+    fn from(err: rmp_serde::decode::Error) -> Self {
+        RedisCacheError::Deserialization(err.to_string())
     }
 }
 
-/// Helper functions for error handling
-pub mod error_helpers {
-    use super::{RedisCacheError, RedisCacheResult};
-    use redis::RedisError;
-    use tracing::error;
+impl From<RedisCacheError> for CacheError {
+    fn from(err: RedisCacheError) -> Self {
+        match err {
+            RedisCacheError::Connection(msg) => CacheError::ConnectionError(msg),
+            RedisCacheError::Command(msg) => CacheError::OperationError(msg),
+            RedisCacheError::Serialization(msg) => CacheError::SerializationError(msg),
+            RedisCacheError::Deserialization(msg) => CacheError::SerializationError(msg),
+            RedisCacheError::Timeout(msg) => {
+                CacheError::OperationError(format!("Timeout: {}", msg))
+            }
+            RedisCacheError::InvalidKey(msg) => {
+                CacheError::OperationError(format!("Invalid key: {}", msg))
+            }
+            RedisCacheError::Configuration(msg) => CacheError::ConfigurationError(msg),
+        }
+    }
+}
 
-    /// Handle result from Redis operation
-    pub fn handle_redis_result<T>(
-        result: Result<T, RedisError>,
-        key: &str,
-        operation: &str,
-    ) -> RedisCacheResult<T> {
-        match result {
-            Ok(value) => Ok(value),
-            Err(err) => {
-                error!(
-                    "Redis operation '{}' failed on key '{}': {}",
-                    operation, key, err
-                );
-                Err(RedisCacheError::Operation(format!(
-                    "Redis operation '{}' failed: {}",
-                    operation, err
-                )))
+/// Helper function to convert a Redis result to a Cache result
+pub fn to_cache_result<T>(result: Result<T, RedisError>) -> Result<T, CacheError> {
+    result.map_err(|err| {
+        let redis_err = RedisCacheError::from(err);
+        CacheError::from(redis_err)
+    })
+}
+
+/// Redis cache result type
+pub type RedisCacheResult<T> = Result<T, RedisCacheError>;
+
+// Fix error conversion for RedisCacheError to RedisError
+impl From<RedisCacheError> for redis::RedisError {
+    fn from(err: RedisCacheError) -> Self {
+        match err {
+            RedisCacheError::Command(msg) => {
+                redis::RedisError::from((redis::ErrorKind::ResponseError, "Command error", msg))
+            }
+            RedisCacheError::Connection(msg) => {
+                redis::RedisError::from((redis::ErrorKind::IoError, "Connection error", msg))
+            }
+            RedisCacheError::Timeout(msg) => {
+                redis::RedisError::from((redis::ErrorKind::IoError, "Timeout error", msg))
+            }
+            RedisCacheError::Serialization(msg) => {
+                redis::RedisError::from((redis::ErrorKind::TypeError, "Serialization error", msg))
+            }
+            RedisCacheError::Deserialization(msg) => {
+                redis::RedisError::from((redis::ErrorKind::TypeError, "Deserialization error", msg))
+            }
+            RedisCacheError::InvalidKey(msg) => {
+                redis::RedisError::from((redis::ErrorKind::TypeError, "Invalid key error", msg))
+            }
+            RedisCacheError::Configuration(msg) => {
+                redis::RedisError::from((redis::ErrorKind::TypeError, "Configuration error", msg))
+            }
+        }
+    }
+}
+
+// Implement From<CacheError> for RedisCacheError to help with error conversion
+impl From<CacheError> for RedisCacheError {
+    fn from(err: CacheError) -> Self {
+        match err {
+            CacheError::ConnectionError(msg) => RedisCacheError::Connection(msg),
+            CacheError::OperationError(msg) => RedisCacheError::Command(msg),
+            CacheError::SerializationError(msg) => RedisCacheError::Serialization(msg),
+            CacheError::NotFoundError(msg) => {
+                RedisCacheError::Command(format!("Not found: {}", msg))
+            }
+            CacheError::ConfigurationError(msg) => RedisCacheError::Configuration(msg),
+            CacheError::TimeoutError(msg) => RedisCacheError::Timeout(msg),
+            CacheError::InvalidationError(msg) => {
+                RedisCacheError::Command(format!("Invalidation error: {}", msg))
+            }
+            CacheError::BackendError(msg) => {
+                RedisCacheError::Command(format!("Backend error: {}", msg))
+            }
+            CacheError::UnsupportedOperation(msg) => {
+                RedisCacheError::Command(format!("Unsupported operation: {}", msg))
+            }
+            CacheError::Redis(err) => RedisCacheError::from(err),
+            CacheError::Serialization(err) => RedisCacheError::Serialization(err.to_string()),
+            CacheError::InvalidArgument(msg) => RedisCacheError::InvalidKey(msg),
+            CacheError::LuaManagerNotInitialized => {
+                RedisCacheError::Command("Lua manager not initialized".to_string())
             }
         }
     }

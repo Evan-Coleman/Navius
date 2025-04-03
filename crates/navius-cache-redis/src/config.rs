@@ -1,241 +1,297 @@
+use crate::error::{RedisCacheError, RedisCacheResult};
+use crate::serialization::SerializationFormat;
 use navius_cache::config::CacheConfig;
-use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 use std::time::Duration;
 
-/// Configuration for Redis cache connection
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RedisCacheConfig {
-    /// Redis connection URL (redis://...)
-    pub url: String,
-
-    /// Key prefix for namespacing
-    pub key_prefix: String,
-
-    /// Default time to live for cache entries
-    pub default_ttl: Duration,
-
-    /// Maximum number of connections in the pool
-    #[serde(default = "default_max_connections")]
-    pub max_connections: u32,
-
-    /// Minimum number of connections to maintain in the pool
-    #[serde(default = "default_min_connections")]
-    pub min_connections: u32,
-
-    /// Redis database index (0-15)
-    #[serde(default)]
-    pub database: u8,
-
-    /// Redis password
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub password: Option<String>,
-
-    /// Whether to use TLS
-    #[serde(default)]
-    pub use_tls: bool,
-
-    /// Connection timeout in seconds
-    #[serde(default = "default_connection_timeout")]
-    pub connection_timeout_seconds: u64,
-
-    /// Command timeout in seconds
-    #[serde(default = "default_command_timeout")]
-    pub command_timeout_seconds: u64,
-
-    /// Idle timeout in seconds - how long a connection can remain idle before being removed
-    #[serde(default = "default_idle_timeout")]
-    pub idle_timeout_seconds: u64,
-
-    /// Maximum lifetime of a connection in seconds
-    #[serde(default = "default_max_lifetime")]
-    pub max_lifetime_seconds: u64,
-
-    /// Whether to retry failed commands
-    #[serde(default = "default_retry_commands")]
-    pub retry_commands: bool,
-
-    /// Maximum number of retries for failed commands
-    #[serde(default = "default_max_retries")]
-    pub max_retries: u32,
-
-    /// Health check interval in seconds
-    #[serde(default = "default_health_check_interval")]
-    pub health_check_interval_seconds: u64,
-
-    /// Circuit breaker threshold - number of consecutive failures before opening circuit
-    #[serde(default = "default_circuit_breaker_threshold")]
-    pub circuit_breaker_threshold: u32,
-
-    /// Circuit breaker reset timeout in seconds
-    #[serde(default = "default_circuit_reset_timeout")]
-    pub circuit_reset_timeout_seconds: u64,
-
-    /// Whether to enable connection pool metrics
-    #[serde(default)]
-    pub enable_metrics: bool,
+/// Options for key validation
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeyValidationOptions {
+    /// Whether to check key format
+    pub check_format: bool,
+    /// Whether to check for reserved characters
+    pub check_reserved: bool,
 }
 
-fn default_max_connections() -> u32 {
-    10
-}
-
-fn default_min_connections() -> u32 {
-    2
-}
-
-fn default_connection_timeout() -> u64 {
-    5
-}
-
-fn default_command_timeout() -> u64 {
-    2
-}
-
-fn default_idle_timeout() -> u64 {
-    60 // 1 minute
-}
-
-fn default_max_lifetime() -> u64 {
-    300 // 5 minutes
-}
-
-fn default_health_check_interval() -> u64 {
-    30 // 30 seconds
-}
-
-fn default_circuit_breaker_threshold() -> u32 {
-    5
-}
-
-fn default_circuit_reset_timeout() -> u64 {
-    5 // 5 seconds
-}
-
-fn default_retry_commands() -> bool {
-    true
-}
-
-fn default_max_retries() -> u32 {
-    3
-}
-
-impl From<CacheConfig> for RedisCacheConfig {
-    fn from(config: CacheConfig) -> Self {
+impl Default for KeyValidationOptions {
+    fn default() -> Self {
         Self {
-            url: config.url,
-            key_prefix: config.prefix,
-            default_ttl: config.default_ttl,
-            max_connections: config.max_connections as u32,
-            min_connections: (config.max_connections / 5) as u32,
-            database: 0,
-            password: None,
-            use_tls: false,
-            connection_timeout_seconds: 5,
-            command_timeout_seconds: 2,
-            idle_timeout_seconds: default_idle_timeout(),
-            max_lifetime_seconds: default_max_lifetime(),
+            check_format: false,
+            check_reserved: false,
+        }
+    }
+}
+
+impl KeyValidationOptions {
+    /// Create a new KeyValidationOptions
+    pub fn new(check_format: bool, check_reserved: bool) -> Self {
+        Self {
+            check_format,
+            check_reserved,
+        }
+    }
+
+    /// Check if options are default
+    pub fn is_default(&self) -> bool {
+        !self.check_format && !self.check_reserved
+    }
+
+    /// Check if options are valid
+    pub fn is_valid(&self) -> bool {
+        true
+    }
+}
+
+/// Redis cache configuration
+#[derive(Debug, Clone)]
+pub struct RedisCacheConfig {
+    /// Redis connection URL
+    pub url: String,
+    /// Redis key prefix
+    pub key_prefix: Option<String>,
+    /// Maximum connections in the pool
+    pub max_connections: usize,
+    /// Connection timeout
+    pub connection_timeout: Duration,
+    /// Command timeout
+    pub command_timeout: Duration,
+    /// Whether to enable command retries
+    pub retry_commands: bool,
+    /// Maximum number of command retries
+    pub max_retries: usize,
+    /// Serialization format
+    pub serialization_format: SerializationFormat,
+    /// Default TTL for cache entries
+    pub default_ttl: Option<Duration>,
+    /// Metrics reporting interval (if enabled)
+    pub metrics_interval: Option<Duration>,
+    /// Key validation options
+    pub key_validation: KeyValidationOptions,
+}
+
+impl Default for RedisCacheConfig {
+    fn default() -> Self {
+        Self {
+            url: "redis://127.0.0.1:6379".to_string(),
+            key_prefix: None,
+            max_connections: 10,
+            connection_timeout: Duration::from_secs(5),
+            command_timeout: Duration::from_secs(2),
             retry_commands: true,
             max_retries: 3,
-            health_check_interval_seconds: default_health_check_interval(),
-            circuit_breaker_threshold: default_circuit_breaker_threshold(),
-            circuit_reset_timeout_seconds: default_circuit_reset_timeout(),
-            enable_metrics: config.metrics,
+            serialization_format: SerializationFormat::Json,
+            default_ttl: Some(Duration::from_secs(3600)), // 1 hour
+            metrics_interval: None,
+            key_validation: KeyValidationOptions::default(),
         }
     }
 }
 
 impl RedisCacheConfig {
-    /// Create a new Redis cache configuration with defaults
-    pub fn new(url: String, key_prefix: String) -> Self {
+    /// Create a new Redis cache configuration
+    pub fn new(url: impl Into<String>) -> Self {
         Self {
-            url,
-            key_prefix,
-            default_ttl: Duration::from_secs(300),
-            max_connections: default_max_connections(),
-            min_connections: default_min_connections(),
-            database: 0,
-            password: None,
-            use_tls: false,
-            connection_timeout_seconds: default_connection_timeout(),
-            command_timeout_seconds: default_command_timeout(),
-            idle_timeout_seconds: default_idle_timeout(),
-            max_lifetime_seconds: default_max_lifetime(),
-            retry_commands: default_retry_commands(),
-            max_retries: default_max_retries(),
-            health_check_interval_seconds: default_health_check_interval(),
-            circuit_breaker_threshold: default_circuit_breaker_threshold(),
-            circuit_reset_timeout_seconds: default_circuit_reset_timeout(),
-            enable_metrics: false,
+            url: url.into(),
+            ..Default::default()
         }
     }
 
-    /// Create a new Redis cache configuration with specific TTL
-    pub fn with_ttl(url: String, key_prefix: String, default_ttl: Duration) -> Self {
-        let mut config = Self::new(url, key_prefix);
-        config.default_ttl = default_ttl;
-        config
+    /// Validate the configuration
+    pub fn validate(&self) -> RedisCacheResult<()> {
+        if self.url.is_empty() {
+            return Err(RedisCacheError::Configuration(
+                "Redis URL cannot be empty".to_string(),
+            ));
+        }
+
+        if self.max_connections == 0 {
+            return Err(RedisCacheError::Configuration(
+                "Max connections must be greater than zero".to_string(),
+            ));
+        }
+
+        if self.connection_timeout.as_millis() == 0 {
+            return Err(RedisCacheError::Configuration(
+                "Connection timeout must be greater than zero".to_string(),
+            ));
+        }
+
+        if self.command_timeout.as_millis() == 0 {
+            return Err(RedisCacheError::Configuration(
+                "Command timeout must be greater than zero".to_string(),
+            ));
+        }
+
+        Ok(())
     }
 
-    /// Create a high-availability configuration with optimized settings
-    pub fn high_availability(url: String, key_prefix: String) -> Self {
+    /// Get the prefixed key
+    pub fn prefixed_key(&self, key: &str) -> String {
+        match &self.key_prefix {
+            Some(prefix) => format!("{}{}", prefix, key),
+            None => key.to_string(),
+        }
+    }
+
+    /// Set the key prefix
+    pub fn with_key_prefix(mut self, prefix: impl Into<String>) -> Self {
+        self.key_prefix = Some(prefix.into());
+        self
+    }
+
+    /// Set the default TTL
+    pub fn with_default_ttl(mut self, ttl: Duration) -> Self {
+        self.default_ttl = Some(ttl);
+        self
+    }
+
+    /// Set the maximum number of connections
+    pub fn with_max_connections(mut self, max_connections: usize) -> Self {
+        self.max_connections = max_connections;
+        self
+    }
+
+    /// Set the connection timeout
+    pub fn with_connection_timeout(mut self, timeout: Duration) -> Self {
+        self.connection_timeout = timeout;
+        self
+    }
+
+    /// Set the command timeout
+    pub fn with_command_timeout(mut self, timeout: Duration) -> Self {
+        self.command_timeout = timeout;
+        self
+    }
+
+    /// Set whether to retry commands on failure
+    pub fn with_retry_commands(mut self, retry: bool) -> Self {
+        self.retry_commands = retry;
+        self
+    }
+
+    /// Set the maximum number of retries
+    pub fn with_max_retries(mut self, max_retries: usize) -> Self {
+        self.max_retries = max_retries;
+        self
+    }
+
+    /// Set the serialization format
+    pub fn with_serialization_format(mut self, format: SerializationFormat) -> Self {
+        self.serialization_format = format;
+        self
+    }
+
+    /// Set the metrics interval
+    pub fn with_metrics_interval(mut self, interval: Duration) -> Self {
+        self.metrics_interval = Some(interval);
+        self
+    }
+
+    /// Set the key validation options
+    pub fn with_key_validation(mut self, validation: KeyValidationOptions) -> Self {
+        self.key_validation = validation;
+        self
+    }
+}
+
+impl From<&CacheConfig> for RedisCacheConfig {
+    fn from(config: &CacheConfig) -> Self {
         Self {
-            url,
-            key_prefix,
-            default_ttl: Duration::from_secs(300),
-            max_connections: 20,
-            min_connections: 5,
-            database: 0,
-            password: None,
-            use_tls: true,
-            connection_timeout_seconds: 3,
-            command_timeout_seconds: 1,
-            idle_timeout_seconds: 30,
-            max_lifetime_seconds: 120,
+            url: config.url.clone(),
+            key_prefix: Some(config.prefix.clone()),
+            max_connections: config.max_connections as usize,
+            connection_timeout: config.connect_timeout,
+            command_timeout: Duration::from_secs(2), // Default command timeout
             retry_commands: true,
-            max_retries: 5,
-            health_check_interval_seconds: 15,
-            circuit_breaker_threshold: 3,
-            circuit_reset_timeout_seconds: 3,
-            enable_metrics: true,
+            max_retries: 3,
+            serialization_format: SerializationFormat::Json,
+            default_ttl: Some(config.default_ttl),
+            metrics_interval: None,
+            key_validation: KeyValidationOptions::default(),
         }
     }
+}
 
-    /// Create a prefixed key
-    pub fn prefixed_key<K: AsRef<str>>(&self, key: K) -> String {
-        if self.key_prefix.is_empty() {
-            key.as_ref().to_string()
-        } else {
-            format!("{}:{}", self.key_prefix, key.as_ref())
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_config() {
+        let config = RedisCacheConfig::default();
+        assert_eq!(config.url, "redis://127.0.0.1:6379");
+        assert_eq!(config.key_prefix, None);
+        assert_eq!(config.max_connections, 10);
+        assert_eq!(config.connection_timeout, Duration::from_secs(5));
+        assert_eq!(config.command_timeout, Duration::from_secs(2));
+        assert!(config.retry_commands);
+        assert_eq!(config.max_retries, 3);
+        assert!(matches!(
+            config.serialization_format,
+            SerializationFormat::Json
+        ));
+        assert_eq!(config.default_ttl, Some(Duration::from_secs(3600)));
+        assert_eq!(config.metrics_interval, None);
+        assert!(config.key_validation.is_default());
     }
 
-    /// Get connection timeout as Duration
-    pub fn connection_timeout(&self) -> Duration {
-        Duration::from_secs(self.connection_timeout_seconds)
+    #[test]
+    fn test_custom_config() {
+        let config = RedisCacheConfig::new("redis://custom-host:6379")
+            .with_key_prefix("custom:")
+            .with_default_ttl(Duration::from_secs(60))
+            .with_max_connections(5)
+            .with_connection_timeout(Duration::from_secs(2))
+            .with_command_timeout(Duration::from_secs(1))
+            .with_retry_commands(false)
+            .with_max_retries(2)
+            .with_serialization_format(SerializationFormat::MsgPack)
+            .with_metrics_interval(Duration::from_secs(30))
+            .with_key_validation(KeyValidationOptions::new(true, true));
+
+        assert_eq!(config.url, "redis://custom-host:6379");
+        assert_eq!(config.key_prefix, Some("custom:"));
+        assert_eq!(config.max_connections, 5);
+        assert_eq!(config.connection_timeout, Duration::from_secs(2));
+        assert_eq!(config.command_timeout, Duration::from_secs(1));
+        assert!(!config.retry_commands);
+        assert_eq!(config.max_retries, 2);
+        assert!(matches!(
+            config.serialization_format,
+            SerializationFormat::MsgPack
+        ));
+        assert_eq!(config.default_ttl, Some(Duration::from_secs(60)));
+        assert_eq!(config.metrics_interval, Some(Duration::from_secs(30)));
+        assert!(config.key_validation.is_valid());
     }
 
-    /// Get command timeout as Duration
-    pub fn command_timeout(&self) -> Duration {
-        Duration::from_secs(self.command_timeout_seconds)
-    }
+    #[test]
+    fn test_validation() {
+        let config = RedisCacheConfig::default();
+        assert!(config.validate().is_ok());
 
-    /// Get idle timeout as Duration
-    pub fn idle_timeout(&self) -> Duration {
-        Duration::from_secs(self.idle_timeout_seconds)
-    }
+        let config = RedisCacheConfig {
+            url: "".to_string(),
+            ..RedisCacheConfig::default()
+        };
+        assert!(config.validate().is_err());
 
-    /// Get max lifetime as Duration
-    pub fn max_lifetime(&self) -> Duration {
-        Duration::from_secs(self.max_lifetime_seconds)
-    }
+        let config = RedisCacheConfig {
+            max_connections: 0,
+            ..RedisCacheConfig::default()
+        };
+        assert!(config.validate().is_err());
 
-    /// Get health check interval as Duration
-    pub fn health_check_interval(&self) -> Duration {
-        Duration::from_secs(self.health_check_interval_seconds)
-    }
+        let config = RedisCacheConfig {
+            connection_timeout: Duration::from_secs(0),
+            ..RedisCacheConfig::default()
+        };
+        assert!(config.validate().is_err());
 
-    /// Get circuit reset timeout as Duration
-    pub fn circuit_reset_timeout(&self) -> Duration {
-        Duration::from_secs(self.circuit_reset_timeout_seconds)
+        let config = RedisCacheConfig {
+            command_timeout: Duration::from_secs(0),
+            ..RedisCacheConfig::default()
+        };
+        assert!(config.validate().is_err());
     }
 }

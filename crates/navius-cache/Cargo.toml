@@ -17,7 +17,11 @@ futures = "0.3.31"
 tokio = { version = "1.44.1", features = ["rt", "macros"] }
 
 # Redis support
-redis = { version = "0.29.2", features = ["tokio-comp", "aio", "connection-manager"], optional = true }
+redis = { version = "0.29.2", features = [
+    "tokio-comp",
+    "aio",
+    "connection-manager",
+], optional = true }
 
 # Metrics and observability
 metrics = { version = "0.24.1", optional = true }
@@ -52,4 +56,4 @@ path = "examples/metrics_usage.rs"
 [[example]]
 name = "repository_pattern"
 required-features = ["redis"]
-path = "examples/repository_pattern.rs" 
+path = "examples/repository_pattern.rs"

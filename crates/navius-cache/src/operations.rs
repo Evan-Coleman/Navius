@@ -1,8 +1,11 @@
 use crate::error::CacheResult;
 use async_trait::async_trait;
+// Comment out or remove redis imports if not used by any trait signature anymore
+// use ::redis::{FromRedisValue, ToRedisArgs};
 use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Display;
 use std::time::Duration;
+// Remove other unused imports like Debug, Eq, Hash if they aren't needed
 
 /// Cache key trait for converting types to cache keys
 pub trait CacheKey: Display + Send + Sync {
