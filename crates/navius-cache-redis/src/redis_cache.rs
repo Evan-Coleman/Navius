@@ -128,7 +128,7 @@ impl RedisCache {
     /// `Ok(())` if the key is valid, `Err(RedisCacheError)` otherwise
     fn validate_key<K>(&self, key: &K) -> CrateRedisCacheResult<()>
     where
-        K: AsRef<str> + Debug + std::fmt::Display + Send + Sync + 'static,
+        K: AsRef<str> + std::fmt::Display + Send + Sync + 'static,
     {
         validate_key(key, &self.key_validation)
     }
@@ -425,7 +425,7 @@ impl Cache for RedisCache {}
 
 #[async_trait]
 impl CacheOperations for RedisCache {
-    #[instrument(skip(self, key), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn get<K, V>(&self, key: K) -> CacheResult<Option<V>>
     where
         K: CacheKey + 'static,
@@ -434,7 +434,7 @@ impl CacheOperations for RedisCache {
         self._get_internal(key).await.map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, keys), fields(key_count = keys.len()), level = "info")]
+    #[instrument(skip(self, keys), fields(key_count = %keys.len()), level = "info")]
     async fn get_many<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<Option<V>>>
     where
         K: CacheKey + 'static,
@@ -446,7 +446,7 @@ impl CacheOperations for RedisCache {
         self._get_many_internal(keys).await.map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key, value), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key, value), fields(key = %key.to_string()), level = "info")]
     async fn set<K, V>(&self, key: K, value: &V, options: Option<CacheOptions>) -> CacheResult<()>
     where
         K: CacheKey + 'static,
@@ -458,7 +458,7 @@ impl CacheOperations for RedisCache {
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, entries), fields(entry_count = entries.len()), level = "info")]
+    #[instrument(skip(self, entries), fields(entry_count = %entries.len()), level = "info")]
     async fn set_many<K, V>(
         &self,
         entries: Vec<(K, V)>,
@@ -476,7 +476,7 @@ impl CacheOperations for RedisCache {
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn delete<K>(&self, key: K) -> CacheResult<bool>
     where
         K: CacheKey + 'static,
@@ -484,7 +484,7 @@ impl CacheOperations for RedisCache {
         self.delete_internal(key).await.map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, keys), fields(key_count = keys.len()), level = "info")]
+    #[instrument(skip(self, keys), fields(key_count = %keys.len()), level = "info")]
     async fn delete_many<K>(&self, keys: Vec<K>) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
@@ -492,7 +492,7 @@ impl CacheOperations for RedisCache {
         self.delete_many_internal(keys).await.map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn exists<K>(&self, key: K) -> CacheResult<bool>
     where
         K: CacheKey + 'static,
@@ -500,7 +500,7 @@ impl CacheOperations for RedisCache {
         self.exists_internal(key).await.map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn increment<K>(&self, key: K, amount: i64) -> CacheResult<i64>
     where
         K: CacheKey + 'static,
@@ -515,7 +515,7 @@ impl CacheOperations for RedisCache {
         ))
     }
 
-    #[instrument(skip(self, key), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn expire<K>(&self, key: K, ttl: Duration) -> CacheResult<bool>
     where
         K: CacheKey + 'static,
@@ -548,7 +548,7 @@ impl CacheOperations for RedisCache {
         }
     }
 
-    #[instrument(skip(self, key, value), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key, value), fields(key = %key.to_string()), level = "info")]
     async fn list_push_right<K, V>(&self, key: K, value: &V) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
@@ -559,7 +559,7 @@ impl CacheOperations for RedisCache {
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key, values), fields(key = %display(key.to_string()), value_count = values.len()), level = "info")]
+    #[instrument(skip(self, key, values), fields(key = %key.to_string(), value_count = values.len()), level = "info")]
     async fn list_push_right_many<K, V>(&self, key: K, values: &[V]) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
@@ -570,7 +570,7 @@ impl CacheOperations for RedisCache {
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key, value), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key, value), fields(key = %key.to_string()), level = "info")]
     async fn list_push_left<K, V>(&self, key: K, value: &V) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
@@ -581,18 +581,18 @@ impl CacheOperations for RedisCache {
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key, values), fields(key = %display(key.to_string()), value_count = values.len()), level = "info")]
+    #[instrument(skip(self, key, values), fields(key = %key.to_string(), value_count = values.len()), level = "info")]
     async fn list_push_left_many<K, V>(&self, key: K, values: &[V]) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static + Clone,
+        V: Serialize + Send + Sync + Clone + 'static,
     {
         self.list_push_left_many_internal(key, values.to_vec())
             .await
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn list_pop_right<K, V>(&self, key: K) -> CacheResult<Option<V>>
     where
         K: CacheKey + 'static,
@@ -603,7 +603,7 @@ impl CacheOperations for RedisCache {
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn list_pop_left<K, V>(&self, key: K) -> CacheResult<Option<V>>
     where
         K: CacheKey + 'static,
@@ -612,7 +612,7 @@ impl CacheOperations for RedisCache {
         self.list_pop_left_internal(key).await.map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn list_range<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<V>>
     where
         K: CacheKey + 'static,
@@ -623,7 +623,7 @@ impl CacheOperations for RedisCache {
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn list_length<K>(&self, key: K) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
@@ -631,18 +631,18 @@ impl CacheOperations for RedisCache {
         self.list_length_internal(key).await.map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key, value), fields(key = %display(key.to_string())), level = "info")]
-    async fn list_remove<K, V>(&self, key: K, count: isize, value: &V) -> CacheResult<usize>
+    #[instrument(skip(self, key, value), fields(key = %key.to_string()), level = "info")]
+    async fn list_remove<K, V>(&self, key: K, count: i32, value: &V) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static + Clone,
+        V: Serialize + Send + Sync + Clone + 'static,
     {
         self.list_remove_internal(key, count, value.clone())
             .await
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn list_trim<K>(&self, key: K, start: isize, stop: isize) -> CacheResult<()>
     where
         K: CacheKey + 'static,
@@ -652,22 +652,22 @@ impl CacheOperations for RedisCache {
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key, value), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key, value), fields(key = %key.to_string()), level = "info")]
     async fn list_set<K, V>(&self, key: K, index: isize, value: &V) -> CacheResult<()>
     where
         K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static + Clone,
+        V: Serialize + Send + Sync + Clone + 'static,
     {
         self.list_set_internal(key, index, value.clone())
             .await
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key, field), fields(key = %display(key.to_string()), field = %display(field.to_string())), level = "info")]
+    #[instrument(skip(self, key, field), fields(key = %key.to_string(), field = %field.to_string()), level = "info")]
     async fn hash_get<K, F, V>(&self, key: K, field: F) -> CacheResult<Option<V>>
     where
         K: CacheKey + 'static,
-        F: CacheKey + redis::ToRedisArgs + std::fmt::Debug + 'static,
+        F: CacheKey + redis::ToRedisArgs + 'static,
         V: DeserializeOwned + Send + Sync + 'static,
     {
         self.hash_get_internal(key, field)
@@ -675,24 +675,24 @@ impl CacheOperations for RedisCache {
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key, field, value), fields(key = %display(key.to_string()), field = %display(field.to_string())), level = "info")]
+    #[instrument(skip(self, key, field, value), fields(key = %key.to_string(), field = %field.to_string()), level = "info")]
     async fn hash_set<K, F, V>(&self, key: K, field: F, value: &V) -> CacheResult<bool>
     where
         K: CacheKey + 'static,
-        F: CacheKey + redis::ToRedisArgs + std::fmt::Debug + 'static,
-        V: Serialize + Send + Sync + 'static + Clone,
+        F: CacheKey + redis::ToRedisArgs + 'static,
+        V: Serialize + Send + Sync + Clone + 'static,
     {
         self.hash_set_internal(key, field, value.clone())
             .await
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key, fields), fields(key = %display(key.to_string()), field_count = fields.len()), level = "info")]
+    #[instrument(skip(self, key, fields), fields(key = %key.to_string(), field_count = %fields.len()), level = "info")]
     async fn hash_get_many<K, F, V>(&self, key: K, fields: Vec<F>) -> CacheResult<Vec<Option<V>>>
     where
         K: CacheKey + 'static,
         F: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
+        V: DeserializeOwned + Send + Sync + 'static,
     {
         if fields.is_empty() {
             return Ok(Vec::new());
@@ -702,45 +702,43 @@ impl CacheOperations for RedisCache {
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key, entries), fields(key = %display(key.to_string()), entry_count = entries.len()), level = "info")]
+    #[instrument(skip(self, key, entries), fields(key = %key.to_string(), entry_count = %entries.len()), level = "info")]
     async fn hash_set_many<K, F, V>(&self, key: K, entries: Vec<(F, V)>) -> CacheResult<()>
     where
         K: CacheKey + 'static,
-        F: CacheKey + redis::ToRedisArgs + std::fmt::Debug + Eq + std::hash::Hash + 'static,
-        V: Serialize + Send + Sync + 'static + Clone,
+        F: CacheKey + redis::ToRedisArgs + 'static,
+        V: Serialize + Send + Sync + Clone + 'static,
     {
-        // Convert Vec<(F, V)> to HashMap<F, V>
         let items: HashMap<F, V> = entries.into_iter().collect();
-        // Map Ok(usize) -> Ok(())
         self.hash_set_many_internal(key, items)
             .await
             .map(|_| ())
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key, field), fields(key = %display(key.to_string()), field = %display(field.to_string())), level = "info")]
+    #[instrument(skip(self, key, field), fields(key = %key.to_string(), field = %field.to_string()), level = "info")]
     async fn hash_exists<K, F>(&self, key: K, field: F) -> CacheResult<bool>
     where
         K: CacheKey + 'static,
-        F: CacheKey + redis::ToRedisArgs + std::fmt::Debug + 'static,
+        F: CacheKey + redis::ToRedisArgs + 'static,
     {
         self.hash_exists_internal(key, field)
             .await
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key, fields), fields(key = %display(key.to_string()), field_count = fields.len()), level = "info")]
+    #[instrument(skip(self, fields), fields(key = %key.to_string(), field_count = %fields.len()), level = "info")]
     async fn hash_delete<K, F>(&self, key: K, fields: Vec<F>) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
-        F: CacheKey + redis::ToRedisArgs + std::fmt::Debug + 'static,
+        F: CacheKey + redis::ToRedisArgs + 'static,
     {
         self.hash_delete_many_internal(key, fields)
             .await
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn hash_get_all<K, V>(&self, key: K) -> CacheResult<Vec<(String, V)>>
     where
         K: CacheKey + 'static,
@@ -752,7 +750,7 @@ impl CacheOperations for RedisCache {
         }
     }
 
-    #[instrument(skip(self, key), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn hash_keys<K>(&self, key: K) -> CacheResult<Vec<String>>
     where
         K: CacheKey + 'static,
@@ -762,7 +760,7 @@ impl CacheOperations for RedisCache {
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn hash_values<K, V>(&self, key: K) -> CacheResult<Vec<V>>
     where
         K: CacheKey + 'static,
@@ -771,25 +769,18 @@ impl CacheOperations for RedisCache {
         self.hash_values_internal(key).await.map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key, field), fields(key = %display(key.to_string()), field = %display(field.to_string())), level = "info")]
+    #[instrument(skip(self, key, field), fields(key = %key.to_string(), field = %field.to_string()), level = "info")]
     async fn hash_increment<K, F>(&self, key: K, field: F, amount: i64) -> CacheResult<i64>
     where
         K: CacheKey + 'static,
-        F: CacheKey + redis::ToRedisArgs + std::fmt::Debug + 'static,
+        F: CacheKey + redis::ToRedisArgs + 'static,
     {
-        debug!(
-            key = %key.to_string(),
-            field = %field.to_string(),
-            amount = %amount,
-            "RedisCache: hash_increment operation is not supported due to serialization concerns."
-        );
-        Err(CacheError::UnsupportedOperation(
-            "RedisCache does not support generic atomic hash increment due to serialization"
-                .to_string(),
-        ))
+        self.hash_increment_internal(key, field, amount)
+            .await
+            .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn hash_length<K>(&self, key: K) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
@@ -797,7 +788,7 @@ impl CacheOperations for RedisCache {
         self.hash_length_internal(key).await.map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key, values), fields(key = %display(key.to_string()), value_count = values.len()), level = "info")]
+    #[instrument(skip(self, key, values), fields(key = %key.to_string(), value_count = values.len()), level = "info")]
     async fn set_add<K, V>(&self, key: K, values: Vec<V>) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
@@ -808,7 +799,7 @@ impl CacheOperations for RedisCache {
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key, values), fields(key = %display(key.to_string()), value_count = values.len()), level = "info")]
+    #[instrument(skip(self, key, values), fields(key = %key.to_string(), value_count = values.len()), level = "info")]
     async fn set_remove<K, V>(&self, key: K, values: Vec<V>) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
@@ -819,7 +810,7 @@ impl CacheOperations for RedisCache {
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, key, value), fields(key = %display(key.to_string())), level = "info")]
+    #[instrument(skip(self, key, value), fields(key = %key.to_string()), level = "info")]
     async fn set_contains<K, V>(&self, key: K, value: &V) -> CacheResult<bool>
     where
         K: CacheKey + 'static,

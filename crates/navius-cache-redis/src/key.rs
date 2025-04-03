@@ -37,7 +37,7 @@ impl Default for KeyValidationOptions {
 /// Returns `RedisCacheError::InvalidKey` if the key is invalid based on the options
 pub fn validate_key<K>(key: &K, options: &KeyValidationOptions) -> Result<(), RedisCacheError>
 where
-    K: AsRef<str> + Debug + ?Sized,
+    K: AsRef<str> + std::fmt::Display + ?Sized,
 {
     let key_str = key.as_ref();
 
