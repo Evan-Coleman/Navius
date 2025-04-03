@@ -56,16 +56,15 @@ impl RedisCache {
         let result: Result<usize, RedisCacheError> = self
             .pool
             .execute(move |conn| {
-                let key_str_clone = key_str.clone(); // Clone necessary data
+                let key_str_clone = key_str.clone();
                 let value_str_clone = value_str.clone();
-                async move {
-                    // Remove Box::pin
+                Box::pin(async move {
                     redis::cmd("LPUSH")
                         .arg(&key_str_clone)
                         .arg(&value_str_clone)
                         .query_async::<usize>(conn)
                         .await
-                }
+                })
             })
             .await;
 
@@ -118,16 +117,15 @@ impl RedisCache {
         let result: Result<usize, RedisCacheError> = self
             .pool
             .execute(move |conn| {
-                let key_str_clone = key_str.clone(); // Clone necessary data
+                let key_str_clone = key_str.clone();
                 let value_str_clone = value_str.clone();
-                async move {
-                    // Remove Box::pin
+                Box::pin(async move {
                     redis::cmd("RPUSH")
                         .arg(&key_str_clone)
                         .arg(&value_str_clone)
                         .query_async::<usize>(conn)
                         .await
-                }
+                })
             })
             .await;
 
@@ -169,14 +167,13 @@ impl RedisCache {
         let result: Result<Option<String>, RedisCacheError> = self
             .pool
             .execute(move |conn| {
-                let key_str_clone = key_str.clone(); // Clone necessary data
-                async move {
-                    // Remove Box::pin
+                let key_str_clone = key_str.clone();
+                Box::pin(async move {
                     redis::cmd("LPOP")
                         .arg(&key_str_clone)
                         .query_async::<Option<String>>(conn)
                         .await
-                }
+                })
             })
             .await;
 
@@ -231,14 +228,13 @@ impl RedisCache {
         let result: Result<Option<String>, RedisCacheError> = self
             .pool
             .execute(move |conn| {
-                let key_str_clone = key_str.clone(); // Clone necessary data
-                async move {
-                    // Remove Box::pin
+                let key_str_clone = key_str.clone();
+                Box::pin(async move {
                     redis::cmd("RPOP")
                         .arg(&key_str_clone)
                         .query_async::<Option<String>>(conn)
                         .await
-                }
+                })
             })
             .await;
 
@@ -292,9 +288,8 @@ impl RedisCache {
         let result: Result<isize, RedisCacheError> = self
             .pool
             .execute(move |conn| {
-                let key_str_clone = key_str.clone(); // Clone necessary data
+                let key_str_clone = key_str.clone();
                 Box::pin(async move {
-                    // Remove Box::pin
                     redis::cmd("LLEN")
                         .arg(&key_str_clone)
                         .query_async::<isize>(conn)
@@ -358,10 +353,9 @@ impl RedisCache {
         let result: Result<usize, RedisCacheError> = self
             .pool
             .execute(move |conn| {
-                let key_str_clone = key_str.clone(); // Clone necessary data
+                let key_str_clone = key_str.clone();
                 let serialized_values_clone = serialized_values.clone();
                 Box::pin(async move {
-                    // Remove Box::pin
                     let mut cmd = redis::cmd("RPUSH");
                     cmd.arg(&key_str_clone);
                     cmd.arg(&serialized_values_clone);
@@ -425,10 +419,9 @@ impl RedisCache {
         let result: Result<usize, RedisCacheError> = self
             .pool
             .execute(move |conn| {
-                let key_str_clone = key_str.clone(); // Clone necessary data
+                let key_str_clone = key_str.clone();
                 let serialized_values_clone = serialized_values.clone();
                 Box::pin(async move {
-                    // Remove Box::pin
                     let mut cmd = redis::cmd("LPUSH");
                     cmd.arg(&key_str_clone);
                     cmd.arg(&serialized_values_clone);
@@ -479,9 +472,8 @@ impl RedisCache {
         let result: Result<Vec<String>, RedisCacheError> = self
             .pool
             .execute(move |conn| {
-                let key_str_clone = key_str.clone(); // Clone necessary data
+                let key_str_clone = key_str.clone();
                 Box::pin(async move {
-                    // Remove Box::pin
                     let mut cmd = redis::cmd("LRANGE");
                     cmd.arg(&key_str_clone);
                     cmd.arg(start);
@@ -546,9 +538,8 @@ impl RedisCache {
         let result: Result<String, RedisCacheError> = self
             .pool
             .execute(move |conn| {
-                let key_str_clone = key_str.clone(); // Clone necessary data
+                let key_str_clone = key_str.clone();
                 Box::pin(async move {
-                    // Remove Box::pin
                     redis::cmd("LTRIM")
                         .arg(&key_str_clone)
                         .arg(start)
@@ -607,10 +598,9 @@ impl RedisCache {
         let result: Result<String, RedisCacheError> = self
             .pool
             .execute(move |conn| {
-                let key_str_clone = key_str.clone(); // Clone necessary data
+                let key_str_clone = key_str.clone();
                 let value_str_clone = value_str.clone();
                 Box::pin(async move {
-                    // Remove Box::pin
                     redis::cmd("LSET")
                         .arg(&key_str_clone)
                         .arg(index)
@@ -649,15 +639,18 @@ impl RedisCache {
         V: Serialize + Send + Sync + 'static,
     {
         debug!(key = %key.to_string(), count = count, "Executing LREM");
-        let timer = self.metrics.start_timer("list_remove_internal");
+        let timer = OperationTimer::new("list_remove_internal");
 
-        if let Err(e) = validate_key(&key, &self.pool.key_validation_options()) {
-            timer.record_error(&e);
-            metrics::counter!("cache.list_remove.error").increment(1);
-            return Err(e.into());
-        }
+        let key_str = match self.key_to_string(key) {
+            Ok(k) => k,
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.list_remove.error").increment(1);
+                return Err(e.into());
+            }
+        };
 
-        let serialized_value = match self.serializer.serialize(&value) {
+        let serialized_value = match self.serializer.serialize(&value).await {
             Ok(val) => val,
             Err(e) => {
                 timer.record_error(&e);
@@ -666,7 +659,6 @@ impl RedisCache {
             }
         };
 
-        let key_str = self.prefix_key(&key);
         let key_str_clone = key_str.clone();
         let serialized_value_clone = serialized_value.clone();
 
