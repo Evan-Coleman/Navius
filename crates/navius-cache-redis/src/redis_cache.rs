@@ -269,14 +269,6 @@ impl RedisCache {
                             break;
                         }
                     }
-                    Ok(Err(redis_err)) => {
-                        let err = RedisCacheError::from(redis_err);
-                        timer.record_error(&err);
-                        return Err(CacheError::OperationError(format!(
-                            "Failed to scan keys: {}",
-                            err
-                        )));
-                    }
                     Err(cache_err) => {
                         timer.record_error(&cache_err);
                         return Err(CacheError::OperationError(format!(
