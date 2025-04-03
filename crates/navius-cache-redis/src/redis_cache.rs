@@ -233,39 +233,31 @@ impl RedisCache {
 
                         // Delete the found keys if any
                         if !keys.is_empty() {
-                            let del_result: Result<redis::RedisResult<usize>, RedisCacheError> =
-                                self.pool
-                                    .execute(move |conn| {
-                                        let keys_clone = keys.clone();
-                                        Box::pin(async move {
-                                            redis::cmd("DEL")
-                                                .arg(&keys_clone)
-                                                .query_async::<usize>(conn)
-                                                .await
-                                        })
+                            let del_result: Result<usize, RedisCacheError> = self
+                                .pool
+                                .execute(move |conn| {
+                                    let keys_clone = keys.clone();
+                                    Box::pin(async move {
+                                        redis::cmd("DEL")
+                                            .arg(&keys_clone)
+                                            .query_async::<usize>(conn)
+                                            .await
                                     })
-                                    .await;
+                                })
+                                .await;
 
                             match del_result {
-                                Ok(Ok(count)) => {
+                                Ok(count) => {
                                     total_deleted += count;
                                     debug!(
                                         deleted = %count,
                                         "Deleted keys in batch"
                                     );
                                 }
-                                Ok(Err(redis_err)) => {
-                                    let err = RedisCacheError::from(redis_err);
-                                    timer.record_error(&err);
-                                    return Err(CacheError::OperationError(format!(
-                                        "Failed to delete keys: {}",
-                                        err
-                                    )));
-                                }
                                 Err(cache_err) => {
                                     timer.record_error(&cache_err);
                                     return Err(CacheError::OperationError(format!(
-                                        "Failed to execute delete keys: {}",
+                                        "Failed to delete keys: {}",
                                         cache_err
                                     )));
                                 }
