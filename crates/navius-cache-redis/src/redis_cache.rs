@@ -291,7 +291,7 @@ impl RedisCache {
     pub(crate) async fn _get<K, V>(&self, key: K) -> CrateRedisCacheResult<Option<V>>
     where
         K: CacheKey + 'static,
-        V: serde::de::DeserializeOwned + Send + 'static,
+        V: DeserializeOwned + Send + 'static,
     {
         let timer = OperationTimer::new("cache_get");
         metrics::counter!("cache.get.total");
@@ -310,7 +310,7 @@ impl RedisCache {
         let result: redis::RedisResult<Option<String>> = match self
             .pool
             .execute(move |conn| {
-                let mut cmd = redis::cmd("GET");
+                let cmd = redis::cmd("GET");
                 let mut cmd_clone = cmd.clone();
                 Box::pin(async move { cmd_clone.arg(&key_str).query_async(conn).await })
             })
@@ -356,7 +356,7 @@ impl RedisCache {
     ) -> CrateRedisCacheResult<Vec<Option<V>>>
     where
         K: CacheKey + 'static,
-        V: serde::de::DeserializeOwned + Send + 'static,
+        V: DeserializeOwned + Send + 'static,
     {
         let timer = OperationTimer::new("cache_get_many");
         metrics::counter!("cache.get_many.total");
@@ -383,7 +383,7 @@ impl RedisCache {
         let result: redis::RedisResult<Vec<Option<String>>> = match self
             .pool
             .execute(move |conn| {
-                let mut cmd = redis::cmd("MGET");
+                let cmd = redis::cmd("MGET");
                 let mut cmd_clone = cmd.clone();
                 Box::pin(async move { cmd_clone.arg(&key_strings).query_async(conn).await })
             })
@@ -419,6 +419,62 @@ impl RedisCache {
             }
         }
     }
+
+    pub(crate) async fn hash_increment_internal<K, F>(
+        &self,
+        key: K,
+        field: F,
+        amount: i64,
+    ) -> CrateRedisCacheResult<i64>
+    where
+        K: CacheKey + 'static,
+        F: CacheKey + redis::ToRedisArgs + 'static,
+    {
+        let timer = OperationTimer::new("cache_hash_increment");
+        metrics::counter!("cache.hash_increment.total");
+
+        // Convert key to string and validate
+        let key_str = match self.key_to_string(key) {
+            Ok(k) => k,
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.hash_increment.error");
+                return Err(e);
+            }
+        };
+
+        // Get field as string
+        let field_str = field.to_string();
+
+        // Execute HINCRBY command
+        let result = self
+            .pool
+            .execute(move |conn| {
+                Box::pin(async move {
+                    redis::cmd("HINCRBY")
+                        .arg(&key_str)
+                        .arg(&field_str)
+                        .arg(amount)
+                        .query_async::<i64>(conn)
+                        .await
+                })
+            })
+            .await;
+
+        match result {
+            Ok(value) => {
+                timer.record_success();
+                metrics::counter!("cache.hash_increment.success");
+                Ok(value)
+            }
+            Err(e) => {
+                let err = RedisCacheError::from(e);
+                timer.record_error(&err);
+                metrics::counter!("cache.hash_increment.error");
+                Err(err)
+            }
+        }
+    }
 }
 
 impl Cache for RedisCache {}
@@ -429,21 +485,21 @@ impl CacheOperations for RedisCache {
     async fn get<K, V>(&self, key: K) -> CacheResult<Option<V>>
     where
         K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
+        V: DeserializeOwned + Send + 'static,
     {
-        self._get_internal(key).await.map_err(|e| e.into())
+        self._get(key).await.map_err(|e| e.into())
     }
 
     #[instrument(skip(self, keys), fields(key_count = %keys.len()), level = "info")]
     async fn get_many<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<Option<V>>>
     where
         K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
+        V: DeserializeOwned + Send + 'static,
     {
         if keys.is_empty() {
             return Ok(Vec::new());
         }
-        self._get_many_internal(keys).await.map_err(|e| e.into())
+        self._get_many(keys).await.map_err(|e| e.into())
     }
 
     #[instrument(skip(self, key, value), fields(key = %key.to_string()), level = "info")]
@@ -616,7 +672,7 @@ impl CacheOperations for RedisCache {
     async fn list_range<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<V>>
     where
         K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
+        V: DeserializeOwned + Send + Sync + 'static,
     {
         self.list_range_internal(key, start, stop)
             .await
@@ -690,8 +746,14 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, key, fields), fields(key = %key.to_string(), field_count = %fields.len()), level = "info")]
     async fn hash_get_many<K, F, V>(&self, key: K, fields: Vec<F>) -> CacheResult<Vec<Option<V>>>
     where
-        K: CacheKey + 'static,
-        F: CacheKey + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey
+            + redis::FromRedisValue
+            + std::cmp::Eq
+            + std::hash::Hash
+            + Clone
+            + std::fmt::Debug
+            + 'static,
         V: DeserializeOwned + Send + Sync + 'static,
     {
         if fields.is_empty() {
@@ -705,8 +767,14 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, key, entries), fields(key = %key.to_string(), entry_count = %entries.len()), level = "info")]
     async fn hash_set_many<K, F, V>(&self, key: K, entries: Vec<(F, V)>) -> CacheResult<()>
     where
-        K: CacheKey + 'static,
-        F: CacheKey + redis::ToRedisArgs + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey
+            + redis::ToRedisArgs
+            + std::cmp::Eq
+            + std::hash::Hash
+            + Clone
+            + std::fmt::Debug
+            + 'static,
         V: Serialize + Send + Sync + Clone + 'static,
     {
         let items: HashMap<F, V> = entries.into_iter().collect();
@@ -719,8 +787,8 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, key, field), fields(key = %key.to_string(), field = %field.to_string()), level = "info")]
     async fn hash_exists<K, F>(&self, key: K, field: F) -> CacheResult<bool>
     where
-        K: CacheKey + 'static,
-        F: CacheKey + redis::ToRedisArgs + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + redis::ToRedisArgs + Clone + std::fmt::Debug + 'static,
     {
         self.hash_exists_internal(key, field)
             .await
@@ -730,8 +798,8 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, fields), fields(key = %key.to_string(), field_count = %fields.len()), level = "info")]
     async fn hash_delete<K, F>(&self, key: K, fields: Vec<F>) -> CacheResult<usize>
     where
-        K: CacheKey + 'static,
-        F: CacheKey + redis::ToRedisArgs + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + redis::ToRedisArgs + Clone + std::fmt::Debug + 'static,
     {
         self.hash_delete_many_internal(key, fields)
             .await
@@ -741,7 +809,7 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn hash_get_all<K, V>(&self, key: K) -> CacheResult<Vec<(String, V)>>
     where
-        K: CacheKey + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
         V: DeserializeOwned + Send + Sync + 'static,
     {
         match self.hash_get_all_internal::<K, String, V>(key).await {
@@ -753,7 +821,7 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn hash_keys<K>(&self, key: K) -> CacheResult<Vec<String>>
     where
-        K: CacheKey + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
     {
         self.hash_keys_internal::<K, String>(key)
             .await
@@ -763,8 +831,8 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn hash_values<K, V>(&self, key: K) -> CacheResult<Vec<V>>
     where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + Send + Sync + 'static,
     {
         self.hash_values_internal(key).await.map_err(|e| e.into())
     }
@@ -772,8 +840,8 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, key, field), fields(key = %key.to_string(), field = %field.to_string()), level = "info")]
     async fn hash_increment<K, F>(&self, key: K, field: F, amount: i64) -> CacheResult<i64>
     where
-        K: CacheKey + 'static,
-        F: CacheKey + redis::ToRedisArgs + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + redis::ToRedisArgs + Clone + std::fmt::Debug + 'static,
     {
         self.hash_increment_internal(key, field, amount)
             .await
@@ -783,7 +851,7 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn hash_length<K>(&self, key: K) -> CacheResult<usize>
     where
-        K: CacheKey + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
     {
         self.hash_length_internal(key).await.map_err(|e| e.into())
     }
@@ -1048,8 +1116,8 @@ impl CacheOperations for RedisCache {
         ))
     }
 
-    #[instrument(skip(self, _key, _min, _max), level = "info")]
-    async fn zset_count<K>(&self, _key: K, _min: f64, _max: f64) -> CacheResult<usize>
+    #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
+    async fn zset_count<K>(&self, key: K) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
     {
@@ -1058,13 +1126,11 @@ impl CacheOperations for RedisCache {
         ))
     }
 
-    #[instrument(skip(self, _destination, _keys, _weights, _aggregate), level = "info")]
+    #[instrument(skip(self, destination, keys), fields(dest = %destination.to_string(), key_count = keys.len()), level = "info")]
     async fn zset_intersection_store<K, D>(
         &self,
-        _destination: D,
-        _keys: Vec<K>,
-        _weights: Option<Vec<f64>>,
-        _aggregate: Option<String>,
+        destination: D,
+        keys: Vec<K>,
     ) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
@@ -1075,14 +1141,8 @@ impl CacheOperations for RedisCache {
         ))
     }
 
-    #[instrument(skip(self, _destination, _keys, _weights, _aggregate), level = "info")]
-    async fn zset_union_store<K, D>(
-        &self,
-        _destination: D,
-        _keys: Vec<K>,
-        _weights: Option<Vec<f64>>,
-        _aggregate: Option<String>,
-    ) -> CacheResult<usize>
+    #[instrument(skip(self, destination, keys), fields(dest = %destination.to_string(), key_count = keys.len()), level = "info")]
+    async fn zset_union_store<K, D>(&self, destination: D, keys: Vec<K>) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
         D: CacheKey + 'static,

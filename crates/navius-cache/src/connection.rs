@@ -3,6 +3,8 @@ use crate::error::CacheResult;
 #[cfg(feature = "redis")]
 use crate::operations::redis::RedisCache;
 use crate::operations::{Cache, CacheOperations};
+use std::cmp::Eq;
+use std::hash::Hash;
 use std::sync::Arc;
 use tracing::{debug, instrument};
 
@@ -60,7 +62,7 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
     async fn get<K, V>(&self, key: K) -> CacheResult<Option<V>>
     where
         K: crate::operations::CacheKey + 'static,
-        V: serde::de::DeserializeOwned + 'static,
+        V: serde::de::DeserializeOwned + Send + 'static,
     {
         self.cache.get(key).await
     }
@@ -68,7 +70,7 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
     async fn get_many<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<Option<V>>>
     where
         K: crate::operations::CacheKey + 'static,
-        V: serde::de::DeserializeOwned + 'static,
+        V: serde::de::DeserializeOwned + Send + 'static,
     {
         self.cache.get_many(keys).await
     }
@@ -81,7 +83,7 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
     ) -> CacheResult<()>
     where
         K: crate::operations::CacheKey + 'static,
-        V: serde::Serialize + Send + Sync + 'static,
+        V: serde::Serialize + Send + Sync + Clone + 'static,
     {
         self.cache.set(key, value, options).await
     }
@@ -92,8 +94,8 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
         options: Option<crate::operations::CacheOptions>,
     ) -> CacheResult<()>
     where
-        K: crate::operations::CacheKey + 'static,
-        V: serde::Serialize + Send + Sync + 'static,
+        K: crate::operations::CacheKey + Eq + Hash + 'static,
+        V: serde::Serialize + Send + Sync + Clone + 'static,
     {
         self.cache.set_many(entries, options).await
     }
@@ -193,7 +195,7 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
     async fn list_range<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<V>>
     where
         K: crate::operations::CacheKey + 'static,
-        V: serde::de::DeserializeOwned + 'static,
+        V: serde::de::DeserializeOwned + Send + Sync + 'static,
     {
         self.cache.list_range(key, start, stop).await
     }
@@ -205,10 +207,10 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
         self.cache.list_length(key).await
     }
 
-    async fn list_remove<K, V>(&self, key: K, count: isize, value: &V) -> CacheResult<usize>
+    async fn list_remove<K, V>(&self, key: K, count: i32, value: &V) -> CacheResult<usize>
     where
         K: crate::operations::CacheKey + 'static,
-        V: serde::Serialize + Send + Sync + 'static,
+        V: serde::Serialize + Send + Sync + Clone + 'static,
     {
         self.cache.list_remove(key, count, value).await
     }
@@ -233,7 +235,7 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
     where
         K: crate::operations::CacheKey + 'static,
         F: crate::operations::CacheKey + 'static,
-        V: serde::de::DeserializeOwned + 'static,
+        V: serde::de::DeserializeOwned + Send + Sync + 'static,
     {
         self.cache.hash_get(key, field).await
     }
@@ -251,7 +253,7 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
     where
         K: crate::operations::CacheKey + 'static,
         F: crate::operations::CacheKey + 'static,
-        V: serde::de::DeserializeOwned + 'static,
+        V: serde::de::DeserializeOwned + Send + Sync + 'static,
     {
         self.cache.hash_get_many(key, fields).await
     }
@@ -284,7 +286,7 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
     async fn hash_get_all<K, V>(&self, key: K) -> CacheResult<Vec<(String, V)>>
     where
         K: crate::operations::CacheKey + 'static,
-        V: serde::de::DeserializeOwned + 'static,
+        V: serde::de::DeserializeOwned + Send + Sync + 'static,
     {
         self.cache.hash_get_all(key).await
     }
@@ -299,7 +301,7 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
     async fn hash_values<K, V>(&self, key: K) -> CacheResult<Vec<V>>
     where
         K: crate::operations::CacheKey + 'static,
-        V: serde::de::DeserializeOwned + 'static,
+        V: serde::de::DeserializeOwned + Send + Sync + 'static,
     {
         self.cache.hash_values(key).await
     }
@@ -346,15 +348,15 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
 
     async fn set_members<K, V>(&self, key: K) -> CacheResult<Vec<V>>
     where
-        K: crate::operations::CacheKey + 'static,
-        V: serde::de::DeserializeOwned + 'static,
+        K: crate::operations::CacheKey + std::fmt::Debug + 'static,
+        V: serde::de::DeserializeOwned + Send + Sync + 'static,
     {
         self.cache.set_members(key).await
     }
 
     async fn set_length<K>(&self, key: K) -> CacheResult<usize>
     where
-        K: crate::operations::CacheKey + 'static,
+        K: crate::operations::CacheKey + std::fmt::Debug + 'static,
     {
         self.cache.set_length(key).await
     }
@@ -409,8 +411,8 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
 
     async fn set_random_members<K, V>(&self, key: K, count: usize) -> CacheResult<Vec<V>>
     where
-        K: crate::operations::CacheKey + 'static,
-        V: serde::de::DeserializeOwned + 'static,
+        K: crate::operations::CacheKey + std::fmt::Debug + 'static,
+        V: serde::de::DeserializeOwned + Send + 'static,
     {
         self.cache.set_random_members(key, count).await
     }
@@ -515,42 +517,30 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
         self.cache.zset_length(key).await
     }
 
-    async fn zset_count<K>(&self, key: K, min: f64, max: f64) -> CacheResult<usize>
+    async fn zset_count<K>(&self, key: K) -> CacheResult<usize>
     where
         K: crate::operations::CacheKey + 'static,
     {
-        self.cache.zset_count(key, min, max).await
+        self.cache.zset_count(key).await
     }
 
     async fn zset_intersection_store<K, D>(
         &self,
         destination: D,
         keys: Vec<K>,
-        weights: Option<Vec<f64>>,
-        aggregate: Option<String>,
     ) -> CacheResult<usize>
     where
         K: crate::operations::CacheKey + 'static,
         D: crate::operations::CacheKey + 'static,
     {
-        self.cache
-            .zset_intersection_store(destination, keys, weights, aggregate)
-            .await
+        self.cache.zset_intersection_store(destination, keys).await
     }
 
-    async fn zset_union_store<K, D>(
-        &self,
-        destination: D,
-        keys: Vec<K>,
-        weights: Option<Vec<f64>>,
-        aggregate: Option<String>,
-    ) -> CacheResult<usize>
+    async fn zset_union_store<K, D>(&self, destination: D, keys: Vec<K>) -> CacheResult<usize>
     where
         K: crate::operations::CacheKey + 'static,
         D: crate::operations::CacheKey + 'static,
     {
-        self.cache
-            .zset_union_store(destination, keys, weights, aggregate)
-            .await
+        self.cache.zset_union_store(destination, keys).await
     }
 }

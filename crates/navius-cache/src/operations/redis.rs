@@ -254,7 +254,7 @@ impl CacheOperations for RedisCache {
     ) -> CacheResult<()>
     where
         K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
+        V: Serialize + Send + Sync + Clone + 'static,
     {
         if entries.is_empty() {
             return Ok(());
@@ -566,12 +566,14 @@ impl CacheOperations for RedisCache {
         unimplemented!("List operations are not implemented yet")
     }
 
-    async fn list_remove<K, V>(&self, _key: K, _count: isize, _value: &V) -> CacheResult<usize>
+    async fn list_remove<K, V>(&self, _key: K, _count: i32, _value: &V) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
         V: Serialize + Send + Sync + 'static,
     {
-        unimplemented!("List operations are not implemented yet")
+        Err(CacheError::UnsupportedOperation(
+            "RedisCache list_remove not implemented".to_string(),
+        ))
     }
 
     async fn list_trim<K>(&self, _key: K, _start: isize, _stop: isize) -> CacheResult<()>
@@ -883,7 +885,7 @@ impl CacheOperations for RedisCache {
         unimplemented!("Sorted set operations are not implemented yet")
     }
 
-    async fn zset_count<K>(&self, _key: K, _min: f64, _max: f64) -> CacheResult<usize>
+    async fn zset_count<K>(&self, _key: K) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
     {
@@ -894,8 +896,6 @@ impl CacheOperations for RedisCache {
         &self,
         _destination: D,
         _keys: Vec<K>,
-        _weights: Option<Vec<f64>>,
-        _aggregate: Option<String>,
     ) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
@@ -904,13 +904,7 @@ impl CacheOperations for RedisCache {
         unimplemented!("Sorted set operations are not implemented yet")
     }
 
-    async fn zset_union_store<K, D>(
-        &self,
-        _destination: D,
-        _keys: Vec<K>,
-        _weights: Option<Vec<f64>>,
-        _aggregate: Option<String>,
-    ) -> CacheResult<usize>
+    async fn zset_union_store<K, D>(&self, _destination: D, _keys: Vec<K>) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
         D: CacheKey + 'static,

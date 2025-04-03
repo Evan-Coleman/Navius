@@ -1,10 +1,13 @@
 use crate::error::CacheResult;
 use async_trait::async_trait;
-// Comment out or remove redis imports if not used by any trait signature anymore
-// use ::redis::{FromRedisValue, ToRedisArgs};
+// Uncomment Redis imports since they are used by the trait signatures
+use ::redis::{FromRedisValue, ToRedisArgs};
 use serde::{Serialize, de::DeserializeOwned};
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::time::Duration;
+// Add these imports
+use std::cmp::Eq;
+use std::hash::Hash;
 // Remove other unused imports like Debug, Eq, Hash if they aren't needed
 
 /// Cache key trait for converting types to cache keys
@@ -60,19 +63,19 @@ pub trait CacheOperations: Send + Sync + 'static {
     async fn get<K, V>(&self, key: K) -> CacheResult<Option<V>>
     where
         K: CacheKey + 'static,
-        V: DeserializeOwned + 'static;
+        V: DeserializeOwned + Send + 'static;
 
     /// Get multiple values from the cache
     async fn get_many<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<Option<V>>>
     where
         K: CacheKey + 'static,
-        V: DeserializeOwned + 'static;
+        V: DeserializeOwned + Send + 'static;
 
     /// Set a value in the cache
     async fn set<K, V>(&self, key: K, value: &V, options: Option<CacheOptions>) -> CacheResult<()>
     where
         K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static;
+        V: Serialize + Send + Sync + Clone + 'static;
 
     /// Set multiple values in the cache
     async fn set_many<K, V>(
@@ -81,8 +84,8 @@ pub trait CacheOperations: Send + Sync + 'static {
         options: Option<CacheOptions>,
     ) -> CacheResult<()>
     where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static;
+        K: CacheKey + Eq + Hash + 'static,
+        V: Serialize + Send + Sync + Clone + 'static;
 
     /// Delete a value from the cache
     async fn delete<K>(&self, key: K) -> CacheResult<bool>
@@ -157,7 +160,7 @@ pub trait CacheOperations: Send + Sync + 'static {
     async fn list_range<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<V>>
     where
         K: CacheKey + 'static,
-        V: DeserializeOwned + 'static;
+        V: DeserializeOwned + Send + Sync + 'static;
 
     /// Get the length of a list
     async fn list_length<K>(&self, key: K) -> CacheResult<usize>
@@ -165,10 +168,10 @@ pub trait CacheOperations: Send + Sync + 'static {
         K: CacheKey + 'static;
 
     /// Remove occurrences of a value from a list
-    async fn list_remove<K, V>(&self, key: K, count: isize, value: &V) -> CacheResult<usize>
+    async fn list_remove<K, V>(&self, key: K, count: i32, value: &V) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static;
+        V: Serialize + Send + Sync + Clone + 'static;
 
     /// Trim a list to the specified range
     async fn list_trim<K>(&self, key: K, start: isize, stop: isize) -> CacheResult<()>
@@ -186,70 +189,82 @@ pub trait CacheOperations: Send + Sync + 'static {
     /// Get a field from a hash map
     async fn hash_get<K, F, V>(&self, key: K, field: F) -> CacheResult<Option<V>>
     where
-        K: CacheKey + 'static,
-        F: CacheKey + 'static,
-        V: DeserializeOwned + 'static;
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + ::redis::ToRedisArgs + Clone + std::fmt::Debug + 'static,
+        V: DeserializeOwned + Send + Sync + 'static;
 
     /// Set a field in a hash map
     async fn hash_set<K, F, V>(&self, key: K, field: F, value: &V) -> CacheResult<bool>
     where
-        K: CacheKey + 'static,
-        F: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static;
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + ::redis::ToRedisArgs + Clone + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + Clone + 'static;
 
     /// Get multiple fields from a hash map
     async fn hash_get_many<K, F, V>(&self, key: K, fields: Vec<F>) -> CacheResult<Vec<Option<V>>>
     where
-        K: CacheKey + 'static,
-        F: CacheKey + 'static,
-        V: DeserializeOwned + 'static;
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey
+            + ::redis::FromRedisValue
+            + std::cmp::Eq
+            + std::hash::Hash
+            + Clone
+            + std::fmt::Debug
+            + 'static,
+        V: DeserializeOwned + Send + Sync + 'static;
 
     /// Set multiple fields in a hash map
     async fn hash_set_many<K, F, V>(&self, key: K, entries: Vec<(F, V)>) -> CacheResult<()>
     where
-        K: CacheKey + 'static,
-        F: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static;
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey
+            + ::redis::ToRedisArgs
+            + std::cmp::Eq
+            + std::hash::Hash
+            + Clone
+            + std::fmt::Debug
+            + 'static,
+        V: Serialize + Send + Sync + Clone + 'static;
 
     /// Check if a field exists in a hash map
     async fn hash_exists<K, F>(&self, key: K, field: F) -> CacheResult<bool>
     where
-        K: CacheKey + 'static,
-        F: CacheKey + 'static;
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + ::redis::ToRedisArgs + Clone + std::fmt::Debug + 'static;
 
     /// Delete fields from a hash map
     async fn hash_delete<K, F>(&self, key: K, fields: Vec<F>) -> CacheResult<usize>
     where
-        K: CacheKey + 'static,
-        F: CacheKey + 'static;
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + ::redis::ToRedisArgs + Clone + std::fmt::Debug + 'static;
 
     /// Get all fields and values from a hash map
     async fn hash_get_all<K, V>(&self, key: K) -> CacheResult<Vec<(String, V)>>
     where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static;
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + Send + Sync + 'static;
 
     /// Get all field names from a hash map
     async fn hash_keys<K>(&self, key: K) -> CacheResult<Vec<String>>
     where
-        K: CacheKey + 'static;
+        K: CacheKey + std::fmt::Debug + 'static;
 
     /// Get all values from a hash map
     async fn hash_values<K, V>(&self, key: K) -> CacheResult<Vec<V>>
     where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static;
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + Send + Sync + 'static;
 
     /// Increment a numeric field in a hash map
     async fn hash_increment<K, F>(&self, key: K, field: F, amount: i64) -> CacheResult<i64>
     where
-        K: CacheKey + 'static,
-        F: CacheKey + 'static;
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + ::redis::ToRedisArgs + Clone + std::fmt::Debug + 'static;
 
     /// Get the number of fields in a hash map
     async fn hash_length<K>(&self, key: K) -> CacheResult<usize>
     where
-        K: CacheKey + 'static;
+        K: CacheKey + std::fmt::Debug + 'static;
 
     // Set Operations
 
@@ -274,13 +289,13 @@ pub trait CacheOperations: Send + Sync + 'static {
     /// Get all members of a set
     async fn set_members<K, V>(&self, key: K) -> CacheResult<Vec<V>>
     where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static;
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + Send + Sync + 'static;
 
     /// Get the number of members in a set
     async fn set_length<K>(&self, key: K) -> CacheResult<usize>
     where
-        K: CacheKey + 'static;
+        K: CacheKey + std::fmt::Debug + 'static;
 
     /// Get the intersection of multiple sets
     async fn set_intersection<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<V>>
@@ -325,8 +340,8 @@ pub trait CacheOperations: Send + Sync + 'static {
     /// Get random members from a set
     async fn set_random_members<K, V>(&self, key: K, count: usize) -> CacheResult<Vec<V>>
     where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static;
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + Send + 'static;
 
     // Sorted Set Operations
 
@@ -411,7 +426,7 @@ pub trait CacheOperations: Send + Sync + 'static {
         K: CacheKey + 'static;
 
     /// Get the number of members in a sorted set within a score range
-    async fn zset_count<K>(&self, key: K, min: f64, max: f64) -> CacheResult<usize>
+    async fn zset_count<K>(&self, key: K) -> CacheResult<usize>
     where
         K: CacheKey + 'static;
 
@@ -420,21 +435,13 @@ pub trait CacheOperations: Send + Sync + 'static {
         &self,
         destination: D,
         keys: Vec<K>,
-        weights: Option<Vec<f64>>,
-        aggregate: Option<String>,
     ) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
         D: CacheKey + 'static;
 
     /// Get the union of multiple sorted sets with optional weights and aggregate function
-    async fn zset_union_store<K, D>(
-        &self,
-        destination: D,
-        keys: Vec<K>,
-        weights: Option<Vec<f64>>,
-        aggregate: Option<String>,
-    ) -> CacheResult<usize>
+    async fn zset_union_store<K, D>(&self, destination: D, keys: Vec<K>) -> CacheResult<usize>
     where
         K: CacheKey + 'static,
         D: CacheKey + 'static;

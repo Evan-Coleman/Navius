@@ -631,7 +631,7 @@ impl RedisCache {
     pub async fn list_remove_internal<K, V>(
         &self,
         key: K,
-        count: isize,
+        count: i32,
         value: V,
     ) -> CacheResult<usize>
     where
