@@ -250,7 +250,7 @@ mod tests {
             .with_key_validation(KeyValidationOptions::new(true, true));
 
         assert_eq!(config.url, "redis://custom-host:6379");
-        assert_eq!(config.key_prefix, Some("custom:"));
+        assert_eq!(config.key_prefix, Some("custom:".to_string()));
         assert_eq!(config.max_connections, 5);
         assert_eq!(config.connection_timeout, Duration::from_secs(2));
         assert_eq!(config.command_timeout, Duration::from_secs(1));
