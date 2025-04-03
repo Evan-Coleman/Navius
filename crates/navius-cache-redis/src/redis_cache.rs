@@ -438,26 +438,12 @@ impl CacheOperations for RedisCache {
     async fn get_many<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<Option<V>>>
     where
         K: CacheKey + 'static,
-        V: DeserializeOwned + Send + 'static,
+        V: DeserializeOwned + 'static,
     {
         if keys.is_empty() {
             return Ok(Vec::new());
         }
-        // Keep track of original keys for ordering the final result
-        let key_map: HashMap<String, K> =
-            keys.into_iter().map(|k| (self.prefix_key(&k), k)).collect();
-        let prefixed_keys: Vec<String> = key_map.keys().cloned().collect();
-
-        let internal_result: HashMap<String, Option<V>> =
-            self._get_many_internal(prefixed_keys).await?;
-
-        // Map the HashMap result back to a Vec in the original order
-        let mut results = Vec::with_capacity(key_map.len());
-        for (prefixed_key, _original_key) in &key_map {
-            results.push(internal_result.get(prefixed_key).cloned().flatten());
-        }
-
-        Ok(results)
+        self._get_many_internal(keys).await.map_err(|e| e.into())
     }
 
     #[instrument(skip(self, key, value), fields(key = %display(key.to_string())), level = "info")]
@@ -630,7 +616,7 @@ impl CacheOperations for RedisCache {
     async fn list_range<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<V>>
     where
         K: CacheKey + 'static,
-        V: DeserializeOwned + Send + Sync + 'static,
+        V: DeserializeOwned + 'static,
     {
         self.list_range_internal(key, start, stop)
             .await
@@ -705,41 +691,15 @@ impl CacheOperations for RedisCache {
     async fn hash_get_many<K, F, V>(&self, key: K, fields: Vec<F>) -> CacheResult<Vec<Option<V>>>
     where
         K: CacheKey + 'static,
-        F: CacheKey
-            + redis::ToRedisArgs
-            + std::fmt::Debug
-            + Clone
-            + Eq
-            + std::hash::Hash
-            + redis::FromRedisValue
-            + 'static,
-        V: DeserializeOwned + Send + Sync + 'static,
+        F: CacheKey + 'static,
+        V: DeserializeOwned + 'static,
     {
         if fields.is_empty() {
             return Ok(Vec::new());
         }
-        // Keep track of original fields for ordering the final result
-        let field_map: HashMap<F, usize> = fields
-            .iter()
-            .cloned()
-            .enumerate()
-            .map(|(i, f)| (f, i))
-            .collect();
-        let original_field_order: Vec<F> = fields;
-
-        let internal_result: HashMap<F, Option<V>> = self
-            .hash_get_many_internal(key, original_field_order.clone())
-            .await?;
-
-        // Map the HashMap result back to a Vec in the original order
-        let mut results = vec![None; original_field_order.len()];
-        for (field, value_opt) in internal_result {
-            if let Some(index) = field_map.get(&field) {
-                results[*index] = value_opt;
-            }
-        }
-
-        Ok(results)
+        self.hash_get_many_internal(key, fields)
+            .await
+            .map_err(|e| e.into())
     }
 
     #[instrument(skip(self, key, entries), fields(key = %display(key.to_string()), entry_count = entries.len()), level = "info")]
@@ -806,7 +766,7 @@ impl CacheOperations for RedisCache {
     async fn hash_values<K, V>(&self, key: K) -> CacheResult<Vec<V>>
     where
         K: CacheKey + 'static,
-        V: DeserializeOwned + Send + Sync + 'static,
+        V: DeserializeOwned + 'static,
     {
         self.hash_values_internal(key).await.map_err(|e| e.into())
     }
