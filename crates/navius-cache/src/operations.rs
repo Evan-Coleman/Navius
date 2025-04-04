@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt::Display, hash::Hash, time::Duration};
 use async_trait::async_trait;
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::error::{CacheError, CacheResult};
+use crate::error::CacheResult;
 
 /// Cache key trait for converting types to cache keys
 pub trait CacheKey: Display + Send + Sync {
@@ -252,26 +252,16 @@ pub trait CacheOperations: Send + Sync + 'static {
     // Set Operations
 
     /// Add values to a set
-    async fn set_add<K, V>(&self, key: K, values: Vec<V>) -> CacheResult<usize>
+    async fn set_add<K, V>(&self, _key: K, _values: Vec<V>) -> CacheResult<usize>
     where
         K: CacheKey + std::fmt::Debug + 'static,
-        V: Serialize + Send + Sync + Clone + 'static,
-    {
-        Err(CacheError::UnsupportedOperation(
-            "set_add is not implemented for MemoryCache".to_string(),
-        ))
-    }
+        V: Serialize + Send + Sync + 'static;
 
     /// Remove values from a set
-    async fn set_remove<K, V>(&self, key: K, values: Vec<V>) -> CacheResult<usize>
+    async fn set_remove<K, V>(&self, _key: K, _values: Vec<V>) -> CacheResult<usize>
     where
         K: CacheKey + std::fmt::Debug + 'static,
-        V: Serialize + Send + Sync + Clone + 'static,
-    {
-        Err(CacheError::UnsupportedOperation(
-            "set_remove is not implemented for MemoryCache".to_string(),
-        ))
-    }
+        V: Serialize + Send + Sync + 'static;
 
     /// Check if a value is in a set
     async fn set_contains<K, V>(&self, key: K, value: &V) -> CacheResult<bool>
@@ -319,15 +309,10 @@ pub trait CacheOperations: Send + Sync + 'static {
         D: CacheKey + std::fmt::Debug + 'static;
 
     /// Get the difference between multiple sets
-    async fn set_difference<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<V>>
+    async fn set_difference<K, V>(&self, _keys: Vec<K>) -> CacheResult<Vec<V>>
     where
         K: CacheKey + std::fmt::Debug + 'static,
-        V: DeserializeOwned + Send + Sync + 'static,
-    {
-        Err(CacheError::UnsupportedOperation(
-            "set_difference is not implemented for MemoryCache".to_string(),
-        ))
-    }
+        V: DeserializeOwned + Send + 'static;
 
     /// Store the difference between multiple sets into a destination key
     async fn set_difference_store<K, D>(&self, destination: D, keys: Vec<K>) -> CacheResult<usize>
@@ -344,48 +329,33 @@ pub trait CacheOperations: Send + Sync + 'static {
     // Sorted Set Operations
 
     /// Add one or more members to a sorted set, or update its score if it already exists
-    async fn zset_add<K, V>(&self, key: K, items: Vec<(f64, V)>) -> CacheResult<usize>
+    async fn zset_add<K, V>(&self, _key: K, _items: Vec<(f64, V)>) -> CacheResult<usize>
     where
         K: CacheKey + std::fmt::Debug + 'static,
-        V: Serialize + Send + Sync + Clone + 'static,
-    {
-        Err(CacheError::UnsupportedOperation(
-            "zset_add is not implemented for MemoryCache".to_string(),
-        ))
-    }
+        V: Serialize + Send + Sync + 'static;
 
     /// Remove one or more members from a sorted set
-    async fn zset_remove<K, V>(&self, key: K, members: Vec<V>) -> CacheResult<usize>
+    async fn zset_remove<K, V>(&self, _key: K, _members: Vec<V>) -> CacheResult<usize>
     where
         K: CacheKey + std::fmt::Debug + 'static,
-        V: Serialize + Send + Sync + Clone + 'static,
-    {
-        Err(CacheError::UnsupportedOperation(
-            "zset_remove is not implemented for MemoryCache".to_string(),
-        ))
-    }
+        V: Serialize + Send + Sync + 'static;
 
     /// Get the score associated with the given member in a sorted set
-    async fn zset_score<K, V>(&self, key: K, member: &V) -> CacheResult<Option<f64>>
+    async fn zset_score<K, V>(&self, _key: K, _member: &V) -> CacheResult<Option<f64>>
     where
         K: CacheKey + std::fmt::Debug + 'static,
-        V: Serialize + Send + Sync + Clone + 'static,
-    {
-        Err(CacheError::UnsupportedOperation(
-            "zset_score is not implemented for MemoryCache".to_string(),
-        ))
-    }
+        V: Serialize + Send + Sync + 'static;
 
     /// Increment the score of a member in a sorted set
-    async fn zset_increment<K, V>(&self, key: K, member: &V, increment: f64) -> CacheResult<f64>
+    async fn zset_increment_score<K, V>(
+        &self,
+        _key: K,
+        _member: &V,
+        _increment: f64,
+    ) -> CacheResult<f64>
     where
         K: CacheKey + std::fmt::Debug + 'static,
-        V: Serialize + Send + Sync + Clone + 'static,
-    {
-        Err(CacheError::UnsupportedOperation(
-            "zset_increment is not implemented for MemoryCache".to_string(),
-        ))
-    }
+        V: Serialize + Send + Sync + 'static;
 
     /// Get members by rank range (ordered by score)
     async fn zset_range<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<V>>
@@ -514,7 +484,6 @@ pub mod memory {
     use crate::error::{CacheError, CacheResult};
     use serde_json;
     use std::{
-        collections::HashMap,
         sync::{Arc, RwLock},
         time::{Duration, Instant},
     };
@@ -1026,8 +995,8 @@ pub mod memory {
         // Set operations - stub implementations
         async fn set_add<K, V>(&self, _key: K, _values: Vec<V>) -> CacheResult<usize>
         where
-            K: super::CacheKey + std::fmt::Debug + 'static,
-            V: Serialize + Send + Sync + Clone + 'static,
+            K: CacheKey + std::fmt::Debug + 'static,
+            V: Serialize + Send + Sync + 'static,
         {
             Err(CacheError::UnsupportedOperation(
                 "set_add is not implemented for MemoryCache".to_string(),
@@ -1036,8 +1005,8 @@ pub mod memory {
 
         async fn set_remove<K, V>(&self, _key: K, _values: Vec<V>) -> CacheResult<usize>
         where
-            K: super::CacheKey + std::fmt::Debug + 'static,
-            V: Serialize + Send + Sync + Clone + 'static,
+            K: CacheKey + std::fmt::Debug + 'static,
+            V: Serialize + Send + Sync + 'static,
         {
             Err(CacheError::UnsupportedOperation(
                 "set_remove is not implemented for MemoryCache".to_string(),
@@ -1119,8 +1088,8 @@ pub mod memory {
 
         async fn set_difference<K, V>(&self, _keys: Vec<K>) -> CacheResult<Vec<V>>
         where
-            K: super::CacheKey + std::fmt::Debug + 'static,
-            V: DeserializeOwned + Send + Sync + 'static,
+            K: CacheKey + std::fmt::Debug + 'static,
+            V: DeserializeOwned + Send + 'static,
         {
             Err(CacheError::UnsupportedOperation(
                 "set_difference is not implemented for MemoryCache".to_string(),
@@ -1154,8 +1123,8 @@ pub mod memory {
         // Sorted set operations - stub implementations
         async fn zset_add<K, V>(&self, _key: K, _items: Vec<(f64, V)>) -> CacheResult<usize>
         where
-            K: super::CacheKey + std::fmt::Debug + 'static,
-            V: Serialize + Send + Sync + Clone + 'static,
+            K: CacheKey + std::fmt::Debug + 'static,
+            V: Serialize + Send + Sync + 'static,
         {
             Err(CacheError::UnsupportedOperation(
                 "zset_add is not implemented for MemoryCache".to_string(),
@@ -1164,8 +1133,8 @@ pub mod memory {
 
         async fn zset_remove<K, V>(&self, _key: K, _members: Vec<V>) -> CacheResult<usize>
         where
-            K: super::CacheKey + std::fmt::Debug + 'static,
-            V: Serialize + Send + Sync + Clone + 'static,
+            K: CacheKey + std::fmt::Debug + 'static,
+            V: Serialize + Send + Sync + 'static,
         {
             Err(CacheError::UnsupportedOperation(
                 "zset_remove is not implemented for MemoryCache".to_string(),
@@ -1174,26 +1143,26 @@ pub mod memory {
 
         async fn zset_score<K, V>(&self, _key: K, _member: &V) -> CacheResult<Option<f64>>
         where
-            K: super::CacheKey + std::fmt::Debug + 'static,
-            V: Serialize + Send + Sync + Clone + 'static,
+            K: CacheKey + std::fmt::Debug + 'static,
+            V: Serialize + Send + Sync + 'static,
         {
             Err(CacheError::UnsupportedOperation(
                 "zset_score is not implemented for MemoryCache".to_string(),
             ))
         }
 
-        async fn zset_increment<K, V>(
+        async fn zset_increment_score<K, V>(
             &self,
             _key: K,
             _member: &V,
             _increment: f64,
         ) -> CacheResult<f64>
         where
-            K: super::CacheKey + std::fmt::Debug + 'static,
-            V: Serialize + Send + Sync + Clone + 'static,
+            K: CacheKey + std::fmt::Debug + 'static,
+            V: Serialize + Send + Sync + 'static,
         {
             Err(CacheError::UnsupportedOperation(
-                "zset_increment is not implemented for MemoryCache".to_string(),
+                "zset_increment_score is not implemented for MemoryCache".to_string(),
             ))
         }
 
@@ -1317,7 +1286,7 @@ pub mod memory {
             _min: f64,
         ) -> CacheResult<Vec<(V, f64)>>
         where
-            K: super::CacheKey + 'static,
+            K: CacheKey + 'static,
             V: DeserializeOwned + 'static,
         {
             Err(CacheError::UnsupportedOperation(
@@ -1333,7 +1302,7 @@ pub mod memory {
             _stop: isize,
         ) -> CacheResult<usize>
         where
-            K: super::CacheKey + 'static,
+            K: CacheKey + 'static,
         {
             Err(CacheError::UnsupportedOperation(
                 "zset_remove_range_by_rank is not implemented for MemoryCache".to_string(),
@@ -1347,7 +1316,7 @@ pub mod memory {
             _max: f64,
         ) -> CacheResult<usize>
         where
-            K: super::CacheKey + 'static,
+            K: CacheKey + 'static,
         {
             Err(CacheError::UnsupportedOperation(
                 "zset_remove_range_by_score is not implemented for MemoryCache".to_string(),
@@ -1362,8 +1331,8 @@ pub mod memory {
             _aggregate: Option<String>,
         ) -> CacheResult<usize>
         where
-            K: super::CacheKey + 'static,
-            D: super::CacheKey + 'static,
+            K: CacheKey + 'static,
+            D: CacheKey + 'static,
         {
             Err(CacheError::UnsupportedOperation(
                 "zset_intersection_store is not implemented for MemoryCache".to_string(),
@@ -1378,8 +1347,8 @@ pub mod memory {
             _aggregate: Option<String>,
         ) -> CacheResult<usize>
         where
-            K: super::CacheKey + 'static,
-            D: super::CacheKey + 'static,
+            K: CacheKey + 'static,
+            D: CacheKey + 'static,
         {
             Err(CacheError::UnsupportedOperation(
                 "zset_union_store is not implemented for MemoryCache".to_string(),

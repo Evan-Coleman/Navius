@@ -421,7 +421,7 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
     async fn set_add<K, V>(&self, key: K, values: Vec<V>) -> CacheResult<usize>
     where
         K: crate::operations::CacheKey + std::fmt::Debug + 'static,
-        V: serde::Serialize + Send + Sync + Clone + 'static,
+        V: serde::Serialize + Send + Sync + 'static,
     {
         self.cache.set_add(key, values).await
     }
@@ -429,7 +429,7 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
     async fn set_remove<K, V>(&self, key: K, values: Vec<V>) -> CacheResult<usize>
     where
         K: crate::operations::CacheKey + std::fmt::Debug + 'static,
-        V: serde::Serialize + Send + Sync + Clone + 'static,
+        V: serde::Serialize + Send + Sync + 'static,
     {
         self.cache.set_remove(key, values).await
     }
@@ -492,7 +492,7 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
     async fn set_difference<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<V>>
     where
         K: crate::operations::CacheKey + std::fmt::Debug + 'static,
-        V: serde::de::DeserializeOwned + Send + Sync + 'static,
+        V: serde::de::DeserializeOwned + Send + 'static,
     {
         self.cache.set_difference(keys).await
     }
@@ -517,7 +517,7 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
     async fn zset_add<K, V>(&self, key: K, items: Vec<(f64, V)>) -> CacheResult<usize>
     where
         K: crate::operations::CacheKey + std::fmt::Debug + 'static,
-        V: serde::Serialize + Send + Sync + Clone + 'static,
+        V: serde::Serialize + Send + Sync + 'static,
     {
         self.cache.zset_add(key, items).await
     }
@@ -525,7 +525,7 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
     async fn zset_remove<K, V>(&self, key: K, members: Vec<V>) -> CacheResult<usize>
     where
         K: crate::operations::CacheKey + std::fmt::Debug + 'static,
-        V: serde::Serialize + Send + Sync + Clone + 'static,
+        V: serde::Serialize + Send + Sync + 'static,
     {
         self.cache.zset_remove(key, members).await
     }
@@ -533,17 +533,24 @@ impl<C: Cache> CacheOperations for CacheConnectionManager<C> {
     async fn zset_score<K, V>(&self, key: K, member: &V) -> CacheResult<Option<f64>>
     where
         K: crate::operations::CacheKey + std::fmt::Debug + 'static,
-        V: serde::Serialize + Send + Sync + Clone + 'static,
+        V: serde::Serialize + Send + Sync + 'static,
     {
         self.cache.zset_score(key, member).await
     }
 
-    async fn zset_increment<K, V>(&self, key: K, member: &V, increment: f64) -> CacheResult<f64>
+    async fn zset_increment_score<K, V>(
+        &self,
+        key: K,
+        member: &V,
+        increment: f64,
+    ) -> CacheResult<f64>
     where
         K: crate::operations::CacheKey + std::fmt::Debug + 'static,
-        V: serde::Serialize + Send + Sync + Clone + 'static,
+        V: serde::Serialize + Send + Sync + 'static,
     {
-        self.cache.zset_increment(key, member, increment).await
+        self.cache
+            .zset_increment_score(key, member, increment)
+            .await
     }
 
     async fn zset_range<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<V>>
