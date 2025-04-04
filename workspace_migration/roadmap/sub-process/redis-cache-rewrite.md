@@ -99,8 +99,8 @@ The Redis cache implementation requires architectural separation, improved seria
   - [x] zset_count
   - [ ] zset_rev_range_by_score
   - [ ] zset_rev_range_by_score_with_scores
-  - [ ] zset_remove_range_by_rank
-  - [ ] zset_remove_range_by_score
+  - [x] zset_remove_range_by_rank
+  - [x] zset_remove_range_by_score
   - [ ] zset_intersection_store
   - [ ] zset_union_store
 

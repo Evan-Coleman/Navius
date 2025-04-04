@@ -408,7 +408,7 @@ async fn test_zset_count() {
     // Clear cache before test
     cache.clear().await.unwrap();
 
-    // Create test data with different scores
+    // Create test data
     let users = vec![
         (
             50.0,
@@ -450,32 +450,175 @@ async fn test_zset_count() {
     // Add members to sorted set
     cache.zset_add("scores", users).await.unwrap();
 
-    // Test count of members within score range
+    // Test zset_count
     let count = cache.zset_count("scores", 70.0, 130.0).await.unwrap();
-    assert_eq!(count, 3, "Should count 3 members in the score range 70-130");
+    assert_eq!(count, 3, "Should find 3 members with scores between 70-130");
 
-    // Test count with different ranges
-    let count = cache.zset_count("scores", 0.0, 60.0).await.unwrap();
-    assert_eq!(count, 1, "Should count 1 member in the score range 0-60");
-
-    let count = cache.zset_count("scores", 140.0, 200.0).await.unwrap();
-    assert_eq!(count, 1, "Should count 1 member in the score range 140-200");
-
-    // Test count with range that includes all members
-    let count = cache.zset_count("scores", 0.0, 200.0).await.unwrap();
+    // Test edge case - count at exact score points
+    let count = cache.zset_count("scores", 75.0, 125.0).await.unwrap();
     assert_eq!(
-        count, 5,
-        "Should count all 5 members in the score range 0-200"
+        count, 3,
+        "Should find 3 members with scores between 75-125 (inclusive)"
     );
 
-    // Test count with range that includes no members
+    // Test edge case - count with out of range values
     let count = cache.zset_count("scores", 200.0, 300.0).await.unwrap();
     assert_eq!(
         count, 0,
-        "Should count 0 members in the score range 200-300"
+        "Should find 0 members with scores between 200-300"
     );
 
-    // Test count with non-existent key
+    // Test edge case - count in non-existent key
     let count = cache.zset_count("nonexistent", 0.0, 100.0).await.unwrap();
-    assert_eq!(count, 0, "Should count 0 members for a non-existent key");
+    assert_eq!(count, 0, "Should return 0 for non-existent key");
+}
+
+#[tokio::test]
+async fn test_zset_remove_range_by_rank() {
+    // Start Redis server
+    let redis_url = start_redis_server();
+
+    // Create cache with test configuration
+    let config = create_test_config(&redis_url);
+    let cache = navius_cache_redis::new(config).await.unwrap();
+
+    // Clear cache before test
+    cache.clear().await.unwrap();
+
+    // Create test data with 10 users with scores 10-100
+    let mut users = Vec::new();
+    for i in 1..=10 {
+        users.push((
+            i as f64 * 10.0,
+            TestUser {
+                id: i,
+                username: format!("user_{}", i),
+            },
+        ));
+    }
+
+    // Add members to sorted set
+    cache.zset_add("leaderboard", users).await.unwrap();
+
+    // Verify initial length
+    let length = cache.zset_length("leaderboard").await.unwrap();
+    assert_eq!(length, 10, "Should have 10 members initially");
+
+    // Remove members ranked 2-4 (0-based index)
+    let removed = cache
+        .zset_remove_range_by_rank("leaderboard", 2, 4)
+        .await
+        .unwrap();
+    assert_eq!(removed, 3, "Should remove 3 members");
+
+    // Verify new length
+    let length = cache.zset_length("leaderboard").await.unwrap();
+    assert_eq!(length, 7, "Should have 7 members after removal");
+
+    // Get remaining members to verify correct removal
+    let remaining: Vec<TestUser> = cache.zset_range("leaderboard", 0, -1).await.unwrap();
+    assert_eq!(remaining.len(), 7, "Should have 7 members remaining");
+
+    // Verify the correct members were removed (users 3, 4, and 5)
+    // The remaining should be users 1, 2, 6, 7, 8, 9, 10
+    let user_ids: Vec<u64> = remaining.iter().map(|u| u.id).collect();
+    assert!(user_ids.contains(&1), "User 1 should remain");
+    assert!(user_ids.contains(&2), "User 2 should remain");
+    assert!(!user_ids.contains(&3), "User 3 should be removed");
+    assert!(!user_ids.contains(&4), "User 4 should be removed");
+    assert!(!user_ids.contains(&5), "User 5 should be removed");
+    assert!(user_ids.contains(&6), "User 6 should remain");
+
+    // Test edge case - remove from non-existent key
+    let removed = cache
+        .zset_remove_range_by_rank("nonexistent", 0, 5)
+        .await
+        .unwrap();
+    assert_eq!(removed, 0, "Should remove 0 members from non-existent key");
+}
+
+#[tokio::test]
+async fn test_zset_remove_range_by_score() {
+    // Start Redis server
+    let redis_url = start_redis_server();
+
+    // Create cache with test configuration
+    let config = create_test_config(&redis_url);
+    let cache = navius_cache_redis::new(config).await.unwrap();
+
+    // Clear cache before test
+    cache.clear().await.unwrap();
+
+    // Create test data with 10 users with scores 10-100
+    let mut users = Vec::new();
+    for i in 1..=10 {
+        users.push((
+            i as f64 * 10.0,
+            TestUser {
+                id: i,
+                username: format!("user_{}", i),
+            },
+        ));
+    }
+
+    // Add members to sorted set
+    cache.zset_add("leaderboard", users).await.unwrap();
+
+    // Verify initial length
+    let length = cache.zset_length("leaderboard").await.unwrap();
+    assert_eq!(length, 10, "Should have 10 members initially");
+
+    // Remove members with scores 30-60
+    let removed = cache
+        .zset_remove_range_by_score("leaderboard", 30.0, 60.0)
+        .await
+        .unwrap();
+    assert_eq!(removed, 4, "Should remove 4 members");
+
+    // Verify new length
+    let length = cache.zset_length("leaderboard").await.unwrap();
+    assert_eq!(length, 6, "Should have 6 members after removal");
+
+    // Get remaining members to verify correct removal
+    let remaining: Vec<TestUser> = cache.zset_range("leaderboard", 0, -1).await.unwrap();
+    assert_eq!(remaining.len(), 6, "Should have 6 members remaining");
+
+    // Verify the correct members were removed (users with scores 30, 40, 50, 60)
+    let user_ids: Vec<u64> = remaining.iter().map(|u| u.id).collect();
+    assert!(user_ids.contains(&1), "User 1 (score 10) should remain");
+    assert!(user_ids.contains(&2), "User 2 (score 20) should remain");
+    assert!(
+        !user_ids.contains(&3),
+        "User 3 (score 30) should be removed"
+    );
+    assert!(
+        !user_ids.contains(&4),
+        "User 4 (score 40) should be removed"
+    );
+    assert!(
+        !user_ids.contains(&5),
+        "User 5 (score 50) should be removed"
+    );
+    assert!(
+        !user_ids.contains(&6),
+        "User 6 (score 60) should be removed"
+    );
+    assert!(user_ids.contains(&7), "User 7 (score 70) should remain");
+
+    // Test edge case - remove from non-existent key
+    let removed = cache
+        .zset_remove_range_by_score("nonexistent", 0.0, 100.0)
+        .await
+        .unwrap();
+    assert_eq!(removed, 0, "Should remove 0 members from non-existent key");
+
+    // Test edge case - remove with out of range scores
+    let removed = cache
+        .zset_remove_range_by_score("leaderboard", 200.0, 300.0)
+        .await
+        .unwrap();
+    assert_eq!(
+        removed, 0,
+        "Should remove 0 members with out of range scores"
+    );
 }

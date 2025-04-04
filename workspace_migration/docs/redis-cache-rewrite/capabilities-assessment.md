@@ -95,7 +95,7 @@ The Redis implementation must satisfy all traits defined in the navius-cache cra
   - ✅ Added explanations for all type parameter requirements (K, V, F) and their purpose
   - ✅ Documented Debug bounds and their importance for error reporting
   - ✅ Provided examples of proper type usage in zset and other methods
-  - ✅ Improved documentation of several zset operations (zset_add, zset_score, zset_increment, zset_range_by_score, zset_range_by_score_with_scores, zset_rank, zset_length, zset_count)
+  - ✅ Improved documentation of several zset operations (zset_add, zset_score, zset_increment, zset_range_by_score, zset_range_by_score_with_scores, zset_rank, zset_length, zset_count, zset_remove_range_by_rank, zset_remove_range_by_score)
   - Additional zset methods still need implementation and documentation
 - Add additional test coverage for zset operations:
   - ✅ Added tests for implemented zset operations (add, remove, score, range by score, rank, length, increment)

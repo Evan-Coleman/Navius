@@ -1548,7 +1548,7 @@ impl CacheOperations for RedisCache {
     async fn zset_range_by_score<K, V>(&self, key: K, min: f64, max: f64) -> CacheResult<Vec<V>>
     where
         K: CacheKey + 'static,
-        V: DeserializeOwned + Send + 'static,
+        V: DeserializeOwned + Send + Sync + 'static,
     {
         let timer = OperationTimer::new("cache_zset_range_by_score");
         metrics::counter!("cache.zset_range_by_score.total");
@@ -1661,7 +1661,7 @@ impl CacheOperations for RedisCache {
     ) -> CacheResult<Vec<(V, f64)>>
     where
         K: CacheKey + 'static,
-        V: DeserializeOwned + Send + 'static,
+        V: DeserializeOwned + Send + Sync + 'static,
     {
         let timer = OperationTimer::new("cache_zset_range_by_score_with_scores");
         metrics::counter!("cache.zset_range_by_score_with_scores.total");
@@ -1770,8 +1770,8 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, key, member), fields(key = %key.to_string()), level = "info")]
     async fn zset_rank<K, V>(&self, key: K, member: &V) -> CacheResult<Option<usize>>
     where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + Clone + 'static,
     {
         let timer = OperationTimer::new("cache_zset_rank");
         metrics::counter!("cache.zset_rank.total");
@@ -2023,5 +2023,178 @@ impl CacheOperations for RedisCache {
         Err(CacheError::UnsupportedOperation(
             "RedisCache zset_union_store not implemented".to_string(),
         ))
+    }
+
+    /// Remove members from a sorted set based on their rank range
+    ///
+    /// # Type Requirements
+    ///
+    /// * `K`: Must implement `CacheKey` (convertible to a string key) and `Debug`
+    ///   for better error messages
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key of the sorted set
+    /// * `start` - The start rank (0-based, inclusive)
+    /// * `stop` - The stop rank (0-based, inclusive)
+    ///
+    /// # Returns
+    ///
+    /// The number of members removed
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The key is invalid
+    /// - The Redis operation fails
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use navius_cache::{Cache, CacheOperations};
+    /// # use navius_cache_redis::{new, RedisCacheConfig};
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let config = RedisCacheConfig::new("redis://localhost:6379");
+    /// # let cache = new(config).await?;
+    /// // Remove users ranked 5 to 10 (0-based indexing)
+    /// let removed = cache.zset_remove_range_by_rank("leaderboard", 5, 10).await?;
+    /// println!("Removed {} users", removed);
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[instrument(skip(self, key), fields(key = %key.to_string(), start = %start, stop = %stop), level = "info")]
+    async fn zset_remove_range_by_rank<K>(
+        &self,
+        key: K,
+        start: isize,
+        stop: isize,
+    ) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+    {
+        let timer = OperationTimer::new("cache_zset_remove_range_by_rank");
+        metrics::counter!("cache.zset_remove_range_by_rank.total");
+
+        // Convert key to string and validate
+        let key_str = match self.key_to_string(key) {
+            Ok(k) => k,
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_remove_range_by_rank.error");
+                return Err(e.into());
+            }
+        };
+
+        // Execute ZREMRANGEBYRANK command
+        let result: Result<usize, RedisCacheError> = self
+            .pool
+            .execute(move |conn| {
+                Box::pin(async move {
+                    redis::cmd("ZREMRANGEBYRANK")
+                        .arg(&key_str)
+                        .arg(start)
+                        .arg(stop)
+                        .query_async::<usize>(conn)
+                        .await
+                })
+            })
+            .await;
+
+        match result {
+            Ok(count) => {
+                timer.record_success();
+                metrics::counter!("cache.zset_remove_range_by_rank.success");
+                Ok(count)
+            }
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_remove_range_by_rank.error");
+                Err(e.into())
+            }
+        }
+    }
+
+    /// Remove members from a sorted set with scores within a specified range
+    ///
+    /// # Type Requirements
+    ///
+    /// * `K`: Must implement `CacheKey` (convertible to a string key) and `Debug`
+    ///   for better error messages
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key of the sorted set
+    /// * `min` - The minimum score (inclusive)
+    /// * `max` - The maximum score (inclusive)
+    ///
+    /// # Returns
+    ///
+    /// The number of members removed
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The key is invalid
+    /// - The Redis operation fails
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use navius_cache::{Cache, CacheOperations};
+    /// # use navius_cache_redis::{new, RedisCacheConfig};
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let config = RedisCacheConfig::new("redis://localhost:6379");
+    /// # let cache = new(config).await?;
+    /// // Remove all users with scores between 50 and 80
+    /// let removed = cache.zset_remove_range_by_score("leaderboard", 50.0, 80.0).await?;
+    /// println!("Removed {} users with scores between 50 and 80", removed);
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[instrument(skip(self, key), fields(key = %key.to_string(), min = %min, max = %max), level = "info")]
+    async fn zset_remove_range_by_score<K>(&self, key: K, min: f64, max: f64) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+    {
+        let timer = OperationTimer::new("cache_zset_remove_range_by_score");
+        metrics::counter!("cache.zset_remove_range_by_score.total");
+
+        // Convert key to string and validate
+        let key_str = match self.key_to_string(key) {
+            Ok(k) => k,
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_remove_range_by_score.error");
+                return Err(e.into());
+            }
+        };
+
+        // Execute ZREMRANGEBYSCORE command
+        let result: Result<usize, RedisCacheError> = self
+            .pool
+            .execute(move |conn| {
+                Box::pin(async move {
+                    redis::cmd("ZREMRANGEBYSCORE")
+                        .arg(&key_str)
+                        .arg(min)
+                        .arg(max)
+                        .query_async::<usize>(conn)
+                        .await
+                })
+            })
+            .await;
+
+        match result {
+            Ok(count) => {
+                timer.record_success();
+                metrics::counter!("cache.zset_remove_range_by_score.success");
+                Ok(count)
+            }
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_remove_range_by_score.error");
+                Err(e.into())
+            }
+        }
     }
 }
