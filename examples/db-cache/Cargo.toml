@@ -11,7 +11,7 @@ navius-http = { path = "../../crates/navius-http" }
 navius-db = { path = "../../crates/navius-db" }
 navius-db-postgres = { path = "../../crates/navius-db-postgres" }
 navius-cache = { path = "../../crates/navius-cache" }
-navius-cache-redis = { path = "../../crates/navius-cache-redis" }
+navius-cache-redis-plugin = { path = "../../crates/navius-cache-redis-plugin" }
 tokio = { version = "1.44.1", features = ["full"] }
 serde = { version = "1.0.219", features = ["derive"] }
 async-trait = "0.1.88"
@@ -19,4 +19,4 @@ uuid = { version = "1.16.0", features = ["v4", "serde"] }
 chrono = { version = "0.4.40", features = ["serde"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
-rand = "0.9.0" 
+rand = "0.9.0"

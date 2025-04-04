@@ -385,3 +385,8 @@ Once build failures are resolved:
 - Core Development: 100% focused on build failures resolution
 - QA: Preparing test scenarios for fixed components
 - DevOps: On standby for deployment pipeline completion
+
+## Recent Updates
+
+- May 30, 2024: Created [Redis-rs Integration Roadmap](./roadmap/sub-process/redis-rs-integration.md) to plan the integration of the redis-rs crate as a plugin for navius-cache
+- May 29, 2024: Removed navius-cache-redis due to implementation challenges

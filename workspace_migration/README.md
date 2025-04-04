@@ -58,6 +58,15 @@ This repository contains the code and documentation for the Navius Workspace Mig
       - Created new example files demonstrating real-world usage scenarios
       - Updated README with usage examples for all operation types
       - Created comprehensive API reference documentation
+- Completed the Microsoft Entra authentication provider implementation
+- Completed the error testing framework implementation with error injection and propagation tracking
+- Fixed all interface mismatches in the navius-cache-redis crate
+- Implemented all Set and SortedSet operations in the cache
+- Added pipeline command execution support with significant performance improvements
+- Added comprehensive test coverage for Redis cache operations
+- Updated project documentation and examples
+- Refined the Cross-Crate Testing Infrastructure implementation plan
+- Created Redis-rs Integration Roadmap to replace navius-cache-redis with a plugin-based solution using the established redis-rs crate
 
 ## Current Focus
 
@@ -189,17 +198,6 @@ The codebase follows these principles for working with traits:
 | navius-template | Not Started | 0% |
 | navius-cli | Not Started | 0% |
 | Crates Migration | Not Started | 0% |
-
-## Recent Accomplishments
-
-- Completed the Microsoft Entra authentication provider implementation
-- Completed the error testing framework implementation with error injection and propagation tracking
-- Fixed all interface mismatches in the navius-cache-redis crate
-- Implemented all Set and SortedSet operations in the cache
-- Added pipeline command execution support with significant performance improvements
-- Added comprehensive test coverage for Redis cache operations
-- Updated project documentation and examples
-- Refined the Cross-Crate Testing Infrastructure implementation plan
 
 ## Cross-Crate Testing Infrastructure Status
 
