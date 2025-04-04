@@ -67,6 +67,7 @@ This repository contains the code and documentation for the Navius Workspace Mig
 - Updated project documentation and examples
 - Refined the Cross-Crate Testing Infrastructure implementation plan
 - Created Redis-rs Integration Roadmap to replace navius-cache-redis with a plugin-based solution using the established redis-rs crate
+- Initiated Cache Simplification Initiative to create a more focused, modular cache interface
 
 ## Current Focus
 
@@ -84,21 +85,40 @@ This repository contains the code and documentation for the Navius Workspace Mig
       - ✅ Dependency injection (navius-di) - ConfigProvider and Arc handling issues
       - ✅ Testing infrastructure (navius-test) - Mock registry and duplicate definitions
       - ✅ Metrics infrastructure (navius-metrics-prometheus) - Fixed namespace method issues and type conversion problems
-      - ✅ Cache infrastructure (navius-cache-redis)
-        - ✅ Fixed method signatures and type parameters
-        - ✅ Resolved to_string() disambiguation
-        - ✅ Fixed connection manager implementation
-        - ✅ Implemented Lua script manager
-        - ✅ Implemented all Set and SortedSet operations
-        - ✅ Fixed proper error handling
-        - ✅ Added pipeline support for batch operations
-        - ✅ Added comprehensive test coverage for all operations
-        - ✅ Created comprehensive API documentation with examples
+      - 🚧 Cache infrastructure - Simplification initiative in progress:
+        - 🚧 Analyzing current interface to identify core vs. specialized operations
+        - 🚧 Designing simplified BasicCache trait for essential operations
+        - 🚧 Creating modular extension traits for specialized features
+        - 🚧 Developing migration strategy for existing implementations
       - ✅ Verify each individual crate is compiling without errors or warnings
     - 🔄 Run complete test suite against the new structure (95% complete)
     - 🔄 Verify API endpoints functionality (90% complete)
     - 🔄 Test performance metrics (90% complete)
 - Preparing for Phase 5 - Deployment and Monitoring
+
+## New Cache Simplification Initiative
+
+We've initiated a new effort to simplify the cache system after encountering significant implementation challenges. The current CacheOperations trait requires implementing numerous methods (>40), many of which are specialized and rarely used in typical applications. This has led to:
+
+- Over 100 compilation errors when implementing plugins
+- High implementation burden for new providers
+- Maintenance challenges for comprehensive implementations
+
+Our new approach creates a more focused, modular design:
+1. A minimal `BasicCache` trait with ~10 essential operations
+2. Extension traits for specialized features (lists, hashes, sets)
+3. Composition over inheritance for advanced capabilities
+
+This initiative will:
+- Reduce implementation complexity for cache providers
+- Focus on the critical 20% of functionality that covers 80% of use cases
+- Enable gradual adoption of advanced features based on actual needs
+- Improve maintainability and testability
+
+For more details, see:
+- [Cache Simplification Roadmap](./roadmap/sub-process/cache-simplification.md)
+- [Cache Operations Analysis](./roadmap/sub-process/cache-simplification-analysis.md)
+- [Redis Simplification Plan](./roadmap/sub-process/redis-simplification-plan.md)
 
 ## Repository Structure
 
