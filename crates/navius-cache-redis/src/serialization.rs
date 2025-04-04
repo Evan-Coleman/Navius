@@ -1,7 +1,9 @@
 use crate::error::{RedisCacheError, RedisCacheResult};
 use async_trait::async_trait;
-use serde::{Serialize, de::DeserializeOwned};
+use redis::{FromRedisValue, RedisResult, RedisWrite, ToRedisArgs};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use tracing::{instrument, warn};
 
 /// Serialization format options
@@ -156,6 +158,63 @@ impl Serializer for MsgPackSerializer {
 /// Create a serializer based on the specified format
 pub fn create_serializer(format: SerializationFormat) -> SerializerImpl {
     SerializerImpl::new(format)
+}
+
+/// Serializes data for Redis storage
+///
+/// Converts any Serialize type to a Redis-compatible string
+/// Uses JSON serialization by default
+pub fn serialize<T: Serialize + Debug>(value: &T) -> RedisCacheResult<String> {
+    serde_json::to_string(value)
+        .map_err(|e| RedisCacheError::Serialization(format!("Failed to serialize value: {:?}", e)))
+}
+
+/// Deserializes data from Redis storage
+///
+/// Converts a Redis-compatible string to any Deserialize type
+/// Uses JSON deserialization by default
+pub fn deserialize<T: DeserializeOwned>(value: &str) -> RedisCacheResult<T> {
+    serde_json::from_str(value).map_err(|e| {
+        RedisCacheError::Deserialization(format!("Failed to deserialize value: {:?}", e))
+    })
+}
+
+/// Adapter trait to convert from Serialize to ToRedisArgs
+pub trait SerializeToRedisArgs: Serialize + Debug {
+    /// Convert to Redis arguments
+    fn to_redis_args(&self) -> Vec<Vec<u8>> {
+        match serde_json::to_string(self) {
+            Ok(s) => vec![s.into_bytes()],
+            Err(e) => {
+                // Log the error and return an empty vec
+                tracing::error!(
+                    "Failed to serialize value to Redis args: {:?}, error: {:?}",
+                    self,
+                    e
+                );
+                vec![]
+            }
+        }
+    }
+}
+
+/// Implement SerializeToRedisArgs for all types that implement Serialize
+impl<T: Serialize + Debug> SerializeToRedisArgs for T {}
+
+// We'll need to implement ToRedisArgs for specific types instead of a blanket impl
+// Define a wrapper struct to implement ToRedisArgs for
+pub struct SerializeWrapper<T: SerializeToRedisArgs>(pub T);
+
+impl<T: SerializeToRedisArgs> ToRedisArgs for SerializeWrapper<T> {
+    fn write_redis_args<W>(&self, out: &mut W)
+    where
+        W: ?Sized + RedisWrite,
+    {
+        let args = self.0.to_redis_args();
+        for arg in args {
+            out.write_arg(&arg);
+        }
+    }
 }
 
 #[cfg(test)]

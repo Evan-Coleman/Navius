@@ -3,10 +3,10 @@
 //! This example demonstrates how to use the metrics functionality.
 //! To run:
 //! ```bash
-//! cargo run --example metrics_usage --features redis,metrics
+//! cargo run --example metrics_usage --features metrics
 //! ```
 
-use navius_cache::{CacheConfig, CacheConnectionManager, CacheOptions};
+use navius_cache::{CacheConfig, CacheOptions, MemoryCache};
 use std::time::Duration;
 
 #[tokio::main]
@@ -27,27 +27,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create cache configuration with metrics enabled
     let config = CacheConfig::new(
-        "redis://127.0.0.1:6379".to_string(),
+        "memory://".to_string(),
         "metrics-example:".to_string(),
         Duration::from_secs(300),
     )
     .with_metrics(true) // Enable metrics
     .with_trace(true); // Enable tracing
 
-    println!("Connecting to Redis...");
+    println!("Creating memory cache...");
 
-    // Connect to Redis
-    let cache = match CacheConnectionManager::new_redis(config.clone()).await {
-        Ok(cache) => {
-            println!("Successfully connected to Redis");
-            cache
-        }
-        Err(e) => {
-            println!("Failed to connect to Redis: {}", e);
-            println!("This example requires a running Redis instance.");
-            return Ok(());
-        }
-    };
+    // Create memory cache
+    let cache = MemoryCache::new(config.key_prefix.unwrap_or_default(), config.default_ttl);
+    println!("Successfully created memory cache");
 
     // Clear any existing data
     println!("Clearing any previous data...");
@@ -77,15 +68,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         cache.delete(&key).await?;
     }
 
-    // Generate some errors (trying to increment a string)
+    // Generate some errors
     println!("\nGenerating some error metrics...");
 
-    // First set a string value
-    cache.set("string-key", "not-a-number", None).await?;
-
-    // Try to increment it (this will cause an error in Redis)
-    println!("Attempting to increment a string value (will generate an error metric)");
-    let result = cache.increment("string-key", 1).await;
+    // Try to use an unsupported operation
+    println!("Attempting to use an unsupported operation (will generate an error metric)");
+    let result = cache.hash_get::<_, _, String>("hash-key", "field").await;
     println!("Result as expected: {:?}", result);
 
     // Health check
@@ -107,21 +95,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("- Dashboards would display cache hit/miss ratios, operation latency, etc.");
 
     println!("\nThe following metrics should have been recorded:");
-    println!("- navius_cache_operations_total{operation=\"get\",backend=\"redis\",result=\"hit\"}");
     println!(
-        "- navius_cache_operations_total{operation=\"get\",backend=\"redis\",result=\"miss\"}"
+        "- navius_cache_operations_total{operation=\"get\",backend=\"memory\",result=\"hit\"}"
     );
     println!(
-        "- navius_cache_operations_total{operation=\"set\",backend=\"redis\",result=\"success\"}"
+        "- navius_cache_operations_total{operation=\"get\",backend=\"memory\",result=\"miss\"}"
     );
     println!(
-        "- navius_cache_operations_total{operation=\"delete\",backend=\"redis\",result=\"success\"}"
+        "- navius_cache_operations_total{operation=\"set\",backend=\"memory\",result=\"success\"}"
     );
     println!(
-        "- navius_cache_operations_total{operation=\"increment\",backend=\"redis\",result=\"error\"}"
+        "- navius_cache_operations_total{operation=\"delete\",backend=\"memory\",result=\"success\"}"
     );
-    println!("- navius_cache_operation_duration_seconds{operation=\"get\",backend=\"redis\"}");
-    println!("- navius_cache_operation_duration_seconds{operation=\"set\",backend=\"redis\"}");
+    println!(
+        "- navius_cache_operations_total{operation=\"hash_get\",backend=\"memory\",result=\"error\"}"
+    );
+    println!("- navius_cache_operation_duration_seconds{operation=\"get\",backend=\"memory\"}");
+    println!("- navius_cache_operation_duration_seconds{operation=\"set\",backend=\"memory\"}");
 
     // Cleanup
     println!("\nCleaning up...");

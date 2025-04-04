@@ -9,7 +9,7 @@ Welcome to the navius-cache documentation! This crate provides a flexible, type-
 
 ## Examples
 
-- [Basic Usage](./examples/basic_usage.rs) - Basic cache operations with Redis
+- [Basic Usage](./examples/basic_usage.rs) - Basic cache operations with in-memory backend
 - [Metrics Usage](./examples/metrics_usage.rs) - Using metrics to monitor cache operations
 - [Repository Pattern](./examples/repository_pattern.rs) - Integrating cache with a repository pattern
 
@@ -17,16 +17,16 @@ Welcome to the navius-cache documentation! This crate provides a flexible, type-
 
 ```bash
 # Basic usage example
-cargo run --example basic_usage --features redis
+cargo run --example basic_usage
 
 # Metrics usage example
-cargo run --example metrics_usage --features redis,metrics
+cargo run --example metrics_usage --features metrics
 
 # Repository pattern example
-cargo run --example repository_pattern --features redis
+cargo run --example repository_pattern
 
 # Main metrics example
-cargo run --example metrics --features metrics,redis
+cargo run --example metrics --features metrics
 ```
 
 ## Integration with Other Crates
@@ -37,6 +37,10 @@ The navius-cache crate is designed to work seamlessly with other Navius crates:
 - **navius-http**: Can be used to cache HTTP responses
 - **navius-db**: Can be used to cache database query results
 - **navius-auth**: Can be used to cache authentication tokens
+
+## Related Crates
+
+For Redis caching support, check out the [navius-cache-redis](../navius-cache-redis/README.md) crate.
 
 ## Feedback and Contributions
 

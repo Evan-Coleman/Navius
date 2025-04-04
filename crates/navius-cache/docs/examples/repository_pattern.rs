@@ -1,352 +1,425 @@
-//! Repository pattern integration example for navius-cache
+//! Repository Pattern Example with Cache Integration
 //!
-//! This example demonstrates how to integrate the cache with a repository pattern.
+//! This example demonstrates how to use the cache with a repository pattern.
 //! To run:
 //! ```bash
-//! cargo run --example repository_pattern --features redis
+//! cargo run --example repository_pattern
 //! ```
 
-use async_trait::async_trait;
 use navius_cache::{CacheConfig, CacheConnectionManager, CacheOptions};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-// Entity model
+// ===========================================================================
+// Domain Models
+// ===========================================================================
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-struct User {
+pub struct User {
     id: u64,
     name: String,
     email: String,
-    role: String,
+    active: bool,
 }
 
-// Repository trait
-#[async_trait]
-trait UserRepository: Send + Sync {
-    async fn find_by_id(&self, id: u64) -> Result<Option<User>, String>;
-    async fn find_all(&self) -> Result<Vec<User>, String>;
-    async fn save(&self, user: User) -> Result<User, String>;
-    async fn delete(&self, id: u64) -> Result<bool, String>;
-}
-
-// In-memory implementation (simulating a database)
-struct InMemoryUserRepository {
-    data: Arc<RwLock<HashMap<u64, User>>>,
-}
-
-impl InMemoryUserRepository {
-    fn new() -> Self {
-        // Populate with some initial data
-        let mut data = HashMap::new();
-        data.insert(
-            1,
-            User {
-                id: 1,
-                name: "John Doe".to_string(),
-                email: "john@example.com".to_string(),
-                role: "user".to_string(),
-            },
-        );
-        data.insert(
-            2,
-            User {
-                id: 2,
-                name: "Jane Smith".to_string(),
-                email: "jane@example.com".to_string(),
-                role: "admin".to_string(),
-            },
-        );
-
+impl User {
+    pub fn new(id: u64, name: &str, email: &str) -> Self {
         Self {
-            data: Arc::new(RwLock::new(data)),
+            id,
+            name: name.to_string(),
+            email: email.to_string(),
+            active: true,
         }
     }
 }
 
-#[async_trait]
-impl UserRepository for InMemoryUserRepository {
-    async fn find_by_id(&self, id: u64) -> Result<Option<User>, String> {
-        // Simulate database latency
-        tokio::time::sleep(Duration::from_millis(50)).await;
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Product {
+    id: u64,
+    name: String,
+    price: f64,
+    in_stock: bool,
+}
 
-        let data = self.data.read().unwrap();
-        Ok(data.get(&id).cloned())
-    }
-
-    async fn find_all(&self) -> Result<Vec<User>, String> {
-        // Simulate database latency
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        let data = self.data.read().unwrap();
-        Ok(data.values().cloned().collect())
-    }
-
-    async fn save(&self, user: User) -> Result<User, String> {
-        // Simulate database latency
-        tokio::time::sleep(Duration::from_millis(75)).await;
-
-        let mut data = self.data.write().unwrap();
-        data.insert(user.id, user.clone());
-        Ok(user)
-    }
-
-    async fn delete(&self, id: u64) -> Result<bool, String> {
-        // Simulate database latency
-        tokio::time::sleep(Duration::from_millis(50)).await;
-
-        let mut data = self.data.write().unwrap();
-        Ok(data.remove(&id).is_some())
+impl Product {
+    pub fn new(id: u64, name: &str, price: f64) -> Self {
+        Self {
+            id,
+            name: name.to_string(),
+            price,
+            in_stock: true,
+        }
     }
 }
 
-// Cached repository implementation
-struct CachedUserRepository {
-    repository: Box<dyn UserRepository>,
+// ===========================================================================
+// Error Types
+// ===========================================================================
+
+#[derive(Debug, thiserror::Error)]
+pub enum RepositoryError {
+    #[error("Entity not found: {0}")]
+    NotFound(String),
+
+    #[error("Database error: {0}")]
+    DatabaseError(String),
+
+    #[error("Cache error: {0}")]
+    CacheError(String),
+
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
+}
+
+impl From<navius_cache::error::CacheError> for RepositoryError {
+    fn from(error: navius_cache::error::CacheError) -> Self {
+        RepositoryError::CacheError(error.to_string())
+    }
+}
+
+// ===========================================================================
+// Mocked Database
+// ===========================================================================
+
+/// Mock database that uses hashmaps as storage
+#[derive(Debug)]
+pub struct MockDatabase {
+    users: Arc<RwLock<HashMap<u64, User>>>,
+    products: Arc<RwLock<HashMap<u64, Product>>>,
+}
+
+impl MockDatabase {
+    pub fn new() -> Self {
+        Self {
+            users: Arc::new(RwLock::new(HashMap::new())),
+            products: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    pub fn get_user(&self, id: u64) -> Result<Option<User>, RepositoryError> {
+        // Simulate database latency
+        std::thread::sleep(Duration::from_millis(50));
+
+        let users = self
+            .users
+            .read()
+            .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        Ok(users.get(&id).cloned())
+    }
+
+    pub fn save_user(&self, user: User) -> Result<(), RepositoryError> {
+        // Simulate database latency
+        std::thread::sleep(Duration::from_millis(100));
+
+        let mut users = self
+            .users
+            .write()
+            .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        users.insert(user.id, user);
+        Ok(())
+    }
+
+    pub fn delete_user(&self, id: u64) -> Result<bool, RepositoryError> {
+        // Simulate database latency
+        std::thread::sleep(Duration::from_millis(75));
+
+        let mut users = self
+            .users
+            .write()
+            .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        Ok(users.remove(&id).is_some())
+    }
+
+    pub fn get_product(&self, id: u64) -> Result<Option<Product>, RepositoryError> {
+        // Simulate database latency
+        std::thread::sleep(Duration::from_millis(50));
+
+        let products = self
+            .products
+            .read()
+            .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        Ok(products.get(&id).cloned())
+    }
+
+    pub fn save_product(&self, product: Product) -> Result<(), RepositoryError> {
+        // Simulate database latency
+        std::thread::sleep(Duration::from_millis(100));
+
+        let mut products = self
+            .products
+            .write()
+            .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        products.insert(product.id, product);
+        Ok(())
+    }
+
+    pub fn delete_product(&self, id: u64) -> Result<bool, RepositoryError> {
+        // Simulate database latency
+        std::thread::sleep(Duration::from_millis(75));
+
+        let mut products = self
+            .products
+            .write()
+            .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        Ok(products.remove(&id).is_some())
+    }
+}
+
+// ===========================================================================
+// Cached Repository Implementation
+// ===========================================================================
+
+/// Cache-aware user repository
+pub struct UserRepository {
+    db: Arc<MockDatabase>,
     cache: CacheConnectionManager,
-    ttl: Duration,
+    cache_ttl: Duration,
 }
 
-impl CachedUserRepository {
-    fn new(
-        repository: Box<dyn UserRepository>,
-        cache: CacheConnectionManager,
-        ttl: Duration,
-    ) -> Self {
+impl UserRepository {
+    pub fn new(db: Arc<MockDatabase>, cache: CacheConnectionManager, cache_ttl: Duration) -> Self {
         Self {
-            repository,
+            db,
             cache,
-            ttl,
+            cache_ttl,
         }
     }
 
-    // Helper to build the cache key for a user
-    fn user_key(&self, id: u64) -> String {
-        format!("user:{}", id)
-    }
-
-    // Helper to build the cache key for all users
-    fn all_users_key(&self) -> String {
-        "users:all".to_string()
-    }
-}
-
-#[async_trait]
-impl UserRepository for CachedUserRepository {
-    async fn find_by_id(&self, id: u64) -> Result<Option<User>, String> {
-        let key = self.user_key(id);
+    pub async fn get_user(&self, id: u64) -> Result<Option<User>, RepositoryError> {
+        let cache_key = format!("user:{}", id);
 
         // Try to get from cache first
-        match self.cache.get::<_, User>(&key).await {
-            Ok(Some(user)) => {
-                println!("Cache HIT for {}", key);
-                return Ok(Some(user));
+        if let Some(user) = self.cache.get::<_, User>(&cache_key).await? {
+            println!("Cache HIT: Retrieved user {} from cache", id);
+            return Ok(Some(user));
+        }
+
+        println!(
+            "Cache MISS: User {} not in cache, fetching from database",
+            id
+        );
+
+        // If not in cache, get from database
+        match self.db.get_user(id)? {
+            Some(user) => {
+                // Store in cache for future requests
+                let options = CacheOptions::new().ttl(self.cache_ttl);
+                self.cache.set(&cache_key, &user, Some(options)).await?;
+                println!(
+                    "Cached user {} for {} seconds",
+                    id,
+                    self.cache_ttl.as_secs()
+                );
+                Ok(Some(user))
             }
-            Ok(None) => {
-                println!("Cache MISS for {}", key);
-                // Not in cache, get from repository
-                match self.repository.find_by_id(id).await {
-                    Ok(Some(user)) => {
-                        // Store in cache for future requests
-                        let options = CacheOptions::new().ttl(self.ttl);
-                        if let Err(e) = self.cache.set(&key, &user, Some(options)).await {
-                            println!("Warning: Failed to cache user {}: {}", id, e);
-                        }
-                        Ok(Some(user))
-                    }
-                    Ok(None) => Ok(None),
-                    Err(e) => Err(e),
-                }
-            }
-            Err(e) => {
-                println!("Cache error for {}: {}", key, e);
-                // Cache error, fallback to repository
-                self.repository.find_by_id(id).await
-            }
+            None => Ok(None),
         }
     }
 
-    async fn find_all(&self) -> Result<Vec<User>, String> {
-        let key = self.all_users_key();
+    pub async fn save_user(&self, user: User) -> Result<(), RepositoryError> {
+        // Save to database
+        self.db.save_user(user.clone())?;
 
-        // Try to get from cache first
-        match self.cache.get::<_, Vec<User>>(&key).await {
-            Ok(Some(users)) => {
-                println!("Cache HIT for {}", key);
-                return Ok(users);
-            }
-            Ok(None) => {
-                println!("Cache MISS for {}", key);
-                // Not in cache, get from repository
-                match self.repository.find_all().await {
-                    Ok(users) => {
-                        // Store in cache for future requests
-                        let options = CacheOptions::new().ttl(self.ttl);
-                        if let Err(e) = self.cache.set(&key, &users, Some(options)).await {
-                            println!("Warning: Failed to cache all users: {}", e);
-                        }
-                        Ok(users)
-                    }
-                    Err(e) => Err(e),
-                }
-            }
-            Err(e) => {
-                println!("Cache error for {}: {}", key, e);
-                // Cache error, fallback to repository
-                self.repository.find_all().await
-            }
-        }
+        // Update cache
+        let cache_key = format!("user:{}", user.id);
+        let options = CacheOptions::new().ttl(self.cache_ttl);
+        self.cache.set(&cache_key, &user, Some(options)).await?;
+        println!("Updated user {} in cache", user.id);
+
+        Ok(())
     }
 
-    async fn save(&self, user: User) -> Result<User, String> {
-        // Update the database first
-        let result = self.repository.save(user.clone()).await?;
+    pub async fn delete_user(&self, id: u64) -> Result<bool, RepositoryError> {
+        // Delete from database
+        let result = self.db.delete_user(id)?;
 
-        // Then invalidate cache
-        let user_key = self.user_key(user.id);
-        let all_users_key = self.all_users_key();
-
-        // We don't want to fail if cache invalidation fails, just log it
-        if let Err(e) = self.cache.delete(&user_key).await {
-            println!("Warning: Failed to invalidate user cache: {}", e);
-        }
-
-        if let Err(e) = self.cache.delete(&all_users_key).await {
-            println!("Warning: Failed to invalidate all users cache: {}", e);
-        }
-
-        Ok(result)
-    }
-
-    async fn delete(&self, id: u64) -> Result<bool, String> {
-        // Delete from the database first
-        let result = self.repository.delete(id).await?;
-
-        // Then invalidate cache
-        let user_key = self.user_key(id);
-        let all_users_key = self.all_users_key();
-
-        // We don't want to fail if cache invalidation fails, just log it
-        if let Err(e) = self.cache.delete(&user_key).await {
-            println!("Warning: Failed to invalidate user cache: {}", e);
-        }
-
-        if let Err(e) = self.cache.delete(&all_users_key).await {
-            println!("Warning: Failed to invalidate all users cache: {}", e);
+        // If successful, invalidate cache
+        if result {
+            let cache_key = format!("user:{}", id);
+            self.cache.delete(&cache_key).await?;
+            println!("Removed user {} from cache", id);
         }
 
         Ok(result)
     }
 }
 
-// Service layer to demonstrate usage
-struct UserService {
-    repository: Box<dyn UserRepository>,
+/// Cache-aware product repository
+pub struct ProductRepository {
+    db: Arc<MockDatabase>,
+    cache: CacheConnectionManager,
+    cache_ttl: Duration,
 }
 
-impl UserService {
-    fn new(repository: Box<dyn UserRepository>) -> Self {
-        Self { repository }
+impl ProductRepository {
+    pub fn new(db: Arc<MockDatabase>, cache: CacheConnectionManager, cache_ttl: Duration) -> Self {
+        Self {
+            db,
+            cache,
+            cache_ttl,
+        }
     }
 
-    async fn get_user(&self, id: u64) -> Result<Option<User>, String> {
-        self.repository.find_by_id(id).await
+    pub async fn get_product(&self, id: u64) -> Result<Option<Product>, RepositoryError> {
+        let cache_key = format!("product:{}", id);
+
+        // Try to get from cache first
+        if let Some(product) = self.cache.get::<_, Product>(&cache_key).await? {
+            println!("Cache HIT: Retrieved product {} from cache", id);
+            return Ok(Some(product));
+        }
+
+        println!(
+            "Cache MISS: Product {} not in cache, fetching from database",
+            id
+        );
+
+        // If not in cache, get from database
+        match self.db.get_product(id)? {
+            Some(product) => {
+                // Store in cache for future requests
+                let options = CacheOptions::new().ttl(self.cache_ttl);
+                self.cache.set(&cache_key, &product, Some(options)).await?;
+                println!(
+                    "Cached product {} for {} seconds",
+                    id,
+                    self.cache_ttl.as_secs()
+                );
+                Ok(Some(product))
+            }
+            None => Ok(None),
+        }
     }
 
-    async fn get_all_users(&self) -> Result<Vec<User>, String> {
-        self.repository.find_all().await
+    pub async fn save_product(&self, product: Product) -> Result<(), RepositoryError> {
+        // Save to database
+        self.db.save_product(product.clone())?;
+
+        // Update cache
+        let cache_key = format!("product:{}", product.id);
+        let options = CacheOptions::new().ttl(self.cache_ttl);
+        self.cache.set(&cache_key, &product, Some(options)).await?;
+        println!("Updated product {} in cache", product.id);
+
+        Ok(())
     }
 
-    async fn create_user(&self, user: User) -> Result<User, String> {
-        self.repository.save(user).await
-    }
+    pub async fn delete_product(&self, id: u64) -> Result<bool, RepositoryError> {
+        // Delete from database
+        let result = self.db.delete_product(id)?;
 
-    async fn delete_user(&self, id: u64) -> Result<bool, String> {
-        self.repository.delete(id).await
+        // If successful, invalidate cache
+        if result {
+            let cache_key = format!("product:{}", id);
+            self.cache.delete(&cache_key).await?;
+            println!("Removed product {} from cache", id);
+        }
+
+        Ok(result)
     }
 }
+
+// ===========================================================================
+// Main Example
+// ===========================================================================
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("Navius Cache: Repository Pattern Example");
-    println!("=========================================");
+    println!("Repository Pattern with Cache Integration Example");
+    println!("================================================");
 
-    // Create cache configuration
+    // Create a mock database
+    let db = Arc::new(MockDatabase::new());
+
+    // Setup the cache
     let config = CacheConfig::new(
-        "redis://127.0.0.1:6379".to_string(),
-        "repo-example:".to_string(),
-        Duration::from_secs(300), // 5 minutes default TTL
+        "memory://".to_string(),
+        "repository-example:".to_string(),
+        Duration::from_secs(60),
     );
 
-    println!("Connecting to Redis...");
+    println!("Creating in-memory cache...");
 
-    // Connect to Redis
-    let cache = match CacheConnectionManager::new_redis(config.clone()).await {
-        Ok(cache) => {
-            println!("Successfully connected to Redis");
-            cache
-        }
-        Err(e) => {
-            println!("Failed to connect to Redis: {}", e);
-            println!("This example requires a running Redis instance.");
-            return Ok(());
-        }
-    };
+    // Create in-memory cache
+    let cache = CacheConnectionManager::new_memory(config);
+    println!("Successfully created in-memory cache");
 
-    // Clear any existing data
-    println!("Clearing any previous data...");
+    // Clear any previous data
     cache.clear().await?;
 
-    // Create base repository (simulates database)
-    let base_repository = Box::new(InMemoryUserRepository::new());
+    // Create repositories
+    let user_repo = UserRepository::new(db.clone(), cache.clone(), Duration::from_secs(30));
+    let product_repo = ProductRepository::new(db.clone(), cache.clone(), Duration::from_secs(30));
 
-    // Create cached repository with 1 minute TTL
-    let cached_repository = Box::new(CachedUserRepository::new(
-        base_repository,
-        cache,
-        Duration::from_secs(60),
-    ));
+    println!("\nTesting User Repository");
+    println!("----------------------");
 
-    // Create user service with cached repository
-    let user_service = UserService::new(cached_repository);
+    // Create and save a user
+    let alice = User::new(1, "Alice", "alice@example.com");
+    user_repo.save_user(alice.clone()).await?;
+    println!("Saved user: {:?}", alice);
 
-    // Demonstrate cache pattern
-    println!("\n1. First request for all users (cache miss):");
-    let users = user_service.get_all_users().await?;
-    println!("Found {} users", users.len());
+    // First retrieval (should come from database with cache miss)
+    let retrieved = user_repo.get_user(1).await?;
+    println!("First retrieval result: {:?}", retrieved);
 
-    println!("\n2. Second request for all users (cache hit):");
-    let _users = user_service.get_all_users().await?;
+    // Second retrieval (should come from cache)
+    let retrieved = user_repo.get_user(1).await?;
+    println!("Second retrieval result: {:?}", retrieved);
 
-    println!("\n3. First request for user 1 (cache miss):");
-    let user = user_service.get_user(1).await?;
-    println!("Found user: {:?}", user);
+    // Update the user
+    let mut updated_alice = alice.clone();
+    updated_alice.email = "alice.updated@example.com".to_string();
+    user_repo.save_user(updated_alice.clone()).await?;
+    println!("Updated user: {:?}", updated_alice);
 
-    println!("\n4. Second request for user 1 (cache hit):");
-    let _user = user_service.get_user(1).await?;
+    // Retrieval after update (should reflect new data)
+    let retrieved = user_repo.get_user(1).await?;
+    println!("Retrieval after update: {:?}", retrieved);
 
-    println!("\n5. Create a new user (invalidates caches):");
-    let new_user = User {
-        id: 3,
-        name: "Bob Johnson".to_string(),
-        email: "bob@example.com".to_string(),
-        role: "user".to_string(),
-    };
-    user_service.create_user(new_user.clone()).await?;
-    println!("Created user: {:?}", new_user);
-
-    println!("\n6. Request for all users after update (cache miss due to invalidation):");
-    let users = user_service.get_all_users().await?;
-    println!("Found {} users (including new user)", users.len());
-
-    println!("\n7. Delete a user (invalidates caches):");
-    let deleted = user_service.delete_user(2).await?;
+    // Delete the user
+    let deleted = user_repo.delete_user(1).await?;
     println!("User deleted: {}", deleted);
 
-    println!("\n8. Request for all users after deletion (cache miss due to invalidation):");
-    let users = user_service.get_all_users().await?;
-    println!("Found {} users (after deletion)", users.len());
+    // Retrieval after delete (should be None)
+    let retrieved = user_repo.get_user(1).await?;
+    println!("Retrieval after delete: {:?}", retrieved);
+
+    println!("\nTesting Product Repository");
+    println!("-------------------------");
+
+    // Create and save a product
+    let laptop = Product::new(101, "Laptop", 999.99);
+    product_repo.save_product(laptop.clone()).await?;
+    println!("Saved product: {:?}", laptop);
+
+    // First retrieval (should come from database with cache miss)
+    let retrieved = product_repo.get_product(101).await?;
+    println!("First retrieval result: {:?}", retrieved);
+
+    // Second retrieval (should come from cache)
+    let retrieved = product_repo.get_product(101).await?;
+    println!("Second retrieval result: {:?}", retrieved);
+
+    // Update the product
+    let mut updated_laptop = laptop.clone();
+    updated_laptop.price = 899.99;
+    product_repo.save_product(updated_laptop.clone()).await?;
+    println!("Updated product: {:?}", updated_laptop);
+
+    // Retrieval after update (should reflect new data)
+    let retrieved = product_repo.get_product(101).await?;
+    println!("Retrieval after update: {:?}", retrieved);
+
+    // Delete the product
+    let deleted = product_repo.delete_product(101).await?;
+    println!("Product deleted: {}", deleted);
+
+    // Retrieval after delete (should be None)
+    let retrieved = product_repo.get_product(101).await?;
+    println!("Retrieval after delete: {:?}", retrieved);
 
     println!("\nExample completed successfully!");
     Ok(())

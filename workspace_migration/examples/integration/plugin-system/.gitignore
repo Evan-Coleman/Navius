@@ -1,7 +1,0 @@
-/target/
-**/*.rs.bk
-.idea/
-.vscode/
-*.iml
-Cargo.lock
-.DS_Store 

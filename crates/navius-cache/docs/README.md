@@ -5,7 +5,7 @@ A flexible, type-safe caching library for the Navius framework.
 ## Features
 
 - **Type-safe API**: Work with strongly-typed cache values using generics
-- **Redis support**: Full Redis implementation with connection pooling
+- **In-memory backend**: Fast, lightweight in-memory cache implementation
 - **Multiple invalidation strategies**: TTL-based, pattern-based, and entity-based
 - **Comprehensive metrics**: Track cache hits, misses, errors, and performance
 - **Flexible configuration**: Customize cache behavior for different use cases
@@ -16,11 +16,10 @@ Add navius-cache to your Cargo.toml:
 
 ```toml
 [dependencies]
-navius-cache = { path = "../navius-cache", features = ["redis", "metrics"] }
+navius-cache = { path = "../navius-cache", features = ["metrics"] }
 ```
 
 Available features:
-- `redis` - Redis backend support (enabled by default)
 - `metrics` - Metrics and telemetry integration
 
 ## Quick Start
@@ -32,13 +31,13 @@ use std::time::Duration;
 async fn example() -> Result<(), Box<dyn std::error::Error>> {
     // Create a configuration
     let config = CacheConfig::new(
-        "redis://127.0.0.1:6379".to_string(),
+        "memory://".to_string(),
         "my-app:".to_string(),
         Duration::from_secs(300), // 5 minutes default TTL
     );
 
-    // Connect to Redis
-    let cache = CacheConnectionManager::new_redis(config).await?;
+    // Create an in-memory cache
+    let cache = CacheConnectionManager::new_memory(config);
 
     // Store a value
     let user = User { id: 123, name: "Alice".to_string() };
@@ -66,21 +65,19 @@ async fn example() -> Result<(), Box<dyn std::error::Error>> {
 ```rust
 // Minimal configuration
 let config = CacheConfig::new(
-    "redis://127.0.0.1:6379".to_string(), // Cache URL
+    "memory://".to_string(),                // Cache URL
     "my-app:".to_string(),                // Key prefix
     Duration::from_secs(3600),            // Default TTL (1 hour)
 );
 
 // Advanced configuration
 let config = CacheConfig::new(
-    "redis://127.0.0.1:6379".to_string(),
+    "memory://".to_string(),
     "my-app:".to_string(),
     Duration::from_secs(3600),
 )
-.with_max_connections(20)       // Set connection pool size
 .with_metrics(true)             // Enable metrics tracking
-.with_trace(true)               // Enable tracing
-.with_serialization_format("json"); // Set serialization format
+.with_trace(true);              // Enable tracing
 ```
 
 ### Multiple Caches
@@ -89,22 +86,22 @@ You can create multiple cache instances with different configurations:
 
 ```rust
 // Short-lived cache for temporary data
-let temp_cache = CacheConnectionManager::new_redis(
+let temp_cache = CacheConnectionManager::new_memory(
     CacheConfig::new(
-        "redis://127.0.0.1:6379".to_string(),
+        "memory://".to_string(),
         "temp:",
         Duration::from_secs(60),
     )
-).await?;
+);
 
 // Long-lived cache for reference data
-let ref_cache = CacheConnectionManager::new_redis(
+let ref_cache = CacheConnectionManager::new_memory(
     CacheConfig::new(
-        "redis://127.0.0.1:6379".to_string(),
+        "memory://".to_string(),
         "ref:",
         Duration::from_secs(86400), // 24 hours
     )
-).await?;
+);
 ```
 
 ## Working with Cache Keys
@@ -190,13 +187,13 @@ use navius_cache::{CacheConfig, CacheConnectionManager};
 
 // Enable metrics in configuration
 let config = CacheConfig::new(
-    "redis://127.0.0.1:6379".to_string(),
+    "memory://".to_string(),
     "my-app:".to_string(),
     Duration::from_secs(3600),
 ).with_metrics(true);
 
 // All operations will now record metrics
-let cache = CacheConnectionManager::new_redis(config).await?;
+let cache = CacheConnectionManager::new_memory(config);
 
 // Perform operations - metrics are recorded automatically
 let _: Option<String> = cache.get("key").await?;
@@ -222,17 +219,17 @@ use navius_cache::metrics::{CacheOperation, CacheTimer, MetricsResult};
 #[cfg(feature = "metrics")]
 fn with_metrics() {
     // Create a timer for an operation
-    let timer = CacheTimer::new(CacheOperation::Get, "redis");
+    let timer = CacheTimer::new(CacheOperation::Get, "memory");
     
     // Record the result
     timer.hit(); // Cache hit
     
     // Or for other operations
-    let timer = CacheTimer::new(CacheOperation::Set, "redis");
+    let timer = CacheTimer::new(CacheOperation::Set, "memory");
     timer.success(); // Successful operation
     
     // For failures
-    let timer = CacheTimer::new(CacheOperation::Delete, "redis");
+    let timer = CacheTimer::new(CacheOperation::Delete, "memory");
     timer.error(); // Failed operation
 }
 ```
@@ -263,7 +260,6 @@ fn with_metrics() {
 ### Metrics Monitoring
 
 - Set up alerts for sudden changes in hit/miss ratios
-- Monitor operation latency for early detection of Redis issues
 - Track cache size growth over time
 - Configure dashboards to visualize cache performance
 
@@ -362,20 +358,15 @@ mod tests {
     }
     
     #[tokio::test]
-    async fn test_with_real_redis() {
-        // Only run this test if REDIS_TEST env var is set
-        if std::env::var("REDIS_TEST").is_err() {
-            return;
-        }
-        
-        // Create a real Redis connection for integration testing
+    async fn test_with_memory_cache() {
+        // Create a memory cache for testing
         let config = CacheConfig::new(
-            "redis://127.0.0.1:6379".to_string(),
+            "memory://".to_string(),
             "test:".to_string(),
             Duration::from_secs(10),
         );
         
-        let cache = CacheConnectionManager::new_redis(config).await.unwrap();
+        let cache = CacheConnectionManager::new_memory(config);
         
         // Clear test data before test
         cache.clear().await.unwrap();
@@ -395,10 +386,10 @@ mod tests {
 
 ### Common Issues
 
-1. **Connection Failures**
-   - Check that Redis is running and accessible
-   - Verify connection URL format is correct
-   - Ensure network settings allow connections
+1. **Memory Usage**
+   - Monitor memory usage for large cache datasets
+   - Consider using TTLs to automatically expire older entries
+   - Implement size-based eviction for memory-constrained environments
 
 2. **Serialization Errors**
    - Ensure types implement `Serialize` and `Deserialize`
@@ -411,7 +402,6 @@ mod tests {
    - Look for invalidation operations that might be clearing cache
 
 4. **Performance Issues**
-   - Check Redis server metrics
    - Monitor operation latency
    - Reduce key/value sizes if possible
    - Optimize invalidation strategies
@@ -422,4 +412,8 @@ For complete API documentation, see the rustdoc documentation:
 
 ```bash
 cargo doc --open
-``` 
+```
+
+## Related Crates
+
+For Redis caching support, see the [navius-cache-redis](../navius-cache-redis/README.md) crate. 

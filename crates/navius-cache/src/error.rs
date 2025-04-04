@@ -32,16 +32,13 @@ pub enum CacheError {
     #[error("Cache invalidation failed: {0}")]
     InvalidationError(String),
 
-    /// Backend errors (Redis, etc.)
+    /// Backend-specific errors
     #[error("Cache backend error: {0}")]
     BackendError(String),
 
     /// Unsupported operation
     #[error("Unsupported cache operation: {0}")]
     UnsupportedOperation(String),
-
-    #[error("Redis error: {0}")]
-    Redis(#[from] redis::RedisError),
 
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
@@ -85,7 +82,6 @@ impl From<CacheError> for AppError {
             CacheError::UnsupportedOperation(msg) => {
                 AppError::internal(format!("Unsupported cache operation: {}", msg))
             }
-            CacheError::Redis(err) => err.into(),
             CacheError::Serialization(err) => err.into(),
             CacheError::InvalidArgument(msg) => AppError::invalid_argument(msg),
             CacheError::LuaManagerNotInitialized => {

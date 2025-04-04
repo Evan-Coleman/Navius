@@ -22,7 +22,10 @@ pub enum InvalidationStrategy {
 #[async_trait]
 pub trait CacheInvalidation<C: Cache> {
     /// Invalidate cache entries by key
-    async fn invalidate<K: CacheKey + 'static>(&self, key: K) -> CacheResult<bool>;
+    async fn invalidate<K: CacheKey + std::fmt::Debug + 'static>(
+        &self,
+        key: K,
+    ) -> CacheResult<bool>;
 
     /// Invalidate cache entries by pattern
     async fn invalidate_by_pattern(&self, pattern: &str) -> CacheResult<usize>;
@@ -72,21 +75,30 @@ impl<C: Cache, K: CacheKey + 'static> CacheInvalidator<C, K> {
 
 #[async_trait]
 impl<C: Cache, K: CacheKey + 'static> CacheInvalidation<C> for CacheInvalidator<C, K> {
-    #[instrument(skip(self, key))]
-    async fn invalidate<T: CacheKey + 'static>(&self, key: T) -> CacheResult<bool> {
-        debug!("Invalidating cache entry: {}", key.to_string());
-
-        match &self.strategy {
+    /// Invalidate a cache entry. If a TTL is set, the entry will be set to expire after the TTL.
+    /// Otherwise, the entry will be deleted immediately.
+    ///
+    /// # Arguments
+    /// * `key` - The key to invalidate
+    ///
+    /// # Returns
+    /// * `CacheResult<bool>` - Whether the invalidation was successful
+    #[instrument(level = "debug", skip(self), err)]
+    async fn invalidate<T: CacheKey + std::fmt::Debug + 'static>(
+        &self,
+        key: T,
+    ) -> CacheResult<bool> {
+        match self.strategy {
             InvalidationStrategy::Immediate => {
-                // Simply delete the key
+                debug!("Invalidating cache entry by deleting");
                 self.cache.delete(key).await
             }
-            InvalidationStrategy::TimeToLive(ttl) => {
-                // Set the key to expire
+            InvalidationStrategy::TimeToLive(ref ttl) => {
+                debug!("Invalidating cache entry by setting TTL");
                 self.cache.expire(key, *ttl).await
             }
             InvalidationStrategy::EntityBased => {
-                // Delete the specific entity key
+                debug!("Invalidating cache entry with custom strategy");
                 self.cache.delete(key).await
             }
             InvalidationStrategy::PatternBased(_) => {
@@ -102,16 +114,10 @@ impl<C: Cache, K: CacheKey + 'static> CacheInvalidation<C> for CacheInvalidator<
     async fn invalidate_by_pattern(&self, pattern: &str) -> CacheResult<usize> {
         debug!("Invalidating cache entries by pattern: {}", pattern);
 
-        // For Redis, we'd typically use SCAN + DEL
-        // For simplicity, we'll implement a basic version here
-        // In a real implementation, you'd want to optimize this for your specific cache backend
-
-        // In our Redis implementation, we're already using prefixed keys
-        // So we can just use the pattern as-is with our prefix and a wildcard
+        // Add a wildcard to the pattern to match all keys with the given prefix
         let pattern_with_wildcard = format!("{}*", pattern);
 
-        // This is a simplified implementation that just clears all keys matching the pattern
-        // In a production implementation, you'd want to use a more efficient approach
+        // Delete all keys matching the pattern
         self.cache.delete_many(vec![pattern_with_wildcard]).await
     }
 

@@ -1,6 +1,8 @@
 use crate::error::{RedisCacheError, RedisCacheResult};
 use crate::serialization::SerializationFormat;
 use navius_cache::config::CacheConfig;
+use navius_cache::connection::ConnectionPoolConfig;
+use navius_cache::error::CacheResult;
 use std::fmt::Debug;
 use std::time::Duration;
 
@@ -209,6 +211,34 @@ impl From<&CacheConfig> for RedisCacheConfig {
             metrics_interval: None,
             key_validation: KeyValidationOptions::default(),
         }
+    }
+}
+
+// Implement ConnectionPoolConfig for RedisCacheConfig
+impl ConnectionPoolConfig for RedisCacheConfig {
+    fn max_connections(&self) -> usize {
+        self.max_connections
+    }
+
+    fn connection_timeout(&self) -> Duration {
+        self.connection_timeout
+    }
+
+    fn command_timeout(&self) -> Duration {
+        self.command_timeout
+    }
+
+    fn retry_commands(&self) -> bool {
+        self.retry_commands
+    }
+
+    fn max_retries(&self) -> usize {
+        self.max_retries
+    }
+
+    fn validate(&self) -> CacheResult<()> {
+        // Convert RedisCacheResult to CacheResult
+        self.validate().map_err(|e| e.into())
     }
 }
 

@@ -5,7 +5,7 @@
 //! latency, and error rates.
 
 #[cfg(feature = "metrics")]
-use metrics::{Counter, Histogram, counter, histogram};
+use metrics::{counter, histogram};
 use std::time::{Duration, Instant};
 
 /// Types of cache operations for metrics

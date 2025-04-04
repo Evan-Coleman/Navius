@@ -1,88 +1,94 @@
-//! Example demonstrating cache metrics integration
+//! Metrics example for navius-cache
 //!
-//! This example shows how to use the navius-cache crate with metrics enabled.
+//! This example demonstrates metrics integration for cache operations
+//!
 //! Run with:
-//! ```
 //! cargo run --example metrics --features metrics
-//! ```
 
-use navius_cache::{CacheConfig, CacheConnectionManager, CacheOptions, RedisCache};
+use navius_cache::{CacheConfig, CacheConnectionManager, CacheOperations, CacheOptions};
 use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize the metrics registry
-    // In a real application, you'd use a metrics exporter like metrics-exporter-prometheus
-    let _ = metrics_exporter_prometheus::PrometheusBuilder::new()
-        .install()
-        .expect("Failed to install Prometheus recorder");
+    println!("Navius Cache: Metrics Example");
+    println!("=============================");
 
-    // Set up custom metrics recorder to print metrics to the console
-    metrics_util::debugging::print_stdout();
+    // Set up metrics using Prometheus
+    setup_metrics();
 
-    // Create a cache configuration with metrics enabled
+    // Create cache configuration with metrics enabled
     let config = CacheConfig::new(
-        "redis://127.0.0.1:6379".to_string(),
+        "memory://".to_string(),
         "metrics-example:".to_string(),
-        Duration::from_secs(60),
+        Duration::from_secs(300),
     )
-    .with_metrics(true)
-    .with_trace(true);
+    .with_metrics(true);
 
-    println!("Connecting to Redis...");
+    // Create the cache instance
+    let cache = CacheConnectionManager::new_memory(config);
 
-    // Create a cache connection
-    let cache = match CacheConnectionManager::new_redis(config.clone()).await {
-        Ok(cache) => {
-            println!("Successfully connected to Redis");
-            cache
-        }
-        Err(e) => {
-            println!(
-                "Failed to connect to Redis: {}. Using mock implementation.",
-                e
-            );
-            return Ok(());
-        }
-    };
+    // Clear any existing data
+    cache.clear().await?;
 
-    // Generate some cache activity
-    println!("Generating cache activity...");
+    println!("\nPerforming cache operations...");
 
-    // Perform a series of operations to generate metrics
-    for i in 0..10 {
-        let key = format!("test-key-{}", i);
-        let value = format!("test-value-{}", i);
+    // Set a value
+    cache.set("key1", &"value1".to_string(), None).await?;
+    println!("Set key1 = value1");
 
-        // Set a value
-        cache
-            .set(
-                &key,
-                &value,
-                Some(CacheOptions::new().ttl(Duration::from_secs(30))),
-            )
-            .await?;
+    // Get the value (hit)
+    let _: Option<String> = cache.get("key1").await?;
+    println!("Get key1 (hit)");
 
-        // Get the value we just set (cache hit)
-        let _: Option<String> = cache.get(&key).await?;
+    // Get a non-existent key (miss)
+    let _: Option<String> = cache.get("key2").await?;
+    println!("Get key2 (miss)");
 
-        // Get a non-existent key (cache miss)
-        let _: Option<String> = cache.get(format!("{}-nonexistent", key)).await?;
+    // Set with options
+    let options = CacheOptions::new().ttl(Duration::from_secs(10));
+    cache
+        .set("key3", &"value3".to_string(), Some(options))
+        .await?;
+    println!("Set key3 with 10s TTL");
 
-        // Delete the key
-        cache.delete(&key).await?;
-    }
+    // Delete a key
+    cache.delete("key1").await?;
+    println!("Delete key1");
 
-    // Perform health check
-    cache.health_check().await?;
+    // Wait a moment to allow metrics to be collected
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
-    // Wait a moment to ensure all metrics are recorded
-    println!("Cache operations completed. Metrics have been recorded.");
-    println!("In a real application, these metrics would be exposed via Prometheus.");
+    // Print metrics information
+    println!("\nFollowing metrics have been recorded:");
+    println!(
+        "- navius_cache_operations_total{{operation=\"get\",backend=\"memory\",result=\"hit\"}}"
+    );
+    println!(
+        "- navius_cache_operations_total{{operation=\"get\",backend=\"memory\",result=\"miss\"}}"
+    );
+    println!(
+        "- navius_cache_operations_total{{operation=\"set\",backend=\"memory\",result=\"success\"}}"
+    );
+    println!(
+        "- navius_cache_operations_total{{operation=\"delete\",backend=\"memory\",result=\"success\"}}"
+    );
+    println!("- navius_cache_operation_duration_seconds{{operation=\"get\",backend=\"memory\"}}");
+    println!("- navius_cache_operation_duration_seconds{{operation=\"set\",backend=\"memory\"}}");
 
-    // In a real application, you would expose the metrics endpoint
-    // For this example, we'll just wait a moment and then exit
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    println!("\nExample completed successfully!");
+    println!("In a real application, metrics would be:");
+    println!("1. Exposed on an HTTP endpoint (e.g., /metrics)");
+    println!("2. Scraped by Prometheus");
+    println!("3. Visualized in Grafana dashboards");
 
     Ok(())
+}
+
+// Set up metrics using the Prometheus exporter
+fn setup_metrics() {
+    // Create a Prometheus handle for metrics
+    let builder = metrics_exporter_prometheus::PrometheusBuilder::new();
+    builder
+        .install()
+        .expect("Failed to install Prometheus recorder");
 }

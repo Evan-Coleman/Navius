@@ -133,9 +133,9 @@ impl From<CacheError> for RedisCacheError {
         match err {
             CacheError::ConnectionError(msg) => RedisCacheError::Connection(msg),
             CacheError::OperationError(msg) => RedisCacheError::Command(msg),
-            CacheError::SerializationError(msg) => RedisCacheError::Serialization(msg),
+            CacheError::SerializationError(msg) => RedisCacheError::Deserialization(msg),
             CacheError::NotFoundError(msg) => {
-                RedisCacheError::Command(format!("Not found: {}", msg))
+                RedisCacheError::Command(format!("Key not found: {}", msg))
             }
             CacheError::ConfigurationError(msg) => RedisCacheError::Configuration(msg),
             CacheError::TimeoutError(msg) => RedisCacheError::Timeout(msg),
@@ -148,12 +148,12 @@ impl From<CacheError> for RedisCacheError {
             CacheError::UnsupportedOperation(msg) => {
                 RedisCacheError::Command(format!("Unsupported operation: {}", msg))
             }
-            CacheError::Redis(err) => RedisCacheError::from(err),
             CacheError::Serialization(err) => RedisCacheError::Serialization(err.to_string()),
             CacheError::InvalidArgument(msg) => RedisCacheError::InvalidKey(msg),
             CacheError::LuaManagerNotInitialized => {
                 RedisCacheError::Command("Lua manager not initialized".to_string())
             }
+            _ => RedisCacheError::Command("Unknown cache error".to_string()),
         }
     }
 }

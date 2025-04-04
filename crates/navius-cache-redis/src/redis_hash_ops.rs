@@ -13,6 +13,7 @@ use navius_cache::error::CacheError;
 use redis::{AsyncCommands, FromRedisValue, RedisError, RedisResult, ToRedisArgs, Value};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde_json;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::future::Future;
@@ -33,7 +34,7 @@ impl RedisCache {
     // Returns true if field is new, false if updated
     where
         K: CacheKey + Debug + 'static,
-        F: ToRedisArgs + Send + Sync + Clone + 'static + Debug,
+        F: Serialize + Send + Sync + Clone + 'static + Debug,
         V: Serialize + Send + Sync + 'static,
     {
         let timer = OperationTimer::new("cache_hash_set");
@@ -45,6 +46,18 @@ impl RedisCache {
                 timer.record_error(&e);
                 metrics::counter!("cache.hash_set.error").increment(1);
                 return Err(e.into());
+            }
+        };
+
+        // Serialize the field to JSON
+        let field_str = match serde_json::to_string(&field) {
+            Ok(f) => f,
+            Err(e) => {
+                let err =
+                    RedisCacheError::Serialization(format!("Failed to serialize field: {}", e));
+                timer.record_error(&err);
+                metrics::counter!("cache.hash_set.error").increment(1);
+                return Err(err.into());
             }
         };
 
@@ -62,7 +75,7 @@ impl RedisCache {
             .pool
             .execute(move |conn| {
                 let key_str_clone = key_str.clone();
-                let field_clone = field; // Requires F: Clone or pass ownership
+                let field_clone = field_str.clone(); // Now using serialized field string
                 let serialized_value_clone = serialized_value.clone();
                 Box::pin(async move {
                     redis::cmd("HSET")
@@ -104,7 +117,7 @@ impl RedisCache {
     // Returns number of fields added
     where
         K: CacheKey + Debug + 'static,
-        F: ToRedisArgs + Send + Sync + Clone + 'static + Debug,
+        F: Serialize + Send + Sync + Clone + 'static + Debug,
         V: Serialize + Send + Sync + 'static,
     {
         let timer = OperationTimer::new("cache_hash_set_many");
@@ -128,6 +141,18 @@ impl RedisCache {
         let mut args = Vec::with_capacity(items.len() * 2);
         let mut item_count = 0;
         for (field, value) in items {
+            // Serialize the field to JSON
+            let field_str = match serde_json::to_string(&field) {
+                Ok(f) => f,
+                Err(e) => {
+                    let err =
+                        RedisCacheError::Serialization(format!("Failed to serialize field: {}", e));
+                    timer.record_error(&err);
+                    metrics::counter!("cache.hash_set_many.error").increment(1);
+                    return Err(err.into());
+                }
+            };
+
             let serialized_value = match self.serializer.serialize(&value).await {
                 Ok(v) => v,
                 Err(e) => {
@@ -136,7 +161,7 @@ impl RedisCache {
                     return Err(e.into());
                 }
             };
-            args.push((field, serialized_value));
+            args.push((field_str, serialized_value));
             item_count += 1;
         }
 
@@ -145,11 +170,12 @@ impl RedisCache {
             .execute(move |conn| {
                 let key_str_clone = key_str.clone();
                 Box::pin(async move {
-                    redis::cmd("HSET")
-                        .arg(&key_str_clone)
-                        .arg(&args)
-                        .query_async::<usize>(conn)
-                        .await
+                    let mut pipe = redis::pipe();
+                    pipe.cmd("HSET").arg(&key_str_clone);
+                    for (field, value) in args {
+                        pipe.arg(field).arg(value);
+                    }
+                    pipe.query_async::<usize>(conn).await
                 })
             })
             .await;
@@ -177,7 +203,7 @@ impl RedisCache {
     ) -> CacheResult<Option<V>>
     where
         K: CacheKey + Debug + 'static,
-        F: ToRedisArgs + Send + Sync + Clone + 'static + Debug,
+        F: Serialize + Send + Sync + Clone + 'static + Debug,
         V: DeserializeOwned + Send + Sync + 'static,
     {
         let timer = OperationTimer::new("cache_hash_get");
@@ -191,20 +217,33 @@ impl RedisCache {
                 return Err(e.into());
             }
         };
+
+        // Serialize the field to JSON
+        let field_str = match serde_json::to_string(&field) {
+            Ok(f) => f,
+            Err(e) => {
+                let err =
+                    RedisCacheError::Serialization(format!("Failed to serialize field: {}", e));
+                timer.record_error(&err);
+                metrics::counter!("cache.hash_get.error").increment(1);
+                return Err(err.into());
+            }
+        };
+
         let key_str_for_warn = key_str.clone();
-        let field_for_warn = field.clone();
+        let field_for_warn = field_str.clone();
 
         trace!(key = %key_str, "Redis HGET operation");
         let result = self
             .pool
             .execute(move |conn| {
-                let key_str_clone = key_str.clone();
                 Box::pin(async move {
-                    redis::cmd("HGET")
-                        .arg(&key_str_clone)
-                        .arg(field)
-                        .query_async::<Option<Vec<u8>>>(conn)
-                        .await
+                    let result: RedisResult<Option<Vec<u8>>> = redis::cmd("HGET")
+                        .arg(&key_str)
+                        .arg(&field_str)
+                        .query_async(conn)
+                        .await;
+                    result
                 })
             })
             .await;
@@ -252,8 +291,8 @@ impl RedisCache {
     ) -> CacheResult<HashMap<F, Option<V>>>
     where
         K: CacheKey + Debug + 'static,
-        F: ToRedisArgs
-            + FromRedisValue
+        F: Serialize
+            + DeserializeOwned
             + Send
             + Sync
             + Eq
@@ -280,8 +319,22 @@ impl RedisCache {
             }
         };
 
+        // Serialize each field to JSON
+        let mut serialized_fields = Vec::with_capacity(fields.len());
+        for field in &fields {
+            match serde_json::to_string(field) {
+                Ok(f) => serialized_fields.push(f),
+                Err(e) => {
+                    let err =
+                        RedisCacheError::Serialization(format!("Failed to serialize field: {}", e));
+                    timer.record_error(&err);
+                    metrics::counter!("cache.hash_get_many.error").increment(1);
+                    return Err(err.into());
+                }
+            }
+        }
+
         let fields_len = fields.len();
-        let fields_clone = fields.clone();
         let key_str_for_warn = key_str.clone();
         let result: Result<Vec<Option<Vec<u8>>>, RedisCacheError> = self
             .pool
@@ -290,7 +343,7 @@ impl RedisCache {
                 Box::pin(async move {
                     redis::cmd("HMGET")
                         .arg(&key_str_clone)
-                        .arg(&fields_clone)
+                        .arg(&serialized_fields)
                         .query_async::<Vec<Option<Vec<u8>>>>(conn)
                         .await
                 })
@@ -346,7 +399,7 @@ impl RedisCache {
     pub(crate) async fn hash_get_all_internal<K, F, V>(&self, key: K) -> CacheResult<HashMap<F, V>>
     where
         K: CacheKey + Debug + 'static,
-        F: FromRedisValue + Send + Sync + Eq + std::hash::Hash + Debug + 'static,
+        F: DeserializeOwned + Send + Sync + Eq + std::hash::Hash + Debug + 'static,
         V: DeserializeOwned + Send + Sync + 'static,
     {
         let timer = OperationTimer::new("cache_hash_get_all");
@@ -365,14 +418,15 @@ impl RedisCache {
 
         trace!(key = %key_str, "Redis HGETALL operation");
 
-        let result: Result<HashMap<F, Vec<u8>>, RedisCacheError> = self
+        // We'll need to parse strings into F type from serialized JSON
+        let result: Result<HashMap<String, Vec<u8>>, RedisCacheError> = self
             .pool
             .execute(move |conn| {
                 let key_str_clone = key_str.clone();
                 Box::pin(async move {
                     redis::cmd("HGETALL")
                         .arg(&key_str_clone)
-                        .query_async::<HashMap<F, Vec<u8>>>(conn)
+                        .query_async::<HashMap<String, Vec<u8>>>(conn)
                         .await
                 })
             })
@@ -388,15 +442,28 @@ impl RedisCache {
                 let mut deserialized_map = HashMap::with_capacity(raw_map.len());
                 let mut errors = 0;
 
-                for (field, bytes) in raw_map {
-                    match self.serializer.deserialize::<V>(&bytes).await {
-                        Ok(value) => {
-                            deserialized_map.insert(field, value);
+                for (field_str, bytes) in raw_map {
+                    // First deserialize the field from JSON string to F
+                    match serde_json::from_str::<F>(&field_str) {
+                        Ok(field) => {
+                            // Then deserialize the value
+                            match self.serializer.deserialize::<V>(&bytes).await {
+                                Ok(value) => {
+                                    deserialized_map.insert(field, value);
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        "Deserialization failed for hash key '{}', field '{}': {}",
+                                        key_str_for_warn, field_str, e
+                                    );
+                                    errors += 1;
+                                }
+                            }
                         }
                         Err(e) => {
                             warn!(
-                                "Deserialization failed for hash key '{}', field '{:?}': {}",
-                                key_str_for_warn, field, e
+                                "Field deserialization failed for hash key '{}', field '{}': {}",
+                                key_str_for_warn, field_str, e
                             );
                             errors += 1;
                         }
@@ -417,7 +484,7 @@ impl RedisCache {
     pub(crate) async fn hash_delete_internal<K, F>(&self, key: K, field: F) -> CacheResult<bool>
     where
         K: CacheKey + Debug + 'static,
-        F: ToRedisArgs + Send + Sync + Clone + 'static + Debug,
+        F: Serialize + Send + Sync + Clone + 'static + Debug,
     {
         let timer = OperationTimer::new("cache_hash_delete");
         metrics::counter!("cache.hash_delete.total").increment(1);
@@ -431,12 +498,24 @@ impl RedisCache {
             }
         };
 
+        // Serialize the field to JSON
+        let field_str = match serde_json::to_string(&field) {
+            Ok(f) => f,
+            Err(e) => {
+                let err =
+                    RedisCacheError::Serialization(format!("Failed to serialize field: {}", e));
+                timer.record_error(&err);
+                metrics::counter!("cache.hash_delete.error").increment(1);
+                return Err(err.into());
+            }
+        };
+
         // HDEL returns integer: number of fields deleted (0 or 1 here)
         let result: Result<usize, RedisCacheError> = self
             .pool
             .execute(move |conn| {
                 let key_str_clone = key_str.clone();
-                let field_clone = field; // Requires F: Clone or pass ownership
+                let field_clone = field_str.clone(); // Now using serialized field string
                 Box::pin(async move {
                     redis::cmd("HDEL")
                         .arg(&key_str_clone)
@@ -474,7 +553,7 @@ impl RedisCache {
     // Returns number of fields deleted
     where
         K: CacheKey + Debug + 'static,
-        F: ToRedisArgs + Send + Sync + Clone + 'static + Debug,
+        F: Serialize + Send + Sync + Clone + 'static + Debug,
     {
         let timer = OperationTimer::new("cache_hash_delete_many");
         metrics::counter!("cache.hash_delete_many.total").increment(fields.len() as u64);
@@ -493,6 +572,21 @@ impl RedisCache {
             }
         };
 
+        // Serialize each field to JSON
+        let mut serialized_fields = Vec::with_capacity(fields.len());
+        for field in &fields {
+            match serde_json::to_string(field) {
+                Ok(f) => serialized_fields.push(f),
+                Err(e) => {
+                    let err =
+                        RedisCacheError::Serialization(format!("Failed to serialize field: {}", e));
+                    timer.record_error(&err);
+                    metrics::counter!("cache.hash_delete_many.error").increment(1);
+                    return Err(err.into());
+                }
+            }
+        }
+
         let fields_count = fields.len() as u64;
 
         // HDEL returns integer: number of fields deleted
@@ -500,11 +594,10 @@ impl RedisCache {
             .pool
             .execute(move |conn| {
                 let key_str_clone = key_str.clone();
-                let fields_clone = fields; // Pass ownership of Vec<F>
                 Box::pin(async move {
                     redis::cmd("HDEL")
                         .arg(&key_str_clone)
-                        .arg(&fields_clone) // Pass Vec<F>
+                        .arg(&serialized_fields) // Pass serialized fields
                         .query_async::<usize>(conn)
                         .await
                 })
@@ -530,7 +623,7 @@ impl RedisCache {
     pub(crate) async fn hash_exists_internal<K, F>(&self, key: K, field: F) -> CacheResult<bool>
     where
         K: CacheKey + Debug + 'static,
-        F: ToRedisArgs + Send + Sync + Clone + 'static + Debug,
+        F: Serialize + Send + Sync + Clone + 'static + Debug,
     {
         let timer = OperationTimer::new("cache_hash_exists");
         metrics::counter!("cache.hash_exists.total").increment(1);
@@ -544,12 +637,24 @@ impl RedisCache {
             }
         };
 
+        // Serialize the field to JSON
+        let field_str = match serde_json::to_string(&field) {
+            Ok(f) => f,
+            Err(e) => {
+                let err =
+                    RedisCacheError::Serialization(format!("Failed to serialize field: {}", e));
+                timer.record_error(&err);
+                metrics::counter!("cache.hash_exists.error").increment(1);
+                return Err(err.into());
+            }
+        };
+
         // HEXISTS returns boolean
         let result: Result<bool, RedisCacheError> = self
             .pool
             .execute(move |conn| {
                 let key_str_clone = key_str.clone();
-                let field_clone = field; // Requires F: Clone or pass ownership
+                let field_clone = field_str.clone(); // Now using serialized field string
                 Box::pin(async move {
                     redis::cmd("HEXISTS")
                         .arg(&key_str_clone)
@@ -630,7 +735,7 @@ impl RedisCache {
     pub(crate) async fn hash_keys_internal<K, F>(&self, key: K) -> CacheResult<Vec<F>>
     where
         K: CacheKey + Debug + 'static,
-        F: FromRedisValue + Send + Sync + 'static + Debug,
+        F: DeserializeOwned + Send + Sync + 'static + Debug,
     {
         let timer = OperationTimer::new("cache_hash_keys");
         metrics::counter!("cache.hash_keys.total").increment(1);
@@ -644,27 +749,50 @@ impl RedisCache {
             }
         };
 
-        // HKEYS returns Vec<F>
-        let result: Result<Vec<F>, RedisCacheError> = self
+        let key_str_for_warn = key_str.clone();
+
+        // HKEYS returns Vec<String> (field keys as strings)
+        let result: Result<Vec<String>, RedisCacheError> = self
             .pool
             .execute(move |conn| {
                 let key_str_clone = key_str.clone();
                 Box::pin(async move {
                     redis::cmd("HKEYS")
                         .arg(&key_str_clone)
-                        .query_async::<Vec<F>>(conn)
+                        .query_async::<Vec<String>>(conn)
                         .await
                 })
             })
             .await;
 
         match result {
-            Ok(fields) => {
+            Ok(field_strings) => {
                 timer.record_success();
                 metrics::counter!("cache.hash_keys.success").increment(1);
                 let gauge = metrics::gauge!("cache.hash_keys.count");
-                gauge.set(fields.len() as f64);
-                Ok(fields)
+                gauge.set(field_strings.len() as f64);
+
+                // Deserialize each field string to type F
+                let mut deserialized_fields = Vec::with_capacity(field_strings.len());
+                let mut errors = 0;
+
+                for field_str in field_strings {
+                    match serde_json::from_str::<F>(&field_str) {
+                        Ok(field) => {
+                            deserialized_fields.push(field);
+                        }
+                        Err(e) => {
+                            warn!(
+                                "Field deserialization failed for hash key '{}', field '{}': {}",
+                                key_str_for_warn, field_str, e
+                            );
+                            errors += 1;
+                        }
+                    }
+                }
+
+                metrics::counter!("cache.hash_keys.deserialization_error").increment(errors);
+                Ok(deserialized_fields)
             }
             Err(cache_err) => {
                 timer.record_error(&cache_err);
@@ -696,6 +824,7 @@ impl RedisCache {
 
         trace!(key = %key_str, "Redis HVALS operation");
 
+        // HVALS returns Vec<Vec<u8>> (serialized values)
         let result: Result<Vec<Vec<u8>>, RedisCacheError> = self
             .pool
             .execute(move |conn| {

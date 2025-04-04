@@ -2,8 +2,11 @@ use crate::config::RedisCacheConfig;
 use crate::error::{RedisCacheError, RedisCacheResult};
 use bb8::Pool;
 use bb8_redis::{RedisConnectionManager, bb8::PooledConnection};
+use navius_cache::connection::{ConnectionPool, ConnectionPoolStats};
+use navius_cache::error::CacheError;
 use redis::aio::MultiplexedConnection;
 use redis::{Client, RedisError};
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -229,6 +232,80 @@ impl RedisConnectionPool {
     /// Check if a Redis error is retriable
     fn should_retry(err: &RedisError) -> bool {
         err.is_io_error() || err.is_timeout()
+    }
+}
+
+// Implement ConnectionPool trait for RedisConnectionPool
+#[async_trait::async_trait]
+impl ConnectionPool for RedisConnectionPool {
+    type Connection = MultiplexedConnection;
+    type Config = RedisCacheConfig;
+    type Error = RedisCacheError;
+
+    async fn get_connection(&self) -> Result<Self::Connection, Self::Error> {
+        let mut conn = self.get_connection().await?;
+        // Convert the pooled connection to the underlying MultiplexedConnection
+        // This is a bit of a hack since we can't directly access the underlying connection
+        // In a real implementation, we might need to modify this approach
+
+        // For now, let's execute a dummy command to get access to the connection
+        let _dummy_result: Result<(), RedisError> = timeout(
+            self.config.command_timeout,
+            redis::cmd("PING").query_async(&mut *conn),
+        )
+        .await
+        .map_err(|_| RedisCacheError::Timeout("Connection access timed out".to_string()))?;
+
+        // This approach doesn't actually give us the MultiplexedConnection
+        // For now, we'll return an error to indicate that this isn't implemented yet
+        Err(RedisCacheError::Command(
+            "Direct connection access not yet implemented".to_string(),
+        ))
+    }
+
+    async fn execute<F, T, E>(&self, f: F) -> Result<T, E>
+    where
+        F: FnOnce(
+                &mut Self::Connection,
+            ) -> Pin<Box<dyn std::future::Future<Output = Result<T, E>> + Send>>
+            + Clone
+            + Send
+            + 'static,
+        T: Send + 'static,
+        E: From<Self::Error> + Send + 'static,
+    {
+        // We can't actually use the underlying RedisCache execute method directly
+        // because it expects a specific output type and this trait needs a generic output
+        // For now, we'll implement a simplified version
+        let mut conn = match self.get_connection().await {
+            Ok(conn) => conn,
+            Err(err) => return Err(E::from(err)),
+        };
+
+        // Run the function with the connection
+        let result = f(&mut conn).await;
+
+        // Return the result
+        result
+    }
+
+    async fn health_check(&self) -> Result<(), Self::Error> {
+        self.health_check().await
+    }
+
+    async fn get_stats(&self) -> ConnectionPoolStats {
+        let stats = self.get_stats().await;
+        ConnectionPoolStats {
+            total_connections_created: stats.total_connections_created,
+            total_connections_closed: stats.total_connections_closed,
+            current_size: stats.current_size,
+            active_connections: stats.active_connections,
+            idle_connections: stats.idle_connections,
+        }
+    }
+
+    fn config(&self) -> &Self::Config {
+        &self.config
     }
 }
 

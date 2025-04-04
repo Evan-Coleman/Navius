@@ -1,9 +1,9 @@
 //! Basic usage example for navius-cache
 //!
-//! This example demonstrates common cache operations using the Redis backend.
+//! This example demonstrates common cache operations using the in-memory backend.
 //! To run:
 //! ```bash
-//! cargo run --example basic_usage --features redis
+//! cargo run --example basic_usage
 //! ```
 
 use navius_cache::{CacheConfig, CacheConnectionManager, CacheOptions};
@@ -24,25 +24,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create cache configuration
     let config = CacheConfig::new(
-        "redis://127.0.0.1:6379".to_string(),
+        "memory://".to_string(),
         "example:".to_string(),
         Duration::from_secs(300), // 5 minutes default TTL
     );
 
-    println!("Connecting to Redis...");
+    println!("Creating in-memory cache...");
 
-    // Connect to Redis
-    let cache = match CacheConnectionManager::new_redis(config.clone()).await {
-        Ok(cache) => {
-            println!("Successfully connected to Redis");
-            cache
-        }
-        Err(e) => {
-            println!("Failed to connect to Redis: {}", e);
-            println!("This example requires a running Redis instance.");
-            return Ok(());
-        }
-    };
+    // Create in-memory cache
+    let cache = CacheConnectionManager::new_memory(config);
+    println!("Successfully created in-memory cache");
 
     // Clear any existing data from previous runs
     println!("Clearing any previous data...");

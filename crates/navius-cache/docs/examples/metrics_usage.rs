@@ -3,7 +3,7 @@
 //! This example demonstrates how to use the metrics functionality.
 //! To run:
 //! ```bash
-//! cargo run --example metrics_usage --features redis,metrics
+//! cargo run --example metrics_usage --features metrics
 //! ```
 
 use navius_cache::{CacheConfig, CacheConnectionManager, CacheOptions};
@@ -27,27 +27,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create cache configuration with metrics enabled
     let config = CacheConfig::new(
-        "redis://127.0.0.1:6379".to_string(),
+        "memory://".to_string(),
         "metrics-example:".to_string(),
         Duration::from_secs(300),
     )
     .with_metrics(true) // Enable metrics
     .with_trace(true); // Enable tracing
 
-    println!("Connecting to Redis...");
+    println!("Creating in-memory cache...");
 
-    // Connect to Redis
-    let cache = match CacheConnectionManager::new_redis(config.clone()).await {
-        Ok(cache) => {
-            println!("Successfully connected to Redis");
-            cache
-        }
-        Err(e) => {
-            println!("Failed to connect to Redis: {}", e);
-            println!("This example requires a running Redis instance.");
-            return Ok(());
-        }
-    };
+    // Create in-memory cache
+    let cache = CacheConnectionManager::new_memory(config);
+    println!("Successfully created in-memory cache");
 
     // Clear any existing data
     println!("Clearing any previous data...");
@@ -57,76 +48,69 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Generate hits and misses
     for i in 0..5 {
-        let key = format!("key-{}", i);
+        // Set some values
+        cache
+            .set(&format!("key:{}", i), &format!("value:{}", i), None)
+            .await?;
+        println!("Set key:{} -> value:{}", i, i);
 
-        // Set a value
-        println!("Setting key: {}", key);
-        cache.set(&key, &format!("value-{}", i), None).await?;
+        // Generate some hits
+        let _: Option<String> = cache.get(&format!("key:{}", i)).await?;
+        println!("Hit: Retrieved key:{}", i);
 
-        // Get the value (should be a hit)
-        println!("Getting key (hit): {}", key);
-        let _: Option<String> = cache.get(&key).await?;
-
-        // Get a non-existent key (should be a miss)
-        let missing_key = format!("{}-missing", key);
-        println!("Getting missing key (miss): {}", missing_key);
-        let _: Option<String> = cache.get(&missing_key).await?;
-
-        // Delete the key
-        println!("Deleting key: {}", key);
-        cache.delete(&key).await?;
+        // Generate some misses
+        let _: Option<String> = cache.get(&format!("missing:{}", i)).await?;
+        println!("Miss: Attempted to retrieve missing:{}", i);
     }
 
-    // Generate some errors (trying to increment a string)
-    println!("\nGenerating some error metrics...");
+    // Generate some deletes
+    for i in 0..3 {
+        cache.delete(&format!("key:{}", i)).await?;
+        println!("Delete: Removed key:{}", i);
+    }
 
-    // First set a string value
-    cache.set("string-key", "not-a-number", None).await?;
+    // Generate some batch operations
+    let entries = vec![
+        ("batch:1", "value:1"),
+        ("batch:2", "value:2"),
+        ("batch:3", "value:3"),
+    ];
+    cache.set_many(entries, None).await?;
+    println!("Set many: batch:1, batch:2, batch:3");
 
-    // Try to increment it (this will cause an error in Redis)
-    println!("Attempting to increment a string value (will generate an error metric)");
-    let result = cache.increment("string-key", 1).await;
-    println!("Result as expected: {:?}", result);
+    let keys = vec!["batch:1", "batch:2", "batch:3", "batch:missing"];
+    let _: Vec<Option<String>> = cache.get_many(keys).await?;
+    println!("Get many: batch:1, batch:2, batch:3, batch:missing");
 
-    // Health check
-    println!("\nPerforming health check (generates metrics)");
-    cache.health_check().await?;
+    // Generate some expirations
+    let options = CacheOptions::new().ttl(Duration::from_millis(10));
+    cache
+        .set("expiring", "This will expire quickly", Some(options))
+        .await?;
+    println!("Set expiring key with 10ms TTL");
 
-    // Wait a moment for metrics to be recorded
-    println!("\nWaiting for metrics to be processed...");
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Wait for expiration
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    let _: Option<String> = cache.get("expiring").await?;
+    println!("Miss: Attempted to retrieve expired key");
 
-    // In a real application, metrics would be:
-    // 1. Scraped by Prometheus
-    // 2. Visualized in Grafana
-    // 3. Used for alerting
-
-    println!("\nMetrics have been recorded. In a real application:");
-    println!("- They would be exposed via a metrics endpoint (e.g., /metrics)");
-    println!("- Prometheus would scrape the metrics");
-    println!("- Dashboards would display cache hit/miss ratios, operation latency, etc.");
-
-    println!("\nThe following metrics should have been recorded:");
-    println!("- navius_cache_operations_total{operation=\"get\",backend=\"redis\",result=\"hit\"}");
+    // Print metric values
+    println!("\nMetrics were recorded for all operations above.");
+    println!("Check the console output for metrics debugging information.");
+    println!("\nYou should see metrics like:");
     println!(
-        "- navius_cache_operations_total{operation=\"get\",backend=\"redis\",result=\"miss\"}"
+        "  - navius_cache_operations_total{{operation=\"get\",backend=\"memory\",result=\"hit\"}}"
     );
     println!(
-        "- navius_cache_operations_total{operation=\"set\",backend=\"redis\",result=\"success\"}"
+        "  - navius_cache_operations_total{{operation=\"get\",backend=\"memory\",result=\"miss\"}}"
     );
     println!(
-        "- navius_cache_operations_total{operation=\"delete\",backend=\"redis\",result=\"success\"}"
+        "  - navius_cache_operations_total{{operation=\"set\",backend=\"memory\",result=\"success\"}}"
     );
-    println!(
-        "- navius_cache_operations_total{operation=\"increment\",backend=\"redis\",result=\"error\"}"
-    );
-    println!("- navius_cache_operation_duration_seconds{operation=\"get\",backend=\"redis\"}");
-    println!("- navius_cache_operation_duration_seconds{operation=\"set\",backend=\"redis\"}");
+    println!("  - navius_cache_operation_duration_seconds{{operation=\"get\",backend=\"memory\"}}");
 
-    // Cleanup
-    println!("\nCleaning up...");
+    // Clean up
     cache.clear().await?;
 
-    println!("\nExample completed successfully!");
     Ok(())
 }

@@ -3,11 +3,11 @@ use crate::connection::RedisConnectionPool;
 use crate::error::{RedisCacheError, RedisCacheResult as CrateRedisCacheResult};
 use crate::key::{KeyValidationOptions, validate_key};
 use crate::metrics::OperationTimer;
-use crate::operations::RedisOperations;
-use crate::serialization::{SerializationFormat, SerializerImpl};
+use crate::serialization::{JsonSerializer, SerializationFormat, Serializer, SerializerImpl};
 use async_trait::async_trait;
 use metrics;
 use navius_cache::cache::{Cache, CacheKey, CacheOperations, CacheOptions, CacheResult};
+use navius_cache::connection::ConnectionPool;
 use navius_cache::error::CacheError;
 use redis::{AsyncCommands, FromRedisValue, RedisError, RedisResult, ToRedisArgs};
 use serde::{Serialize, de::DeserializeOwned};
@@ -19,7 +19,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, error, field::display, info, instrument, trace, warn};
 
-/// Redis cache implementation
+/// Main Redis cache implementation
+///
+/// This struct provides a Redis-backed implementation of the Cache trait
 #[derive(Clone)]
 pub struct RedisCache {
     /// The Redis connection pool
@@ -40,21 +42,21 @@ pub struct RedisCache {
 ///
 /// `true` if the Redis server is available, `false` otherwise
 pub async fn check_redis_connection(url: &str) -> bool {
-    let client = match redis::Client::open(url) {
-        Ok(client) => client,
-        Err(_) => return false,
+    // Create a minimal config with just the URL
+    let config = RedisCacheConfig {
+        url: url.to_string(),
+        ..RedisCacheConfig::default()
     };
 
-    let connection = match client.get_async_connection().await {
-        Ok(conn) => conn,
-        Err(_) => return false,
-    };
-
-    let mut connection = connection;
-    let ping: redis::RedisResult<String> = redis::cmd("PING").query_async(&mut connection).await;
-
-    match ping {
-        Ok(response) => response == "PONG",
+    // Try to create a connection pool
+    match RedisConnectionPool::new(config).await {
+        Ok(pool) => {
+            // If we can create a pool, run a health check
+            match pool.health_check().await {
+                Ok(_) => true,
+                Err(_) => false,
+            }
+        }
         Err(_) => false,
     }
 }
@@ -78,28 +80,28 @@ impl RedisCache {
         config.validate()?;
 
         // Create the connection pool
-        let pool = RedisConnectionPool::new(config.clone()).await?;
+        let pool = Arc::new(RedisConnectionPool::new(config.clone()).await?);
 
         // Create the serializer
         let serializer = SerializerImpl::new(config.serialization_format);
 
-        // Create the cache
-        let cache = Self {
-            pool: Arc::new(pool),
+        // Test the connection
+        let pool_clone = pool.clone();
+        let health_check_result = pool_clone.health_check().await;
+        if let Err(e) = health_check_result {
+            return Err(RedisCacheError::Connection(format!(
+                "Failed to connect to Redis: {}",
+                e
+            )));
+        }
+
+        Ok(Self {
+            pool,
             config: config.clone(),
             serializer,
             key_validation: KeyValidationOptions::default(),
             format: config.serialization_format,
-        };
-
-        // Test the connection
-        match cache.health_check().await {
-            Ok(_) => Ok(cache),
-            Err(e) => Err(RedisCacheError::Connection(format!(
-                "Failed to connect to Redis: {}",
-                e
-            ))),
-        }
+        })
     }
 
     /// Get the Redis cache configuration
@@ -283,7 +285,7 @@ impl RedisCache {
             }
 
             timer.record_success();
-            debug!("Cleared all keys with prefix");
+            debug!(total_deleted = %total_deleted, "Cleared all keys with prefix");
             Ok(())
         }
     }
@@ -330,9 +332,13 @@ impl RedisCache {
                         Ok(Some(value))
                     }
                     Err(e) => {
-                        timer.record_error(&e);
+                        let err = RedisCacheError::Serialization(format!(
+                            "Failed to serialize cache value: {}",
+                            e
+                        ));
+                        timer.record_error(&err);
                         metrics::counter!("cache.get.error");
-                        Err(e.into())
+                        Err(err)
                     }
                 }
             }
@@ -428,7 +434,7 @@ impl RedisCache {
     ) -> CrateRedisCacheResult<i64>
     where
         K: CacheKey + 'static,
-        F: CacheKey + redis::ToRedisArgs + 'static,
+        F: CacheKey + Serialize + Debug + 'static,
     {
         let timer = OperationTimer::new("cache_hash_increment");
         metrics::counter!("cache.hash_increment.total");
@@ -444,7 +450,16 @@ impl RedisCache {
         };
 
         // Get field as string
-        let field_str = field.to_string();
+        let field_str = match serde_json::to_string(&field) {
+            Ok(f) => f,
+            Err(e) => {
+                let err =
+                    RedisCacheError::Serialization(format!("Failed to serialize field: {}", e));
+                timer.record_error(&err);
+                metrics::counter!("cache.hash_increment.error");
+                return Err(err);
+            }
+        };
 
         // Execute HINCRBY command
         let result = self
@@ -484,7 +499,7 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn get<K, V>(&self, key: K) -> CacheResult<Option<V>>
     where
-        K: CacheKey + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
         V: DeserializeOwned + Send + 'static,
     {
         self._get(key).await.map_err(|e| e.into())
@@ -493,7 +508,7 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, keys), fields(key_count = %keys.len()), level = "info")]
     async fn get_many<K, V>(&self, keys: Vec<K>) -> CacheResult<Vec<Option<V>>>
     where
-        K: CacheKey + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
         V: DeserializeOwned + Send + 'static,
     {
         if keys.is_empty() {
@@ -505,7 +520,7 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, key, value), fields(key = %key.to_string()), level = "info")]
     async fn set<K, V>(&self, key: K, value: &V, options: Option<CacheOptions>) -> CacheResult<()>
     where
-        K: CacheKey + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
         V: Serialize + Send + Sync + Clone + 'static,
     {
         let ttl = self.get_ttl(options);
@@ -521,7 +536,7 @@ impl CacheOperations for RedisCache {
         options: Option<CacheOptions>,
     ) -> CacheResult<()>
     where
-        K: CacheKey + Eq + Hash + 'static,
+        K: CacheKey + Eq + Hash + std::fmt::Debug + 'static,
         V: Serialize + Send + Sync + Clone + 'static,
     {
         let ttl = self.get_ttl(options);
@@ -535,7 +550,7 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn delete<K>(&self, key: K) -> CacheResult<bool>
     where
-        K: CacheKey + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
     {
         self.delete_internal(key).await.map_err(|e| e.into())
     }
@@ -543,7 +558,7 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, keys), fields(key_count = %keys.len()), level = "info")]
     async fn delete_many<K>(&self, keys: Vec<K>) -> CacheResult<usize>
     where
-        K: CacheKey + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
     {
         self.delete_many_internal(keys).await.map_err(|e| e.into())
     }
@@ -551,7 +566,7 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn exists<K>(&self, key: K) -> CacheResult<bool>
     where
-        K: CacheKey + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
     {
         self.exists_internal(key).await.map_err(|e| e.into())
     }
@@ -559,7 +574,7 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn increment<K>(&self, key: K, amount: i64) -> CacheResult<i64>
     where
-        K: CacheKey + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
     {
         debug!(
             key = %key.to_string(),
@@ -574,7 +589,7 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
     async fn expire<K>(&self, key: K, ttl: Duration) -> CacheResult<bool>
     where
-        K: CacheKey + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
     {
         self.expire_internal(key, ttl).await.map_err(|e| e.into())
     }
@@ -722,8 +737,8 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, key, field), fields(key = %key.to_string(), field = %field.to_string()), level = "info")]
     async fn hash_get<K, F, V>(&self, key: K, field: F) -> CacheResult<Option<V>>
     where
-        K: CacheKey + 'static,
-        F: CacheKey + redis::ToRedisArgs + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + Serialize + Clone + std::fmt::Debug + 'static,
         V: DeserializeOwned + Send + Sync + 'static,
     {
         self.hash_get_internal(key, field)
@@ -734,8 +749,8 @@ impl CacheOperations for RedisCache {
     #[instrument(skip(self, key, field, value), fields(key = %key.to_string(), field = %field.to_string()), level = "info")]
     async fn hash_set<K, F, V>(&self, key: K, field: F, value: &V) -> CacheResult<bool>
     where
-        K: CacheKey + 'static,
-        F: CacheKey + redis::ToRedisArgs + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+        F: CacheKey + Serialize + Clone + std::fmt::Debug + 'static,
         V: Serialize + Send + Sync + Clone + 'static,
     {
         self.hash_set_internal(key, field, value.clone())
@@ -747,21 +762,88 @@ impl CacheOperations for RedisCache {
     async fn hash_get_many<K, F, V>(&self, key: K, fields: Vec<F>) -> CacheResult<Vec<Option<V>>>
     where
         K: CacheKey + std::fmt::Debug + 'static,
-        F: CacheKey
-            + redis::FromRedisValue
-            + std::cmp::Eq
-            + std::hash::Hash
-            + Clone
-            + std::fmt::Debug
-            + 'static,
+        F: CacheKey + Serialize + Eq + Hash + Clone + std::fmt::Debug + 'static,
         V: DeserializeOwned + Send + Sync + 'static,
     {
         if fields.is_empty() {
             return Ok(Vec::new());
         }
-        self.hash_get_many_internal(key, fields)
-            .await
-            .map_err(|e| e.into())
+
+        let timer = OperationTimer::new("cache_hash_get_many");
+        metrics::counter!("cache.hash_get_many.total");
+
+        // Convert key to string and validate
+        let key_str = match self.key_to_string(key) {
+            Ok(k) => k,
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.hash_get_many.error");
+                return Err(e.into());
+            }
+        };
+
+        // Prepare fields for Redis
+        let mut serialized_fields = Vec::with_capacity(fields.len());
+        for field in fields {
+            // Serialize field to string using serde_json for consistency
+            match serde_json::to_string(&field) {
+                Ok(field_str) => serialized_fields.push(field_str),
+                Err(e) => {
+                    let err =
+                        RedisCacheError::Serialization(format!("Failed to serialize field: {}", e));
+                    timer.record_error(&err);
+                    metrics::counter!("cache.hash_get_many.error");
+                    return Err(err.into());
+                }
+            }
+        }
+
+        // Execute HMGET command
+        let result: Result<Vec<Option<Vec<u8>>>, RedisCacheError> = self
+            .pool
+            .execute(move |conn| {
+                Box::pin(async move {
+                    redis::cmd("HMGET")
+                        .arg(&key_str)
+                        .arg(&serialized_fields)
+                        .query_async::<Vec<Option<Vec<u8>>>>(conn)
+                        .await
+                })
+            })
+            .await;
+
+        match result {
+            Ok(values) => {
+                // Convert results to Vec<Option<V>>
+                let mut result = Vec::with_capacity(values.len());
+                for value_opt in values {
+                    if let Some(value_bytes) = value_opt {
+                        match self.serializer.deserialize::<V>(&value_bytes).await {
+                            Ok(value) => result.push(Some(value)),
+                            Err(e) => {
+                                let err = RedisCacheError::Serialization(format!(
+                                    "Failed to deserialize value: {}",
+                                    e
+                                ));
+                                timer.record_error(&err);
+                                metrics::counter!("cache.hash_get_many.error");
+                                return Err(err.into());
+                            }
+                        }
+                    } else {
+                        result.push(None);
+                    }
+                }
+                timer.record_success();
+                metrics::counter!("cache.hash_get_many.success");
+                Ok(result)
+            }
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.hash_get_many.error");
+                Err(e.into())
+            }
+        }
     }
 
     #[instrument(skip(self, key, entries), fields(key = %key.to_string(), entry_count = %entries.len()), level = "info")]
@@ -769,7 +851,7 @@ impl CacheOperations for RedisCache {
     where
         K: CacheKey + std::fmt::Debug + 'static,
         F: CacheKey
-            + redis::ToRedisArgs
+            + Serialize
             + std::cmp::Eq
             + std::hash::Hash
             + Clone
@@ -788,7 +870,7 @@ impl CacheOperations for RedisCache {
     async fn hash_exists<K, F>(&self, key: K, field: F) -> CacheResult<bool>
     where
         K: CacheKey + std::fmt::Debug + 'static,
-        F: CacheKey + redis::ToRedisArgs + Clone + std::fmt::Debug + 'static,
+        F: CacheKey + Serialize + Clone + std::fmt::Debug + 'static,
     {
         self.hash_exists_internal(key, field)
             .await
@@ -799,7 +881,7 @@ impl CacheOperations for RedisCache {
     async fn hash_delete<K, F>(&self, key: K, fields: Vec<F>) -> CacheResult<usize>
     where
         K: CacheKey + std::fmt::Debug + 'static,
-        F: CacheKey + redis::ToRedisArgs + Clone + std::fmt::Debug + 'static,
+        F: CacheKey + Serialize + Clone + std::fmt::Debug + 'static,
     {
         self.hash_delete_many_internal(key, fields)
             .await
@@ -841,7 +923,7 @@ impl CacheOperations for RedisCache {
     async fn hash_increment<K, F>(&self, key: K, field: F, amount: i64) -> CacheResult<i64>
     where
         K: CacheKey + std::fmt::Debug + 'static,
-        F: CacheKey + redis::ToRedisArgs + Clone + std::fmt::Debug + 'static,
+        F: CacheKey + Serialize + Clone + std::fmt::Debug + 'static,
     {
         self.hash_increment_internal(key, field, amount)
             .await
@@ -854,6 +936,86 @@ impl CacheOperations for RedisCache {
         K: CacheKey + std::fmt::Debug + 'static,
     {
         self.hash_length_internal(key).await.map_err(|e| e.into())
+    }
+
+    /// Get the number of members in a sorted set
+    ///
+    /// # Type Requirements
+    ///
+    /// * `K`: Must implement `CacheKey` (convertible to a string key) and `Debug`
+    ///   for better error messages
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key of the sorted set
+    ///
+    /// # Returns
+    ///
+    /// The number of members in the sorted set
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The key is invalid
+    /// - The Redis operation fails
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use navius_cache::{Cache, CacheOperations};
+    /// # use navius_cache_redis::{new, RedisCacheConfig};
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let config = RedisCacheConfig::new("redis://localhost:6379");
+    /// # let cache = new(config).await?;
+    /// // Get the number of users in a leaderboard
+    /// let count = cache.zset_length("leaderboard").await?;
+    /// println!("There are {} users in the leaderboard", count);
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
+    async fn zset_length<K>(&self, key: K) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+    {
+        let timer = OperationTimer::new("cache_zset_length");
+        metrics::counter!("cache.zset_length.total");
+
+        // Convert key to string and validate
+        let key_str = match self.key_to_string(key) {
+            Ok(k) => k,
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_length.error");
+                return Err(e.into());
+            }
+        };
+
+        // Execute ZCARD command
+        let result: Result<usize, RedisCacheError> = self
+            .pool
+            .execute(move |conn| {
+                Box::pin(async move {
+                    redis::cmd("ZCARD")
+                        .arg(&key_str)
+                        .query_async::<usize>(conn)
+                        .await
+                })
+            })
+            .await;
+
+        match result {
+            Ok(count) => {
+                timer.record_success();
+                metrics::counter!("cache.zset_length.success");
+                Ok(count)
+            }
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_length.error");
+                Err(e.into())
+            }
+        }
     }
 
     #[instrument(skip(self, key, values), fields(key = %key.to_string(), value_count = values.len()), level = "info")]
@@ -981,171 +1143,882 @@ impl CacheOperations for RedisCache {
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, _key, _items), level = "info")]
-    async fn zset_add<K, V>(&self, _key: K, _items: Vec<(f64, V)>) -> CacheResult<usize>
+    /// Get the score of a member in a sorted set
+    ///
+    /// # Type Requirements
+    ///
+    /// * `K`: Must implement `CacheKey` (convertible to a string key)
+    /// * `V`: Must be serializable (implements `Serialize`), thread-safe (`Send` + `Sync`),
+    ///   and have a `'static` lifetime
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key of the sorted set
+    /// * `member` - The member to get the score for
+    ///
+    /// # Returns
+    ///
+    /// The score of the member as a floating-point number, or None if the member does not exist
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The key is invalid
+    /// - Serialization of the member fails
+    /// - The Redis operation fails
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use navius_cache::{Cache, CacheOperations};
+    /// # use navius_cache_redis::{new, RedisCacheConfig};
+    /// # use serde::{Serialize, Deserialize};
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let config = RedisCacheConfig::new("redis://localhost:6379");
+    /// # let cache = new(config).await?;
+    /// // Get the score of a user in a leaderboard
+    /// let username = "alice";
+    ///
+    /// if let Some(score) = cache.zset_score("leaderboard", &username).await? {
+    ///     println!("{}'s score is {}", username, score);
+    /// } else {
+    ///     println!("{} is not in the leaderboard", username);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[instrument(skip(self, key, member), fields(key = %key.to_string()), level = "info")]
+    async fn zset_score<K, V>(&self, key: K, member: &V) -> CacheResult<Option<f64>>
     where
         K: CacheKey + 'static,
         V: Serialize + Send + Sync + 'static,
     {
-        Err(CacheError::UnsupportedOperation(
-            "RedisCache zset_add not implemented".to_string(),
-        ))
+        let timer = OperationTimer::new("cache_zset_score");
+        metrics::counter!("cache.zset_score.total");
+
+        // Convert key to string and validate
+        let key_str = match self.key_to_string(key) {
+            Ok(k) => k,
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_score.error");
+                return Err(e.into());
+            }
+        };
+
+        // Serialize member
+        let serialized = match self.serializer.serialize(member).await {
+            Ok(s) => s,
+            Err(e) => {
+                let err = RedisCacheError::Serialization(format!(
+                    "Failed to serialize zset member: {}",
+                    e
+                ));
+                timer.record_error(&err);
+                metrics::counter!("cache.zset_score.error");
+                return Err(err.into());
+            }
+        };
+
+        let member_str = String::from_utf8_lossy(&serialized).to_string();
+
+        // Execute ZSCORE command
+        let result: Result<Option<f64>, RedisCacheError> = self
+            .pool
+            .execute(move |conn| {
+                Box::pin(async move {
+                    redis::cmd("ZSCORE")
+                        .arg(&key_str)
+                        .arg(&member_str)
+                        .query_async::<Option<f64>>(conn)
+                        .await
+                })
+            })
+            .await;
+
+        match result {
+            Ok(score) => {
+                timer.record_success();
+                if score.is_some() {
+                    metrics::counter!("cache.zset_score.hit");
+                } else {
+                    metrics::counter!("cache.zset_score.miss");
+                }
+                Ok(score)
+            }
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_score.error");
+                Err(e.into())
+            }
+        }
     }
 
-    #[instrument(skip(self, _key, _members), level = "info")]
-    async fn zset_remove<K, V>(&self, _key: K, _members: Vec<V>) -> CacheResult<usize>
+    /// Increment the score of a member in a sorted set
+    ///
+    /// # Type Requirements
+    ///
+    /// * `K`: Must implement `CacheKey` (convertible to a string key) and `Debug` for better error messages
+    /// * `V`: Must be serializable (implements `Serialize`), thread-safe (`Send` + `Sync`),
+    ///   support cloning (`Clone`), and have a `'static` lifetime
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key of the sorted set
+    /// * `member` - The member whose score should be incremented
+    /// * `increment` - The amount to increment the score by (can be negative)
+    ///
+    /// # Returns
+    ///
+    /// The new score of the member after incrementing
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The key is invalid
+    /// - Serialization of the member fails
+    /// - The Redis operation fails
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use navius_cache::{Cache, CacheOperations};
+    /// # use navius_cache_redis::{new, RedisCacheConfig};
+    /// # use serde::{Serialize, Deserialize};
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let config = RedisCacheConfig::new("redis://localhost:6379");
+    /// # let cache = new(config).await?;
+    /// // Increment a user's score in a leaderboard
+    /// let username = "alice";
+    ///
+    /// // Add 15.5 points to the user's score
+    /// let new_score = cache.zset_increment("leaderboard", &username, 15.5).await?;
+    /// println!("{}'s new score is {}", username, new_score);
+    ///
+    /// // Subtract 5 points from the user's score
+    /// let new_score = cache.zset_increment("leaderboard", &username, -5.0).await?;
+    /// println!("{}'s score after penalty is {}", username, new_score);
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[instrument(skip(self, key, member), fields(key = %key.to_string()), level = "info")]
+    async fn zset_increment<K, V>(&self, key: K, member: &V, increment: f64) -> CacheResult<f64>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + Clone + 'static,
+    {
+        let timer = OperationTimer::new("cache_zset_increment");
+        metrics::counter!("cache.zset_increment.total");
+
+        // Convert key to string and validate
+        let key_str = match self.key_to_string(key) {
+            Ok(k) => k,
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_increment.error");
+                return Err(e.into());
+            }
+        };
+
+        // Serialize member
+        let serialized = match self.serializer.serialize(member).await {
+            Ok(s) => s,
+            Err(e) => {
+                let err = RedisCacheError::Serialization(format!(
+                    "Failed to serialize zset member: {}",
+                    e
+                ));
+                timer.record_error(&err);
+                metrics::counter!("cache.zset_increment.error");
+                return Err(err.into());
+            }
+        };
+
+        let member_str = String::from_utf8_lossy(&serialized).to_string();
+
+        // Execute ZINCRBY command
+        let result: Result<f64, RedisCacheError> = self
+            .pool
+            .execute(move |conn| {
+                Box::pin(async move {
+                    redis::cmd("ZINCRBY")
+                        .arg(&key_str)
+                        .arg(increment)
+                        .arg(&member_str)
+                        .query_async::<f64>(conn)
+                        .await
+                })
+            })
+            .await;
+
+        match result {
+            Ok(new_score) => {
+                timer.record_success();
+                metrics::counter!("cache.zset_increment.success");
+                Ok(new_score)
+            }
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_increment.error");
+                Err(e.into())
+            }
+        }
+    }
+
+    #[instrument(skip(self, key, start, stop), fields(key = %key.to_string(), start = %start, stop = %stop), level = "info")]
+    async fn zset_range<K, V>(&self, key: K, start: isize, stop: isize) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + Send + 'static,
+    {
+        let timer = OperationTimer::new("cache_zset_range");
+        metrics::counter!("cache.zset_range.total");
+
+        // Convert key to string and validate
+        let key_str = match self.key_to_string(key) {
+            Ok(k) => k,
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_range.error");
+                return Err(e.into());
+            }
+        };
+
+        // Execute ZRANGE command
+        let result: Result<Vec<String>, RedisCacheError> = self
+            .pool
+            .execute(move |conn| {
+                Box::pin(async move {
+                    redis::cmd("ZRANGE")
+                        .arg(&key_str)
+                        .arg(start)
+                        .arg(stop)
+                        .query_async::<Vec<String>>(conn)
+                        .await
+                })
+            })
+            .await;
+
+        match result {
+            Ok(members) => {
+                // Deserialize members
+                let mut deserialized = Vec::with_capacity(members.len());
+                for member in members {
+                    match self.serializer.deserialize::<V>(member.as_bytes()).await {
+                        Ok(value) => deserialized.push(value),
+                        Err(e) => {
+                            let err = RedisCacheError::Serialization(format!(
+                                "Failed to deserialize zset member: {}",
+                                e
+                            ));
+                            timer.record_error(&err);
+                            metrics::counter!("cache.zset_range.error");
+                            return Err(err.into());
+                        }
+                    }
+                }
+
+                timer.record_success();
+                metrics::counter!("cache.zset_range.success");
+                Ok(deserialized)
+            }
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_range.error");
+                Err(e.into())
+            }
+        }
+    }
+
+    #[instrument(skip(self, key, start, stop), fields(key = %key.to_string(), start = %start, stop = %stop), level = "info")]
+    async fn zset_range_with_scores<K, V>(
+        &self,
+        key: K,
+        start: isize,
+        stop: isize,
+    ) -> CacheResult<Vec<(V, f64)>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + Send + 'static,
+    {
+        let timer = OperationTimer::new("cache_zset_range_with_scores");
+        metrics::counter!("cache.zset_range_with_scores.total");
+
+        // Convert key to string and validate
+        let key_str = match self.key_to_string(key) {
+            Ok(k) => k,
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_range_with_scores.error");
+                return Err(e.into());
+            }
+        };
+
+        // Execute ZRANGE command with WITHSCORES option
+        let result: Result<Vec<(String, f64)>, RedisCacheError> = self
+            .pool
+            .execute(move |conn| {
+                Box::pin(async move {
+                    redis::cmd("ZRANGE")
+                        .arg(&key_str)
+                        .arg(start)
+                        .arg(stop)
+                        .arg("WITHSCORES")
+                        .query_async::<Vec<(String, f64)>>(conn)
+                        .await
+                })
+            })
+            .await;
+
+        match result {
+            Ok(members_with_scores) => {
+                // Deserialize members
+                let mut deserialized = Vec::with_capacity(members_with_scores.len());
+                for (member, score) in members_with_scores {
+                    match self.serializer.deserialize::<V>(member.as_bytes()).await {
+                        Ok(value) => deserialized.push((value, score)),
+                        Err(e) => {
+                            let err = RedisCacheError::Serialization(format!(
+                                "Failed to deserialize zset member: {}",
+                                e
+                            ));
+                            timer.record_error(&err);
+                            metrics::counter!("cache.zset_range_with_scores.error");
+                            return Err(err.into());
+                        }
+                    }
+                }
+
+                timer.record_success();
+                metrics::counter!("cache.zset_range_with_scores.success");
+                Ok(deserialized)
+            }
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_range_with_scores.error");
+                Err(e.into())
+            }
+        }
+    }
+
+    /// Get members from a sorted set with scores within a specified range
+    ///
+    /// # Type Requirements
+    ///
+    /// * `K`: Must implement `CacheKey` (convertible to a string key)
+    /// * `V`: Must be deserializable (implements `DeserializeOwned`),
+    ///   and have a `'static` lifetime
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key of the sorted set
+    /// * `min` - The minimum score (inclusive)
+    /// * `max` - The maximum score (inclusive)
+    ///
+    /// # Returns
+    ///
+    /// A vector of members with scores between min and max (inclusive)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The key is invalid
+    /// - Deserialization of any member fails
+    /// - The Redis operation fails
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use navius_cache::{Cache, CacheOperations};
+    /// # use navius_cache_redis::{new, RedisCacheConfig};
+    /// # use serde::{Serialize, Deserialize};
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let config = RedisCacheConfig::new("redis://localhost:6379");
+    /// # let cache = new(config).await?;
+    /// // Get all users with scores between 50 and 100
+    /// let users = cache.zset_range_by_score("leaderboard", 50.0, 100.0).await?;
+    ///
+    /// for user in users {
+    ///     println!("User in score range: {}", user);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[instrument(skip(self, key, min, max), fields(key = %key.to_string(), min = %min, max = %max), level = "info")]
+    async fn zset_range_by_score<K, V>(&self, key: K, min: f64, max: f64) -> CacheResult<Vec<V>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + Send + 'static,
+    {
+        let timer = OperationTimer::new("cache_zset_range_by_score");
+        metrics::counter!("cache.zset_range_by_score.total");
+
+        // Convert key to string and validate
+        let key_str = match self.key_to_string(key) {
+            Ok(k) => k,
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_range_by_score.error");
+                return Err(e.into());
+            }
+        };
+
+        // Execute ZRANGEBYSCORE command
+        let result: Result<Vec<String>, RedisCacheError> = self
+            .pool
+            .execute(move |conn| {
+                Box::pin(async move {
+                    redis::cmd("ZRANGEBYSCORE")
+                        .arg(&key_str)
+                        .arg(min)
+                        .arg(max)
+                        .query_async::<Vec<String>>(conn)
+                        .await
+                })
+            })
+            .await;
+
+        match result {
+            Ok(members) => {
+                // Deserialize members
+                let mut deserialized = Vec::with_capacity(members.len());
+                for member in members {
+                    match self.serializer.deserialize::<V>(member.as_bytes()).await {
+                        Ok(value) => deserialized.push(value),
+                        Err(e) => {
+                            let err = RedisCacheError::Serialization(format!(
+                                "Failed to deserialize zset member: {}",
+                                e
+                            ));
+                            timer.record_error(&err);
+                            metrics::counter!("cache.zset_range_by_score.error");
+                            return Err(err.into());
+                        }
+                    }
+                }
+
+                timer.record_success();
+                metrics::counter!("cache.zset_range_by_score.success");
+                Ok(deserialized)
+            }
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_range_by_score.error");
+                Err(e.into())
+            }
+        }
+    }
+
+    /// Get members with their scores from a sorted set with scores within a specified range
+    ///
+    /// # Type Requirements
+    ///
+    /// * `K`: Must implement `CacheKey` (convertible to a string key)
+    /// * `V`: Must be deserializable (implements `DeserializeOwned`),
+    ///   and have a `'static` lifetime
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key of the sorted set
+    /// * `min` - The minimum score (inclusive)
+    /// * `max` - The maximum score (inclusive)
+    ///
+    /// # Returns
+    ///
+    /// A vector of (member, score) pairs for members with scores between min and max (inclusive)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The key is invalid
+    /// - Deserialization of any member fails
+    /// - The Redis operation fails
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use navius_cache::{Cache, CacheOperations};
+    /// # use navius_cache_redis::{new, RedisCacheConfig};
+    /// # use serde::{Serialize, Deserialize};
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let config = RedisCacheConfig::new("redis://localhost:6379");
+    /// # let cache = new(config).await?;
+    /// // Get all users with their scores between 50 and 100
+    /// let users_with_scores = cache.zset_range_by_score_with_scores("leaderboard", 50.0, 100.0).await?;
+    ///
+    /// for (user, score) in users_with_scores {
+    ///     println!("User: {} with score: {}", user, score);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[instrument(skip(self, key, min, max), fields(key = %key.to_string(), min = %min, max = %max), level = "info")]
+    async fn zset_range_by_score_with_scores<K, V>(
+        &self,
+        key: K,
+        min: f64,
+        max: f64,
+    ) -> CacheResult<Vec<(V, f64)>>
+    where
+        K: CacheKey + 'static,
+        V: DeserializeOwned + Send + 'static,
+    {
+        let timer = OperationTimer::new("cache_zset_range_by_score_with_scores");
+        metrics::counter!("cache.zset_range_by_score_with_scores.total");
+
+        // Convert key to string and validate
+        let key_str = match self.key_to_string(key) {
+            Ok(k) => k,
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_range_by_score_with_scores.error");
+                return Err(e.into());
+            }
+        };
+
+        // Execute ZRANGEBYSCORE command with WITHSCORES option
+        let result: Result<Vec<(String, f64)>, RedisCacheError> = self
+            .pool
+            .execute(move |conn| {
+                Box::pin(async move {
+                    redis::cmd("ZRANGEBYSCORE")
+                        .arg(&key_str)
+                        .arg(min)
+                        .arg(max)
+                        .arg("WITHSCORES")
+                        .query_async::<Vec<(String, f64)>>(conn)
+                        .await
+                })
+            })
+            .await;
+
+        match result {
+            Ok(members_with_scores) => {
+                // Deserialize members
+                let mut deserialized = Vec::with_capacity(members_with_scores.len());
+                for (member, score) in members_with_scores {
+                    match self.serializer.deserialize::<V>(member.as_bytes()).await {
+                        Ok(value) => deserialized.push((value, score)),
+                        Err(e) => {
+                            let err = RedisCacheError::Serialization(format!(
+                                "Failed to deserialize zset member: {}",
+                                e
+                            ));
+                            timer.record_error(&err);
+                            metrics::counter!("cache.zset_range_by_score_with_scores.error");
+                            return Err(err.into());
+                        }
+                    }
+                }
+
+                timer.record_success();
+                metrics::counter!("cache.zset_range_by_score_with_scores.success");
+                Ok(deserialized)
+            }
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_range_by_score_with_scores.error");
+                Err(e.into())
+            }
+        }
+    }
+
+    /// Get the rank of a member in a sorted set (0-based, ascending order)
+    ///
+    /// # Type Requirements
+    ///
+    /// * `K`: Must implement `CacheKey` (convertible to a string key)
+    /// * `V`: Must be serializable (implements `Serialize`), thread-safe (`Send` + `Sync`),
+    ///   and have a `'static` lifetime
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key of the sorted set
+    /// * `member` - The member to get the rank for
+    ///
+    /// # Returns
+    ///
+    /// The rank of the member as a 0-based index, or None if the member doesn't exist
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The key is invalid
+    /// - Serialization of the member fails
+    /// - The Redis operation fails
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use navius_cache::{Cache, CacheOperations};
+    /// # use navius_cache_redis::{new, RedisCacheConfig};
+    /// # use serde::{Serialize, Deserialize};
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let config = RedisCacheConfig::new("redis://localhost:6379");
+    /// # let cache = new(config).await?;
+    /// // Get the rank of a user in a leaderboard (0 is the lowest score)
+    /// let username = "alice";
+    ///
+    /// if let Some(rank) = cache.zset_rank("leaderboard", &username).await? {
+    ///     println!("{} is ranked #{} (0-based index)", username, rank);
+    /// } else {
+    ///     println!("{} is not in the leaderboard", username);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[instrument(skip(self, key, member), fields(key = %key.to_string()), level = "info")]
+    async fn zset_rank<K, V>(&self, key: K, member: &V) -> CacheResult<Option<usize>>
     where
         K: CacheKey + 'static,
         V: Serialize + Send + Sync + 'static,
     {
-        Err(CacheError::UnsupportedOperation(
-            "RedisCache zset_remove not implemented".to_string(),
-        ))
+        let timer = OperationTimer::new("cache_zset_rank");
+        metrics::counter!("cache.zset_rank.total");
+
+        // Convert key to string and validate
+        let key_str = match self.key_to_string(key) {
+            Ok(k) => k,
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_rank.error");
+                return Err(e.into());
+            }
+        };
+
+        // Serialize member
+        let serialized = match self.serializer.serialize(member).await {
+            Ok(s) => s,
+            Err(e) => {
+                let err = RedisCacheError::Serialization(format!(
+                    "Failed to serialize zset member: {}",
+                    e
+                ));
+                timer.record_error(&err);
+                metrics::counter!("cache.zset_rank.error");
+                return Err(err.into());
+            }
+        };
+
+        let member_str = String::from_utf8_lossy(&serialized).to_string();
+
+        // Execute ZRANK command
+        let result: Result<Option<usize>, RedisCacheError> = self
+            .pool
+            .execute(move |conn| {
+                Box::pin(async move {
+                    redis::cmd("ZRANK")
+                        .arg(&key_str)
+                        .arg(&member_str)
+                        .query_async::<Option<usize>>(conn)
+                        .await
+                })
+            })
+            .await;
+
+        match result {
+            Ok(rank) => {
+                timer.record_success();
+                if rank.is_some() {
+                    metrics::counter!("cache.zset_rank.hit");
+                } else {
+                    metrics::counter!("cache.zset_rank.miss");
+                }
+                Ok(rank)
+            }
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_rank.error");
+                Err(e.into())
+            }
+        }
     }
 
     #[instrument(skip(self, _key, _member), level = "info")]
-    async fn zset_score<K, V>(&self, _key: K, _member: &V) -> CacheResult<Option<f64>>
+    async fn zset_rev_rank<K, V>(&self, _key: K, _member: &V) -> CacheResult<Option<usize>>
     where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: Serialize + Send + Sync + Clone + 'static,
     {
         Err(CacheError::UnsupportedOperation(
-            "RedisCache zset_score not implemented".to_string(),
+            "RedisCache zset_rev_rank not implemented".to_string(),
         ))
     }
 
-    #[instrument(skip(self, _key, _member, _increment), level = "info")]
-    async fn zset_increment_score<K, V>(
+    /// Count the number of members in a sorted set with scores within a specified range
+    ///
+    /// # Type Requirements
+    ///
+    /// * `K`: Must implement `CacheKey` (convertible to a string key) and `Debug`
+    ///   for better error messages
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key of the sorted set
+    /// * `min` - The minimum score (inclusive)
+    /// * `max` - The maximum score (inclusive)
+    ///
+    /// # Returns
+    ///
+    /// The number of members with scores between min and max
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The key is invalid
+    /// - The Redis operation fails
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use navius_cache::{Cache, CacheOperations};
+    /// # use navius_cache_redis::{new, RedisCacheConfig};
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let config = RedisCacheConfig::new("redis://localhost:6379");
+    /// # let cache = new(config).await?;
+    /// // Count users with scores between 50 and 100
+    /// let count = cache.zset_count("leaderboard", 50.0, 100.0).await?;
+    /// println!("There are {} users with scores between 50 and 100", count);
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[instrument(skip(self, key), fields(key = %key.to_string(), min = %min, max = %max), level = "info")]
+    async fn zset_count<K>(&self, key: K, min: f64, max: f64) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+    {
+        let timer = OperationTimer::new("cache_zset_count");
+        metrics::counter!("cache.zset_count.total");
+
+        // Convert key to string and validate
+        let key_str = match self.key_to_string(key) {
+            Ok(k) => k,
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_count.error");
+                return Err(e.into());
+            }
+        };
+
+        // Execute ZCOUNT command
+        let result: Result<usize, RedisCacheError> = self
+            .pool
+            .execute(move |conn| {
+                Box::pin(async move {
+                    redis::cmd("ZCOUNT")
+                        .arg(&key_str)
+                        .arg(min)
+                        .arg(max)
+                        .query_async::<usize>(conn)
+                        .await
+                })
+            })
+            .await;
+
+        match result {
+            Ok(count) => {
+                timer.record_success();
+                metrics::counter!("cache.zset_count.success");
+                Ok(count)
+            }
+            Err(e) => {
+                timer.record_error(&e);
+                metrics::counter!("cache.zset_count.error");
+                Err(e.into())
+            }
+        }
+    }
+
+    #[instrument(skip(self, _key, _max, _min), level = "info")]
+    async fn zset_rev_range_by_score<K, V>(
         &self,
         _key: K,
-        _member: &V,
-        _increment: f64,
-    ) -> CacheResult<f64>
+        _max: f64,
+        _min: f64,
+    ) -> CacheResult<Vec<V>>
     where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + Send + Sync + 'static,
     {
         Err(CacheError::UnsupportedOperation(
-            "RedisCache zset_increment_score not implemented".to_string(),
+            "RedisCache zset_rev_range_by_score not implemented".to_string(),
+        ))
+    }
+
+    #[instrument(skip(self, _key, _max, _min), level = "info")]
+    async fn zset_rev_range_by_score_with_scores<K, V>(
+        &self,
+        _key: K,
+        _max: f64,
+        _min: f64,
+    ) -> CacheResult<Vec<(V, f64)>>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        V: DeserializeOwned + Send + Sync + 'static,
+    {
+        Err(CacheError::UnsupportedOperation(
+            "RedisCache zset_rev_range_by_score_with_scores not implemented".to_string(),
         ))
     }
 
     #[instrument(skip(self, _key, _start, _stop), level = "info")]
-    async fn zset_range<K, V>(&self, _key: K, _start: isize, _stop: isize) -> CacheResult<Vec<V>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
-    {
-        Err(CacheError::UnsupportedOperation(
-            "RedisCache zset_range not implemented".to_string(),
-        ))
-    }
-
-    #[instrument(skip(self, _key, _start, _stop), level = "info")]
-    async fn zset_range_with_scores<K, V>(
+    async fn zset_remove_range_by_rank<K>(
         &self,
         _key: K,
         _start: isize,
         _stop: isize,
-    ) -> CacheResult<Vec<(V, f64)>>
+    ) -> CacheResult<usize>
     where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
     {
         Err(CacheError::UnsupportedOperation(
-            "RedisCache zset_range_with_scores not implemented".to_string(),
+            "RedisCache zset_remove_range_by_rank not implemented".to_string(),
         ))
     }
 
     #[instrument(skip(self, _key, _min, _max), level = "info")]
-    async fn zset_range_by_score<K, V>(&self, _key: K, _min: f64, _max: f64) -> CacheResult<Vec<V>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
-    {
-        Err(CacheError::UnsupportedOperation(
-            "RedisCache zset_range_by_score not implemented".to_string(),
-        ))
-    }
-
-    #[instrument(skip(self, _key, _min, _max), level = "info")]
-    async fn zset_range_by_score_with_scores<K, V>(
+    async fn zset_remove_range_by_score<K>(
         &self,
         _key: K,
         _min: f64,
         _max: f64,
-    ) -> CacheResult<Vec<(V, f64)>>
-    where
-        K: CacheKey + 'static,
-        V: DeserializeOwned + 'static,
-    {
-        Err(CacheError::UnsupportedOperation(
-            "RedisCache zset_range_by_score_with_scores not implemented".to_string(),
-        ))
-    }
-
-    #[instrument(skip(self, _key, _member), level = "info")]
-    async fn zset_rank<K, V>(&self, _key: K, _member: &V) -> CacheResult<Option<usize>>
-    where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
-    {
-        Err(CacheError::UnsupportedOperation(
-            "RedisCache zset_rank not implemented".to_string(),
-        ))
-    }
-
-    #[instrument(skip(self, _key, _member), level = "info")]
-    async fn zset_reverse_rank<K, V>(&self, _key: K, _member: &V) -> CacheResult<Option<usize>>
-    where
-        K: CacheKey + 'static,
-        V: Serialize + Send + Sync + 'static,
-    {
-        Err(CacheError::UnsupportedOperation(
-            "RedisCache zset_reverse_rank not implemented".to_string(),
-        ))
-    }
-
-    #[instrument(skip(self, _key), level = "info")]
-    async fn zset_length<K>(&self, _key: K) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-    {
-        Err(CacheError::UnsupportedOperation(
-            "RedisCache zset_length not implemented".to_string(),
-        ))
-    }
-
-    #[instrument(skip(self, key), fields(key = %key.to_string()), level = "info")]
-    async fn zset_count<K>(&self, key: K) -> CacheResult<usize>
-    where
-        K: CacheKey + 'static,
-    {
-        Err(CacheError::UnsupportedOperation(
-            "RedisCache zset_count not implemented".to_string(),
-        ))
-    }
-
-    #[instrument(skip(self, destination, keys), fields(dest = %destination.to_string(), key_count = keys.len()), level = "info")]
-    async fn zset_intersection_store<K, D>(
-        &self,
-        destination: D,
-        keys: Vec<K>,
     ) -> CacheResult<usize>
     where
-        K: CacheKey + 'static,
-        D: CacheKey + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+    {
+        Err(CacheError::UnsupportedOperation(
+            "RedisCache zset_remove_range_by_score not implemented".to_string(),
+        ))
+    }
+
+    #[instrument(skip(self, _destination, _keys, _weights, _aggregate), level = "info")]
+    async fn zset_intersection_store<K, D>(
+        &self,
+        _destination: D,
+        _keys: Vec<K>,
+        _weights: Option<Vec<f64>>,
+        _aggregate: Option<String>,
+    ) -> CacheResult<usize>
+    where
+        K: CacheKey + std::fmt::Debug + 'static,
+        D: CacheKey + std::fmt::Debug + 'static,
     {
         Err(CacheError::UnsupportedOperation(
             "RedisCache zset_intersection_store not implemented".to_string(),
         ))
     }
 
-    #[instrument(skip(self, destination, keys), fields(dest = %destination.to_string(), key_count = keys.len()), level = "info")]
-    async fn zset_union_store<K, D>(&self, destination: D, keys: Vec<K>) -> CacheResult<usize>
+    #[instrument(skip(self, _destination, _keys, _weights, _aggregate), level = "info")]
+    async fn zset_union_store<K, D>(
+        &self,
+        _destination: D,
+        _keys: Vec<K>,
+        _weights: Option<Vec<f64>>,
+        _aggregate: Option<String>,
+    ) -> CacheResult<usize>
     where
-        K: CacheKey + 'static,
-        D: CacheKey + 'static,
+        K: CacheKey + std::fmt::Debug + 'static,
+        D: CacheKey + std::fmt::Debug + 'static,
     {
         Err(CacheError::UnsupportedOperation(
             "RedisCache zset_union_store not implemented".to_string(),

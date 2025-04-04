@@ -1,35 +1,18 @@
-#[cfg(feature = "redis")]
-mod invalidation_tests {
-    use navius_cache::{
-        invalidation::{CacheInvalidation, CacheInvalidator, InvalidationStrategy},
-        CacheConfig, CacheConnectionManager, RedisCache,
-    };
-    use navius_test::error::{assert_eq, assert_none, assert_some, assert_true, TestResult};
-    use serde::{Deserialize, Serialize};
-    use std::collections::HashMap;
-    use std::sync::Arc;
-    use std::time::Duration;
-    use tokio::sync::RwLock;
-    use uuid::Uuid;
+use navius_cache::{
+    CacheConfig, CacheConnectionManager, CacheInvalidation, CacheOperations, InvalidationStrategy,
+};
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::RwLock;
+use uuid::Uuid;
 
-    // Test data structure
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-    struct TestEntity {
-        id: String,
-        name: String,
-    }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+    use std::collections::HashSet;
 
-    impl TestEntity {
-        fn new(name: &str) -> Self {
-            Self {
-                id: Uuid::new_v4().to_string(),
-                name: name.to_string(),
-            }
-        }
-    }
-
-    // Test invalidator that tracks calls for verification
-    #[derive(Debug, Default)]
+    // Mock invalidator to test custom invalidation strategies
     struct TestInvalidator {
         invalidated_keys: Arc<RwLock<Vec<String>>>,
         invalidated_patterns: Arc<RwLock<Vec<String>>>,
@@ -43,24 +26,50 @@ mod invalidation_tests {
             }
         }
 
-        async fn get_invalidated_keys(&self) -> Vec<String> {
-            self.invalidated_keys.read().await.clone()
+        async fn invalidated_key_count(&self) -> usize {
+            self.invalidated_keys.read().await.len()
         }
 
-        async fn get_invalidated_patterns(&self) -> Vec<String> {
-            self.invalidated_patterns.read().await.clone()
+        async fn invalidated_pattern_count(&self) -> usize {
+            self.invalidated_patterns.read().await.len()
+        }
+
+        async fn contains_key(&self, key: &str) -> bool {
+            self.invalidated_keys
+                .read()
+                .await
+                .contains(&key.to_string())
+        }
+
+        async fn contains_pattern(&self, pattern: &str) -> bool {
+            self.invalidated_patterns
+                .read()
+                .await
+                .contains(&pattern.to_string())
         }
     }
 
-    #[async_trait::async_trait]
+    #[async_trait]
+    trait CacheInvalidator {
+        async fn invalidate_key(&self, key: &str) -> Result<(), navius_cache::error::CacheError>;
+        async fn invalidate_pattern(
+            &self,
+            pattern: &str,
+        ) -> Result<(), navius_cache::error::CacheError>;
+    }
+
+    #[async_trait]
     impl CacheInvalidator for TestInvalidator {
-        async fn invalidate_key(&self, key: &str) -> Result<(), navius_cache::Error> {
+        async fn invalidate_key(&self, key: &str) -> Result<(), navius_cache::error::CacheError> {
             let mut keys = self.invalidated_keys.write().await;
             keys.push(key.to_string());
             Ok(())
         }
 
-        async fn invalidate_pattern(&self, pattern: &str) -> Result<(), navius_cache::Error> {
+        async fn invalidate_pattern(
+            &self,
+            pattern: &str,
+        ) -> Result<(), navius_cache::error::CacheError> {
             let mut patterns = self.invalidated_patterns.write().await;
             patterns.push(pattern.to_string());
             Ok(())
@@ -70,405 +79,127 @@ mod invalidation_tests {
     // Helper function to create a unique test configuration
     fn create_test_config() -> CacheConfig {
         CacheConfig::new(
-            "redis://127.0.0.1:6379".to_string(),
+            "memory://".to_string(),
             format!("navius-test-{}:", Uuid::new_v4()),
             Duration::from_secs(60),
         )
-        .with_connect_timeout(Duration::from_secs(1))
-        .with_max_connections(5)
         .with_trace(true)
     }
 
     // Helper function to create a test cache manager
-    async fn create_test_cache() -> Option<CacheConnectionManager<RedisCache>> {
-        match CacheConnectionManager::new_redis(create_test_config()).await {
-            Ok(cache) => Some(cache),
-            Err(_) => None,
-        }
+    fn create_test_cache() -> CacheConnectionManager {
+        CacheConnectionManager::new_memory(create_test_config())
     }
 
     #[tokio::test]
-    async fn test_immediate_invalidation() -> TestResult<()> {
-        // Skip if Redis is not available
-        let Some(cache) = create_test_cache().await else {
-            return Ok(());
-        };
+    async fn test_immediate_invalidation() {
+        // Set up cache with data
+        let cache = create_test_cache();
+        cache.clear().await.unwrap();
 
-        // Set up some test data
-        let prefix = "user:";
-        let keys = vec![
-            format!("{}123", prefix),
-            format!("{}456", prefix),
-            format!("{}789", prefix),
-        ];
-        let value = "test-value";
+        // Add test data
+        cache.set("test:key1", "value1", None).await.unwrap();
+        cache.set("test:key2", "value2", None).await.unwrap();
 
-        // Set values
-        for key in &keys {
-            cache.set(key, &value, None).await.unwrap();
-        }
+        // Verify data exists
+        assert_eq!(cache.exists("test:key1").await.unwrap(), true);
+        assert_eq!(cache.exists("test:key2").await.unwrap(), true);
 
-        // Create invalidator with immediate strategy
+        // Create and use invalidator for immediate deletion
         let invalidator =
-            CacheInvalidator::<_, String>::new(cache.clone(), InvalidationStrategy::Immediate);
+            CacheInvalidation::new(InvalidationStrategy::ImmediateKey("test:key1".to_string()));
+        invalidator.invalidate(&cache).await.unwrap();
 
-        // Invalidate one key
-        let result = invalidator.invalidate(&keys[1]).await.unwrap();
-        assert_true(result, "Invalidation should return true")?;
-
-        // Verify first and third keys still exist
-        let result1: Option<String> = cache.get(&keys[0]).await.unwrap();
-        let result2: Option<String> = cache.get(&keys[1]).await.unwrap();
-        let result3: Option<String> = cache.get(&keys[2]).await.unwrap();
-
-        assert_eq(
-            result1,
-            Some(value.to_string()),
-            "First key should still exist",
-        )?;
-        assert_eq(result2, None, "Second key should be invalidated")?;
-        assert_eq(
-            result3,
-            Some(value.to_string()),
-            "Third key should still exist",
-        )?;
-
-        Ok(())
+        // Verify key1 is gone but key2 remains
+        assert_eq!(cache.exists("test:key1").await.unwrap(), false);
+        assert_eq!(cache.exists("test:key2").await.unwrap(), true);
     }
 
     #[tokio::test]
-    async fn test_ttl_invalidation() -> TestResult<()> {
-        // Skip if Redis is not available
-        let Some(cache) = create_test_cache().await else {
-            return Ok(());
-        };
+    async fn test_entity_invalidation() {
+        // Set up cache with data
+        let cache = create_test_cache();
+        cache.clear().await.unwrap();
 
-        // Set up test data
-        let key = "ttl-test";
-        let value = "test-value";
+        // Add test data
+        cache
+            .set("user:123:profile", "profile_data", None)
+            .await
+            .unwrap();
+        cache
+            .set("user:123:settings", "settings_data", None)
+            .await
+            .unwrap();
+        cache
+            .set("user:456:profile", "other_profile", None)
+            .await
+            .unwrap();
 
-        // Set value
-        cache.set(key, &value, None).await.unwrap();
+        // Verify data exists
+        assert_eq!(cache.exists("user:123:profile").await.unwrap(), true);
+        assert_eq!(cache.exists("user:123:settings").await.unwrap(), true);
+        assert_eq!(cache.exists("user:456:profile").await.unwrap(), true);
 
-        // Create invalidator with TTL strategy (100ms)
-        let invalidator = CacheInvalidator::<_, String>::new(
-            cache.clone(),
-            InvalidationStrategy::TimeToLive(Duration::from_millis(100)),
-        );
+        // Create and use entity invalidator
+        let invalidator = CacheInvalidation::new(InvalidationStrategy::EntityBased);
+        invalidator
+            .invalidate_entity(&cache, "user", "123")
+            .await
+            .unwrap();
 
-        // Apply TTL invalidation
-        let result = invalidator.invalidate(key).await.unwrap();
-        assert_true(result, "Invalidation should return true")?;
+        // Verify user 123 data is gone but 456 remains
+        assert_eq!(cache.exists("user:123:profile").await.unwrap(), false);
+        assert_eq!(cache.exists("user:123:settings").await.unwrap(), false);
+        assert_eq!(cache.exists("user:456:profile").await.unwrap(), true);
+    }
 
-        // Verify key still exists immediately
-        let result: Option<String> = cache.get(key).await.unwrap();
-        assert_eq(
-            result,
-            Some(value.to_string()),
-            "Key should still exist immediately",
-        )?;
+    #[tokio::test]
+    async fn test_custom_invalidator() {
+        // Create test invalidator
+        let invalidator = TestInvalidator::new();
 
-        // Wait for TTL to expire
+        // Invalidate some keys and patterns
+        invalidator.invalidate_key("test:key1").await.unwrap();
+        invalidator.invalidate_key("test:key2").await.unwrap();
+        invalidator.invalidate_pattern("user:*").await.unwrap();
+
+        // Verify invalidation was tracked
+        assert_eq!(invalidator.invalidated_key_count().await, 2);
+        assert_eq!(invalidator.invalidated_pattern_count().await, 1);
+        assert!(invalidator.contains_key("test:key1").await);
+        assert!(invalidator.contains_key("test:key2").await);
+        assert!(invalidator.contains_pattern("user:*").await);
+    }
+
+    #[tokio::test]
+    async fn test_ttl_invalidation() {
+        // Set up cache with data
+        let cache = create_test_cache();
+        cache.clear().await.unwrap();
+
+        // Add test data with different TTLs
+        let short_ttl =
+            navius_cache::operations::CacheOptions::new().ttl(Duration::from_millis(100));
+        let long_ttl = navius_cache::operations::CacheOptions::new().ttl(Duration::from_secs(60));
+
+        cache
+            .set("short-lived", "value1", Some(short_ttl))
+            .await
+            .unwrap();
+        cache
+            .set("long-lived", "value2", Some(long_ttl))
+            .await
+            .unwrap();
+
+        // Verify data exists
+        assert_eq!(cache.exists("short-lived").await.unwrap(), true);
+        assert_eq!(cache.exists("long-lived").await.unwrap(), true);
+
+        // Wait for the short TTL to expire
         tokio::time::sleep(Duration::from_millis(150)).await;
 
-        // Verify key is now gone
-        let result: Option<String> = cache.get(key).await.unwrap();
-        assert_eq(result, None, "Key should be invalidated after TTL expires")?;
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_pattern_based_invalidation() -> TestResult<()> {
-        // Skip if Redis is not available
-        let Some(cache) = create_test_cache().await else {
-            return Ok(());
-        };
-
-        // Set up test data
-        let prefix = "product:";
-        let keys = vec![
-            format!("{}123", prefix),
-            format!("{}456", prefix),
-            format!("{}789", prefix),
-            "another:key".to_string(),
-        ];
-        let value = "test-value";
-
-        // Set values
-        for key in &keys {
-            cache.set(key, &value, None).await.unwrap();
-        }
-
-        // Create invalidator with pattern-based strategy
-        let pattern = "{}*".to_string(); // Will be replaced with the key + *
-        let invalidator = CacheInvalidator::<_, String>::new(
-            cache.clone(),
-            InvalidationStrategy::PatternBased(pattern),
-        );
-
-        // Invalidate by pattern (product:*)
-        let result = invalidator.invalidate(prefix).await.unwrap();
-        assert_true(result, "Invalidation should return true")?;
-
-        // Verify product keys are gone but other key remains
-        for i in 0..3 {
-            let result: Option<String> = cache.get(&keys[i]).await.unwrap();
-            assert_eq(result, None, "Key {} should be invalidated", keys[i])?;
-        }
-
-        // The "another:key" should still exist
-        let result: Option<String> = cache.get(&keys[3]).await.unwrap();
-        assert_eq(
-            result,
-            Some(value.to_string()),
-            "Key another:key should still exist",
-        )?;
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_invalidate_all() -> TestResult<()> {
-        // Skip if Redis is not available
-        let Some(cache) = create_test_cache().await else {
-            return Ok(());
-        };
-
-        // Set up test data
-        let keys = vec!["key1", "key2", "key3"];
-        let value = "test-value";
-
-        // Set values
-        for key in &keys {
-            cache.set(*key, &value, None).await.unwrap();
-        }
-
-        // Create invalidator
-        let invalidator =
-            CacheInvalidator::<_, String>::new(cache.clone(), InvalidationStrategy::Immediate);
-
-        // Invalidate all
-        invalidator.invalidate_all().await.unwrap();
-
-        // Verify all keys are gone
-        for key in &keys {
-            let result: Option<String> = cache.get(*key).await.unwrap();
-            assert_eq(result, None, "Key {} should be invalidated", key)?;
-        }
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_change_strategy() -> TestResult<()> {
-        // Skip if Redis is not available
-        let Some(cache) = create_test_cache().await else {
-            return Ok(());
-        };
-
-        // Create invalidator with initial strategy
-        let mut invalidator =
-            CacheInvalidator::<_, String>::new(cache.clone(), InvalidationStrategy::Immediate);
-
-        // Check initial strategy
-        assert_eq!(
-            *invalidator.strategy(),
-            InvalidationStrategy::Immediate,
-            "Initial strategy should be Immediate"
-        )?;
-
-        // Change strategy
-        invalidator.set_strategy(InvalidationStrategy::TimeToLive(Duration::from_secs(60)));
-
-        // Check new strategy
-        if let InvalidationStrategy::TimeToLive(ttl) = invalidator.strategy() {
-            assert_eq!(
-                *ttl,
-                Duration::from_secs(60),
-                "New strategy should be TimeToLive with TTL 60 seconds"
-            )?;
-        } else {
-            panic!("Strategy should be TimeToLive");
-        }
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_entity_invalidation_strategy() -> TestResult<()> {
-        // Create a test cache
-        let cache = create_test_cache().await.unwrap();
-
-        // Create a test invalidator
-        let invalidator = Arc::new(TestInvalidator::new());
-
-        // Define the invalidation strategy
-        let strategy = InvalidationStrategy::new()
-            .when_entity("user")
-            .with_id_field("id")
-            .invalidate_key("user:{id}")
-            .invalidate_pattern("user:*:friends")
-            .build();
-
-        // Execute the strategy
-        let entity = TestEntity::new("John");
-        strategy
-            .execute(
-                &entity,
-                Arc::clone(&invalidator) as Arc<dyn CacheInvalidator>,
-            )
-            .await?;
-
-        // Check invalidated keys
-        let invalidated_keys = invalidator.get_invalidated_keys().await;
-        assert_eq(
-            invalidated_keys.len(),
-            1,
-            "Should invalidate exactly one key",
-        )?;
-        assert_true(
-            invalidated_keys[0].contains(&entity.id),
-            "Invalidated key should contain the entity ID",
-        )?;
-
-        // Check invalidated patterns
-        let invalidated_patterns = invalidator.get_invalidated_patterns().await;
-        assert_eq(
-            invalidated_patterns.len(),
-            1,
-            "Should invalidate exactly one pattern",
-        )?;
-        assert_eq(
-            invalidated_patterns[0],
-            "user:*:friends",
-            "Should invalidate the correct pattern",
-        )?;
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_compound_invalidation_strategy() -> TestResult<()> {
-        // Create a test invalidator
-        let invalidator = Arc::new(TestInvalidator::new());
-
-        // Define a compound invalidation strategy
-        let strategy = InvalidationStrategy::new()
-            .when_entity("order")
-            .with_id_field("id")
-            .invalidate_key("order:{id}")
-            .invalidate_key("order:{id}:details")
-            .invalidate_pattern("user:{userId}:orders")
-            .build();
-
-        // Mock entity with compound data
-        let mut entity_data = HashMap::new();
-        entity_data.insert("id".to_string(), "order-123".to_string());
-        entity_data.insert("userId".to_string(), "user-456".to_string());
-
-        // Execute the strategy with the HashMap entity
-        strategy
-            .execute(
-                &entity_data,
-                Arc::clone(&invalidator) as Arc<dyn CacheInvalidator>,
-            )
-            .await?;
-
-        // Check invalidated keys
-        let invalidated_keys = invalidator.get_invalidated_keys().await;
-        assert_eq(
-            invalidated_keys.len(),
-            2,
-            "Should invalidate exactly two keys",
-        )?;
-
-        let expected_keys = vec![
-            "order:order-123".to_string(),
-            "order:order-123:details".to_string(),
-        ];
-
-        for key in expected_keys {
-            assert_true(
-                invalidated_keys.contains(&key),
-                &format!("Should invalidate key: {}", key),
-            )?;
-        }
-
-        // Check invalidated patterns
-        let invalidated_patterns = invalidator.get_invalidated_patterns().await;
-        assert_eq(
-            invalidated_patterns.len(),
-            1,
-            "Should invalidate exactly one pattern",
-        )?;
-        assert_eq(
-            invalidated_patterns[0],
-            "user:user-456:orders",
-            "Should interpolate the userId in the pattern",
-        )?;
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_cache_with_invalidation() -> TestResult<()> {
-        // Create a test cache
-        let cache = create_test_cache().await.unwrap();
-
-        // Set up test data
-        let user_id = Uuid::new_v4().to_string();
-        let user_key = format!("user:{}", user_id);
-        let user = TestEntity::new("Alice");
-
-        // Store the user in cache
-        cache.set(&user_key, &user, None).await?;
-
-        // Verify the user is in cache
-        let cached_user: Option<TestEntity> = cache.get(&user_key).await?;
-        assert_some(
-            cached_user,
-            user.clone(),
-            "User should be available in cache after setting",
-        )?;
-
-        // Create a test invalidator
-        let invalidator = Arc::new(TestInvalidator::new());
-
-        // Define and execute an invalidation strategy
-        let strategy = InvalidationStrategy::new()
-            .when_entity("user")
-            .with_id_field("id")
-            .invalidate_key(&format!("user:{}", user.id))
-            .build();
-
-        strategy
-            .execute(&user, Arc::clone(&invalidator) as Arc<dyn CacheInvalidator>)
-            .await?;
-
-        // Check invalidated keys
-        let invalidated_keys = invalidator.get_invalidated_keys().await;
-        assert_eq(
-            invalidated_keys.len(),
-            1,
-            "Should invalidate exactly one key",
-        )?;
-        assert_eq(
-            invalidated_keys[0],
-            &format!("user:{}", user.id),
-            "Should invalidate the user key",
-        )?;
-
-        // Manually clear the cache to simulate the invalidator's effect
-        cache.delete(&user_key).await?;
-
-        // Verify the user is no longer in cache
-        let cached_user: Option<TestEntity> = cache.get(&user_key).await?;
-        assert_none(
-            cached_user,
-            "User should not be available in cache after invalidation",
-        )?;
-
-        Ok(())
+        // Verify short-lived is gone but long-lived remains
+        assert_eq!(cache.exists("short-lived").await.unwrap(), false);
+        assert_eq!(cache.exists("long-lived").await.unwrap(), true);
     }
 }

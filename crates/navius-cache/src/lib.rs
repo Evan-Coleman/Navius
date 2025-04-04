@@ -6,7 +6,7 @@ This crate provides comprehensive caching capabilities for the Navius framework,
 - **Connection Management**: Flexible connection handling with configuration options
 - **Cache Operations**: Type-safe interface for common cache operations (get, set, delete, etc.)
 - **Invalidation Strategies**: Multiple strategies for cache invalidation
-- **Backend Support**: Redis implementation with transaction support
+- **Backend Support**: In-memory implementation with extensible backend support
 - **Error Handling**: Consistent error handling with integration into the core error system
 - **Metrics**: Optional metrics for monitoring cache operations
 
@@ -14,30 +14,30 @@ This crate provides comprehensive caching capabilities for the Navius framework,
 
 The crate is approximately 95% complete with the following features implemented:
 
-- Connection management with connection pooling and health checks
+- Connection management with configuration options
 - Comprehensive cache operations interface with type-safe serialization
 - Multiple invalidation strategies (immediate, TTL-based, pattern-based, entity-based)
-- Full Redis backend implementation with optimized operations
+- In-memory backend implementation with optimized operations
 - Metrics and telemetry integration for monitoring cache operations
 - Comprehensive test coverage for all components
 
 ## Usage
 
-Basic usage with Redis:
+Basic usage with in-memory cache:
 
 ```rust
-use navius_cache::{CacheConfig, CacheConnectionManager, CacheOptions, RedisCache};
+use navius_cache::{CacheConfig, operations::memory::MemoryCache, CacheOptions};
 use std::time::Duration;
 
 // Create a cache configuration
 let config = CacheConfig::new(
-    "redis://127.0.0.1:6379".to_string(),
+    "memory://".to_string(),
     "my-app:".to_string(),
     Duration::from_secs(3600),
 );
 
-// Create a cache connection manager
-let cache = CacheConnectionManager::new_redis(config).await?;
+// Create an in-memory cache
+let cache = MemoryCache::new(config);
 
 // Store a value with a custom TTL
 let options = CacheOptions::new().ttl(Duration::from_secs(600));
@@ -68,8 +68,7 @@ pub use error::{CacheError, CacheResult};
 pub use invalidation::{CacheInvalidation, InvalidationStrategy};
 #[cfg(feature = "metrics")]
 pub use metrics::{CacheOperation, CacheResult as MetricsResult, CacheTimer};
-#[cfg(feature = "redis")]
-pub use operations::redis::{RedisCache, RedisConfig};
+pub use operations::memory::{CacheEntry, MemoryCache};
 pub use operations::{Cache, CacheKey, CacheOperations, CacheOptions};
 
 /// Cache module to be used in applications
