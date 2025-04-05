@@ -1,5 +1,3 @@
-pub mod app;
-pub mod plugins;
+mod repository;
 
-pub use app::{App, AppBuilder};
-pub use plugins::{SqlxPlugin, SqlxPluginConfig, WebPlugin, WebPluginConfig};
+pub use repository::{DbRepository, DynDbRepository, PostgresRepository};

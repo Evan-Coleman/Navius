@@ -12,23 +12,42 @@ repository = "https://github.com/navius/navius"
 # Dependencies section with explicit versions
 [dependencies]
 # Core dependencies
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = { version = "1.0.140" }
-serde_yaml = { version = "0.9.33" }
-tokio = { version = "1.44.1", features = ["full"] }
-tracing = "0.1.41"
-uuid = { version = "1.16.0", features = ["v4", "serde"] }
-async-trait = "0.1.88"
-thiserror = { version = "2.0.12" }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_yaml = "0.9.34+deprecated"
+tokio = { workspace = true, features = [
+    "macros",
+    "rt-multi-thread",
+], optional = true }
+tracing = { workspace = true, optional = true }
+uuid = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
 # Added regex dependency
-regex = { version = "1.11.1" } 
-redis = { workspace = true }
-# Configuration
-config = { version = "0.15.11" }
-dotenvy = { version = "0.15.7" }
+regex = "1.11.1"
+# Use explicit version and optional = true for redis
+redis = { workspace = true, optional = true }
+# Ensure config is optional=true
+config = { workspace = true, optional = true }
+dotenvy = "0.15.7"
 
 # Time handling
-chrono = { version = "0.4.40", features = ["serde"] }
+chrono = { workspace = true }
+
+
+# Internal - Ensure all path dependencies linked to features are optional
+# Remove non-existent navius-config dependency
+# navius-config = { path = "../navius-config", optional = true }
+navius-di = { path = "../navius-di", optional = true } # Assumed feature uses dep:
+# Remove non-existent navius-logging dependency
+# navius-logging = { path = "../navius-logging", optional = true }
+# Remove navius-db dependency from navius-core
+# navius-db = { path = "../navius-db", optional = true }
+# Remove navius-cache dependency from navius-core
+# navius-cache = { path = "../navius-cache", optional = true }
+navius-plugin = { path = "../navius-plugin", optional = true }
+
+sqlx = { workspace = true, optional = true }
 
 # Development dependencies
 [dev-dependencies]
@@ -39,12 +58,39 @@ test-context = "0.4.1"
 assert_matches = "1.5.0"
 once_cell = "1.21.3"
 mockall = "0.13.1"
-tokio = { version = "1.44.1", features = ["rt", "macros", "sync", "time", "rt-multi-thread"] }
+tokio = { workspace = true, features = [
+    "rt",
+    "macros",
+    "sync",
+    "time",
+    "rt-multi-thread",
+] }
+axum = { workspace = true }
+http = { workspace = true }
 
 # The core crate has minimal feature flags
 [features]
-default = []
-test-utils = [] # Enable test utilities when testing
+# Default features
+default = [
+    "config",
+    "di",
+    # "logging", # Remove logging from default
+    "tokio",
+    "tracing",
+    # "db", # Remove db from default
+    # "cache", # Remove cache from default
+    "plugin",
+]
 
-
-
+# Feature flags
+config = ["dep:config"]
+di = ["dep:navius-di"]
+# Remove logging feature definition
+# logging = ["dep:tracing", "dep:navius-logging"]
+tokio = ["dep:tokio"]
+tracing = ["dep:tracing"]
+# Remove db feature definition
+# db = ["dep:sqlx", "dep:navius-db"]
+# Remove cache feature definition
+# cache = ["dep:redis", "dep:navius-cache"]
+plugin = ["dep:navius-plugin"]

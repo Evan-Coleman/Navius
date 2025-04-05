@@ -10,7 +10,7 @@ readme = "README.md"
 # Dependencies section uses workspace inheritance
 [dependencies]
 # Core dependencies from workspace
-navius-core = { path = "../../crates/navius-core", version = "0.1.0" }
+navius-core = { path = "../navius-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
@@ -22,10 +22,11 @@ thiserror = { workspace = true }
 axum = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
-reqwest = { workspace = true }
-bytes = { workspace = true }
-futures = { workspace = true }
-futures-util = { workspace = true }
+reqwest = "0.12.15"
+bytes = "1.10.1"
+futures = "0.3.31"
+futures-util = "0.3.31"
+http = { workspace = true }
 
 # Development dependencies
 [dev-dependencies]
@@ -35,10 +36,13 @@ fake = { version = "4.2.0", features = ["derive", "chrono", "uuid"] }
 test-context = "0.4.1"
 assert_matches = "1.5.0"
 once_cell = "1.21.3"
+tokio = { workspace = true }
+axum = { workspace = true }
+http = { workspace = true }
 
 # Feature flags
 [features]
 default = ["server", "client"]
 server = []
 client = []
-test-utils = [] 
+test-utils = []

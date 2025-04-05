@@ -25,7 +25,7 @@ navius-core = { path = "../navius-core", version = "0.1.0" }
 
 # Metrics-specific dependencies
 metrics = "0.24.1"
-opentelemetry = { version = "0.29.0", features = ["metrics"] }
+opentelemetry = { version = "0.29.1", features = ["metrics"] }
 opentelemetry-semantic-conventions = "0.29.0"
 tracing-opentelemetry = "0.30.0"
 
@@ -40,7 +40,6 @@ opentelemetry-otlp = { version = "0.29.0", optional = true }
 [dev-dependencies]
 # Shared development dependencies from workspace
 mockito = { workspace = true }
-mock-it = { workspace = true }
 proptest = { workspace = true }
 fake = { workspace = true }
 test-context = { workspace = true }
@@ -60,4 +59,4 @@ default = []
 prometheus = ["dep:metrics-exporter-prometheus"]
 dynatrace = ["dep:opentelemetry-dynatrace"]
 jaeger = ["dep:opentelemetry-jaeger"]
-otlp = ["dep:opentelemetry-otlp"] 
+otlp = ["dep:opentelemetry-otlp"]

@@ -8,8 +8,10 @@ for the Navius framework with pluggable database backends.
 // Re-exports
 pub use connection::{DatabaseConnection, PgConnection};
 pub use error::DatabaseError;
+pub use pool::NaviusPool;
 pub use transaction::{DatabaseTransaction, PgTransaction};
 
+pub mod config;
 pub mod connection;
 pub mod error;
 pub mod pool;

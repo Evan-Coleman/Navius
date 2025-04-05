@@ -1,7 +1,18 @@
-# Navius Crate Enhancement Tracking
+# Crate Enhancements for Example App
 
-## Overview
-This document tracks enhancements to Navius crates identified during the development of the example app. As we implement features using TDD, we'll document limitations, enhancement proposals, and implementations.
+This document tracks the specific enhancements required in the Navius crate ecosystem to support the target style and functionality of the example application.
+
+| Enhancement ID | Crate(s) Affected | Title                   | Description                                                                                                                               | Status      | Implementation Notes                                         |
+| -------------- | ----------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------ |
+| NC-1           | navius-core       | Plugin/DI System        | Initial DI and config loading via `ApplicationBuilder`. Basic error handling improvements. (Initial plugin concept superseded by direct DI). | Completed   | Implemented via `ApplicationBuilder` refactoring.            |
+| NC-2           | navius-http       | Declarative Route Macros | Implement `#[route(path="...", method=..., ...)]` and `#[nest(...)]` macros for defining routes and applying middleware/auth declaratively.   | In Progress | Focus on `#[route]` unification. Parameters: method, auth_policy, middleware, name, OpenAPI tags? |
+| NC-3           | navius-core       | Config Macros           | Implement `#[auto_config]` and `#[derive(Configurable)]` for automated configuration setup and struct mapping.                              | Not Started | Requires proc-macro development.                             |
+| NC-4           | navius-di         | DI Improvements         | Implement `Component<T>` wrapper or similar extractor for simplified, type-safe component injection in handlers/services.                     | Not Started | Explore alternatives like direct `State` extraction vs. wrapper. |
+| NC-5           | navius-db         | Repository Abstraction  | Define standard repository traits/macros? Simplify common CRUD operations.                                                              | Not Started | Consider base traits or codegen for repositories.          |
+| NC-6           | navius-auth       | Auth Policy Integration | Standardize how `auth_policy` in `#[route]` maps to specific auth middleware/configurations provided by `navius-auth`.                      | Not Started | Define policy registration/lookup mechanism.               |
+
+---
+*Updated at: May 31, 2024*
 
 ## Related Documents
 - [Main Roadmap](../01-example-app.md)
@@ -61,6 +72,8 @@ Based on the target main.rs file example, we've identified the following key enh
 | NC-1 | Plugin System | Completed | Implement plugin system for modular application setup | Implemented App and AppBuilder classes that leverage the existing navius-plugin Registry. Created SqlxPlugin and WebPlugin implementations. |
 | NC-2 | Application Builder | Not Started | Create App builder pattern for clean initialization | Should support add_plugin() and run() methods |
 | NC-3 | Component Registration | Not Started | Implement component registration and retrieval system | Required for dependency injection |
+| NC-5 | Repository Abstraction | Not Started | Define standard repository traits/macros? Simplify common CRUD operations. | Consider base traits or codegen for repositories. |
+| NC-6 | Auth Policy Integration | Not Started | Standardize how `auth_policy` in `#[route]` maps to specific auth middleware/configurations provided by `navius-auth`. | Define policy registration/lookup mechanism. |
 
 ### navius-http
 

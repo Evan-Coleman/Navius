@@ -51,12 +51,12 @@ This roadmap details the process of building an example application using the Na
 
 ## Target Example Application Style
 
-The example app aims to achieve a clean, declarative style as shown in the following main.rs excerpt:
+The example app aims to achieve a clean, declarative style using attribute macros, as shown in the following `main.rs` excerpt:
 
 ```rust
 mod jwt;
 
-use axum::http::StatusCode;
+use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use jwt::Claims;
 use serde::Deserialize;
 
@@ -64,7 +64,6 @@ use serde::Deserialize;
 #[tokio::main]
 async fn main() {
     App::new()
-        .add_plugin(SqlxPlugin)
         .add_plugin(WebPlugin)
         .run()
         .await;
@@ -72,27 +71,39 @@ async fn main() {
     tracing::info!("Server Shutdown")
 }
 
-#[routes]
-#[get("/")]
-#[get("/hello_world")]
-async fn hello_world() -> impl IntoResponse {
-    "hello world"
-}
-
-#[route("/hello/{name}", method = "GET", method = "POST")]
+// Example using the unified route macro
+#[route(path: "/hello/{name}", method: ["GET", "POST"])]
 async fn hello(Path(name): Path<String>) -> impl IntoResponse {
     format!("hello {name}")
 }
 
-// Additional example endpoints for login, user info, and database queries
+// Example with authentication policy
+#[route(path: "/auth/hello/{name}", method: ["GET", "POST"], auth_policy: "basic_required")]
+async fn auth_hello(Path(name): Path<String>) -> impl IntoResponse {
+    format!("Authenticated hello {name}")
+}
+
+// Example using module-level nesting
+#[nest("/api/v1", middleware = [request_logging])]
+mod api_v1 {
+    use super::*;
+
+    #[route(path: "/status", method: "GET")]
+    async fn status() -> impl IntoResponse {
+        "OK"
+    }
+    // ... other v1 routes
+}
+
+// Additional example endpoints for login, user info, and database queries using #[route]
 ```
 
 To support this style, we'll need to develop several enhancements to the Navius crates, including:
 
-1. **Plugin System** - For modular application setup (SqlxPlugin, WebPlugin)
-2. **Route Macros** - For declarative route definition (#[routes], #[get], etc.)
-3. **Configuration System** - For automatic configuration (#[auto_config], #[derive(Configurable)])
-4. **Dependency Injection** - For component injection (Component<T>)
+1.  **Route Macros (`#[route]`, `#[nest]`)** - For declarative route definition (NC-2).
+2.  **Configuration System Macros (`#[auto_config]`, `#[derive(Configurable)]`)** - For automatic configuration loading and component setup (NC-3).
+3.  **Dependency Injection Improvements (`Component<T>`)** - For simplified component injection (NC-4).
+    *Note: Plugin System (NC-1) was initially listed but direct ApplicationBuilder usage is preferred for this example's core setup.* 
 
 See the [Crate Enhancements](./sub-process/crate-enhancements.md) document for detailed tracking of these enhancements.
 

@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use navius_core::error::{Error, Result};
-use navius_db::pool::Pool;
-use sqlx::postgres::PgPool; // Need the specific pool type
+use sqlx::postgres::PgPool; // Use the concrete PgPool type
 use std::sync::Arc;
 
 /// Trait for database repository operations.
@@ -17,18 +16,14 @@ pub trait DbRepository: Send + Sync {
 /// PostgreSQL implementation of the DbRepository.
 #[derive(Debug, Clone)]
 pub struct PostgresRepository {
-    pool: Arc<Pool>, // Use Arc<Pool> for sharing
+    // Hold the concrete sqlx PgPool directly
+    pool: Arc<PgPool>,
 }
 
 impl PostgresRepository {
     /// Create a new PostgresRepository.
-    pub fn new(pool: Arc<Pool>) -> Self {
+    pub fn new(pool: Arc<PgPool>) -> Self {
         Self { pool }
-    }
-
-    /// Helper to get the underlying PgPool.
-    fn pg_pool(&self) -> Result<&PgPool> {
-        self.pool.inner::<PgPool>()
     }
 }
 
@@ -36,7 +31,7 @@ impl PostgresRepository {
 impl DbRepository for PostgresRepository {
     async fn get_db_version(&self) -> Result<String> {
         let version: (String,) = sqlx::query_as("SELECT version()")
-            .fetch_one(self.pg_pool()?)
+            .fetch_one(&*self.pool) // Deref Arc<PgPool> to &PgPool
             .await
             .map_err(|e| Error::database(format!("DB query failed: {}", e)))?;
         Ok(version.0)
@@ -44,12 +39,12 @@ impl DbRepository for PostgresRepository {
 
     async fn get_current_time(&self) -> Result<chrono::DateTime<chrono::Utc>> {
         let now: (chrono::DateTime<chrono::Utc>,) = sqlx::query_as("SELECT NOW()")
-            .fetch_one(self.pg_pool()?)
+            .fetch_one(&*self.pool) // Deref Arc<PgPool> to &PgPool
             .await
             .map_err(|e| Error::database(format!("DB query failed: {}", e)))?;
         Ok(now.0)
     }
 }
 
-// Optional: Define an alias for the concrete repository type if needed elsewhere
+// Type alias still useful for dependency injection
 pub type DynDbRepository = Arc<dyn DbRepository>;

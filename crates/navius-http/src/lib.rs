@@ -19,11 +19,11 @@ pub use error::{Error, Result};
 
 // Re-export server types when the "server" feature is enabled
 #[cfg(feature = "server")]
-pub use server::{HttpServer, HttpServerHandle};
+pub use server::{HttpServerConfig, ShutdownReceiver, ShutdownSender};
 
 // Re-export client types when the "client" feature is enabled
-#[cfg(feature = "client")]
-pub use client::HttpClient;
+// #[cfg(feature = "client")]
+// pub use client::{HttpClient}; // Only export HttpClient if it exists
 
 // Re-export middleware
 pub use middleware::{
@@ -102,4 +102,12 @@ mod tests {
 
         Ok(())
     }
+}
+
+// Optional: Re-export the prelude for convenience
+pub mod prelude {
+    #[cfg(feature = "server")]
+    pub use crate::server::prelude::*; // Assuming server prelude exports axum types
+    // #[cfg(feature = "client")]
+    // pub use crate::client::prelude::*; // Comment out client prelude
 }

@@ -4,9 +4,22 @@
 //! It provides a standardized approach to error handling with consistent categorization,
 //! context preservation, and user-friendly error messages.
 
+// Use imports only if features are enabled
+#[cfg(feature = "axum")]
+use axum::Json;
+#[cfg(feature = "axum")]
+use axum::response::{IntoResponse, Response};
+#[cfg(feature = "http")]
+use http::{
+    StatusCode,
+    header::{HeaderName, HeaderValue},
+};
+
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::collections::HashMap;
 use std::error::Error as StdError;
+use uuid::Uuid;
 
 /// A specialized Result type for Navius operations.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -53,19 +66,17 @@ pub enum ErrorCode {
 
 impl ErrorCode {
     /// Get the HTTP status code associated with this error code.
-    pub fn status_code(&self) -> u16 {
+    #[cfg(feature = "http")]
+    pub fn status_code(&self) -> StatusCode {
         match self {
-            Self::Validation => 400,
-            Self::Authentication => 401,
-            Self::Authorization => 403,
-            Self::NotFound => 404,
-            Self::Conflict => 409,
-            Self::Timeout => 408,
-            Self::Internal | Self::Component | Self::Unknown => 500,
-            Self::External => 502,
-            Self::Database | Self::Cache | Self::Plugin | Self::Serialization | Self::Io => 500,
-            Self::Configuration => 500,
-            Self::InvalidArgument => 400,
+            Self::Validation => StatusCode::BAD_REQUEST,
+            Self::Authentication => StatusCode::UNAUTHORIZED,
+            Self::Authorization => StatusCode::FORBIDDEN,
+            Self::NotFound => StatusCode::NOT_FOUND,
+            Self::Conflict => StatusCode::CONFLICT,
+            Self::Timeout => StatusCode::GATEWAY_TIMEOUT,
+            Self::External => StatusCode::SERVICE_UNAVAILABLE,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
@@ -89,6 +100,29 @@ impl ErrorCode {
             Self::Io => "I/O error",
             Self::Unknown => "Unknown error",
             Self::InvalidArgument => "Invalid argument",
+        }
+    }
+
+    /// Returns a string representation of the error code.
+    pub fn as_code_str(&self) -> &'static str {
+        match self {
+            Self::Unknown => "UNKNOWN_ERROR",
+            Self::Internal => "INTERNAL_SERVER_ERROR",
+            Self::Configuration => "CONFIGURATION_ERROR",
+            Self::Validation => "VALIDATION_ERROR",
+            Self::Database => "DATABASE_ERROR",
+            Self::NotFound => "NOT_FOUND",
+            Self::Authentication => "AUTHENTICATION_ERROR",
+            Self::Authorization => "AUTHORIZATION_ERROR",
+            Self::External => "EXTERNAL_SERVICE_ERROR",
+            Self::Timeout => "TIMEOUT_ERROR",
+            Self::Plugin => "PLUGIN_ERROR",
+            Self::Component => "COMPONENT_ERROR",
+            Self::Serialization => "SERIALIZATION_ERROR",
+            Self::Io => "IO_ERROR",
+            Self::Cache => "CACHE_ERROR",
+            Self::Conflict => "CONFLICT_ERROR",
+            Self::InvalidArgument => "INVALID_ARGUMENT",
         }
     }
 }
@@ -367,6 +401,42 @@ where
 
     fn external<S: Into<String>>(self, message: S) -> Result<T> {
         self.map_err(|e| Error::external(message).with_source(e))
+    }
+}
+
+// Implement IntoResponse for Error - gated by features
+#[cfg(all(feature = "axum", feature = "http"))]
+impl IntoResponse for Error {
+    fn into_response(self) -> Response {
+        let status_code = self.code.status_code();
+        let request_id = self
+            .request_id
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+
+        let body = json!({
+            "error": {
+                "code": self.code.as_code_str(), // Call helper method
+                "message": self.message,
+                // ... optional details/source ...
+            },
+            "request_id": request_id,
+        });
+
+        const REQUEST_ID_HEADER_NAME: HeaderName = HeaderName::from_static("x-request-id");
+
+        let mut response = (status_code, Json(body)).into_response();
+        match HeaderValue::from_str(&request_id) {
+            Ok(val) => {
+                response.headers_mut().insert(REQUEST_ID_HEADER_NAME, val);
+            }
+            Err(_) => {
+                response.headers_mut().insert(
+                    REQUEST_ID_HEADER_NAME,
+                    HeaderValue::from_static("invalid-request-id"),
+                );
+            }
+        }
+        response
     }
 }
 

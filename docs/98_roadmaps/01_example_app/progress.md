@@ -27,6 +27,7 @@
 
 ## Recent Updates
 
+- **May 31, 2024**: Started implementation of NC-2 Declarative Route Macros (`#[route]`, `#[nest]`).
 - **May 31, 2024**: Revised implementation strategy to prioritize using existing Navius crates over custom boilerplate for core features (config, logging, auth, db, http). This aligns better with the goal of showcasing idiomatic usage.
 - **May 30, 2024**: Completed initial setup and plugin system structure (NC-1). Identified need for improved error handling across crates.
 - **May 29, 2024**: Project kickoff. Initial roadmap and structure defined.

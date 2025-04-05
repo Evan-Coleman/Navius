@@ -2,7 +2,7 @@ use crate::connection::{DatabaseConnection, PgConnection};
 use crate::error::DatabaseError;
 use crate::transaction::DatabaseTransaction;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use sqlx::{Pool, Postgres};
+use sqlx::{Pool as SqlxPool, Postgres};
 use std::str::FromStr;
 
 /// Database configuration for the connection pool.
@@ -14,12 +14,13 @@ pub struct DatabaseConfig {
     pub max_connections: u32,
 }
 
-/// A database connection pool.
-pub struct DatabasePool {
-    pool: Pool<Postgres>,
+/// A database connection pool wrapper for Navius.
+#[derive(Debug, Clone)]
+pub struct NaviusPool {
+    pool: SqlxPool<Postgres>,
 }
 
-impl DatabasePool {
+impl NaviusPool {
     /// Create a new database connection pool.
     pub async fn new(config: &DatabaseConfig) -> Result<Self, DatabaseError> {
         let connect_options = PgConnectOptions::from_str(&config.url)
@@ -41,8 +42,6 @@ impl DatabasePool {
             .acquire()
             .await
             .map_err(|e| DatabaseError::ConnectionError(e.to_string()))?;
-
-        // Create a raw PgConnection from the pool connection
         let raw_conn = conn.detach();
         Ok(PgConnection::new(raw_conn))
     }
@@ -62,9 +61,7 @@ impl DatabasePool {
     {
         let mut conn = self.get_connection().await.map_err(E::from)?;
         let tx = conn.begin().await.map_err(E::from)?;
-
         let result = f(tx).await;
-
         match result {
             Ok(value) => Ok(value),
             Err(err) => Err(err),
