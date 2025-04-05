@@ -1,0 +1,40 @@
+# Navius Example Application Configuration
+
+[server]
+host = "127.0.0.1"
+port = 3000
+enable_tls = false
+# cert_path = "certs/server.crt"
+# key_path = "certs/server.key"
+
+[database]
+url = "postgres://postgres:postgres@localhost/navius"
+max_connections = 10
+timeout_seconds = 30
+
+[logging]
+level = "debug"
+json = false
+# file = "logs/navius.log"
+
+[jwt]
+secret = "change_this_to_a_secure_secret_in_production"
+expiration_seconds = 3600                               # 1 hour
+algorithm = "HS256"
+# Add issuer and audience for navius-auth JWTProvider
+issuer = "navius-example-issuer"
+audience = "navius-example-audience"
+# Mock users for testing/development (if needed by JWTProvider config)
+mock_users = [
+    #  { id = "user-1000", username = "root", password = "correct_password", roles = ["admin"] },
+]
+
+# Plugin-specific configurations can be added here
+[plugins.web]
+default_cors_origin = "*"
+max_payload_size = 10485760 # 10MB
+
+[plugins.sqlx]
+use_migrations = true
+migration_dir = "migrations"
+use_connection_pool = true

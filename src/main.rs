@@ -1,30 +1,141 @@
-mod jwt;
+// Use navius-core for core functionality
+use navius_core::{
+    config::Config,
+    di::{ApplicationBuilder, ApplicationContext, ComponentRef, ComponentRegistry},
+    error::Result,
+    logging,
+};
 
+// Use navius-auth types and provider
+use navius_auth::middleware::AuthLayer;
+use navius_auth::token::{JWTProvider, TokenProviderConfig};
+use navius_auth::types::Claims; // Import auth middleware
+
+// Use navius-http for server, routing, and middleware
+use axum::{
+    Router, middleware as axum_middleware,
+    routing::{get, post},
+};
+use navius_http::middleware::{
+    cors_layer, default_middleware, logging_layer, permissive_cors_layer, request_id_layer,
+    timeout_layer,
+}; // Import common middleware
+use navius_http::server::HttpServer; // Axum imports for routing
+
+// Other necessary imports
+use axum::extract::{Json, Path, State};
 use axum::http::StatusCode;
-use jwt::Claims;
+use axum::response::IntoResponse;
 use serde::Deserialize;
+use std::sync::Arc;
+use tower::ServiceBuilder;
 
-#[auto_config(WebConfigurator)]
+// Use navius-db types
+use navius_db::config::DatabaseConfig;
+use navius_db::pool::Pool;
+
+// Remove mock Claims
+// #[derive(Debug, Clone, Deserialize)]
+// pub struct Claims {
+//     pub uid: u64,
+// }
+
+// Remove mock JWT module
+// mod jwt_mock {
+//     use super::Claims;
+//     pub fn encode(claims: Claims) -> Result<String> {
+//         Ok(format!("mock_token_for_uid_{}", claims.uid))
+//     }
+// }
+
 #[tokio::main]
-async fn main() {
-    App::new()
-        .add_plugin(SqlxPlugin)
-        .add_plugin(WebPlugin)
-        .run()
-        .await;
+async fn main() -> Result<()> {
+    // 1. Initialize Application Context (Config, Logging, DI)
+    let app_builder = ApplicationBuilder::new()
+        .with_config_path("config/default.toml")
+        .with_config_path_optional("config/local.toml")
+        .with_env_prefix("APP");
 
-    tracing::info!("Server Shutdown")
+    let temp_config = app_builder.build_config()?;
+
+    // JWT Provider Registration
+    let jwt_config = temp_config.get::<TokenProviderConfig>("jwt")?;
+    let jwt_provider = Arc::new(JWTProvider::new("jwt_main".to_string(), jwt_config));
+    let app_builder = app_builder.register_component(jwt_provider.clone());
+
+    // Database Pool Registration
+    let db_config = temp_config.get::<DatabaseConfig>("database")?;
+    let db_pool = Pool::new(db_config).await?; // Create the pool
+    let app_builder = app_builder.register_component(db_pool); // Register the pool component
+
+    let app_context = Arc::new(app_builder.build()?);
+    let config = app_context.config();
+
+    tracing::info!(
+        "Navius application starting with config keys: {:?}",
+        config.keys()
+    );
+
+    // 2. Define Application Routes
+    let api_routes = Router::new()
+        .route("/", get(hello_world))
+        .route("/hello_world", get(hello_world))
+        .route("/hello/:name", get(hello).post(hello))
+        .route("/login", post(login))
+        .route("/user-info", get(protected_user_info))
+        .route_layer(axum_middleware::from_fn_with_state(
+            jwt_provider.clone(),
+            navius_auth::middleware::authenticate,
+        ));
+
+    // Define SQL routes
+    let sql_router = Router::new()
+        .route("/version", get(sql::sqlx_request_handler))
+        .route("/now", get(sql::sqlx_time_handler));
+
+    let app_router = Router::new()
+        // .nest("/api", api_routes) // Can nest later if needed
+        .merge(api_routes)
+        .nest("/sql", sql_router) // Nest the SQL routes under /sql
+        .layer(
+            ServiceBuilder::new()
+                // Add layers from navius-http
+                .layer(request_id_layer())
+                .layer(logging_layer())
+                .layer(permissive_cors_layer())
+                .layer(timeout_layer()),
+        )
+        .with_state(app_context.clone());
+
+    // 3. Configure and Start the HTTP Server
+    let server_host = config
+        .get::<String>("server.host")
+        .unwrap_or_else(|_| "127.0.0.1".to_string());
+    let server_port = config.get::<u16>("server.port").unwrap_or(3000);
+    let addr = format!("{}:{}", server_host, server_port);
+
+    tracing::info!("Starting HTTP server on {}", addr);
+
+    HttpServer::new(addr)
+        .serve(app_router)
+        .await
+        .map_err(|e| navius_core::error::Error::internal(format!("HTTP server failed: {}", e)))?;
+
+    tracing::info!("Server shutdown complete");
+    Ok(())
 }
 
-#[routes]
-#[get("/")]
-#[get("/hello_world")]
-async fn hello_world() -> impl IntoResponse {
+// --- Route Handlers ---
+
+// Handlers now receive AppContext via State extractor
+async fn hello_world(State(_app_context): State<Arc<ApplicationContext>>) -> impl IntoResponse {
     "hello world"
 }
 
-#[route("/hello/{name}", method = "GET", method = "POST")]
-async fn hello(Path(name): Path<String>) -> impl IntoResponse {
+async fn hello(
+    State(_app_context): State<Arc<ApplicationContext>>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
     format!("hello {name}")
 }
 
@@ -34,58 +145,96 @@ struct LoginCredentials {
     password: String,
 }
 
-#[post("/login")]
-async fn login(Json(credentials): Json<LoginCredentials>) -> Result<impl IntoResponse> {
+// Login handler uses ComponentRef from AppContext implicitly now
+async fn login(
+    State(app_context): State<Arc<ApplicationContext>>,
+    Json(credentials): Json<LoginCredentials>,
+) -> Result<impl IntoResponse> {
+    let jwt_provider = app_context.get_component::<JWTProvider>()?;
     let LoginCredentials { username, password } = credentials;
+
     if username == "root" && password == "correct_password" {
-        let mock_user_id = 1000;
-        let jwt_token = jwt::encode(Claims::new(mock_user_id))?;
-        Ok((StatusCode::OK, jwt_token))
+        let user_id = "user-1000";
+        match jwt_provider
+            .generate_token(user_id, Some(vec!["admin".to_string()]))
+            .await
+        {
+            Ok(token) => Ok((StatusCode::OK, token)),
+            Err(e) => {
+                tracing::error!("Failed to generate token: {}", e);
+                Err(navius_core::error::Error::internal(
+                    "Failed to generate token",
+                ))
+            }
+        }
     } else {
-        Ok((
-            StatusCode::BAD_REQUEST,
-            format!("{username} login failed: username or password are incorrect"),
+        Err(navius_core::error::Error::authentication(
+            "Username or password incorrect",
         ))
     }
 }
 
-#[derive(Configurable, Deserialize)]
-#[config_prefix = "custom"]
+// Placeholder for custom config structure (if needed beyond core config)
+#[derive(Deserialize, Debug)] // Added Debug
 struct CustomConfig {
     user_info_detail: String,
 }
 
-#[get("/user-info")]
+// Protected route handler - Claims should be injected by middleware
+// The AuthLayer applied earlier should handle this.
 async fn protected_user_info(
-    claims: Claims,
-    Config(conf): Config<CustomConfig>,
-) -> impl IntoResponse {
-    let user_id = claims.uid;
-    format!("get user info of id#{}: {}", user_id, conf.user_info_detail)
+    State(app_context): State<Arc<ApplicationContext>>,
+    claims: Claims, // Extracted by navius_auth::middleware::authenticate
+) -> Result<impl IntoResponse> {
+    // Example: Get custom config if registered as a component
+    // let custom_config = app_context.get_component::<CustomConfig>()?;
+    // let details = &custom_config.user_info_detail;
+    let details = "Mock details from handler"; // Placeholder
+
+    let user_id = claims.sub;
+    Ok(format!("get user info of id#{}: {}", user_id, details))
 }
 
-#[nest("/sql")]
+// --- Route Handlers (SQL) ---
 mod sql {
-    use anyhow::Context;
-    use std::ops::Deref;
+    use axum::extract::State;
+    use axum::response::IntoResponse;
+    use navius_core::di::ApplicationContext;
+    use navius_core::error::Result;
+    use navius_db::pool::Pool; // Import Pool
+    use sqlx::postgres::PgPool;
+    use std::sync::Arc; // Need specific pool type if using raw sqlx
 
-    #[get("/version")]
-    pub async fn sqlx_request_handler(Component(pool): Component<ConnectPool>) -> Result<String> {
-        let version = sqlx::query("select version() as version")
-            .fetch_one(&pool)
+    // #[get("/version")] // Target style
+    // Handler now receives the Pool component via AppContext
+    pub async fn sqlx_request_handler(
+        State(app_context): State<Arc<ApplicationContext>>,
+    ) -> Result<impl IntoResponse> {
+        let pool = app_context.get_component::<Pool>()?;
+        // Use the pool (from navius-db) to execute a query
+        // Example: Fetch PostgreSQL version using raw sqlx query
+        // Note: Requires sqlx dependency directly if using raw queries
+        let version: (String,) = sqlx::query_as("SELECT version()")
+            .fetch_one(pool.inner::<PgPool>()?) // Get underlying PgPool
             .await
-            .context("sqlx query failed")?
-            .get("version");
-        Ok(version)
+            .map_err(|e| navius_core::error::Error::database(format!("DB query failed: {}", e)))?;
+        Ok(version.0)
     }
 
-    #[get("/now")]
-    pub async fn sqlx_time_handler(pool: Component<ConnectPool>) -> Result<String> {
-        let time = sqlx::query("select DATE_FORMAT(now(),'%Y-%m-%d %H:%i:%s') as time")
-            .fetch_one(pool.deref())
+    // #[get("/now")] // Target style
+    pub async fn sqlx_time_handler(
+        State(app_context): State<Arc<ApplicationContext>>,
+    ) -> Result<impl IntoResponse> {
+        let pool = app_context.get_component::<Pool>()?;
+        // Example: Fetch current timestamp
+        let now: (chrono::DateTime<chrono::Utc>,) = sqlx::query_as("SELECT NOW()")
+            .fetch_one(pool.inner::<PgPool>()?)
             .await
-            .context("sqlx query failed")?
-            .get("time");
-        Ok(time)
+            .map_err(|e| navius_core::error::Error::database(format!("DB query failed: {}", e)))?;
+        Ok(now.0.to_rfc3339())
     }
 }
+
+// Remove the old App struct and AppBuilder as they are replaced by navius-core and navius-http
+// pub mod app { ... }
+// pub mod plugins { ... }

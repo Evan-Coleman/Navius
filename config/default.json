@@ -1,0 +1,32 @@
+{
+    "server": {
+        "host": "127.0.0.1",
+        "port": 3000,
+        "enable_tls": false
+    },
+    "database": {
+        "url": "postgres://postgres:postgres@localhost/navius",
+        "max_connections": 10,
+        "timeout_seconds": 30
+    },
+    "logging": {
+        "level": "debug",
+        "json": false
+    },
+    "jwt": {
+        "secret": "change_this_to_a_secure_secret_in_production",
+        "expiration_seconds": 3600,
+        "algorithm": "HS256"
+    },
+    "plugins": {
+        "web": {
+            "default_cors_origin": "*",
+            "max_payload_size": 10485760
+        },
+        "sqlx": {
+            "use_migrations": true,
+            "migration_dir": "migrations",
+            "use_connection_pool": true
+        }
+    }
+}

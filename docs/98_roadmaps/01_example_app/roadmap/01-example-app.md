@@ -6,19 +6,19 @@ This roadmap details the process of building an example application using the Na
 ## Timeline and Milestones
 
 ### Phase 1: Project Setup (Week 1)
-- [  ] Create example app project structure
-- [  ] Configure Cargo.toml with initial dependencies
-- [  ] Set up basic project documentation
-- [  ] Establish test infrastructure
-- [  ] Verify initial build with no errors/warnings
+- [x] Create example app project structure
+- [x] Configure Cargo.toml with initial dependencies
+- [ ] Set up basic project documentation
+- [x] Establish test infrastructure
+- [ ] Verify initial build with no errors/warnings
 
 ### Phase 2: Core Application Components (Weeks 2-3)
-- [  ] Design core domain model using TDD
-- [  ] Implement service layer with dependency injection
-- [  ] Set up configuration management
-- [  ] Implement error handling strategy
-- [  ] Add logging and observability
-- [  ] Enhance navius-core crate as needed
+- [ ] Design core domain model using TDD
+- [ ] Implement service layer with dependency injection
+- [ ] Set up configuration management
+- [ ] Implement error handling strategy
+- [ ] Add logging and observability
+- [x] Enhance navius-core crate as needed
 
 ### Phase 3: Data Layer (Weeks 4-5)
 - [  ] Implement database integration using navius-db
@@ -122,6 +122,8 @@ For each feature, the following TDD approach will be strictly followed:
    - Update roadmap progress
    - Note any issues with navius crates
 
+**Note on Crate Usage:** A key principle is to **maximize the use of existing Navius crate functionality** (e.g., `navius-core` for config/logging, `navius-auth` for JWT, `navius-db` for database, `navius-http` for server/middleware). Custom implementations will be avoided unless functionality is missing from the core crates. The example app should showcase idiomatic usage with minimal boilerplate.
+
 ## Navius Crate Enhancement Strategy
 
 Throughout development, we'll identify areas where the Navius crates need enhancement:
@@ -153,6 +155,6 @@ The following metrics will be tracked throughout development:
 - **Documentation Quality**: Comprehensive documentation for all features
 
 ## Current Progress
-- Status: Not Started
-- Progress: 0%
-- Updated at: May 30, 2024 
+- Status: In Progress
+- Progress: 4%
+- Updated at: May 31, 2024 

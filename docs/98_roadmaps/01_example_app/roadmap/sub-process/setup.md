@@ -75,11 +75,11 @@ This document outlines the process of setting up the initial project structure f
 ### Step 4: Implement Main Application Entry Point
 
 #### Task 4.1: Main Application Structure
-- [ ] Implement the main.rs file based on the provided example
-- [ ] Set up basic application structure with plugins:
-  - [ ] SqlxPlugin for database connections
-  - [ ] WebPlugin for web server functionality
-- [ ] Implement App::new() builder pattern for app initialization
+- [x] Implement the main.rs file based on the provided example
+- [x] Set up basic application structure with plugins:
+  - [x] SqlxPlugin for database connections
+  - [x] WebPlugin for web server functionality
+- [x] Implement App::new() builder pattern for app initialization
 
 #### Task 4.2: Route Implementation
 - [ ] Implement route registration using macros
@@ -227,20 +227,20 @@ During the setup phase, document any initial observations about the Navius crate
 
 | Task | Status | Notes |
 |------|--------|-------|
-| 1.1 Initialize Project | Not Started | |
-| 1.2 Configure Cargo.toml | Not Started | |
-| 1.3 Set Up Directory Structure | Not Started | |
+| 1.1 Initialize Project | Completed | Project structure created |
+| 1.2 Configure Cargo.toml | Completed | Added dependencies and package info |
+| 1.3 Set Up Directory Structure | Completed | Created src directory with proper module structure |
 | 2.1 Set Up Configuration | Not Started | |
 | 2.2 Docker Setup | Not Started | |
 | 2.3 Database Setup | Not Started | |
 | 3.1 Configure Testing Framework | Not Started | |
-| 3.2 First Test | Not Started | |
+| 3.2 First Test | Completed | Initial tests for App and Plugins |
 | 3.3 CI Setup | Not Started | |
-| 4.1 Main Application Structure | Not Started | |
+| 4.1 Main Application Structure | Completed | Created App builder pattern with plugin support |
 | 4.2 Route Implementation | Not Started | |
 | 4.3 Application Configuration | Not Started | |
 
 ## Current Status
-- Status: Not Started
-- Progress: 0%
+- Status: In Progress
+- Progress: 25%
 - Updated at: May 30, 2024 
