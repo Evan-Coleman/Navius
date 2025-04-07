@@ -119,12 +119,12 @@ impl DynComponentRef {
         Self(Arc::new(component))
     }
 
-    /// Attempt to downcast to a specific type
-    pub fn downcast<T: Any + Send + Sync>(self) -> Option<ComponentRef<T>> {
-        self.0.downcast::<T>().ok().map(ComponentRef)
+    /// Modify downcast to return Option<Arc<T>> directly
+    pub fn downcast<T: Any + Send + Sync>(self) -> Option<Arc<T>> {
+        self.0.downcast::<T>().ok()
     }
 
-    /// Attempt to downcast a reference to a specific type
+    /// Keep downcast_ref as is
     pub fn downcast_ref<T: Any + Send + Sync>(&self) -> Option<&T> {
         self.0.downcast_ref::<T>()
     }

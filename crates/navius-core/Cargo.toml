@@ -34,18 +34,21 @@ dotenvy = "0.15.7"
 # Time handling
 chrono = { workspace = true }
 
+# External
+futures = { workspace = true }
 
 # Internal - Ensure all path dependencies linked to features are optional
 # Remove non-existent navius-config dependency
 # navius-config = { path = "../navius-config", optional = true }
-navius-di = { path = "../navius-di", optional = true } # Assumed feature uses dep:
+# Remove navius-di dependency from navius-core
+# navius-di = { path = "../navius-di", optional = true }
 # Remove non-existent navius-logging dependency
 # navius-logging = { path = "../navius-logging", optional = true }
 # Remove navius-db dependency from navius-core
 # navius-db = { path = "../navius-db", optional = true }
 # Remove navius-cache dependency from navius-core
 # navius-cache = { path = "../navius-cache", optional = true }
-navius-plugin = { path = "../navius-plugin", optional = true }
+# navius-plugin = { path = "../navius-plugin", optional = true }
 
 sqlx = { workspace = true, optional = true }
 
@@ -73,18 +76,19 @@ http = { workspace = true }
 # Default features
 default = [
     "config",
-    "di",
+    # "di", # Remove di from default
     # "logging", # Remove logging from default
     "tokio",
     "tracing",
     # "db", # Remove db from default
     # "cache", # Remove cache from default
-    "plugin",
+    # "plugin", # Remove plugin from default
 ]
 
 # Feature flags
 config = ["dep:config"]
-di = ["dep:navius-di"]
+# Remove di feature definition
+# di = ["dep:navius-di"]
 # Remove logging feature definition
 # logging = ["dep:tracing", "dep:navius-logging"]
 tokio = ["dep:tokio"]
@@ -93,4 +97,5 @@ tracing = ["dep:tracing"]
 # db = ["dep:sqlx", "dep:navius-db"]
 # Remove cache feature definition
 # cache = ["dep:redis", "dep:navius-cache"]
-plugin = ["dep:navius-plugin"]
+# Remove plugin feature definition
+# plugin = ["dep:navius-plugin"]

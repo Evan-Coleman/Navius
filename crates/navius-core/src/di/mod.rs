@@ -7,10 +7,12 @@
 // Export the component module
 pub mod application;
 pub mod component;
+pub mod registry;
 
 // Re-export common types for convenience
 pub use application::{Application, ApplicationBuilder};
 pub use component::{ComponentRef, ComponentRegistry, ComponentScope};
+pub use registry::{DynComponentRegistry, InMemoryComponentRegistry};
 
 /// Initialize the DI system with a new registry
 pub fn init() -> component::ComponentRegistry {
@@ -42,6 +44,6 @@ mod tests {
     #[test]
     fn test_application_init() {
         let app = init_application().build();
-        assert!(app.registry().lock().unwrap().component_types().is_empty());
+        assert!(app.registry().component_types().is_empty());
     }
 }

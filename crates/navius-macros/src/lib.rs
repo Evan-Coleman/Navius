@@ -173,52 +173,116 @@ pub fn nest(args: TokenStream, input: TokenStream) -> TokenStream {
     let nest_args = parse_macro_input!(args as NestArgs);
     let mut input_mod = parse_macro_input!(input as ItemMod);
     let mod_ident = &input_mod.ident;
-    let route_defs = {
-        let mut route_defs = Vec::new();
-        let mut errors = Vec::new();
-        let items = if let Some((_, ref mut items)) = input_mod.content {
-            items
-        } else {
-            errors.push(syn::Error::new_spanned(
-                &input_mod.ident,
-                "#[nest] must be applied to an inline module (mod name { ... })",
-            ));
-            let error_stream = errors.into_iter().map(|e| e.to_compile_error());
-            return quote! { #input_mod #(#error_stream)* }.into();
-        };
+    let mut route_defs = Vec::new();
+    let mut errors = Vec::new();
+
+    // State Detection Logic
+    let mut detected_state_type: Option<syn::Type> = None;
+
+    if let Some((_, ref mut items)) = input_mod.content {
+        // First pass: collect route defs and detect state
         for item in items.iter_mut() {
+            // Mutable borrow needed later for removing attr
             if let Item::Fn(item_fn) = item {
                 let mut route_attr_index = None;
                 for (i, attr) in item_fn.attrs.iter().enumerate() {
                     if attr.path().is_ident("route") {
                         route_attr_index = Some(i);
-                        break;
+                        // Detect state within this routed function
+                        for input in item_fn.sig.inputs.iter() {
+                            if let syn::FnArg::Typed(pat_type) = input {
+                                if let syn::Type::Path(type_path) = &*pat_type.ty {
+                                    if let Some(last_seg) = type_path.path.segments.last() {
+                                        if last_seg.ident == "State" {
+                                            if let syn::PathArguments::AngleBracketed(angle_args) =
+                                                &last_seg.arguments
+                                            {
+                                                if angle_args.args.len() == 1 {
+                                                    if let syn::GenericArgument::Type(state_ty) =
+                                                        &angle_args.args[0]
+                                                    {
+                                                        if let Some(existing_state) =
+                                                            &detected_state_type
+                                                        {
+                                                            // Basic string comparison for type equality check
+                                                            if existing_state
+                                                                .to_token_stream()
+                                                                .to_string()
+                                                                != state_ty
+                                                                    .to_token_stream()
+                                                                    .to_string()
+                                                            {
+                                                                errors.push(syn::Error::new_spanned(
+                                                                    state_ty,
+                                                                    format!("Inconsistent Axum State types found in handlers: previously saw '{}'", existing_state.to_token_stream())
+                                                                ));
+                                                            }
+                                                        } else {
+                                                            detected_state_type =
+                                                                Some(state_ty.clone());
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        break; // Found #[route], stop searching attrs for this fn
                     }
                 }
+                // Store index for later removal if found
                 if let Some(index) = route_attr_index {
-                    let attr = item_fn.attrs.remove(index);
-                    match attr.parse_args::<RouteArgs>() {
+                    match item_fn.attrs[index].parse_args::<RouteArgs>() {
                         Ok(route_args) => {
-                            route_defs.push((route_args, item_fn.sig.ident.clone()));
+                            route_defs.push((route_args, item_fn.sig.ident.clone(), index));
+                            // Store index too
                         }
                         Err(e) => errors.push(e),
                     }
                 }
             }
         }
-        if !errors.is_empty() {
-            let error_stream = errors.into_iter().map(|e| e.to_compile_error());
-            return quote! { #input_mod #(#error_stream)* }.into();
+        // Remove #[route] attributes after iteration to avoid borrow checker issues
+        // We stored the index earlier
+        for item in items.iter_mut() {
+            if let Item::Fn(item_fn) = item {
+                let indices_to_remove: Vec<usize> = item_fn
+                    .attrs
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, attr)| attr.path().is_ident("route"))
+                    .map(|(i, _)| i)
+                    .collect();
+                // Remove in reverse order to maintain correct indices
+                for index in indices_to_remove.iter().rev() {
+                    item_fn.attrs.remove(*index);
+                }
+            }
         }
-        route_defs
-    };
+    } else {
+        errors.push(syn::Error::new_spanned(
+            &input_mod.ident,
+            "#[nest] must be applied to an inline module (mod name { ... })",
+        ));
+    }
+
+    if !errors.is_empty() {
+        let error_stream = errors.into_iter().map(|e| e.to_compile_error());
+        return quote! { #input_mod #(#error_stream)* }.into();
+    }
+
+    // Use detected state or default to ()
+    let state_type = detected_state_type.unwrap_or_else(|| syn::parse_quote! { () });
 
     let route_calls = {
         let mut stream = proc_macro2::TokenStream::new();
-        for (route_args, handler_name) in route_defs {
-            let path = route_args.path.expect("Path validated");
+        // Use the route_defs collected earlier (ignore stored index now)
+        for (route_args, handler_name, _) in route_defs {
+            let path = route_args.path.expect("Path validated during parsing");
             let methods_to_gen = if route_args.methods.is_empty() {
-                vec![Ident::new("GET", path.span())]
+                vec![Ident::new("GET", path.span())] // Default to GET
             } else {
                 route_args.methods
             };
@@ -229,9 +293,11 @@ pub fn nest(args: TokenStream, input: TokenStream) -> TokenStream {
                     let method_lower =
                         Ident::new(&method.to_string().to_lowercase(), method.span());
                     if first {
+                        // Reference handler directly (it's in the same scope as the generated fn)
                         chain.extend(quote! { ::axum::routing::#method_lower(#handler_name) });
                         first = false;
                     } else {
+                        // Reference handler directly
                         chain.extend(quote! { .#method_lower(#handler_name) });
                     }
                 }
@@ -243,14 +309,17 @@ pub fn nest(args: TokenStream, input: TokenStream) -> TokenStream {
         }
         stream
     };
-    let middleware_layer = quote! {};
+
     let router_fn_name = Ident::new(&format!("__navius_router_{}", mod_ident), mod_ident.span());
 
+    // Generate router function with the detected state type
     let generated_router_fn = quote! {
-        pub fn #router_fn_name() -> ::axum::Router<()> {
+        #[doc(hidden)]
+        pub fn #router_fn_name() -> ::axum::Router<#state_type> {
+            // Ensure routing methods are in scope
             use ::axum::routing::{self, get, post, put, delete, patch, head, options, trace};
             use ::axum::Router;
-            let mut router = Router::<()>::new();
+            let mut router = Router::<#state_type>::new();
             #route_calls
             router
         }
@@ -266,7 +335,6 @@ pub fn nest(args: TokenStream, input: TokenStream) -> TokenStream {
         pub const #prefix_const_name: &str = #prefix_str;
     };
 
-    let mut errors = Vec::new();
     match &mut input_mod.content {
         Some((_, items)) => {
             match syn::parse2::<Item>(generated_router_fn.clone()) {
@@ -288,8 +356,9 @@ pub fn nest(args: TokenStream, input: TokenStream) -> TokenStream {
                 )),
             }
         }
-        None => { /* Handled */ }
+        None => { /* Handled earlier */ }
     }
+
     if !errors.is_empty() {
         let error_stream = errors.into_iter().map(|e| e.to_compile_error());
         return quote! { #input_mod #(#error_stream)* }.into();

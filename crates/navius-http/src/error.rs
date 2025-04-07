@@ -1,5 +1,7 @@
 //! Error types for navius-http.
 
+use navius_core::error::ErrorCode as CoreErrorCode;
+use std::error::Error as StdError;
 use std::fmt;
 use thiserror::Error;
 
@@ -108,6 +110,43 @@ impl Error {
             Self::Serialization(_) => Some(500),
             Self::Core(_) => Some(500),
         }
+    }
+}
+
+impl From<Error> for navius_core::Error {
+    fn from(err: Error) -> Self {
+        let core_code = match err.status_code() {
+            Some(400) => CoreErrorCode::Validation,
+            Some(401) => CoreErrorCode::Authentication,
+            Some(403) => CoreErrorCode::Authorization,
+            Some(404) => CoreErrorCode::NotFound,
+            Some(409) => CoreErrorCode::Conflict,
+            Some(408) => CoreErrorCode::Timeout,
+            Some(500) => CoreErrorCode::Internal,
+            Some(503) => CoreErrorCode::External,
+            Some(504) => CoreErrorCode::External,
+            Some(507) => CoreErrorCode::Conflict,
+            Some(508) => CoreErrorCode::Authorization,
+            Some(509) => CoreErrorCode::Authentication,
+            Some(510) => CoreErrorCode::Authorization,
+            Some(511) => CoreErrorCode::Authentication,
+            _ => CoreErrorCode::Unknown,
+        };
+
+        let mut core_error = navius_core::Error::new(core_code, err.to_string());
+
+        match err {
+            Error::Core(core_err) => {
+                if let Some(source) = core_err.source {
+                    core_error.source = Some(source);
+                }
+            }
+            _ => {
+                core_error.source = Some(Box::new(err));
+            }
+        }
+
+        core_error
     }
 }
 
