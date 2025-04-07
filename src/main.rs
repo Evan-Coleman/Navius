@@ -14,15 +14,18 @@ use navius_macros::nest;
 // Other necessary imports
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{debug, error, info, Level};
 
 // Config imports
 use config::Config as ExternalConfig;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
-    info!("Tracing initialized.");
+    // Initialize tracing with debug level
+    tracing_subscriber::fmt()
+        .with_max_level(Level::DEBUG)
+        .init();
+    info!("Tracing initialized with debug level.");
 
     // --- Configuration ---
     let temp_config: ExternalConfig = ExternalConfig::builder()
@@ -31,6 +34,7 @@ async fn main() -> Result<()> {
         .add_source(config::Environment::with_prefix("NAVIUS").separator("__"))
         .build()
         .map_err(|e| {
+            error!("Configuration error: {}", e);
             navius_core::error::Error::configuration(format!("Config build error: {}", e))
         })?;
     info!("Configuration loaded.");
@@ -38,7 +42,7 @@ async fn main() -> Result<()> {
     // --- Application Context & DI ---
     info!("Initializing application builder...");
     // TODO: Use ApplicationBuilder::with_config once config type mismatch is resolved
-    let mut app_builder = ApplicationBuilder::new();
+    let app_builder = ApplicationBuilder::new();
     info!("Application builder created.");
 
     // --- JWT Provider (Placeholder) ---
@@ -67,43 +71,86 @@ async fn main() -> Result<()> {
     let api_router = api::__navius_router_api();
 
     // Create a new router instance with application state
-    let app_router: Router<AppState> = Router::new().nest("/api", api_router).with_state(app_state);
+    // Use the api module's __NAVIUS_NEST_PREFIX for proper nesting
+    let app_router = Router::new()
+        .nest(
+            format!("/api{}", api::__NAVIUS_NEST_PREFIX).as_str(),
+            api_router,
+        )
+        .with_state(app_state);
 
     info!("Router setup complete.");
 
     // --- Server Start ---
     info!("Setting up server address...");
-    let host = temp_config
-        .get_string("server.host")
-        .unwrap_or_else(|_| "127.0.0.1".to_string());
-    let port = temp_config.get_int("server.port").unwrap_or(8080) as u16;
+    let host = match temp_config.get_string("server.host") {
+        Ok(h) => {
+            info!("Config provided host: {}", h);
+            h
+        }
+        Err(e) => {
+            info!("No host in config ({}), using default: 127.0.0.1", e);
+            "127.0.0.1".to_string()
+        }
+    };
+
+    let port = match temp_config.get_int("server.port") {
+        Ok(p) => {
+            info!("Config provided port: {}", p);
+            p as u16
+        }
+        Err(e) => {
+            info!("No port in config ({}), using default: 3001", e);
+            3001u16
+        }
+    };
 
     // Parse socket address safely
     let addr: SocketAddr = match format!("{}:{}", host, port).parse() {
         Ok(addr) => addr,
         Err(e) => {
-            info!("Failed to parse address: {}", e);
-            "127.0.0.1:8080".parse().unwrap()
+            error!("Failed to parse address: {}", e);
+            "127.0.0.1:3001".parse().unwrap() // Changed fallback to 3001
         }
     };
 
     info!("Server configured to listen on {}", addr);
+    info!("Starting HTTP server...");
 
-    // Handle shutdown - this is a simplified implementation
-    let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| {
-        navius_core::error::Error::internal(format!("Failed to bind to address: {}", e))
-    })?;
+    // Create a TCP listener with more detailed error handling
+    debug!("Attempting to bind TCP listener to {}", addr);
+    let listener = match tokio::net::TcpListener::bind(addr).await {
+        Ok(l) => {
+            info!("Successfully bound to {}", addr);
+            l
+        }
+        Err(e) => {
+            error!("Failed to bind to address: {}", e);
+            return Err(navius_core::error::Error::internal(format!(
+                "Failed to bind to address: {}",
+                e
+            )));
+        }
+    };
 
-    info!("Server listening on {}", addr);
-    info!("Server running at http://{}. Press Ctrl+C to stop.", addr);
+    info!("Server listening on http://{}", addr);
+    info!("Press Ctrl+C to stop the server");
 
-    // Wait for Ctrl+C signal without starting the server
-    // In a real implementation, we would process connections here
-    tokio::signal::ctrl_c()
-        .await
-        .expect("Failed to listen for Ctrl+C signal");
+    // Run the server with more detailed error handling
+    debug!("Starting axum::serve");
+    match axum::serve(listener, app_router).await {
+        Ok(_) => {
+            info!("Server shut down gracefully");
+        }
+        Err(e) => {
+            error!("Server error: {}", e);
+            return Err(navius_core::error::Error::internal(format!(
+                "Server error: {}",
+                e
+            )));
+        }
+    }
 
-    info!("Shutdown signal received. Server shutting down...");
     info!("Server shutdown complete.");
     Ok(())
 }
@@ -113,7 +160,7 @@ async fn main() -> Result<()> {
 mod api {
     use super::*;
     use axum::extract::State;
-    use navius_macros::route;
+
     // Import the trait needed for registry methods
     use navius_core::di::registry::ComponentRegistry;
 
