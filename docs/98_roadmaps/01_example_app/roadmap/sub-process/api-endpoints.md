@@ -1,12 +1,12 @@
-# API Endpoints Implementation
+# Simmr API Endpoints Implementation
 
 ## Overview
-This document outlines the process for implementing RESTful API endpoints for the example app using TDD. The API layer will be built on top of the core domain model and services, providing a clean interface for clients.
+This document outlines the process for implementing RESTful API endpoints for the Simmr social cooking platform using TDD. The API layer will provide a comprehensive interface for the frontend and mobile applications to interact with the Simmr backend.
 
 ## Related Documents
 - [Main Roadmap](../01-example-app.md)
 - [Implementation Plan](../example-app-plan.md)
-- [Core Features](./core-features.md)
+- [Crate Enhancements](./crate-enhancements.md)
 
 ## API Design Principles
 
@@ -30,141 +30,221 @@ This document outlines the process for implementing RESTful API endpoints for th
    - Clear documentation
    - Predictable behavior
 
+5. **Social Features**
+   - Optimized for engagement
+   - Real-time capabilities
+   - Social graph traversal
+
 ## Endpoint Implementation Plan
 
-### Health and Status Endpoints
+### Core Platform Endpoints
 
 #### Endpoint 1.1: Health Check
-- [ ] Write tests for health endpoint
-- [ ] Implement basic health check
-- [ ] Add detailed health status
-- [ ] Configure for monitoring
-- [ ] Verify with cargo build and cargo test
+- [x] Write tests for health endpoint
+- [x] Implement basic health check
+- [x] Add detailed health status
+- [x] Configure for monitoring
+- [x] Verify with cargo build and cargo test
 
 #### Endpoint 1.2: API Info
-- [ ] Write tests for API info endpoint
-- [ ] Implement version information
-- [ ] Add environment details
-- [ ] Configure for monitoring
+- [x] Write tests for API info endpoint
+- [x] Implement version information
+- [x] Add environment details
+- [x] Configure for monitoring
+- [x] Verify with cargo build and cargo test
+
+### User Management Endpoints
+
+#### Endpoint 2.1: User Registration
+- [ ] Write tests for user registration endpoint
+- [ ] Implement email validation
+- [ ] Add password hashing
+- [ ] Implement verification flow
 - [ ] Verify with cargo build and cargo test
 
-### Task Management Endpoints
-
-#### Endpoint 2.1: Create Task
-- [ ] Write tests for task creation endpoint
-- [ ] Implement request validation
-- [ ] Add response formatting
-- [ ] Implement authorization
+#### Endpoint 2.2: User Authentication
+- [ ] Write tests for authentication endpoint
+- [ ] Implement JWT generation
+- [ ] Add refresh token support
+- [ ] Implement social login
 - [ ] Verify with cargo build and cargo test
 
-#### Endpoint 2.2: Get Task
-- [ ] Write tests for task retrieval endpoint
-- [ ] Implement authorization checking
-- [ ] Add response formatting
-- [ ] Implement error handling
+#### Endpoint 2.3: User Profile
+- [ ] Write tests for profile management
+- [ ] Implement profile update
+- [ ] Add avatar upload
+- [ ] Implement profile retrieval
 - [ ] Verify with cargo build and cargo test
 
-#### Endpoint 2.3: Update Task
-- [ ] Write tests for task update endpoint
-- [ ] Implement request validation
-- [ ] Add response formatting
-- [ ] Implement authorization
+#### Endpoint 2.4: User Preferences
+- [ ] Write tests for user preferences
+- [ ] Implement dietary preferences
+- [ ] Add notification settings
+- [ ] Implement privacy settings
 - [ ] Verify with cargo build and cargo test
 
-#### Endpoint 2.4: Delete Task
-- [ ] Write tests for task deletion endpoint
-- [ ] Implement authorization checking
-- [ ] Add response formatting
-- [ ] Implement error handling
+### Recipe Management Endpoints
+
+#### Endpoint 3.1: Create Recipe
+- [ ] Write tests for recipe creation endpoint
+- [ ] Implement request validation for recipe structure
+- [ ] Add support for ingredients and steps
+- [ ] Implement media upload for recipe photos
 - [ ] Verify with cargo build and cargo test
 
-#### Endpoint 2.5: List Tasks
-- [ ] Write tests for task listing endpoint
+#### Endpoint 3.2: Get Recipe
+- [ ] Write tests for recipe retrieval endpoint
+- [ ] Implement complete recipe data retrieval
+- [ ] Add view count tracking
+- [ ] Implement related recipes suggestion
+- [ ] Verify with cargo build and cargo test
+
+#### Endpoint 3.3: Update Recipe
+- [ ] Write tests for recipe update endpoint
+- [ ] Implement version tracking
+- [ ] Add change validation
+- [ ] Implement authorization checks
+- [ ] Verify with cargo build and cargo test
+
+#### Endpoint 3.4: Delete Recipe
+- [ ] Write tests for recipe deletion endpoint
+- [ ] Implement soft delete
+- [ ] Add cleanup of associated resources
+- [ ] Implement authorization checks
+- [ ] Verify with cargo build and cargo test
+
+#### Endpoint 3.5: List Recipes
+- [ ] Write tests for recipe listing endpoint
 - [ ] Implement pagination
-- [ ] Add filtering
-- [ ] Implement authorization
+- [ ] Add filtering by tags, ingredients, cuisine
+- [ ] Implement sorting options
 - [ ] Verify with cargo build and cargo test
 
-### Category Management Endpoints
+### Social Interaction Endpoints
 
-#### Endpoint 3.1: Create Category
-- [ ] Write tests for category creation endpoint
+#### Endpoint 4.1: Follow/Unfollow User
+- [ ] Write tests for follow/unfollow endpoint
+- [ ] Implement relationship management
+- [ ] Add notification triggering
+- [ ] Implement privacy checks
+- [ ] Verify with cargo build and cargo test
+
+#### Endpoint 4.2: Comment on Recipe
+- [ ] Write tests for comment endpoints
+- [ ] Implement comment creation/editing/deletion
+- [ ] Add notification system
+- [ ] Implement moderation features
+- [ ] Verify with cargo build and cargo test
+
+#### Endpoint 4.3: Rate Recipe
+- [ ] Write tests for rating endpoint
+- [ ] Implement star rating system
+- [ ] Add aggregate rating calculation
+- [ ] Implement user-specific rating retrieval
+- [ ] Verify with cargo build and cargo test
+
+#### Endpoint 4.4: Share Recipe
+- [ ] Write tests for recipe sharing
+- [ ] Implement sharing functionality
+- [ ] Add attribution tracking
+- [ ] Implement share statistics
+- [ ] Verify with cargo build and cargo test
+
+#### Endpoint 4.5: Activity Feed
+- [ ] Write tests for activity feed endpoint
+- [ ] Implement feed generation algorithm
+- [ ] Add pagination
+- [ ] Implement personalization
+- [ ] Verify with cargo build and cargo test
+
+### Collection Management Endpoints
+
+#### Endpoint 5.1: Create Collection
+- [ ] Write tests for collection creation
 - [ ] Implement request validation
-- [ ] Add response formatting
+- [ ] Add privacy settings
 - [ ] Implement authorization
 - [ ] Verify with cargo build and cargo test
 
-#### Endpoint 3.2: Get Category
-- [ ] Write tests for category retrieval endpoint
-- [ ] Implement authorization checking
-- [ ] Add response formatting
-- [ ] Implement error handling
+#### Endpoint 5.2: Add/Remove Recipe from Collection
+- [ ] Write tests for collection management
+- [ ] Implement recipe addition/removal
+- [ ] Add ordering capabilities
+- [ ] Implement authorization checks
 - [ ] Verify with cargo build and cargo test
 
-#### Endpoint 3.3: Update Category
-- [ ] Write tests for category update endpoint
-- [ ] Implement request validation
-- [ ] Add response formatting
-- [ ] Implement authorization
-- [ ] Verify with cargo build and cargo test
-
-#### Endpoint 3.4: Delete Category
-- [ ] Write tests for category deletion endpoint
-- [ ] Implement authorization checking
-- [ ] Add response formatting
-- [ ] Implement error handling
-- [ ] Verify with cargo build and cargo test
-
-#### Endpoint 3.5: List Categories
-- [ ] Write tests for category listing endpoint
+#### Endpoint 5.3: List Collections
+- [ ] Write tests for collection listing
 - [ ] Implement pagination
-- [ ] Add filtering
-- [ ] Implement authorization
+- [ ] Add filtering options
+- [ ] Implement privacy-aware results
 - [ ] Verify with cargo build and cargo test
 
-### User Reference Endpoints
+### Search and Discovery Endpoints
 
-#### Endpoint 4.1: Get Current User
-- [ ] Write tests for current user endpoint
-- [ ] Implement response formatting
-- [ ] Add error handling
+#### Endpoint 6.1: Recipe Search
+- [ ] Write tests for search endpoint
+- [ ] Implement full-text search
+- [ ] Add advanced filters
+- [ ] Implement relevance ranking
 - [ ] Verify with cargo build and cargo test
 
-#### Endpoint 4.2: List Users
-- [ ] Write tests for user listing endpoint
-- [ ] Implement pagination
-- [ ] Add filtering
-- [ ] Implement authorization
+#### Endpoint 6.2: User Search
+- [ ] Write tests for user search
+- [ ] Implement profile-based search
+- [ ] Add privacy filtering
+- [ ] Implement result ranking
+- [ ] Verify with cargo build and cargo test
+
+#### Endpoint 6.3: Ingredient Search
+- [ ] Write tests for ingredient search
+- [ ] Implement autocomplete
+- [ ] Add nutritional information
+- [ ] Implement substitution suggestions
+- [ ] Verify with cargo build and cargo test
+
+#### Endpoint 6.4: Recommendations
+- [ ] Write tests for recommendation endpoint
+- [ ] Implement algorithm for personalized suggestions
+- [ ] Add trending content detection
+- [ ] Implement diverse recommendation strategies
 - [ ] Verify with cargo build and cargo test
 
 ## Middleware Implementation
 
 #### Middleware 1: Authentication
-- [ ] Write tests for authentication middleware
-- [ ] Implement token validation
-- [ ] Add user resolution
-- [ ] Implement error handling
-- [ ] Verify with cargo build and cargo test
+- [x] Write tests for authentication middleware
+- [x] Implement token validation
+- [x] Add user resolution
+- [x] Implement error handling
+- [x] Verify with cargo build and cargo test
 
 #### Middleware 2: Request Logging
-- [ ] Write tests for request logging middleware
-- [ ] Implement request logging
-- [ ] Add response logging
-- [ ] Implement performance tracking
-- [ ] Verify with cargo build and cargo test
+- [x] Write tests for request logging middleware
+- [x] Implement request logging
+- [x] Add response logging
+- [x] Implement performance tracking
+- [x] Verify with cargo build and cargo test
 
 #### Middleware 3: Error Handling
-- [ ] Write tests for error handling middleware
-- [ ] Implement error mapping
-- [ ] Add consistent response formatting
-- [ ] Implement error logging
-- [ ] Verify with cargo build and cargo test
+- [x] Write tests for error handling middleware
+- [x] Implement error mapping
+- [x] Add consistent response formatting
+- [x] Implement error logging
+- [x] Verify with cargo build and cargo test
 
 #### Middleware 4: Rate Limiting
 - [ ] Write tests for rate limiting middleware
 - [ ] Implement basic rate limiting
 - [ ] Add configuration options
 - [ ] Implement response headers
+- [ ] Verify with cargo build and cargo test
+
+#### Middleware 5: Content Security
+- [ ] Write tests for content security middleware
+- [ ] Implement content validation
+- [ ] Add malicious content detection
+- [ ] Implement secure headers
 - [ ] Verify with cargo build and cargo test
 
 ## TDD Process for API Endpoints
@@ -206,7 +286,9 @@ During API implementation, we'll leverage these Navius crates:
 
 - **navius-http**: For routing and middleware
 - **navius-auth**: For authentication and authorization
-- **navius-core**: For domain model integration
+- **navius-media**: For image processing and storage
+- **navius-social**: For social interaction features
+- **navius-search**: For search and discovery
 
 Document any limitations or enhancement opportunities in the [Crate Enhancements](./crate-enhancements.md) document.
 
@@ -214,26 +296,36 @@ Document any limitations or enhancement opportunities in the [Crate Enhancements
 
 | Endpoint | Status | Test Coverage | Notes |
 |----------|--------|---------------|-------|
-| 1.1 Health Check | Not Started | 0% | |
-| 1.2 API Info | Not Started | 0% | |
-| 2.1 Create Task | Not Started | 0% | |
-| 2.2 Get Task | Not Started | 0% | |
-| 2.3 Update Task | Not Started | 0% | |
-| 2.4 Delete Task | Not Started | 0% | |
-| 2.5 List Tasks | Not Started | 0% | |
-| 3.1 Create Category | Not Started | 0% | |
-| 3.2 Get Category | Not Started | 0% | |
-| 3.3 Update Category | Not Started | 0% | |
-| 3.4 Delete Category | Not Started | 0% | |
-| 3.5 List Categories | Not Started | 0% | |
-| 4.1 Get Current User | Not Started | 0% | |
-| 4.2 List Users | Not Started | 0% | |
-| Middleware 1: Authentication | Not Started | 0% | |
-| Middleware 2: Request Logging | Not Started | 0% | |
-| Middleware 3: Error Handling | Not Started | 0% | |
+| 1.1 Health Check | Completed | 100% | Basic implementation working |
+| 1.2 API Info | Completed | 100% | Version info implemented |
+| 2.1 User Registration | Not Started | 0% | |
+| 2.2 User Authentication | In Progress | 30% | JWT implementation started |
+| 2.3 User Profile | Not Started | 0% | |
+| 2.4 User Preferences | Not Started | 0% | |
+| 3.1 Create Recipe | Not Started | 0% | |
+| 3.2 Get Recipe | Not Started | 0% | |
+| 3.3 Update Recipe | Not Started | 0% | |
+| 3.4 Delete Recipe | Not Started | 0% | |
+| 3.5 List Recipes | Not Started | 0% | |
+| 4.1 Follow/Unfollow User | Not Started | 0% | |
+| 4.2 Comment on Recipe | Not Started | 0% | |
+| 4.3 Rate Recipe | Not Started | 0% | |
+| 4.4 Share Recipe | Not Started | 0% | |
+| 4.5 Activity Feed | Not Started | 0% | |
+| 5.1 Create Collection | Not Started | 0% | |
+| 5.2 Add/Remove Recipe | Not Started | 0% | |
+| 5.3 List Collections | Not Started | 0% | |
+| 6.1 Recipe Search | Not Started | 0% | |
+| 6.2 User Search | Not Started | 0% | |
+| 6.3 Ingredient Search | Not Started | 0% | |
+| 6.4 Recommendations | Not Started | 0% | |
+| Middleware 1: Authentication | Completed | 90% | Basic authentication working |
+| Middleware 2: Request Logging | Completed | 95% | Implementation complete |
+| Middleware 3: Error Handling | Completed | 80% | Core error handling working |
 | Middleware 4: Rate Limiting | Not Started | 0% | |
+| Middleware 5: Content Security | Not Started | 0% | |
 
 ## Current Status
-- Status: Not Started
-- Progress: 0%
-- Updated at: May 30, 2024 
+- Status: In Progress
+- Progress: 15%
+- Updated at: April 06, 2025 

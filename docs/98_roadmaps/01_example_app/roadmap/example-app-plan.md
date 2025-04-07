@@ -1,33 +1,41 @@
-# Example App Implementation Plan
+# Simmr: Social Cooking Platform Implementation Plan
 
 ## Application Overview
 
-The example application will be a simple but comprehensive task management system that demonstrates all key capabilities of the Navius crate ecosystem. It will allow users to:
+Simmr is a comprehensive social cooking platform that will serve as both a production-ready application and a showcase for the capabilities of the Navius crate ecosystem. The platform will allow users to:
 
-1. Create and manage tasks with deadlines
-2. Organize tasks in categories/projects
-3. Assign tasks to users
-4. Track task completion status
-5. Generate reports and metrics
+1. Create and share recipes with detailed ingredients and steps
+2. Follow other users and discover their recipes
+3. Comment on and rate recipes
+4. Create collections of favorite recipes
+5. Search for recipes by ingredients, tags, or users
+6. Receive notifications about social interactions
+7. View personalized activity feeds
 
 ## Technical Stack
 
 - **Framework**: Axum web framework
 - **Database**: PostgreSQL via navius-db-postgres
-- **Authentication**: Microsoft Entra via navius-auth-entra
+- **Authentication**: JWT and OAuth via navius-auth
 - **Caching**: Redis via navius-cache
 - **API Documentation**: OpenAPI/Swagger
-- **Background Jobs**: navius-job
-- **Messaging**: navius-messaging
+- **Media Storage**: Cloud storage via navius-media
+- **Search**: Full-text search via navius-search
+- **Messaging**: Real-time notifications via navius-messaging
 - **Metrics**: Prometheus via navius-metrics-prometheus
 - **Testing**: navius-test and navius-test-utils
 
 ## Application Structure
 
-The example app will follow a clean, declarative style based on this target main.rs example:
+The Simmr backend will follow a clean, declarative style with modular organization:
 
 ```rust
 mod jwt;
+mod user;
+mod recipe;
+mod social;
+mod media;
+mod search;
 
 use axum::http::StatusCode;
 use jwt::Claims;
@@ -39,25 +47,17 @@ async fn main() {
     App::new()
         .add_plugin(SqlxPlugin)
         .add_plugin(WebPlugin)
+        .add_plugin(MediaPlugin)
+        .add_plugin(SearchPlugin)
+        .add_plugin(SocialPlugin)
         .run()
         .await;
 
-    tracing::info!("Server Shutdown")
+    tracing::info!("Simmr Server Shutdown")
 }
 
-#[routes]
-#[get("/")]
-#[get("/hello_world")]
-async fn hello_world() -> impl IntoResponse {
-    "hello world"
-}
-
-#[route("/hello/{name}", method = "GET", method = "POST")]
-async fn hello(Path(name): Path<String>) -> impl IntoResponse {
-    format!("hello {name}")
-}
-
-// Additional endpoints for authentication, task management, etc.
+// Example API modules will be defined here using nest and route macros
+// for user profiles, recipe management, social features, etc.
 ```
 
 ## Implementation Details
@@ -65,171 +65,228 @@ async fn hello(Path(name): Path<String>) -> impl IntoResponse {
 ### Phase 1: Project Setup and Core Framework
 
 #### Step 1.1: Basic Project Structure
-- Set up project with cargo new
-- Configure Cargo.toml with initial dependencies
-- Set up directory structure
+- [x] Set up project with cargo new
+- [x] Configure Cargo.toml with initial dependencies
+- [x] Set up directory structure
 
 #### Step 1.2: Core Framework Components
-- Implement App builder pattern
-- Create Plugin trait and registration mechanism
-- Implement basic application lifecycle management
-- Create route collection and registration system
+- [x] Implement App builder pattern
+- [x] Create Plugin trait and registration mechanism
+- [x] Implement basic application lifecycle management
+- [x] Create route collection and registration system
 
 #### Step 1.3: Route Macro Implementation
-- Create proc-macro crate for route macros
-- Implement #[routes], #[get], and #[post] macros
-- Add support for nested routes with #[nest]
-- Implement path parameter extraction
+- [x] Create proc-macro crate for route macros
+- [x] Implement #[route] macro with method parameter
+- [x] Add support for nested routes with #[nest]
+- [x] Implement path parameter extraction
 
 #### Step 1.4: Configuration System
-- Implement #[auto_config] macro
-- Create Configurable derive macro
-- Build configuration loading system
-- Add support for configuration prefixes
+- [ ] Implement #[auto_config] macro
+- [ ] Create Configurable derive macro
+- [ ] Build configuration loading system
+- [ ] Add support for configuration prefixes
 
-### Phase 2: Dependency Injection and Components
+### Phase 2: User Management and Authentication
 
-#### Step 2.1: Dependency Injection System
-- Implement Component<T> wrapper
-- Create service registration mechanism
-- Build dependency resolution system
-- Implement parameter extraction for handlers
+#### Step 2.1: User Domain Model
+- [ ] Implement User entity and validation
+- [ ] Create profile management functionality
+- [ ] Build authentication system
 
-#### Step 2.2: Core Plugins
-- Create WebPlugin for HTTP server
-- Implement SqlxPlugin for database access
-- Build basic plugin dependencies management
+#### Step 2.2: User API
+- [ ] Create user registration endpoint
+- [ ] Implement authentication endpoints
+- [ ] Build profile management API
+- [ ] Add avatar upload functionality
 
 #### Step 2.3: JWT Authentication
-- Implement JWT generation and validation
-- Create authentication middleware
-- Add Claims extraction for handlers
+- [ ] Implement JWT generation and validation
+- [ ] Create authentication middleware
+- [ ] Add Claims extraction for handlers
+- [ ] Implement social login (OAuth)
 
-### Phase 3: Task Management Domain
+### Phase 3: Recipe Management
 
-#### Step 3.1: Task Domain Model
-- Implement Task entity and validation
-- Create Category/Project domain model
-- Implement User reference model
+#### Step 3.1: Recipe Domain Model
+- [ ] Implement Recipe entity with ingredients and steps
+- [ ] Create tag and category system
+- [ ] Build media reference model for photos
+- [ ] Implement nutrition information tracking
 
-#### Step 3.2: Task Services
-- Implement TaskService with dependency injection
-- Create CategoryService with business logic
-- Build UserService for reference data
+#### Step 3.2: Recipe Services
+- [ ] Implement RecipeService with creation and updates
+- [ ] Create IngredientService for ingredient management
+- [ ] Build TagService for recipe categorization
+- [ ] Implement media handling for recipe photos
 
-#### Step 3.3: Task Repositories
-- Implement database schema with migrations
-- Create Repository interfaces
-- Implement PostgreSQL repositories
+#### Step 3.3: Recipe Repositories
+- [ ] Implement database schema with migrations
+- [ ] Create Repository interfaces
+- [ ] Implement PostgreSQL repositories
+- [ ] Add caching for popular recipes
 
-### Phase 4: API Development
+#### Step 3.4: Recipe API
+- [ ] Create recipe CRUD endpoints
+- [ ] Implement ingredient management
+- [ ] Build tag and category endpoints
+- [ ] Add media upload functionality
 
-#### Step 4.1: Task API Endpoints
-- Create task management endpoints
-- Implement category management endpoints
-- Build user reference endpoints
+### Phase 4: Social Features
 
-#### Step 4.2: API Security
-- Implement authentication for endpoints
-- Add authorization checks
-- Configure security headers and CORS
+#### Step 4.1: Following System
+- [ ] Implement follower/following relationships
+- [ ] Create following management endpoints
+- [ ] Build user discovery functionality
+- [ ] Add notification system for new followers
 
-#### Step 4.3: API Documentation
-- Implement OpenAPI documentation
-- Create API usage examples
-- Add request/response schemas
+#### Step 4.2: Engagement Features
+- [ ] Implement comments and ratings
+- [ ] Create recipe sharing functionality
+- [ ] Build collections and favorites
+- [ ] Implement activity feed generation
 
-### Phase 5: Advanced Features
+#### Step 4.3: Social API
+- [ ] Create follow/unfollow endpoints
+- [ ] Implement comment and rating API
+- [ ] Build sharing endpoints
+- [ ] Add activity feed endpoints
 
-#### Step 5.1: Background Jobs
-- Implement task notification jobs
-- Create scheduled task processing
-- Configure job monitoring
+### Phase 5: Search and Discovery
 
-#### Step 5.2: Event System
-- Implement domain events
-- Create event handlers
-- Build event-based workflows
+#### Step 5.1: Search Infrastructure
+- [ ] Implement full-text search for recipes
+- [ ] Create user search functionality
+- [ ] Build tag-based filtering
+- [ ] Implement autocomplete suggestions
 
-#### Step 5.3: Metrics
-- Implement performance metrics
-- Add health checks
-- Create monitoring dashboards
+#### Step 5.2: Recommendation Engine
+- [ ] Create basic recommendation algorithms
+- [ ] Implement personalized suggestions
+- [ ] Build trending recipes functionality
+- [ ] Add seasonal recipe highlights
 
-### Phase 6: Testing and Documentation
+#### Step 5.3: Search and Discovery API
+- [ ] Create search endpoints
+- [ ] Implement filter endpoints
+- [ ] Build recommendation API
+- [ ] Add exploration endpoints
 
-#### Step 6.1: Testing
-- Complete test coverage
-- Implement integration tests
-- Add performance tests
+### Phase 6: Advanced Features
 
-#### Step 6.2: Documentation
-- Complete API documentation
-- Create usage guides
-- Document architecture decisions
+#### Step 6.1: Notifications
+- [ ] Implement real-time notifications
+- [ ] Create notification preferences
+- [ ] Build notification center
+- [ ] Add email notifications
+
+#### Step 6.2: Media Processing
+- [ ] Implement image upload and storage
+- [ ] Create thumbnail generation
+- [ ] Build CDN integration
+- [ ] Add image optimization
+
+#### Step 6.3: Metrics and Analytics
+- [ ] Implement usage tracking
+- [ ] Create performance metrics
+- [ ] Build analytics dashboard
+- [ ] Add health monitoring
+
+### Phase 7: Testing and Documentation
+
+#### Step 7.1: Testing
+- [ ] Complete test coverage
+- [ ] Implement integration tests
+- [ ] Add performance tests
+- [ ] Build CI/CD pipeline
+
+#### Step 7.2: Documentation
+- [ ] Complete API documentation
+- [ ] Create usage guides
+- [ ] Document architecture decisions
+- [ ] Build developer portal
 
 ## Implementation Strategy
 
-Our approach will be to work backward from the target main.rs example:
+Our approach will be to build the Simmr platform incrementally:
 
-1. **Identify Core Components**
-   - Determine what framework features are needed
-   - Map out dependencies between components
-   - Create minimal implementations first
+1. **Core Platform First**
+   - Start with user management and authentication
+   - Implement basic recipe functionality
+   - Build minimal viable social features
 
-2. **Build Foundation First**
-   - Start with App builder and Plugin system
-   - Implement basic route macros
-   - Create minimal working example
+2. **Feature Expansion**
+   - Add more sophisticated social features
+   - Implement search and discovery
+   - Build media handling capabilities
 
-3. **Add Features Incrementally**
-   - Build out each feature using TDD
-   - Focus on one component at a time
-   - Ensure everything works together
+3. **Polish and Optimize**
+   - Enhance performance with caching
+   - Optimize search and recommendations
+   - Improve user experience
 
-4. **Enhance as Needed**
-   - Identify limitations in Navius crates
-   - Implement enhancements with TDD
-   - Document improvements
+4. **Scale and Monitor**
+   - Add metrics and monitoring
+   - Implement scalability features
+   - Build administrative tools
+
+Throughout this process, we'll identify and implement necessary enhancements to the Navius crate ecosystem.
 
 ## Navius Crate Enhancement Focus Areas
 
-The implementation will require several enhancements to Navius crates:
+The implementation will require several enhancements to existing Navius crates and the creation of new ones:
 
 1. **navius-core**
-   - Plugin system implementation
-   - Application builder pattern
-   - Component registration system
+   - Enhanced error handling
+   - Improved configuration system
+   - Telemetry integration
 
 2. **navius-http**
-   - Route macro development
-   - Nested route support
-   - Path parameter extraction
+   - Media upload handling
+   - Rate limiting
+   - API versioning
 
-3. **navius-di** (new crate)
-   - Dependency injection framework
-   - Component wrapper
-   - Parameter extraction system
+3. **navius-db-postgres**
+   - Specialized repositories for recipes
+   - Social graph storage optimization
+   - Full-text search integration
 
-4. **navius-config** (new crate)
-   - Configuration system
-   - auto_config macro
-   - Configurable derive macro
+4. **navius-auth**
+   - Social login capabilities
+   - Role-based access control
+   - Enhanced JWT management
+
+5. **navius-media** (new crate)
+   - Image upload and storage
+   - Thumbnail generation
+   - CDN integration
+
+6. **navius-social** (new crate)
+   - Following system
+   - Activity feed generation
+   - Notification management
+
+7. **navius-search** (new crate)
+   - Recipe search functionality
+   - Autocomplete suggestions
+   - Recommendation algorithms
 
 These enhancements will be tracked in the [Crate Enhancements](./sub-process/crate-enhancements.md) document.
 
 ## Success Criteria
 
-The example app implementation will be considered successful when:
+The Simmr implementation will be considered successful when:
 
-1. All features are implemented and working correctly
+1. All core features are implemented and working correctly
 2. Test coverage exceeds 90%
 3. No errors or warnings in cargo build
 4. All identified crate enhancements are implemented
-5. Comprehensive documentation is available
-6. The app demonstrates the clean, declarative style shown in the target example
+5. API response times are under 100ms for non-complex requests
+6. The platform can support at least 10,000 active users
+7. Recipe storage can handle at least 100,000 recipes
+8. Comprehensive documentation is available
 
 ## Current Status
-- Status: Not Started
-- Progress: 0%
-- Updated at: May 30, 2024 
+- Status: In Progress
+- Progress: 12%
+- Updated at: April 06, 2025 

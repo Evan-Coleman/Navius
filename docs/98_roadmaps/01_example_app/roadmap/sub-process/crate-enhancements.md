@@ -1,18 +1,22 @@
-# Crate Enhancements for Example App
+# Crate Enhancements for Simmr - Social Cooking Platform
 
-This document tracks the specific enhancements required in the Navius crate ecosystem to support the target style and functionality of the example application.
+This document tracks the specific enhancements required in the Navius crate ecosystem to support the Simmr social cooking platform backend.
 
 | Enhancement ID | Crate(s) Affected | Title                   | Description                                                                                                                               | Status      | Implementation Notes                                         |
 | -------------- | ----------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------ |
 | NC-1           | navius-core       | Plugin/DI System        | Initial DI and config loading via `ApplicationBuilder`. Basic error handling improvements. (Initial plugin concept superseded by direct DI). | Completed   | Implemented via `ApplicationBuilder` refactoring.            |
-| NC-2           | navius-http       | Declarative Route Macros | Implement `#[route(path="...", method=..., ...)]` and `#[nest(...)]` macros for defining routes and applying middleware/auth declaratively.   | In Progress | Focus on `#[route]` unification. Parameters: method, auth_policy, middleware, name, OpenAPI tags? |
+| NC-2           | navius-http       | Declarative Route Macros | Implement `#[route(path="...", method=..., ...)]` and `#[nest(...)]` macros for defining routes and applying middleware/auth declaratively.   | Completed   | Basic implementation functioning; API routes working with proper nesting. |
 | NC-3           | navius-core       | Config Macros           | Implement `#[auto_config]` and `#[derive(Configurable)]` for automated configuration setup and struct mapping.                              | Not Started | Requires proc-macro development.                             |
 | NC-4           | navius-di         | DI Improvements         | Implement `Component<T>` wrapper or similar extractor for simplified, type-safe component injection in handlers/services.                     | Not Started | Explore alternatives like direct `State` extraction vs. wrapper. |
-| NC-5           | navius-db         | Repository Abstraction  | Define standard repository traits/macros? Simplify common CRUD operations.                                                              | Not Started | Consider base traits or codegen for repositories.          |
-| NC-6           | navius-auth       | Auth Policy Integration | Standardize how `auth_policy` in `#[route]` maps to specific auth middleware/configurations provided by `navius-auth`.                      | Not Started | Define policy registration/lookup mechanism.               |
+| NC-5           | navius-db         | Repository Abstraction  | Define standard repository traits/macros for recipe and user data. Simplify common CRUD operations.                                       | Not Started | Consider base traits or codegen for repositories.          |
+| NC-6           | navius-auth       | Auth Policy Integration | Standardize how `auth_policy` in `#[route]` maps to specific auth middleware/configurations for user authentication.                      | Not Started | Define policy registration/lookup mechanism.               |
+| NC-7           | navius-media      | Media Processing        | Add support for recipe image upload, processing, and storage.                                                                           | Not Started | Implement streaming uploads, image optimization, and CDN integration. |
+| NC-8           | navius-social     | Social Features         | Create new crate with common social media patterns: following, sharing, activity feeds.                                                  | Not Started | Build reusable components for social interactions.         |
+| NC-9           | navius-search     | Search Functionality    | Implement search capabilities for recipes, ingredients, and users.                                                                       | Not Started | Consider integration with Elasticsearch or similar technology. |
+| NC-10          | navius-metrics    | Usage Analytics         | Track platform usage patterns, popular recipes, and user engagement metrics.                                                             | Not Started | Design metrics collection that respects privacy concerns.  |
 
 ---
-*Updated at: May 31, 2024*
+*Updated at: April 06, 2025*
 
 ## Related Documents
 - [Main Roadmap](../01-example-app.md)
@@ -39,213 +43,255 @@ For each enhancement:
    - Update documentation
 
 4. **Verification**
-   - Test the enhancement in the example app
+   - Test the enhancement in the Simmr backend
    - Verify no regressions in the crate
    - Document the updated usage
 
-## Main Application Example Support Requirements
+## Simmr Application Requirements
 
-Based on the target main.rs file example, we've identified the following key enhancements needed:
+Based on the Simmr backend requirements, we've identified the following key enhancements needed:
 
 ### Required Macro Support
 - `#[auto_config(WebConfigurator)]` - For automatic configuration loading
-- `#[routes]`, `#[get]`, `#[post]` - For route definition
-- `#[route]` with method parameters - For multi-method routes
-- `#[nest]` - For nested route modules
-- `#[config_prefix]` - For configuration prefix specification
+- `#[route]` with method parameters - For RESTful API routes
+- `#[nest]` - For organizing routes by resource (recipes, users, etc.)
 - `#[derive(Configurable)]` - For auto-configurable types
 
 ### Required Component Features
-- Plugin system for modular application setup
-- Dependency injection for components
-- Automatic parameter extraction in handlers
-- JWT integration for authentication
-- SQL integration with component injection
-- Configuration system with type-safe config extraction
+- User authentication and authorization
+- Recipe data storage and retrieval
+- Social interaction patterns (following, sharing, etc.)
+- Media handling for recipe images
+- Search functionality
+- Analytics and metrics collection
 
-## Crate Enhancement Tracking
+## Detailed Crate Enhancement Tracking
 
 ### navius-core
 
 | ID | Issue | Status | Description | Implementation Notes |
 |----|-------|--------|-------------|---------------------|
 | NC-1 | Plugin System | Completed | Implement plugin system for modular application setup | Implemented App and AppBuilder classes that leverage the existing navius-plugin Registry. Created SqlxPlugin and WebPlugin implementations. |
-| NC-2 | Application Builder | Not Started | Create App builder pattern for clean initialization | Should support add_plugin() and run() methods |
-| NC-3 | Component Registration | Not Started | Implement component registration and retrieval system | Required for dependency injection |
-| NC-5 | Repository Abstraction | Not Started | Define standard repository traits/macros? Simplify common CRUD operations. | Consider base traits or codegen for repositories. |
-| NC-6 | Auth Policy Integration | Not Started | Standardize how `auth_policy` in `#[route]` maps to specific auth middleware/configurations provided by `navius-auth`. | Define policy registration/lookup mechanism. |
+| NC-2 | Application Builder | Completed | Create App builder pattern for clean initialization | Supports add_plugin() and run() methods |
+| NC-3 | Component Registration | In Progress | Implement component registration and retrieval system | Required for dependency injection |
+| NC-4 | Error Handling | Completed | Implement standardized error handling for API responses | Consistent error pattern implemented |
+| NC-5 | Repository Abstraction | Not Started | Define standard repository traits for recipe and user data | Will include specializations for social cooking context |
+| NC-6 | Configuration System | Not Started | Implement hierarchical config with environment overrides | Support for complex Simmr configuration needs |
 
 ### navius-http
 
 | ID | Issue | Status | Description | Implementation Notes |
 |----|-------|--------|-------------|---------------------|
-| NH-1 | Route Macros | Not Started | Implement macros for route definition (#[routes], #[get], etc.) | Should support multiple route definitions per handler |
-| NH-2 | Nested Routes | Not Started | Support for nested route modules with #[nest] | Allow modular organization of routes |
-| NH-3 | Response Types | Not Started | Implement IntoResponse trait | Allow diverse return types from handlers |
-| NH-4 | Path Parameters | Not Started | Support path parameter extraction | Extract parameters from URL paths |
-| NH-5 | WebPlugin | Not Started | Create web server plugin | Should integrate with App::new() builder |
+| NH-1 | Route Macros | Completed | Implement macros for route definition (#[route]) | Supports method specification and path parameters |
+| NH-2 | Nested Routes | Completed | Support for nested route modules with #[nest] | Working implementation allows route organization by resource |
+| NH-3 | Response Types | In Progress | Implement IntoResponse trait | Allow diverse return types from handlers |
+| NH-4 | Path Parameters | Completed | Support path parameter extraction | Extract parameters from URL paths |
+| NH-5 | WebPlugin | Completed | Create web server plugin | Integrates with App::new() builder |
+| NH-6 | Media Uploads | Not Started | Support for multipart form handling | Required for recipe image uploads |
+| NH-7 | Rate Limiting | Not Started | Implement rate limiting middleware | Protect Simmr API from abuse |
 
 ### navius-db / navius-db-postgres
 
 | ID | Issue | Status | Description | Implementation Notes |
 |----|-------|--------|-------------|---------------------|
-| ND-1 | SqlxPlugin | Not Started | Create SQLx integration plugin | Should integrate with App::new() builder |
-| ND-2 | Connection Pool | Not Started | Implement ConnectPool component | Should be injectable into handlers |
-| ND-3 | Query Helpers | Not Started | Provide simplified query interface | Should wrap SQLx functionality |
+| ND-1 | Recipe Repository | Not Started | Create specialized repository for recipes | Include support for ingredients and steps as nested data |
+| ND-2 | User Repository | Not Started | Implement user profile storage | Support for profile pictures and preferences |
+| ND-3 | Social Graph Storage | Not Started | Design optimal schema for following/followers | Consider performance implications of social graph queries |
+| ND-4 | Query Optimization | Not Started | Optimize common social cooking queries | Focus on recipe discovery and filtering |
+| ND-5 | Full-Text Search | Not Started | Implement recipe search functionality | Consider PostgreSQL full-text search capabilities |
 
-### navius-auth / navius-auth-entra
-
-| ID | Issue | Status | Description | Implementation Notes |
-|----|-------|--------|-------------|---------------------|
-| NA-1 | JWT Support | Not Started | Implement JWT generation and validation | Required for user authentication |
-| NA-2 | Claims Extraction | Not Started | Auto-extract claims from requests | Allow direct injection of Claims into handlers |
-| NA-3 | Authentication Middleware | Not Started | Create authentication middleware | Should validate JWT tokens |
-
-### navius-di
+### navius-auth
 
 | ID | Issue | Status | Description | Implementation Notes |
 |----|-------|--------|-------------|---------------------|
-| NDI-1 | Component Type | Not Started | Create Component<T> wrapper for DI | Allow automatic injection of components |
-| NDI-2 | Service Registration | Not Started | Implement service registration system | Support for registering services with the DI container |
-| NDI-3 | Parameter Extraction | Not Started | Auto-extract dependencies in handlers | Automatically provide dependencies to handlers |
+| NA-1 | JWT Support | In Progress | Implement JWT generation and validation | Required for user authentication |
+| NA-2 | Claims Extraction | In Progress | Auto-extract claims from requests | Allow direct injection of Claims into handlers |
+| NA-3 | Authentication Middleware | In Progress | Create authentication middleware | Should validate JWT tokens |
+| NA-4 | Social Login | Not Started | Support for OAuth providers | Allow login with Google, Facebook, etc. |
+| NA-5 | Permission System | Not Started | Role-based access control | Control access to recipes and social features |
 
-### navius-config
-
-| ID | Issue | Status | Description | Implementation Notes |
-|----|-------|--------|-------------|---------------------|
-| NCF-1 | auto_config Macro | Not Started | Implement #[auto_config] macro | Automatically load and configure application |
-| NCF-2 | Configurable Derive | Not Started | Implement #[derive(Configurable)] | Generate code for configuration structs |
-| NCF-3 | Config Extraction | Not Started | Create Config<T> wrapper | Allow auto-extraction of configuration |
-| NCF-4 | Config Prefix | Not Started | Support #[config_prefix] | Allow specifying config key prefixes |
-
-### navius-test / navius-test-utils
+### navius-social (New Crate)
 
 | ID | Issue | Status | Description | Implementation Notes |
 |----|-------|--------|-------------|---------------------|
-| NT-1 | Route Testing | Not Started | Create utilities for route testing | Allow testing routes without server |
-| NT-2 | Plugin Mocking | Not Started | Support for mocking plugins | Enable testing with mock plugins |
-| NT-3 | Configuration Testing | Not Started | Tools for testing configuration | Verify correct configuration loading |
+| NS-1 | Following System | Not Started | Implement follower/following relationships | Core social graph functionality |
+| NS-2 | Activity Feed | Not Started | Create activity feed generation | Aggregate and personalize user activities |
+| NS-3 | Notifications | Not Started | Design notification system | Support multiple notification channels |
+| NS-4 | Content Sharing | Not Started | Implement recipe sharing | Allow users to share and repost recipes |
+| NS-5 | Comments & Ratings | Not Started | Create comment and rating system | Support for threaded comments and star ratings |
+
+### navius-media (New Crate)
+
+| ID | Issue | Status | Description | Implementation Notes |
+|----|-------|--------|-------------|---------------------|
+| NM-1 | Image Upload | Not Started | Implement secure image uploading | Support for recipe photos |
+| NM-2 | Image Processing | Not Started | Create image optimization pipeline | Generate thumbnails and responsive sizes |
+| NM-3 | Storage Integration | Not Started | Integrate with cloud storage | Support for S3 or similar services |
+| NM-4 | CDN Support | Not Started | Configure CDN for media delivery | Improve image loading performance |
+| NM-5 | Video Support | Not Started | (Future) Support for recipe videos | Allow short cooking demonstrations |
+
+### navius-search (New Crate)
+
+| ID | Issue | Status | Description | Implementation Notes |
+|----|-------|--------|-------------|---------------------|
+| NSE-1 | Recipe Search | Not Started | Implement recipe search functionality | Support for ingredient and title search |
+| NSE-2 | User Search | Not Started | Create user discovery features | Find users by name, interests, etc. |
+| NSE-3 | Tag System | Not Started | Implement tagging for recipes | Improve discoverability via tags |
+| NSE-4 | Search Suggestions | Not Started | Create search autocomplete | Enhance user experience with smart suggestions |
+| NSE-5 | Filter System | Not Started | Build advanced recipe filters | Filter by cuisine, ingredients, time, etc. |
 
 ## Enhancement Proposals
 
-### Enhancement Proposal: Plugin System
+### Enhancement Proposal: Social Features Support
 
-**ID**: NC-1  
-**Crate**: navius-core  
-**Title**: Plugin System Implementation  
+**ID**: NC-8  
+**Crate**: navius-social (New)  
+**Title**: Social Interaction Patterns  
 **Status**: Proposed  
 
 **Problem Statement**:  
-The main.rs example shows a clean application setup with plugins (SqlxPlugin, WebPlugin), but we currently lack a standardized plugin system in the Navius ecosystem.
+The Simmr platform requires comprehensive social features, but the current Navius ecosystem lacks standardized components for social interaction patterns like following, activity feeds, and content sharing.
 
 **Use Case**:  
-Developers need a way to modularly extend application functionality through plugins without tightly coupling components. This enables better separation of concerns and more maintainable code.
+Developers building social platforms need reusable components for common social features without reimplementing these patterns from scratch.
 
 **Proposed Solution**:  
-Implement a trait-based plugin system:
+Create a new `navius-social` crate with the following components:
 
 ```rust
-pub trait Plugin {
-    fn build(&self, app: &mut AppBuilder);
-    fn name(&self) -> &str;
-    fn dependencies(&self) -> Vec<&str> {
-        Vec::new()
-    }
+// Following system
+pub struct FollowService<R: FollowRepository> {
+    repository: R,
 }
 
-pub struct AppBuilder {
-    components: HashMap<TypeId, Box<dyn Any>>,
-    plugins: Vec<Box<dyn Plugin>>,
+impl<R: FollowRepository> FollowService<R> {
+    pub async fn follow(&self, follower_id: UserId, followee_id: UserId) -> Result<()>;
+    pub async fn unfollow(&self, follower_id: UserId, followee_id: UserId) -> Result<()>;
+    pub async fn get_followers(&self, user_id: UserId) -> Result<Vec<User>>;
+    pub async fn get_following(&self, user_id: UserId) -> Result<Vec<User>>;
 }
 
-impl AppBuilder {
-    pub fn add_plugin<P: Plugin + 'static>(&mut self, plugin: P) -> &mut Self {
-        self.plugins.push(Box::new(plugin));
-        self
-    }
+// Activity feed
+pub struct ActivityFeedService<R: ActivityRepository> {
+    repository: R,
+}
+
+impl<R: ActivityRepository> ActivityFeedService<R> {
+    pub async fn record_activity(&self, activity: Activity) -> Result<()>;
+    pub async fn get_feed(&self, user_id: UserId) -> Result<Vec<Activity>>;
+}
+
+// Notification system
+pub struct NotificationService<R: NotificationRepository, S: NotificationSender> {
+    repository: R,
+    sender: S,
+}
+
+impl<R: NotificationRepository, S: NotificationSender> NotificationService<R, S> {
+    pub async fn send_notification(&self, notification: Notification) -> Result<()>;
+    pub async fn get_notifications(&self, user_id: UserId) -> Result<Vec<Notification>>;
+}
+```
+
+**Benefits**:  
+- Standardized implementations of common social patterns
+- Modular design with pluggable storage backends
+- Clear separation of concerns
+- Comprehensive testing of social interaction logic
+
+**Backward Compatibility**:  
+This is a new crate, so backward compatibility is not a concern.
+
+**Implementation Plan**:  
+1. Create the new navius-social crate
+2. Implement core social graph functionality
+3. Add activity feed generation and aggregation
+4. Create notification system with multiple channels
+5. Build content sharing mechanisms
+6. Provide comprehensive testing and documentation
+
+### Enhancement Proposal: Recipe Data Model
+
+**ID**: ND-1  
+**Crate**: navius-db-postgres  
+**Title**: Specialized Recipe Repository  
+**Status**: Proposed  
+
+**Problem Statement**:  
+The Simmr platform needs efficient storage and retrieval of complex recipe data, including ingredients, steps, nutrition information, and media references.
+
+**Use Case**:  
+Developers need a specialized repository that handles the unique requirements of recipe data, including efficient querying and relationship management.
+
+**Proposed Solution**:  
+Implement a specialized recipe repository with the following features:
+
+```rust
+pub struct Recipe {
+    id: RecipeId,
+    title: String,
+    description: String,
+    author_id: UserId,
+    ingredients: Vec<Ingredient>,
+    steps: Vec<CookingStep>,
+    media: Vec<MediaReference>,
+    tags: Vec<Tag>,
+    nutrition: Option<NutritionInfo>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    // Additional fields
+}
+
+pub trait RecipeRepository: Send + Sync {
+    async fn create(&self, recipe: NewRecipe) -> Result<Recipe>;
+    async fn get_by_id(&self, id: RecipeId) -> Result<Option<Recipe>>;
+    async fn update(&self, id: RecipeId, updates: RecipeUpdates) -> Result<Recipe>;
+    async fn delete(&self, id: RecipeId) -> Result<()>;
     
-    pub fn run(self) -> App {
-        // Initialize and run application
+    // Specialized queries
+    async fn find_by_ingredient(&self, ingredient_name: &str) -> Result<Vec<Recipe>>;
+    async fn find_by_author(&self, author_id: UserId) -> Result<Vec<Recipe>>;
+    async fn find_by_tags(&self, tags: &[Tag]) -> Result<Vec<Recipe>>;
+    async fn search(&self, query: &str) -> Result<Vec<Recipe>>;
+    
+    // Social-related queries
+    async fn get_latest_from_following(&self, user_id: UserId) -> Result<Vec<Recipe>>;
+    async fn get_popular(&self, limit: usize) -> Result<Vec<Recipe>>;
+}
+
+pub struct PostgresRecipeRepository {
+    pool: PgPool,
+}
+
+impl PostgresRecipeRepository {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
     }
 }
-```
 
-**Benefits**:  
-- Clean, fluent API for application setup
-- Modular design with pluggable components
-- Clear dependency management between plugins
-- Simplified testing through mock plugins
-
-**Backward Compatibility**:  
-This is a new feature, so backward compatibility is not a concern.
-
-**Implementation Plan**:  
-1. Define the Plugin trait
-2. Create the AppBuilder with plugin registration
-3. Implement app startup process with plugin initialization
-4. Create standard plugins (SqlxPlugin, WebPlugin)
-5. Add comprehensive tests and documentation
-
-### Enhancement Proposal: Route Macros
-
-**ID**: NH-1  
-**Crate**: navius-http  
-**Title**: Route Definition Macros  
-**Status**: Proposed  
-
-**Problem Statement**:  
-The main.rs example shows elegant route definition using attributes like #[routes], #[get], and #[post], but we need to implement these macros to enable this declarative style.
-
-**Use Case**:  
-Developers need a clean, expressive way to define routes without boilerplate. The attribute-based approach is more readable and maintainable than manual route registration.
-
-**Proposed Solution**:  
-Implement a set of procedural macros for route definition:
-
-```rust
-#[proc_macro_attribute]
-pub fn routes(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    // Mark function for route collection
-}
-
-#[proc_macro_attribute]
-pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
-    // Generate route registration for GET method
-}
-
-#[proc_macro_attribute]
-pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
-    // Generate route registration for POST method
-}
-
-#[proc_macro_attribute]
-pub fn route(attr: TokenStream, item: TokenStream) -> TokenStream {
-    // Generate route registration for multiple methods
-}
-
-#[proc_macro_attribute]
-pub fn nest(attr: TokenStream, item: TokenStream) -> TokenStream {
-    // Generate nested route module
+impl RecipeRepository for PostgresRecipeRepository {
+    // Implementation of all repository methods
 }
 ```
 
 **Benefits**:  
-- Declarative route definition
-- Reduced boilerplate
-- Improved code readability
-- Support for method-specific handlers
+- Specialized handling of recipe-specific data
+- Optimized queries for recipe discovery
+- Support for complex filtering and search
+- Integration with social features
 
 **Backward Compatibility**:  
-This is a new feature, but the design should allow for both macro-based and manual route registration to coexist.
+This extends the existing repository pattern and is compatible with the current architecture.
 
 **Implementation Plan**:  
-1. Create proc-macro crate for route attribute macros
-2. Implement route collection mechanism
-3. Support method constraints (GET, POST, etc.)
-4. Add nested route support
-5. Provide comprehensive testing and documentation
+1. Define the recipe data model
+2. Implement the specialized repository trait
+3. Create the PostgreSQL implementation
+4. Add indexes and optimizations for common queries
+5. Integrate with search functionality
+6. Provide comprehensive testing and documentation
 
 ## Current Status
-- Status: Not Started
-- Progress: 0%
-- Updated at: May 30, 2024 
+- Status: In Progress
+- Progress: 15%
+- Updated at: April 06, 2025 

@@ -1,57 +1,100 @@
-# 01 - Example App Roadmap
+# 01 - Simmr: Social Cooking Platform Backend
 
 ## Overview
-This roadmap details the process of building an example application using the Navius crate ecosystem. The app will be developed using Test-Driven Development (TDD) methodology, with incremental feature implementation and continuous verification.
+This roadmap details the process of building a fully functional backend for Simmr, a social cooking website, using the Navius crate ecosystem. The backend will serve as both a production-ready application and a comprehensive test case for the Navius framework, helping to enhance and validate its capabilities. The app will be developed using Test-Driven Development (TDD) methodology, with incremental feature implementation and continuous verification.
 
 ## Timeline and Milestones
 
 ### Phase 1: Project Setup (Week 1)
-- [x] Create example app project structure
+- [x] Create project structure
 - [x] Configure Cargo.toml with initial dependencies
-- [ ] Set up basic project documentation
+- [x] Set up basic project documentation
 - [x] Establish test infrastructure
-- [ ] Verify initial build with no errors/warnings
+- [x] Verify initial build with no errors/warnings
 
 ### Phase 2: Core Application Components (Weeks 2-3)
-- [ ] Design core domain model using TDD
-- [ ] Implement service layer with dependency injection
+- [x] Design core domain model for social cooking platform
+- [ ] Implement user profiles and account management service
 - [ ] Set up configuration management
-- [ ] Implement error handling strategy
-- [ ] Add logging and observability
+- [x] Implement error handling strategy
+- [x] Add logging and observability
 - [x] Enhance navius-core crate as needed
 
-### Phase 3: Data Layer (Weeks 4-5)
-- [  ] Implement database integration using navius-db
-- [  ] Create repository pattern implementation
-- [  ] Add caching mechanism using navius-cache
-- [  ] Implement data validation
-- [  ] Enhance navius-db and navius-cache crates as needed
+### Phase 3: Recipe Data Layer (Weeks 4-5)
+- [ ] Implement database integration for recipe storage
+- [ ] Create repository pattern for recipe management
+- [ ] Add caching mechanism for popular recipes
+- [ ] Implement recipe data validation
+- [ ] Create data models for recipes, ingredients, and cooking steps
+- [ ] Enhance navius-db and navius-cache crates as needed
 
-### Phase 4: API Development (Weeks 6-7)
-- [  ] Design RESTful API using TDD
-- [  ] Implement authentication using navius-auth
-- [  ] Create API endpoints with proper error handling
-- [  ] Implement request validation
-- [  ] Add rate limiting and security features
-- [  ] Enhance navius-http and navius-auth crates as needed
+### Phase 4: Social Features (Weeks 6-7)
+- [ ] Implement following/follower relationships
+- [ ] Create recipe sharing functionality
+- [ ] Develop comment and rating system
+- [ ] Add recipe collections and favorites
+- [ ] Implement user activity feed
+- [ ] Design notification system
 
-### Phase 5: Advanced Features (Weeks 8-9)
-- [  ] Implement background job processing using navius-job
-- [  ] Add event handling using navius-event
-- [  ] Implement messaging with navius-messaging
-- [  ] Set up metrics with navius-metrics
-- [  ] Enhance related navius crates as needed
+### Phase 5: API Development (Weeks 8-9)
+- [ ] Design RESTful API using TDD
+- [ ] Implement authentication using navius-auth
+- [ ] Create API endpoints for all social cooking features
+- [ ] Implement request validation
+- [ ] Add rate limiting and security features
+- [ ] Create API documentation
+- [ ] Enhance navius-http and navius-auth crates as needed
 
-### Phase 6: Testing and Documentation (Weeks 10-11)
-- [  ] Ensure comprehensive test coverage
-- [  ] Document architectural decisions
-- [  ] Create usage examples
-- [  ] Polish and finalize application
-- [  ] Prepare summary of enhancements to navius crates
+### Phase 6: Advanced Features (Weeks 10-11)
+- [ ] Implement background job processing for image processing
+- [ ] Add event handling for social interactions
+- [ ] Implement messaging for user communications
+- [ ] Set up metrics for platform usage tracking
+- [ ] Create search functionality for recipes
+- [ ] Develop recommendation engine
+- [ ] Enhance related navius crates as needed
 
-## Target Example Application Style
+### Phase 7: Testing and Documentation (Weeks 12-13)
+- [ ] Ensure comprehensive test coverage
+- [ ] Document architectural decisions
+- [ ] Create usage examples
+- [ ] Polish and finalize application
+- [ ] Prepare summary of enhancements to navius crates
 
-The example app aims to achieve a clean, declarative style using attribute macros, as shown in the following `main.rs` excerpt:
+## Simmr Backend Features
+
+The Simmr backend will include the following key features:
+
+1. **User Management**
+   - Registration and authentication
+   - Profile management
+   - Following/follower relationships
+
+2. **Recipe Management**
+   - Create, read, update, delete recipes
+   - Ingredient management
+   - Step-by-step instructions
+   - Media attachments (photos)
+
+3. **Social Features**
+   - Comments and ratings
+   - Recipe sharing
+   - Collections and favorites
+   - Activity feed
+
+4. **Search and Discovery**
+   - Recipe search
+   - Tag-based filtering
+   - Recommendation engine
+
+5. **Notifications**
+   - Social interaction alerts
+   - New content notifications
+   - System announcements
+
+## API Design Style
+
+The Simmr API will be designed using a clean, declarative style with attribute macros, as shown in the following example:
 
 ```rust
 mod jwt;
@@ -68,42 +111,55 @@ async fn main() {
         .run()
         .await;
 
-    tracing::info!("Server Shutdown")
+    tracing::info!("Simmr Server Shutdown")
 }
 
-// Example using the unified route macro
-#[route(path: "/hello/{name}", method: ["GET", "POST"])]
-async fn hello(Path(name): Path<String>) -> impl IntoResponse {
-    format!("hello {name}")
-}
-
-// Example with authentication policy
-#[route(path: "/auth/hello/{name}", method: ["GET", "POST"], auth_policy: "basic_required")]
-async fn auth_hello(Path(name): Path<String>) -> impl IntoResponse {
-    format!("Authenticated hello {name}")
-}
-
-// Example using module-level nesting
-#[nest("/api/v1", middleware = [request_logging])]
-mod api_v1 {
-    use super::*;
-
-    #[route(path: "/status", method: "GET")]
-    async fn status() -> impl IntoResponse {
-        "OK"
+// User routes
+#[nest("/api/v1/users", middleware = [auth_required, request_logging])]
+mod user_routes {
+    #[route(path: "/profile", method: "GET")]
+    async fn get_profile(claims: Claims) -> impl IntoResponse {
+        // Return the user profile
     }
-    // ... other v1 routes
+    
+    #[route(path: "/follow/{user_id}", method: "POST")]
+    async fn follow_user(claims: Claims, Path(user_id): Path<String>) -> impl IntoResponse {
+        // Follow a user
+    }
 }
 
-// Additional example endpoints for login, user info, and database queries using #[route]
+// Recipe routes
+#[nest("/api/v1/recipes", middleware = [request_logging])]
+mod recipe_routes {
+    #[route(path: "/", method: "GET")]
+    async fn get_recipes() -> impl IntoResponse {
+        // Return a list of recipes
+    }
+    
+    #[route(path: "/{id}", method: "GET")]
+    async fn get_recipe(Path(id): Path<String>) -> impl IntoResponse {
+        // Return a specific recipe
+    }
+    
+    #[route(path: "/", method: "POST", auth_policy: "user_required")]
+    async fn create_recipe(claims: Claims, Json(recipe): Json<Recipe>) -> impl IntoResponse {
+        // Create a new recipe
+    }
+    
+    #[route(path: "/{id}/rate", method: "POST", auth_policy: "user_required")]
+    async fn rate_recipe(claims: Claims, Path(id): Path<String>, Json(rating): Json<Rating>) -> impl IntoResponse {
+        // Rate a recipe
+    }
+}
 ```
 
 To support this style, we'll need to develop several enhancements to the Navius crates, including:
 
-1.  **Route Macros (`#[route]`, `#[nest]`)** - For declarative route definition (NC-2).
-2.  **Configuration System Macros (`#[auto_config]`, `#[derive(Configurable)]`)** - For automatic configuration loading and component setup (NC-3).
-3.  **Dependency Injection Improvements (`Component<T>`)** - For simplified component injection (NC-4).
-    *Note: Plugin System (NC-1) was initially listed but direct ApplicationBuilder usage is preferred for this example's core setup.* 
+1. **Route Macros (`#[route]`, `#[nest]`)** - For declarative route definition (NC-2).
+2. **Configuration System Macros (`#[auto_config]`, `#[derive(Configurable)]`)** - For automatic configuration loading and component setup (NC-3).
+3. **Dependency Injection Improvements (`Component<T>`)** - For simplified component injection (NC-4).
+4. **Social Features Support** - Enhancing navius crates to better support social application patterns.
+5. **Media Handling** - Adding capabilities for image processing and storage.
 
 See the [Crate Enhancements](./sub-process/crate-enhancements.md) document for detailed tracking of these enhancements.
 
@@ -133,7 +189,7 @@ For each feature, the following TDD approach will be strictly followed:
    - Update roadmap progress
    - Note any issues with navius crates
 
-**Note on Crate Usage:** A key principle is to **maximize the use of existing Navius crate functionality** (e.g., `navius-core` for config/logging, `navius-auth` for JWT, `navius-db` for database, `navius-http` for server/middleware). Custom implementations will be avoided unless functionality is missing from the core crates. The example app should showcase idiomatic usage with minimal boilerplate.
+**Note on Crate Usage:** A key principle is to **maximize the use of existing Navius crate functionality** (e.g., `navius-core` for config/logging, `navius-auth` for JWT, `navius-db` for database, `navius-http` for server/middleware). Custom implementations will be avoided unless functionality is missing from the core crates. The Simmr backend should showcase idiomatic usage with minimal boilerplate.
 
 ## Navius Crate Enhancement Strategy
 
@@ -153,7 +209,7 @@ Throughout development, we'll identify areas where the Navius crates need enhanc
    - Update documentation
 
 4. **Verification**
-   - Ensure example app works with enhancements
+   - Ensure Simmr backend works with enhancements
    - Verify no regressions in crate functionality
 
 ## Key Performance Indicators (KPIs)
@@ -164,8 +220,11 @@ The following metrics will be tracked throughout development:
 - **Build Quality**: Zero errors/warnings in cargo build
 - **Crate Enhancements**: Number of improvements made to navius crates
 - **Documentation Quality**: Comprehensive documentation for all features
+- **API Response Time**: < 100ms for non-complex requests
+- **User Capacity**: Support for 10,000+ active users
+- **Recipe Storage**: Support for 100,000+ recipes with efficient retrieval
 
 ## Current Progress
 - Status: In Progress
-- Progress: 4%
-- Updated at: May 31, 2024 
+- Progress: 12%
+- Updated at: April 06, 2025 
