@@ -1,9 +1,4 @@
 ---
-description: 
-globs: 
-alwaysApply: false
----
----
 description: Before starting work on any task Check this rule.
 globs: **/**
 alwaysApply: true
@@ -18,6 +13,7 @@ alwaysApply: true
 - If multiple rule files seem relevant, review all of them before proceeding
 - Check today's date with the system. Print it at the top of every response. Remember this date for any time you update a date.
 - NEVER DO ANY GIT COMMANDS. I will manually handle all things related to git.
+- USE CONTEXT7
 
 ## Development Environment Requirements
 

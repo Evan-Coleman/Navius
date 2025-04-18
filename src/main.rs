@@ -166,6 +166,7 @@ mod api {
 
     #[route(method = "GET", path = "/hello")]
     pub async fn hello_world() -> &'static str {
+        info!("Hello World");
         "Hello, world!"
     }
 
