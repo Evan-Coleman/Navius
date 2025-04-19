@@ -1,36 +1,38 @@
 mod handlers;
 
+use navius_http::WebPlugin;
+use navius_macros::{navius_app, nest, route};
+
 // Main application with zero boilerplate
 #[navius_app(
-    name = "zero-boilerplate-app",
-    routes = [self::api, self::admin]
+    name = "simmr",
+    routes = "self::api, self::admin",
+    plugins = "WebPlugin"
 )]
 async fn main() {
-    // The macro handles all the boilerplate for us!
-    tracing::info!("Zero-boilerplate application started!");
+    tracing::info!("Simmr application started!");
 }
 
 // API route module with routes
 #[nest(prefix = "/api/v1")]
 mod api {
     use super::*;
+    use crate::handlers::api_handlers;
+    use axum::Json;
 
     #[route(path = "/hello", method = "GET")]
     async fn hello_world() -> Json<serde_json::Value> {
-        handlers::api_handlers::hello_world().await
+        api_handlers::hello_world().await
     }
 
-    #[route(path = "/echo/{text}", method = "GET")]
+    #[route(path = "/echo/:text", method = "GET")]
     async fn echo(axum::extract::Path(text): axum::extract::Path<String>) -> String {
-        handlers::api_handlers::echo(axum::extract::Path(text)).await
+        api_handlers::echo(axum::extract::Path(text)).await
     }
 
-    #[route(path = "/users", method = ["GET", "POST"])]
-    async fn users(
-        // Optional payload for POST requests
-        payload: Option<Json<api_handler::UserRequest>>,
-    ) -> impl axum::response::IntoResponse {
-        handlers::api_handlers::users(payload).await
+    #[route(path = "/users", method = "GET")]
+    async fn users() -> impl axum::response::IntoResponse {
+        api_handlers::users(None).await
     }
 }
 
@@ -38,9 +40,11 @@ mod api {
 #[nest(prefix = "/admin")]
 mod admin {
     use super::*;
+    use crate::handlers::admin_handlers;
+    use axum::Json;
 
     #[route(path = "/status", method = "GET")]
     async fn status() -> Json<serde_json::Value> {
-        handlers::admin_handlers::status().await
+        admin_handlers::status().await
     }
 }

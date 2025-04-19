@@ -1,40 +1,61 @@
-# Navius Example Application Configuration
+# Default configuration for Navius application
+# This file contains the default configuration values that will be used
+# unless overridden by environment-specific files or environment variables
 
-[server]
+# Application metadata
+app_name = "zero-boilerplate-app"
+log_level = "info"
+
+# HTTP server configuration
+[http]
 host = "127.0.0.1"
 port = 3000
-enable_tls = false
-# cert_path = "certs/server.crt"
-# key_path = "certs/server.key"
+cors_allowed_origins = ["http://localhost:3000"]
+request_timeout_secs = 30
 
+# Authentication configuration
+[auth]
+enabled = false
+provider = "entra"
+
+[auth.entra]
+tenant_id = ""
+client_id = ""
+client_secret = ""
+issuer = ""
+jwks_uri = ""
+
+# Database configuration
 [database]
-url = "postgres://postgres:postgres@localhost/navius"
+enabled = false
+url = "postgresql://postgres:postgres@localhost:5432/navius"
 max_connections = 10
-timeout_seconds = 30
+min_connections = 5
 
-[logging]
-level = "debug"
-json = false
-# file = "logs/navius.log"
+# Cache configuration
+[cache]
+enabled = false
+url = "redis://localhost:6379/0"
+ttl_seconds = 3600
 
-[jwt]
-secret = "change_this_to_a_secure_secret_in_production"
-expiration_seconds = 3600                               # 1 hour
-algorithm = "HS256"
-# Add issuer and audience for navius-auth JWTProvider
-issuer = "navius-example-issuer"
-audience = "navius-example-audience"
-# Mock users for testing/development (if needed by JWTProvider config)
-mock_users = [
-    #  { id = "user-1000", username = "root", password = "correct_password", roles = ["admin"] },
-]
+# Date formatting configuration
+[date_formats]
+simple = "%m/%d/%Y"
+formal = "%B %d, %Y"
+verbose = "%Y-%m-%dT%H:%M:%S%.3fZ"
 
-# Plugin-specific configurations can be added here
-[plugins.web]
-default_cors_origin = "*"
-max_payload_size = 10485760 # 10MB
+# Metrics configuration
+[metrics]
+enabled = false
+endpoint = "/actuator/metrics"
+prometheus_endpoint = "/actuator/prometheus"
 
-[plugins.sqlx]
-use_migrations = true
-migration_dir = "migrations"
-use_connection_pool = true
+# Feature flags
+[features]
+web = true
+auth = false
+database = false
+cache = false
+metrics = false
+events = false
+plugins = true
