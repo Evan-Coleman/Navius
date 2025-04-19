@@ -1,95 +1,118 @@
-use navius_core::{Error, ErrorCode, Result};
-use navius_plugin::{Plugin, PluginConfig, PluginRegistry};
+use crate::plugins::web_plugin::AppState;
+use axum::Router;
+use navius_core::{
+    di::{Application, ApplicationBuilder},
+    error::Result,
+};
+use navius_plugin::{Plugin, PluginResult, plugin::PluginLifecycle};
 use std::sync::Arc;
+use tracing::info;
 
-/// The App struct is the main entry point for the application.
+/// Application builder for Navius applications
 pub struct App {
-    /// The plugin registry that manages all plugins.
-    registry: Arc<PluginRegistry>,
+    builder: ApplicationBuilder,
+    plugins: Vec<Box<dyn Plugin>>,
+    web_plugin: Option<crate::plugins::WebPlugin>, // Store the WebPlugin separately
 }
 
 impl App {
-    /// Create a new App instance.
-    pub fn new() -> AppBuilder {
-        AppBuilder::new()
-    }
-
-    /// Run the application.
-    pub async fn run(self) -> Result<()> {
-        // This is just a shell implementation for testing
-        // In a real application, this would start the server, etc.
-        tracing::info!("Starting application with plugins");
-
-        // In a real implementation, we would:
-        // 1. Start all plugins in the correct order
-        // 2. Wait for termination signal
-        // 3. Properly shut down all plugins
-
-        tracing::info!("Application started successfully");
-        Ok(())
-    }
-}
-
-/// The AppBuilder struct provides a fluent API for configuring the application.
-pub struct AppBuilder {
-    registry: Arc<PluginRegistry>,
-    plugins: Vec<Box<dyn Plugin>>,
-}
-
-impl AppBuilder {
-    /// Create a new AppBuilder instance.
+    /// Create a new application instance
     pub fn new() -> Self {
         Self {
-            registry: Arc::new(PluginRegistry::new()),
+            builder: ApplicationBuilder::new(),
             plugins: Vec::new(),
+            web_plugin: None,
         }
     }
 
-    /// Add a plugin to the application.
+    /// Add a plugin to the application
     pub fn add_plugin<P: Plugin + 'static>(mut self, plugin: P) -> Self {
+        info!("Adding plugin: {}", plugin.id());
         self.plugins.push(Box::new(plugin));
         self
     }
 
-    /// Build the App instance.
-    pub fn build(self) -> App {
-        // In a real implementation, we would:
-        // 1. Register all plugins with the registry
-        // 2. Initialize them in the correct order based on dependencies
-
-        App {
-            registry: self.registry,
-        }
+    /// Add a web plugin to the application
+    pub fn add_web_plugin(mut self, plugin: crate::plugins::WebPlugin) -> Self {
+        info!("Adding web plugin: {}", plugin.id());
+        // Store the web plugin separately
+        self.web_plugin = Some(plugin);
+        self
     }
 
-    /// Run the application after building it.
-    pub async fn run(self) -> Result<()> {
-        let registry = self.registry.clone();
+    /// Get a reference to the application builder
+    pub fn builder(&self) -> &ApplicationBuilder {
+        &self.builder
+    }
 
-        // Register all plugins
-        for plugin in self.plugins {
-            let plugin_id = plugin.id().to_string();
-            registry.register_plugin(plugin).await.map_err(|e| {
-                Error::plugin(format!("Failed to register plugin {}: {}", plugin_id, e))
-            })?;
+    /// Get a mutable reference to the application builder
+    pub fn builder_mut(&mut self) -> &mut ApplicationBuilder {
+        &mut self.builder
+    }
 
-            // Initialize the plugin
-            registry
-                .initialize_plugin(&plugin_id, PluginConfig::default())
-                .await
-                .map_err(|e| {
-                    Error::plugin(format!("Failed to initialize plugin {}: {}", plugin_id, e))
-                })?;
+    /// Run the application
+    pub async fn run(mut self) -> Result<()> {
+        // Build the application
+        let app: Application = self.builder.build();
+        let app_arc = Arc::new(app);
 
-            // Start the plugin
-            registry.start_plugin(&plugin_id).await.map_err(|e| {
-                Error::plugin(format!("Failed to start plugin {}: {}", plugin_id, e))
-            })?;
+        // Initialize plugins
+        for plugin in &mut self.plugins {
+            let result: PluginResult<()> = plugin.initialize(Default::default()).await;
+            if let Err(e) = result {
+                return Err(navius_core::error::Error::internal(format!(
+                    "Failed to initialize plugin {}: {}",
+                    plugin.id(),
+                    e
+                )));
+            }
         }
 
-        let app = App { registry };
+        // Start plugins
+        for plugin in &mut self.plugins {
+            let result: PluginResult<()> = plugin.start().await;
+            if let Err(e) = result {
+                return Err(navius_core::error::Error::internal(format!(
+                    "Failed to start plugin {}: {}",
+                    plugin.id(),
+                    e
+                )));
+            }
+        }
 
-        app.run().await
+        // Handle web plugin if present
+        if let Some(mut web_plugin) = self.web_plugin {
+            // Initialize web plugin
+            let result = web_plugin.initialize(Default::default()).await;
+            if let Err(e) = result {
+                return Err(navius_core::error::Error::internal(format!(
+                    "Failed to initialize web plugin: {}",
+                    e
+                )));
+            }
+
+            // Start web plugin
+            let result = web_plugin.start().await;
+            if let Err(e) = result {
+                return Err(navius_core::error::Error::internal(format!(
+                    "Failed to start web plugin: {}",
+                    e
+                )));
+            }
+
+            // Create application state
+            let app_state = AppState {
+                app: app_arc.clone(),
+            };
+
+            // Start the web server
+            return web_plugin.start_server(app_state).await;
+        }
+
+        // No web plugin found
+        Err(navius_core::error::Error::internal(
+            "No web plugin found. Add a WebPlugin with add_web_plugin() to serve HTTP requests.",
+        ))
     }
 }
 

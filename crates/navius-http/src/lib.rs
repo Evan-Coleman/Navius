@@ -13,6 +13,8 @@ pub mod client;
 pub mod middleware;
 #[cfg(feature = "server")]
 pub mod server;
+#[cfg(feature = "server")]
+mod web_plugin;
 
 // Re-export error types
 pub use error::{Error, Result};
@@ -20,6 +22,14 @@ pub use error::{Error, Result};
 // Re-export server types when the "server" feature is enabled
 #[cfg(feature = "server")]
 pub use server::{HttpServerConfig, ShutdownReceiver, ShutdownSender};
+
+// Re-export route discovery types for automatic route discovery
+#[cfg(feature = "server")]
+pub use server::route_discovery::{RouteDiscoveryConfig, RouteRegistry};
+
+// Re-export the WebPlugin for the Zero Boilerplate Initiative
+#[cfg(feature = "server")]
+pub use web_plugin::{AppState, WebPlugin};
 
 // Re-export client types when the "client" feature is enabled
 // #[cfg(feature = "client")]
@@ -108,6 +118,11 @@ mod tests {
 pub mod prelude {
     #[cfg(feature = "server")]
     pub use crate::server::prelude::*; // Assuming server prelude exports axum types
+
+    // Export the WebPlugin for easy access
+    #[cfg(feature = "server")]
+    pub use crate::web_plugin::WebPlugin;
+
     // #[cfg(feature = "client")]
     // pub use crate::client::prelude::*; // Comment out client prelude
 }

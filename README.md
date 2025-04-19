@@ -19,8 +19,9 @@
           <li>Features and documentation may be incomplete</li>
           <li>Claims and statements should be considered provisional</li>
           <li>Moving to a workspace-based structure (see <a href="workspace_migration/README.md">Workspace Migration</a>)</li>
+          <li><strong>NEW:</strong> Zero Boilerplate Initiative in progress (see <a href="docs/98_roadmaps/01_example_app/implementation/zero-boilerplate-plan.md">Implementation Plan</a>)</li>
         </ul>
-        <p><em>Last Updated: March 29, 2025</em></p>
+        <p><em>Last Updated: May 30, 2025</em></p>
       </td>
     </tr>
   </table>
@@ -33,6 +34,63 @@ Navius is a high-performance, modern alternative to Spring Boot, built with Rust
 <div align="center">
   <img src="https://via.placeholder.com/800x400?text=Navius+Diagram" alt="Navius Architecture" width="800px" />
 </div>
+
+## 🔥 Current Initiatives
+
+### Zero Boilerplate Initiative (Top Priority)
+
+We're currently focused on our **Zero Boilerplate Initiative** - moving infrastructure code from user applications into the Navius framework to allow users to focus exclusively on business logic.
+
+**Key Goals:**
+- Extract `WebPlugin`, `WebConfigurator`, and `App/AppBuilder` into framework crates
+- Create a declarative, macro-based API for routes and configuration
+- Simplify application setup with sensible defaults
+- Reduce infrastructure code by 80%
+
+[View the detailed implementation plan](docs/98_roadmaps/01_example_app/implementation/zero-boilerplate-plan.md) | [Track progress in crate enhancements](docs/crate-enhancements.md)
+
+**Before:**
+```rust
+// 100+ lines of infrastructure code
+async fn main() {
+    // Initialize tracing
+    tracing_subscriber::fmt::init();
+    
+    // Create API router
+    let api_router = Router::new()
+        .route("/hello", get(hello_world))
+        .route("/context", get(context_info));
+    
+    // Create web plugin with custom settings
+    let mut web = WebPlugin::new()
+        .with_host("127.0.0.1")
+        .with_port(3000);
+    
+    // Add nested router
+    web.router = Router::new()
+        .nest("/api/v1", api_router);
+    
+    // Build and run application with plugin
+    let app = App::builder()
+        .add_plugin(web)
+        .build();
+    
+    app.run().await.unwrap();
+}
+```
+
+**After (Target):**
+```rust
+#[navius_app]
+async fn main() {
+    // That's it!
+}
+
+#[get("/api/v1/hello")]
+async fn hello_world() -> impl IntoResponse {
+    "Hello, world!"
+}
+```
 
 ## Repository Information
 

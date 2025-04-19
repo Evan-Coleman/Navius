@@ -326,14 +326,14 @@ if [ "$RELEASE_MODE" = true ]; then
         echo "Error: Release build failed. See errors above."
         exit 1
     fi
-    EXEC_PATH="./target/release/navius"
+    EXEC_PATH="./target/release/navius-example"
 else
     cargo build
     if [ $? -ne 0 ]; then
         echo "Error: Debug build failed. See errors above."
         exit 1
     fi
-    EXEC_PATH="./target/debug/navius"
+    EXEC_PATH="./target/debug/navius-example"
 fi
 
 BUILD_END_TIME=$(date +%s)
@@ -366,7 +366,7 @@ start_server() {
     if [ $HEALTH_CHECK_TIMEOUT -gt 0 ]; then
         echo "Waiting for server to start (max ${HEALTH_CHECK_TIMEOUT}s)..."
         for i in $(seq 1 $HEALTH_CHECK_TIMEOUT); do
-            if curl -s http://localhost:$SERVER_PORT/health > /dev/null; then
+            if curl -s http://localhost:$SERVER_PORT/api/v1/hello > /dev/null; then
                 echo "Server is up and running (verified in ${i}s)"
                 break
             fi

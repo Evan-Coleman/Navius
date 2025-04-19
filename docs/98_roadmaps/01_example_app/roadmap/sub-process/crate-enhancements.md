@@ -14,9 +14,14 @@ This document tracks the specific enhancements required in the Navius crate ecos
 | NC-8           | navius-social     | Social Features         | Create new crate with common social media patterns: following, sharing, activity feeds.                                                  | Not Started | Build reusable components for social interactions.         |
 | NC-9           | navius-search     | Search Functionality    | Implement search capabilities for recipes, ingredients, and users.                                                                       | Not Started | Consider integration with Elasticsearch or similar technology. |
 | NC-10          | navius-metrics    | Usage Analytics         | Track platform usage patterns, popular recipes, and user engagement metrics.                                                             | Not Started | Design metrics collection that respects privacy concerns.  |
+| NC-11          | navius-http       | WebPlugin Abstraction   | Move WebPlugin implementation from user code to navius-http crate. Simplify server setup and configuration for end users.                  | High Priority | Current implementation requires too much boilerplate in user code. Implementation work has begun.  |
+| NC-12          | navius-config     | WebConfigurator Abstraction | Move WebConfigurator from user code to navius-config crate. Provide simple configuration loading with sensible defaults.                 | High Priority | Configuration should be handled transparently with minimal user code. |
+| NC-13          | navius-core       | App Builder Simplification | Move App builder pattern implementation from user code to navius-core crate. Provide a simplified API for application setup.            | High Priority | Users shouldn't need to implement their own App builder. |
+| NC-14          | navius-core/http  | Main Entry Point Simplification | Create macros and abstractions to simplify the main.rs entry point. Reduce boilerplate needed to start an application.           | High Priority | Target a minimal main.rs with just a few lines of code. |
+| NC-15          | Framework-wide    | Zero Boilerplate Initiative | Comprehensive audit of all user code requirements. Move complexity into framework.                                                     | Highest Priority | No user should have to write infrastructure code. This is our current focus. |
 
 ---
-*Updated at: April 06, 2025*
+*Updated at: May 30, 2025*
 
 ## Related Documents
 - [Main Roadmap](../01-example-app.md)
@@ -46,6 +51,221 @@ For each enhancement:
    - Test the enhancement in the Simmr backend
    - Verify no regressions in the crate
    - Document the updated usage
+
+## Zero Boilerplate Initiative (ZBI)
+
+The Zero Boilerplate Initiative aims to eliminate all unnecessary infrastructure code from user applications, making Navius a true "Spring-Boot for Rust" experience. **This is our highest priority enhancement**.
+
+### Current Pain Points
+
+After review of the current implementation, we've identified several files that should not be required in user code:
+
+1. **`web_configurator.rs`** - Configuration loading should be handled by the framework
+2. **`web_plugin.rs`** - Web server setup and routing should be abstracted 
+3. **`app.rs`** - Application initialization and lifecycle should be simplified
+4. **`main.rs`** - Entry point should be minimal with most functionality provided by macros
+
+### Target Main.rs
+
+Our goal is to simplify the main.rs entry point to something close to this level of simplicity:
+
+```rust
+#[auto_config]
+#[routes]
+#[tokio::main]
+async fn main() {
+    App::new()
+        .run()
+        .await;
+}
+
+#[get("/api/v1/hello")]
+async fn hello_world() -> impl IntoResponse {
+    "Hello, world!"
+}
+```
+
+### Implementation Strategy
+
+1. **Move Boilerplate to Crates** 
+   - Extract common functionality from user code into appropriate crates
+   - Provide sensible defaults for all configuration
+   - Design flexible but powerful abstractions
+
+2. **Create Declarative API**
+   - Use attribute macros for routes, configuration, and DI
+   - Hide implementation details behind clean interfaces
+   - Automate wiring of components
+
+3. **Measure Success**
+   - Compare line counts in starter apps before and after
+   - Aim for 80% reduction in infrastructure code
+   - Ensure no loss of functionality or flexibility
+
+## Implementation Plans for Zero Boilerplate Initiative
+
+### NC-11: WebPlugin Abstraction (navius-http)
+
+**Current Status**: In Progress
+**Assigned To**: Team Alpha
+**Implementation Timeline**:
+- Phase 1 (Week 1): Extract WebPlugin from example codebase - DONE
+- Phase 2 (Week 2): Create standardized API in navius-http - IN PROGRESS 
+- Phase 3 (Week 3): Add configuration extension points
+- Phase 4 (Week 4): Create documentation and examples
+
+**Technical Approach**:
+1. Copy the existing WebPlugin implementation to navius-http crate
+2. Create a builder pattern for customization
+3. Implement sensible defaults for all configuration options
+4. Add hooks for custom middleware and error handlers
+
+**Expected Outcome**:
+```rust
+// User code with new API
+#[tokio::main]
+async fn main() {
+    App::new()
+        .run_with_web(WebAppConfig::default()
+            .with_port(8080)
+            .with_host("0.0.0.0"))
+        .await
+}
+```
+
+### NC-12: WebConfigurator Abstraction (navius-config)
+
+**Current Status**: Not Started
+**Assigned To**: Team Beta
+**Implementation Timeline**:
+- Phase 1 (Week 1-2): Extract WebConfigurator from example codebase
+- Phase 2 (Week 2-3): Create auto_config macro
+- Phase 3 (Week 3-4): Implement configuration hierarchy and defaults
+- Phase 4 (Week 4): Create documentation and examples
+
+**Technical Approach**:
+1. Move WebConfigurator implementation to navius-config
+2. Create proc-macro for #[auto_config] attribute
+3. Implement configuration source hierarchies (env vars, files, defaults)
+4. Add strong typing for configuration with validation
+
+**Expected Outcome**:
+```rust
+// User marks app as auto-configured
+#[auto_config]
+#[tokio::main]
+async fn main() {
+    // Configuration automatically loaded
+    App::new().run().await
+}
+
+// Or explicit configuration
+#[tokio::main]
+async fn main() {
+    let config = Config::default()
+        .with_file("config.toml")
+        .load()
+        .unwrap();
+    
+    App::new()
+        .with_config(config)
+        .run()
+        .await
+}
+```
+
+### NC-13: App Builder Simplification (navius-core)
+
+**Current Status**: Not Started
+**Assigned To**: Team Gamma
+**Implementation Timeline**:
+- Phase 1 (Week 1): Extract App and AppBuilder from example codebase
+- Phase 2 (Week 2): Create standardized APIs in navius-core
+- Phase 3 (Week 3): Implement automatic component discovery
+- Phase 4 (Week 4): Create documentation and examples
+
+**Technical Approach**:
+1. Move App and AppBuilder to navius-core crate
+2. Simplify the builder interface with sensible defaults
+3. Add auto-discovery for handlers and components
+4. Create extension traits for specialized app configurations
+
+**Expected Outcome**:
+```rust
+// Extremely simple app creation
+async fn main() {
+    App::new().run().await
+}
+
+// Or with customizations
+async fn main() {
+    App::new()
+        .with_plugin(CustomPlugin::new())
+        .with_component(MyService::new())
+        .run()
+        .await
+}
+```
+
+### NC-14: Main Entry Point Simplification (navius-core/http)
+
+**Current Status**: Not Started
+**Assigned To**: Team Delta
+**Implementation Timeline**:
+- Phase 1 (Week 1-2): Design macro API
+- Phase 2 (Week 2-3): Implement proc-macros for routes and configuration
+- Phase 3 (Week 3-4): Create integration with App builder
+- Phase 4 (Week 4): Create documentation and examples
+
+**Technical Approach**:
+1. Create #[routes] proc-macro to collect handler functions
+2. Implement automatic route registration
+3. Create integration with App builder
+4. Implement integration tests for all combinations
+
+**Expected Outcome**:
+```rust
+#[auto_config]
+#[routes]
+#[tokio::main]
+async fn main() {
+    App::new().run().await
+}
+
+#[get("/api/v1/hello")]
+async fn hello_world() -> impl IntoResponse {
+    "Hello, world!"
+}
+
+#[get("/api/v1/users/{id}")]
+async fn get_user(Path(id): Path<String>) -> impl IntoResponse {
+    format!("User ID: {}", id)
+}
+```
+
+## Final Target Architecture
+
+After implementing the Zero Boilerplate Initiative, we aim to achieve the following architecture:
+
+1. **User Code**:
+   - `main.rs` - Minimal entry point with macro annotations
+   - `handlers/*.rs` - Route handlers with declarative annotations
+   - `services/*.rs` - Business logic in services
+   - `models/*.rs` - Domain model definitions
+
+2. **Framework Code** (Moved from user space):
+   - `WebConfigurator` -> navius-config crate
+   - `WebPlugin` -> navius-http crate
+   - `App`/`AppBuilder` -> navius-core crate
+   - Route registration -> navius-http macros
+   - Configuration loading -> navius-config macros
+
+3. **User Experience**:
+   - Write handlers with declarative annotations
+   - Focus on business logic, not infrastructure
+   - Minimal configuration required
+   - Convention over configuration
+   - Spring Boot-like simplicity
 
 ## Simmr Application Requirements
 
@@ -77,6 +297,9 @@ Based on the Simmr backend requirements, we've identified the following key enha
 | NC-4 | Error Handling | Completed | Implement standardized error handling for API responses | Consistent error pattern implemented |
 | NC-5 | Repository Abstraction | Not Started | Define standard repository traits for recipe and user data | Will include specializations for social cooking context |
 | NC-6 | Configuration System | Not Started | Implement hierarchical config with environment overrides | Support for complex Simmr configuration needs |
+| NC-13 | App Builder Migration | **High Priority** | Move App builder from user code to framework | Users shouldn't implement this themselves |
+| NC-14 | Entry Point Simplification | **High Priority** | Create macros to simplify main.rs | Minimize code in user application entry point |
+| NC-15 | Zero Boilerplate Initiative | **Highest Priority** | Comprehensive audit and refactoring | Move infrastructure code to crates |
 
 ### navius-http
 
@@ -89,6 +312,13 @@ Based on the Simmr backend requirements, we've identified the following key enha
 | NH-5 | WebPlugin | Completed | Create web server plugin | Integrates with App::new() builder |
 | NH-6 | Media Uploads | Not Started | Support for multipart form handling | Required for recipe image uploads |
 | NH-7 | Rate Limiting | Not Started | Implement rate limiting middleware | Protect Simmr API from abuse |
+| NH-11 | WebPlugin Abstraction | **High Priority - In Progress** | Move WebPlugin to framework | Simplify server configuration |
+
+### navius-config
+
+| ID | Issue | Status | Description | Implementation Notes |
+|----|-------|--------|-------------|---------------------|
+| NC-12 | WebConfigurator Abstraction | **High Priority** | Move configuration logic to framework | Provide simple interface with sensible defaults |
 
 ### navius-db / navius-db-postgres
 
@@ -142,156 +372,217 @@ Based on the Simmr backend requirements, we've identified the following key enha
 
 ## Enhancement Proposals
 
-### Enhancement Proposal: Social Features Support
+### Enhancement Proposal: Zero Boilerplate Initiative (ZBI)
 
-**ID**: NC-8  
-**Crate**: navius-social (New)  
-**Title**: Social Interaction Patterns  
-**Status**: Proposed  
+**ID**: NC-15  
+**Crate**: Framework-wide  
+**Title**: Zero Boilerplate Initiative  
+**Status**: In Progress - Highest Priority  
 
 **Problem Statement**:  
-The Simmr platform requires comprehensive social features, but the current Navius ecosystem lacks standardized components for social interaction patterns like following, activity feeds, and content sharing.
+The current Navius codebase requires users to implement too much infrastructure code in their applications. Files like `web_configurator.rs`, `web_plugin.rs`, and `app.rs` should be part of the framework, not user code. The `main.rs` entry point contains too much boilerplate that should be handled through macros and sensible defaults.
 
 **Use Case**:  
-Developers building social platforms need reusable components for common social features without reimplementing these patterns from scratch.
+Developers should be able to focus on business logic rather than infrastructure setup. A Spring Boot-like developer experience would allow developers to quickly build applications with minimal configuration.
 
 **Proposed Solution**:  
-Create a new `navius-social` crate with the following components:
+1. Migrate infrastructure code from user applications to Navius crates:
+   - Move WebConfigurator to navius-config
+   - Move WebPlugin to navius-http
+   - Move App builder to navius-core
+   - Create macros to simplify main entry point
+
+2. Implement attribute macros for declarative configuration:
+   ```rust
+   #[auto_config]
+   #[routes]
+   #[tokio::main]
+   async fn main() {
+       App::new().run().await;
+   }
+   ```
+
+3. Simplify handler definitions with attribute macros:
+   ```rust
+   #[get("/hello")]
+   async fn hello_world() -> impl IntoResponse {
+       "Hello, world!"
+   }
+   ```
+
+**Benefits**:  
+- 80% reduction in infrastructure code
+- Focus on business logic rather than setup
+- True Spring Boot-like developer experience
+- Faster onboarding for new developers
+- Less error-prone application setup
+
+**Backward Compatibility**:  
+This refactoring will maintain backward compatibility by:
+- Keeping the same underlying architecture
+- Extracting current user code verbatim into crates
+- Providing equivalent APIs with the same semantics
+
+**Implementation Plan**:  
+1. Extract WebConfigurator to navius-config crate
+2. Move WebPlugin implementation to navius-http crate
+3. Migrate App builder to navius-core
+4. Create macros for main entry point simplification
+5. Update documentation and examples
+6. Refactor Simmr codebase to use new APIs
+
+### Enhancement Proposal: WebConfigurator Abstraction
+
+**ID**: NC-12  
+**Crate**: navius-config  
+**Title**: WebConfigurator Abstraction  
+**Status**: Proposed - High Priority  
+
+**Problem Statement**:  
+Currently, users need to implement their own WebConfigurator in user code, handling configuration loading from multiple sources. This should be part of the framework with sensible defaults.
+
+**Use Case**:  
+Configuration loading is a cross-cutting concern that should be handled consistently across all Navius applications with minimal user intervention.
+
+**Proposed Solution**:  
+Create a standard WebConfigurator in the navius-config crate:
 
 ```rust
-// Following system
-pub struct FollowService<R: FollowRepository> {
-    repository: R,
+// In navius-config crate
+pub struct WebConfigurator {
+    config_prefix: String,
+    config_dir: String,
 }
 
-impl<R: FollowRepository> FollowService<R> {
-    pub async fn follow(&self, follower_id: UserId, followee_id: UserId) -> Result<()>;
-    pub async fn unfollow(&self, follower_id: UserId, followee_id: UserId) -> Result<()>;
-    pub async fn get_followers(&self, user_id: UserId) -> Result<Vec<User>>;
-    pub async fn get_following(&self, user_id: UserId) -> Result<Vec<User>>;
+impl WebConfigurator {
+    pub fn new() -> Self { /* ... */ }
+    pub fn with_prefix(self, prefix: impl Into<String>) -> Self { /* ... */ }
+    pub fn with_config_dir(self, dir: impl Into<String>) -> Self { /* ... */ }
+    pub fn load_config(&self) -> Result<Config> { /* ... */ }
 }
 
-// Activity feed
-pub struct ActivityFeedService<R: ActivityRepository> {
-    repository: R,
-}
-
-impl<R: ActivityRepository> ActivityFeedService<R> {
-    pub async fn record_activity(&self, activity: Activity) -> Result<()>;
-    pub async fn get_feed(&self, user_id: UserId) -> Result<Vec<Activity>>;
-}
-
-// Notification system
-pub struct NotificationService<R: NotificationRepository, S: NotificationSender> {
-    repository: R,
-    sender: S,
-}
-
-impl<R: NotificationRepository, S: NotificationSender> NotificationService<R, S> {
-    pub async fn send_notification(&self, notification: Notification) -> Result<()>;
-    pub async fn get_notifications(&self, user_id: UserId) -> Result<Vec<Notification>>;
+// User code simply uses the macro:
+#[auto_config]
+async fn main() {
+    // Config automatically loaded
 }
 ```
 
 **Benefits**:  
-- Standardized implementations of common social patterns
-- Modular design with pluggable storage backends
-- Clear separation of concerns
-- Comprehensive testing of social interaction logic
-
-**Backward Compatibility**:  
-This is a new crate, so backward compatibility is not a concern.
+- Standardized configuration loading
+- Sensible defaults for most applications
+- Customization possible when needed
+- Reduced boilerplate in user code
 
 **Implementation Plan**:  
-1. Create the new navius-social crate
-2. Implement core social graph functionality
-3. Add activity feed generation and aggregation
-4. Create notification system with multiple channels
-5. Build content sharing mechanisms
-6. Provide comprehensive testing and documentation
+1. Extract current WebConfigurator implementation to navius-config
+2. Add sensible defaults for all configuration parameters
+3. Create auto_config macro to wire everything up
+4. Update documentation with usage examples
 
-### Enhancement Proposal: Recipe Data Model
+### Enhancement Proposal: App Builder Simplification
 
-**ID**: ND-1  
-**Crate**: navius-db-postgres  
-**Title**: Specialized Recipe Repository  
-**Status**: Proposed  
+**ID**: NC-13  
+**Crate**: navius-core  
+**Title**: App Builder Simplification  
+**Status**: Proposed - High Priority  
 
 **Problem Statement**:  
-The Simmr platform needs efficient storage and retrieval of complex recipe data, including ingredients, steps, nutrition information, and media references.
+Currently, users need to implement their own App and AppBuilder classes in user code. This should be part of the framework with a clean, extensible API.
 
 **Use Case**:  
-Developers need a specialized repository that handles the unique requirements of recipe data, including efficient querying and relationship management.
+Application initialization and lifecycle management is a framework concern and should be handled consistently with minimal user code.
 
 **Proposed Solution**:  
-Implement a specialized recipe repository with the following features:
+Move the App and AppBuilder implementations to navius-core:
 
 ```rust
-pub struct Recipe {
-    id: RecipeId,
-    title: String,
-    description: String,
-    author_id: UserId,
-    ingredients: Vec<Ingredient>,
-    steps: Vec<CookingStep>,
-    media: Vec<MediaReference>,
-    tags: Vec<Tag>,
-    nutrition: Option<NutritionInfo>,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
-    // Additional fields
+// In navius-core crate
+pub struct App {
+    registry: Registry,
+    config: Config,
+    // ...
 }
 
-pub trait RecipeRepository: Send + Sync {
-    async fn create(&self, recipe: NewRecipe) -> Result<Recipe>;
-    async fn get_by_id(&self, id: RecipeId) -> Result<Option<Recipe>>;
-    async fn update(&self, id: RecipeId, updates: RecipeUpdates) -> Result<Recipe>;
-    async fn delete(&self, id: RecipeId) -> Result<()>;
-    
-    // Specialized queries
-    async fn find_by_ingredient(&self, ingredient_name: &str) -> Result<Vec<Recipe>>;
-    async fn find_by_author(&self, author_id: UserId) -> Result<Vec<Recipe>>;
-    async fn find_by_tags(&self, tags: &[Tag]) -> Result<Vec<Recipe>>;
-    async fn search(&self, query: &str) -> Result<Vec<Recipe>>;
-    
-    // Social-related queries
-    async fn get_latest_from_following(&self, user_id: UserId) -> Result<Vec<Recipe>>;
-    async fn get_popular(&self, limit: usize) -> Result<Vec<Recipe>>;
+impl App {
+    pub fn new() -> Self { /* ... */ }
+    pub fn with_plugin<P: Plugin>(self, plugin: P) -> Self { /* ... */ }
+    pub fn with_component<C: Component>(self, component: C) -> Self { /* ... */ }
+    pub fn run(self) -> impl Future<Output = Result<()>> { /* ... */ }
 }
 
-pub struct PostgresRecipeRepository {
-    pool: PgPool,
-}
-
-impl PostgresRecipeRepository {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
-    }
-}
-
-impl RecipeRepository for PostgresRecipeRepository {
-    // Implementation of all repository methods
+// User code simply creates and runs:
+async fn main() {
+    App::new()
+        .with_plugin(WebPlugin::default())
+        .run()
+        .await
+        .unwrap();
 }
 ```
 
 **Benefits**:  
-- Specialized handling of recipe-specific data
-- Optimized queries for recipe discovery
-- Support for complex filtering and search
-- Integration with social features
-
-**Backward Compatibility**:  
-This extends the existing repository pattern and is compatible with the current architecture.
+- Standardized application initialization
+- Consistent plugin and component lifecycle
+- Clean, fluent API
+- Reduced boilerplate in user code
 
 **Implementation Plan**:  
-1. Define the recipe data model
-2. Implement the specialized repository trait
-3. Create the PostgreSQL implementation
-4. Add indexes and optimizations for common queries
-5. Integrate with search functionality
-6. Provide comprehensive testing and documentation
+1. Extract current App and AppBuilder implementations to navius-core
+2. Add sensible defaults and extensibility points
+3. Create integration points with other enhancements (auto-config, routes)
+4. Update documentation with usage examples
+
+### Enhancement Proposal: Main Entry Point Simplification
+
+**ID**: NC-14  
+**Crate**: navius-core/http  
+**Title**: Main Entry Point Simplification  
+**Status**: Proposed - High Priority  
+
+**Problem Statement**:  
+The main entry point in user applications contains too much boilerplate code for router setup, plugin configuration, and application initialization.
+
+**Use Case**:  
+Application entry points should be minimal, focusing only on essential customizations. Most of the setup should be handled by the framework.
+
+**Proposed Solution**:  
+Create attribute macros for simplified main entry points:
+
+```rust
+// User code with new API
+#[auto_config]
+#[routes]
+#[tokio::main]
+async fn main() {
+    App::new().run().await
+}
+
+#[get("/api/v1/hello")]
+async fn hello_world() -> impl IntoResponse {
+    "Hello, world!"
+}
+```
+
+The macros would:
+1. Collect all handler functions with route annotations
+2. Register them with the router
+3. Configure the application with sensible defaults
+4. Set up the web server
+
+**Benefits**:  
+- Minimal main entry point
+- Declarative route definitions
+- Focus on business logic
+- Convention over configuration
+
+**Implementation Plan**:  
+1. Create proc-macros for route collection and registration
+2. Implement automatic application setup
+3. Integrate with WebPlugin and WebConfigurator
+4. Create comprehensive documentation and examples
 
 ## Current Status
 - Status: In Progress
-- Progress: 15%
-- Updated at: April 06, 2025 
+- Progress: 20%
+- Updated at: May 30, 2025

@@ -1,22 +1,21 @@
 [package]
 name = "navius-macros"
 version = "0.1.0"
-edition = "2024"                                           # Use 2024 for proc-macros
-authors = ["Navius Team <team@navius.io>"]                 # Placeholder
-license = "Apache-2.0"
+edition = "2024"
 description = "Procedural macros for the Navius framework"
-repository = "https://github.com/navius/navius"
+license = "MIT"
+keywords = ["macros", "proc-macros", "axum", "web"]
 
 [lib]
-proc-macro = true # Indicate this is a procedural macro crate
+proc-macro = true
 
 [dependencies]
-syn = { version = "2.0.100", features = [
-    "full",
-    "parsing",
-    "extra-traits",
-] } # For parsing Rust code
-quote = "1.0.40" # For generating Rust code
-proc-macro2 = "1.0.94" # Provides improved APIs for proc macros
+proc-macro2 = "1.0.95"
+quote = "1.0.40"
+syn = { version = "2.0.100", features = ["full", "extra-traits", "parsing"] }
+proc-macro-error = "1.0.3"
+inventory = "0.3.20"
+heck = "0.5.0"
+bracket-parse = "0.1.1"
 
 # Add other dependencies needed for macro logic later (e.g., serde, config)

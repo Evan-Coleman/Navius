@@ -79,7 +79,7 @@ navius-di = { path = "crates/navius-di" }
 # navius-logging = { path = "crates/navius-logging" } # TBD
 navius-auth = { path = "crates/navius-auth" }
 navius-db = { path = "crates/navius-db" }
-navius-http = { path = "crates/navius-http" }
+navius-http = { path = "crates/navius-http", features = ["server"] }
 navius-macros = { path = "crates/navius-macros" }
 navius-plugin = { path = "crates/navius-plugin" }
 
