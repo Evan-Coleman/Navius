@@ -12,7 +12,7 @@ pub const DEFAULT_PORT: u16 = 8080;
 pub const DEFAULT_LOG_LEVEL: &str = "info";
 
 /// Default configuration file name
-pub const DEFAULT_CONFIG_FILE: &str = "config.yaml";
+pub const DEFAULT_CONFIG_FILE: &str = "config.toml";
 
 /// Environment variable prefix for configuration
 pub const CONFIG_ENV_PREFIX: &str = "NAVIUS_";
@@ -89,7 +89,7 @@ mod tests {
         assert_eq!(DEFAULT_APP_NAME, "navius-app");
         assert_eq!(DEFAULT_PORT, 8080);
         assert_eq!(DEFAULT_LOG_LEVEL, "info");
-        assert_eq!(DEFAULT_CONFIG_FILE, "config.yaml");
+        assert_eq!(DEFAULT_CONFIG_FILE, "config.toml");
         assert_eq!(CONFIG_ENV_PREFIX, "NAVIUS_");
     }
 

@@ -70,15 +70,13 @@ pub enum ConfigSource {
 pub enum FileFormat {
     /// JSON format
     Json,
-    /// YAML format
-    Yaml,
     /// TOML format
     Toml,
     /// INI format
     Ini,
-    /// Properties format
+    /// Java properties format
     Properties,
-    /// Auto-detect format from file extension
+    /// Automatically detect format from file extension
     Auto,
 }
 
@@ -86,7 +84,6 @@ impl fmt::Display for FileFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FileFormat::Json => write!(f, "JSON"),
-            FileFormat::Yaml => write!(f, "YAML"),
             FileFormat::Toml => write!(f, "TOML"),
             FileFormat::Ini => write!(f, "INI"),
             FileFormat::Properties => write!(f, "Properties"),
@@ -97,7 +94,7 @@ impl fmt::Display for FileFormat {
 
 impl FileFormat {
     /// Detect file format from file extension
-    pub fn from_extension(path: &std::path::Path) -> Self {
+    pub fn from_extension(path: &Path) -> Self {
         let extension = path
             .extension()
             .and_then(|ext| ext.to_str())
@@ -106,22 +103,17 @@ impl FileFormat {
 
         match extension.as_str() {
             "json" => FileFormat::Json,
-            "yaml" | "yml" => FileFormat::Yaml,
             "toml" => FileFormat::Toml,
             "ini" => FileFormat::Ini,
             "properties" | "props" => FileFormat::Properties,
-            _ => FileFormat::Json, // Default to JSON if unknown
+            _ => FileFormat::Toml, // Default to TOML if unknown
         }
     }
 
-    /// Check if this format is enabled by feature flags
+    /// Check if this format is enabled in the current build
     pub fn is_enabled(&self) -> bool {
         match self {
             FileFormat::Json => true, // JSON is always enabled
-            #[cfg(feature = "yaml")]
-            FileFormat::Yaml => true,
-            #[cfg(not(feature = "yaml"))]
-            FileFormat::Yaml => false,
             #[cfg(feature = "toml")]
             FileFormat::Toml => true,
             #[cfg(not(feature = "toml"))]
@@ -239,18 +231,6 @@ mod tests {
         )?;
 
         assert_eq(
-            FileFormat::from_extension(Path::new("config.yaml")),
-            FileFormat::Yaml,
-            "Should detect YAML format from .yaml extension",
-        )?;
-
-        assert_eq(
-            FileFormat::from_extension(Path::new("config.yml")),
-            FileFormat::Yaml,
-            "Should detect YAML format from .yml extension",
-        )?;
-
-        assert_eq(
             FileFormat::from_extension(Path::new("config.toml")),
             FileFormat::Toml,
             "Should detect TOML format from .toml extension",
@@ -270,8 +250,8 @@ mod tests {
 
         assert_eq(
             FileFormat::from_extension(Path::new("config")),
-            FileFormat::Json,
-            "Should default to JSON format for files without extension",
+            FileFormat::Toml,
+            "Should default to TOML format for files without extension",
         )?;
 
         Ok(())

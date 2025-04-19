@@ -44,10 +44,20 @@ async fn main() {
     // and/or configuration files
 }
 
-// Routes are defined using attribute macros directly on handlers
-#[route(GET, "/api/v1/hello")]
-async fn hello_world() -> impl IntoResponse {
-    "Hello, world!"
+// Handlers are defined in dedicated handler files for proper separation of concerns
+// src/handlers/api_handler.rs
+pub async fn hello_world() -> Json<serde_json::Value> {
+    Json(json!({ "message": "Hello, world!" }))
+}
+
+// Routes reference these handlers using attribute macros
+// src/main.rs
+#[nest(prefix = "/api/v1")]
+mod api {
+    #[route(path = "/hello", method = "GET")]
+    async fn hello_world() -> Json<serde_json::Value> {
+        api_handler::hello_world().await
+    }
 }
 
 #[route(GET, "/api/v1/context")]

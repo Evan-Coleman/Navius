@@ -533,17 +533,7 @@ test:
 
 ### Loading Test Config
 
-```rust
-// In tests/common/config.rs
-pub fn load_test_config() -> TestConfig {
-    let config_path = std::path::Path::new("tests/config/test.yaml");
-    let config_str = std::fs::read_to_string(config_path)
-        .expect("Failed to read test config");
-        
-    serde_yaml::from_str(&config_str)
-        .expect("Failed to parse test config")
-}
-```
+
 
 ## CI Integration
 

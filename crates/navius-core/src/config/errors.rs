@@ -149,16 +149,6 @@ impl From<serde_json::Error> for ConfigError {
     }
 }
 
-#[cfg(feature = "yaml")]
-impl From<serde_yaml::Error> for ConfigError {
-    fn from(err: serde_yaml::Error) -> Self {
-        ConfigError::ParseError {
-            source: "YAML".to_string(),
-            reason: err.to_string(),
-        }
-    }
-}
-
 #[cfg(feature = "toml")]
 impl From<toml::de::Error> for ConfigError {
     fn from(err: toml::de::Error) -> Self {

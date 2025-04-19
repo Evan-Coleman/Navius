@@ -32,7 +32,7 @@ axum = "0.8.3"
 http = "1.3.1"
 sqlx = "0.8.3"
 redis = "0.29.5"
-config = "0.15.11"
+config = { version = "0.15.11", features = ["toml"] }
 thiserror = "2.0.12"
 uuid = { version = "1.16.0", features = ["v4", "serde"] }
 async-trait = "0.1.88"
@@ -112,8 +112,7 @@ serde = { workspace = true } # Inherit
 serde_json = { workspace = true } # Inherit
 config = { workspace = true, features = [
     "toml",
-    "yaml",
-] } # Inherit, add features
+] } # Only use TOML for configuration
 
 # --- Async & Utilities ---
 async-trait = { workspace = true } # Inherit

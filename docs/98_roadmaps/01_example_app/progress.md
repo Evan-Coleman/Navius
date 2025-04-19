@@ -29,6 +29,7 @@
 
 ## Recent Updates
 
+- **May 31, 2025**: Improved code organization by separating route definitions from handler implementations. Routes now reference handlers from dedicated files, improving maintainability.
 - **May 30, 2025**: Improved developer ergonomics by converting mod.rs files to the Rust 2018 module system (NC-5). This improves code navigation and IDE experience.
 - **May 31, 2024**: Started implementation of NC-2 Declarative Route Macros (`#[route]`, `#[nest]`).
 - **May 31, 2024**: Revised implementation strategy to prioritize using existing Navius crates over custom boilerplate for core features (config, logging, auth, db, http). This aligns better with the goal of showcasing idiomatic usage.

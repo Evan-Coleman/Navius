@@ -14,7 +14,6 @@ repository = "https://github.com/navius/navius"
 # Core dependencies
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-serde_yaml = "0.9.34+deprecated"
 tokio = { workspace = true, features = [
     "macros",
     "rt-multi-thread",
@@ -25,10 +24,9 @@ async-trait = { workspace = true }
 thiserror = { workspace = true }
 # Added regex dependency
 regex = "1.11.1"
-# Use explicit version and optional = true for redis
 redis = { workspace = true, optional = true }
-# Ensure config is optional=true
-config = { workspace = true, optional = true }
+# Config with TOML support only
+config = { workspace = true, optional = true, default-features = false, features = ["toml"] }
 dotenvy = "0.15.7"
 
 # Time handling

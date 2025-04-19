@@ -1,3 +1,5 @@
+use crate::handlers::admin_handler;
+use crate::handlers::api_handler;
 use axum::Json;
 use navius_macros::{navius_app, nest, route};
 use serde_json::json;
@@ -9,38 +11,20 @@ mod api {
 
     #[route(path = "/hello", method = "GET")]
     async fn hello_world() -> Json<serde_json::Value> {
-        Json(json!({ "message": "Hello, world!" }))
+        api_handler::hello_world().await
     }
 
     #[route(path = "/echo/:text", method = "GET")]
     async fn echo(axum::extract::Path(text): axum::extract::Path<String>) -> String {
-        format!("Echo: {}", text)
+        api_handler::echo(axum::extract::Path(text)).await
     }
 
     #[route(path = "/users", method = ["GET", "POST"])]
     async fn users(
         // Optional payload for POST requests
-        payload: Option<Json<UserRequest>>,
+        payload: Option<Json<api_handler::UserRequest>>,
     ) -> impl axum::response::IntoResponse {
-        use axum::http::StatusCode;
-
-        if let Some(Json(user)) = payload {
-            // Create user (POST)
-            (
-                StatusCode::CREATED,
-                Json(json!({
-                    "id": 1234,
-                    "name": user.name,
-                    "created": true
-                })),
-            )
-        } else {
-            // Get all users (GET)
-            Json(json!([
-                { "id": 1, "name": "Alice" },
-                { "id": 2, "name": "Bob" },
-            ]))
-        }
+        api_handler::users(payload).await
     }
 }
 
@@ -51,18 +35,8 @@ mod admin {
 
     #[route(path = "/status", method = "GET")]
     async fn status() -> Json<serde_json::Value> {
-        Json(json!({
-            "status": "OK",
-            "uptime": "10m",
-            "version": env!("CARGO_PKG_VERSION")
-        }))
+        admin_handler::status().await
     }
-}
-
-// Request/response models
-#[derive(serde::Deserialize)]
-struct UserRequest {
-    name: String,
 }
 
 // Main application with zero boilerplate

@@ -317,10 +317,10 @@ By default, the application will use the following configuration sources (in ord
 
 1. Environment variables (e.g., `NAVIUS_WEB_PORT=8080`)
 2. Configuration files:
-   - `./config.{toml,yaml,json}`
-   - `./config/config.{toml,yaml,json}`
-   - `~/.config/navius/config.{toml,yaml,json}`
-   - `/etc/navius/config.{toml,yaml,json}`
+   - `./config.toml`
+   - `./config/config.toml`
+   - `~/.config/navius/config.toml`
+   - `/etc/navius/config.toml`
 
 Common configuration options:
 
