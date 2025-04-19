@@ -1,78 +1,19 @@
 // WebPlugin provides web server capabilities to Navius applications
 // This file implements the web plugin abstraction for the Zero Boilerplate Initiative (NC-11)
 
-use async_trait::async_trait;
 use axum::{Router, routing::get};
-use inventory::collect;
-use navius_core::{di::Application, error::Result};
-use navius_plugin::plugin::{MessageHandler, PluginLifecycle, PluginLifecycleStage};
-use navius_plugin::{BasePlugin, Plugin, PluginConfig, PluginHealth, PluginMetadata, PluginResult};
-use serde_json::Value;
-use std::{collections::HashMap, fmt::Debug, net::SocketAddr, sync::Arc};
-use tokio::net::TcpListener;
+use navius_core::{
+    di::Application,
+    error::{Error, Result},
+};
+use std::net::SocketAddr;
+use tokio::runtime::Handle;
 use tracing::{debug, info};
 
 use crate::server::{
-    HttpServerConfig,
-    route_discovery::{RouteDiscoveryConfig, RouteRegistry, discover_routes},
+    self,
+    route_discovery::{RouteDiscoveryConfig, RouteRegistration, RouteRegistry},
 };
-
-/// Route registration for automatic route discovery.
-#[derive(Debug)]
-pub struct RouteRegistration {
-    /// Path of the route.
-    pub path: &'static str,
-
-    /// HTTP methods supported by the route.
-    pub methods: Vec<String>,
-
-    /// Name of the handler function.
-    pub handler_name: &'static str,
-
-    /// Route handler function.
-    pub handler: fn(Router) -> Router,
-}
-
-/// Global registry for routes discovered via attribute macros.
-#[derive(Debug)]
-pub struct RouteRegistry {
-    routes: Vec<RouteRegistration>,
-}
-
-inventory::collect!(RouteRegistration);
-
-impl RouteRegistry {
-    /// Create a new route registry.
-    pub fn new() -> Self {
-        Self { routes: Vec::new() }
-    }
-
-    /// Register a route.
-    pub fn register(&mut self, route: RouteRegistration) {
-        self.routes.push(route);
-    }
-
-    /// Build a router from the registered routes.
-    pub fn build_router(&self) -> Router {
-        let mut router = Router::new();
-
-        for route in &self.routes {
-            debug!("Registering route: {} ({})", route.path, route.handler_name);
-            router = (route.handler)(router);
-        }
-
-        router
-    }
-
-    /// Gets an iterator over all registered routes.
-    pub fn iter(&self) -> impl Iterator<Item = &RouteRegistration> {
-        self.routes.iter()
-    }
-}
-
-/// Global route registry for collecting route registrations.
-#[inventory::collect]
-pub static ROUTE_REGISTRY: inventory::Registry<RouteRegistration> = inventory::Registry::new();
 
 /// WebPlugin provides web server capabilities to Navius applications
 ///
@@ -95,46 +36,57 @@ pub static ROUTE_REGISTRY: inventory::Registry<RouteRegistration> = inventory::R
 ///     .with_port(8080)
 ///     .with_router(Router::new().route("/hello", get(|| async { "Hello, world!" })));
 ///
-/// // Add it to your Navius application
-/// let app = navius_core::app::App::new()
-///     .with_plugin(web_plugin)
-///     .run();
+/// // Use with a Navius Application
+/// let app = navius_core::di::Application::builder().build();
+/// // TODO: Add direct plugin support
 /// ```
 #[derive(Debug)]
 pub struct WebPlugin {
-    base: BasePlugin,
+    /// Base path for all routes (e.g., "/api")
+    base: String,
+    /// Host address to bind to (e.g., "127.0.0.1" or "0.0.0.0")
     host: String,
+    /// Port to listen on (e.g., 3000)
     port: u16,
+    /// Router with all configured routes
     router: Option<Router>,
-    lifecycle_stage: PluginLifecycleStage,
+    /// Route discovery configuration
+    route_discovery: RouteDiscoveryConfig,
 }
 
 /// Define a simple application state that contains the application context
 #[derive(Clone, Debug)]
-pub struct AppState {
-    pub app: Arc<Application>,
+pub struct AppState<T = ()> {
+    /// Application state that can be accessed in route handlers
+    pub state: T,
+}
+
+impl Default for WebPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl WebPlugin {
     /// Create a new WebPlugin with default settings
     pub fn new() -> Self {
         Self {
-            base: BasePlugin::new(PluginMetadata::new(
-                "web",
-                "0.1.0",
-                "Web Server Plugin",
-                "Provides web server capabilities to Navius applications",
-                "Navius Team",
-            )),
+            base: String::new(),
             host: "127.0.0.1".to_string(),
             port: 3000,
             router: None,
-            lifecycle_stage: PluginLifecycleStage::Created,
+            route_discovery: RouteDiscoveryConfig::new(),
         }
     }
 
+    /// Set the base path for all routes
+    pub fn with_base<T: Into<String>>(mut self, base: T) -> Self {
+        self.base = base.into();
+        self
+    }
+
     /// Set the host address
-    pub fn with_host(mut self, host: impl Into<String>) -> Self {
+    pub fn with_host<T: Into<String>>(mut self, host: T) -> Self {
         self.host = host.into();
         self
     }
@@ -145,14 +97,10 @@ impl WebPlugin {
         self
     }
 
-    /// Get the host address
-    pub fn host(&self) -> &str {
-        &self.host
-    }
-
-    /// Get the port number
-    pub fn port(&self) -> u16 {
-        self.port
+    /// Configure route discovery behavior
+    pub fn with_route_discovery(mut self, config: RouteDiscoveryConfig) -> Self {
+        self.route_discovery = config;
+        self
     }
 
     /// Set the router for the web server
@@ -163,14 +111,18 @@ impl WebPlugin {
 
     /// Build a router from registered routes if none is provided.
     fn build_default_router(&self) -> Router {
-        let mut registry = RouteRegistry::new();
+        let registry = RouteRegistry::new();
 
-        // Collect all registered routes
-        for route in ROUTE_REGISTRY.iter() {
-            registry.register(route.clone());
+        info!("Discovering routes using inventory collect");
+
+        // Collect routes from inventory
+        for route in inventory::iter::<RouteRegistration>() {
+            debug!("Registering route: {}", route.path);
+            let registration = route.clone();
+            registry.register_route(registration);
         }
 
-        if registry.routes.is_empty() {
+        if registry.route_count() == 0 {
             // Default welcome route
             Router::new().route("/", get(|| async { "Welcome to Navius WebPlugin!" }))
         } else {
@@ -178,174 +130,80 @@ impl WebPlugin {
         }
     }
 
-    /// Start the web server with the configured settings
-    pub async fn start_server<T: Clone + Send + Sync + 'static>(&self, app_state: T) -> Result<()> {
-        // Create router with explicit state
+    /// Start the web server - can be used directly or through a runtime
+    pub async fn start_server(&self) -> Result<()> {
+        // Get the address to bind to
+        let addr = SocketAddr::new(
+            self.host
+                .parse()
+                .map_err(|_| Error::internal(format!("Invalid IP address: {}", self.host)))?,
+            self.port,
+        );
+
+        // Create a router, either from the provided one or by discovering routes
         let router = if let Some(router) = &self.router {
-            // Convert the router to a service
-            router
-                .clone()
-                .with_state(app_state)
-                .into_make_service_with_connect_info::<std::net::SocketAddr>()
+            router.clone()
         } else {
-            // Default router with registered routes
-            let default_router = self.build_default_router();
-            default_router
-                .with_state(app_state)
-                .into_make_service_with_connect_info::<std::net::SocketAddr>()
+            self.build_default_router()
         };
 
-        let addr = format!("{}:{}", self.host, self.port)
-            .parse::<SocketAddr>()
-            .map_err(|e| navius_core::error::Error::internal(format!("Invalid address: {}", e)))?;
+        // Create a shutdown channel
+        let (_shutdown_sender, shutdown_future) = server::create_shutdown_channel();
 
-        info!("Starting web server on {}", addr);
+        // Bind to the address
+        let listener = server::bind_listener(&addr).await?;
 
-        let listener = TcpListener::bind(&addr).await.map_err(|e| {
-            navius_core::error::Error::internal(format!("Failed to bind to address: {}", e))
-        })?;
+        // Start the server
+        info!("Starting HTTP server on http://{}:{}", self.host, self.port);
 
-        info!("Server listening on http://{}", addr);
-
+        // Use axum to serve the router
         axum::serve(listener, router)
+            .with_graceful_shutdown(async {
+                server::shutdown_future(shutdown_future).await;
+            })
             .await
-            .map_err(|e| navius_core::error::Error::internal(format!("Server error: {}", e)))?;
+            .map_err(|e| Error::internal(format!("HTTP server error: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// Run the web server in a separate task on the specified runtime
+    pub fn run_in_background(&self, handle: Handle) -> Result<()> {
+        // Clone self for the async block
+        let plugin = self.clone();
+
+        // Start the server in the background
+        handle.spawn(async move {
+            if let Err(e) = plugin.start_server().await {
+                tracing::error!("Failed to start web server: {}", e);
+            }
+        });
 
         Ok(())
     }
 }
 
-impl Default for WebPlugin {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[async_trait]
-impl PluginLifecycle for WebPlugin {
-    async fn initialize(&mut self, config: PluginConfig) -> PluginResult<()> {
-        // Extract configuration values if present
-        if let Some(host) = config.get_string("host") {
-            self.host = host;
+// Need to implement Clone for WebPlugin
+impl Clone for WebPlugin {
+    fn clone(&self) -> Self {
+        Self {
+            base: self.base.clone(),
+            host: self.host.clone(),
+            port: self.port,
+            router: self.router.clone(),
+            route_discovery: self.route_discovery.clone(),
         }
-
-        if let Some(port) = config.get_number("port") {
-            self.port = port as u16;
-        }
-
-        self.lifecycle_stage = PluginLifecycleStage::Initialized;
-        info!(
-            "Initialized WebPlugin with host: {}, port: {}",
-            self.host, self.port
-        );
-        Ok(())
-    }
-
-    async fn start(&mut self) -> PluginResult<()> {
-        self.lifecycle_stage = PluginLifecycleStage::Started;
-        info!("Started WebPlugin - server will be started when needed");
-        Ok(())
-    }
-
-    async fn stop(&mut self) -> PluginResult<()> {
-        self.lifecycle_stage = PluginLifecycleStage::Stopped;
-        info!("Stopped WebPlugin");
-        Ok(())
-    }
-
-    async fn health_check(&self) -> PluginHealth {
-        PluginHealth::Healthy
     }
 }
 
-#[async_trait]
-impl MessageHandler for WebPlugin {
-    async fn handle_message(&self, _message: Value) -> PluginResult<Option<Value>> {
-        // No message handling for now
-        Ok(None)
-    }
+/// Extension trait to add the web plugin to an Application
+pub trait WebPluginExt {
+    fn with_web_plugin(self, plugin: WebPlugin) -> Self;
 }
 
-impl Plugin for WebPlugin {
-    fn id(&self) -> &str {
-        self.base.metadata().id.as_str()
-    }
-
-    fn version(&self) -> &str {
-        self.base.metadata().version.as_str()
-    }
-
-    fn metadata(&self) -> &PluginMetadata {
-        self.base.metadata()
-    }
-
-    fn lifecycle_stage(&self) -> PluginLifecycleStage {
-        self.lifecycle_stage
-    }
-
-    fn capabilities(&self) -> HashMap<String, Arc<dyn std::any::Any + Send + Sync>> {
-        self.base.capabilities()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use navius_test::error::TestResult;
-
-    #[tokio::test]
-    async fn test_web_plugin_creation() -> TestResult<()> {
-        let plugin = WebPlugin::new();
-        assert_eq!(plugin.host(), "127.0.0.1");
-        assert_eq!(plugin.port(), 3000);
-        assert!(plugin.router.is_none());
-        assert_eq!(plugin.lifecycle_stage(), PluginLifecycleStage::Created);
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_web_plugin_with_host() -> TestResult<()> {
-        let plugin = WebPlugin::new().with_host("0.0.0.0");
-        assert_eq!(plugin.host(), "0.0.0.0");
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_web_plugin_with_port() -> TestResult<()> {
-        let plugin = WebPlugin::new().with_port(8080);
-        assert_eq!(plugin.port(), 8080);
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_web_plugin_initialization() -> TestResult<()> {
-        let mut plugin = WebPlugin::new();
-        let config = PluginConfig::new();
-        plugin.initialize(config).await?;
-        assert_eq!(plugin.lifecycle_stage(), PluginLifecycleStage::Initialized);
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_web_plugin_lifecycle() -> TestResult<()> {
-        let mut plugin = WebPlugin::new();
-
-        // Initialize
-        plugin.initialize(PluginConfig::new()).await?;
-        assert_eq!(plugin.lifecycle_stage(), PluginLifecycleStage::Initialized);
-
-        // Start
-        plugin.start().await?;
-        assert_eq!(plugin.lifecycle_stage(), PluginLifecycleStage::Started);
-
-        // Health check
-        let health = plugin.health_check().await;
-        assert_eq!(health, PluginHealth::Healthy);
-
-        // Stop
-        plugin.stop().await?;
-        assert_eq!(plugin.lifecycle_stage(), PluginLifecycleStage::Stopped);
-
-        Ok(())
+impl WebPluginExt for Application {
+    fn with_web_plugin(self, _plugin: WebPlugin) -> Self {
+        // TODO: Implement proper plugin registration
+        self
     }
 }

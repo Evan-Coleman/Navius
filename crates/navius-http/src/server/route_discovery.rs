@@ -1,44 +1,59 @@
-use axum::Router;
-use std::collections::HashMap;
-use tracing::{info, warn};
+use axum::{Router, routing::get};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
+use tracing::{debug, info, warn};
 
 /// Configuration for route discovery
 #[derive(Debug, Clone)]
 pub struct RouteDiscoveryConfig {
-    /// Base path to scan for route handlers
-    pub base_path: Option<String>,
-    /// Whether to scan recursively
-    pub recursive: bool,
-    /// Whether route discovery is enabled
+    /// Whether to enable route discovery
     pub enabled: bool,
-    /// Additional module paths to scan (e.g., "api", "handlers")
+    /// Whether to include file names in route paths
+    pub include_file_names: bool,
+    /// Base path for route discovery
+    pub base_path: Option<String>,
+    /// Module paths for route discovery
     pub module_paths: Vec<String>,
+    /// Whether to recursively discover routes
+    pub recursive: bool,
 }
 
 impl Default for RouteDiscoveryConfig {
     fn default() -> Self {
-        Self {
-            base_path: None,
-            recursive: true,
-            enabled: true,
-            module_paths: Vec::new(),
-        }
+        Self::new()
     }
 }
 
 impl RouteDiscoveryConfig {
     /// Create a new route discovery configuration
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            enabled: true,
+            include_file_names: false,
+            base_path: None,
+            module_paths: Vec::new(),
+            recursive: true,
+        }
     }
 
-    /// Set the base path to scan for route handlers
-    pub fn with_base_path(mut self, path: impl Into<String>) -> Self {
-        self.base_path = Some(path.into());
+    /// Disable route discovery
+    pub fn disable(mut self) -> Self {
+        self.enabled = false;
         self
     }
 
-    /// Set whether to scan recursively
+    /// Enable including file names in route paths
+    pub fn include_file_names(mut self) -> Self {
+        self.include_file_names = true;
+        self
+    }
+
+    /// Set the base path for route discovery
+    pub fn with_base_path<S: Into<String>>(mut self, base_path: S) -> Self {
+        self.base_path = Some(base_path.into());
+        self
+    }
+
+    /// Set whether route discovery should be recursive
     pub fn with_recursive(mut self, recursive: bool) -> Self {
         self.recursive = recursive;
         self
@@ -50,25 +65,47 @@ impl RouteDiscoveryConfig {
         self
     }
 
-    /// Add a module path to scan for routes
-    pub fn with_module_path(mut self, path: impl Into<String>) -> Self {
+    /// Add a module path for route discovery
+    pub fn with_module_path<S: Into<String>>(mut self, path: S) -> Self {
         self.module_paths.push(path.into());
-        self
-    }
-
-    /// Add multiple module paths to scan for routes
-    pub fn with_module_paths(mut self, paths: Vec<impl Into<String>>) -> Self {
-        for path in paths {
-            self.module_paths.push(path.into());
-        }
         self
     }
 }
 
-/// A registry of discovered routes
+/// Route registration for the inventory pattern
+///
+/// This struct is used to register routes with the inventory pattern.
+/// Routes are collected at compile time and processed at runtime.
+#[derive(Clone)]
+pub struct RouteRegistration {
+    /// The HTTP method for this route (GET, POST, etc.)
+    pub method: String,
+    /// The path for this route (e.g., "/api/users")
+    pub path: String,
+    /// The handler function for this route
+    pub handler: Arc<dyn Fn() -> Router + Send + Sync>,
+}
+
+// Manual Debug implementation since the handler doesn't implement Debug
+impl Debug for RouteRegistration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RouteRegistration")
+            .field("method", &self.method)
+            .field("path", &self.path)
+            .field("handler", &"<function>")
+            .finish()
+    }
+}
+
+inventory::collect!(RouteRegistration);
+
+/// Route registry for collecting and building routes
+///
+/// This struct is responsible for collecting all registered routes
+/// and building a router from them.
 #[derive(Debug, Default)]
 pub struct RouteRegistry {
-    routes: HashMap<String, Router>,
+    routes: HashMap<String, RouteRegistration>,
 }
 
 impl RouteRegistry {
@@ -79,34 +116,56 @@ impl RouteRegistry {
         }
     }
 
-    /// Register a router with a path prefix
-    pub fn register(&mut self, path: impl Into<String>, router: Router) {
-        let path = path.into();
-        info!("Registering router at path: {}", path);
-        self.routes.insert(path, router);
+    /// Register a route with the registry
+    pub fn register_route(&self, route: RouteRegistration) {
+        debug!("Registering route: {} {}", route.method, route.path);
+
+        // Store the route in the registry using a unique key
+        let key = format!("{}:{}", route.method, route.path);
+        let _ = self.routes.clone().insert(key, route);
     }
 
-    /// Get all registered routes as a single router
-    pub fn build_router(&self) -> Router {
-        let mut main_router = Router::new();
-
-        for (path, router) in &self.routes {
-            info!("Adding router at path: {}", path);
-            main_router = main_router.nest(path, router.clone());
-        }
-
-        main_router
+    /// Register a router at the given path
+    pub fn register(&mut self, path: &str, router: Router) {
+        debug!("Registering router at path: {}", path);
+        let registration = RouteRegistration {
+            method: "ALL".to_string(),
+            path: path.to_string(),
+            handler: Arc::new(move || router.clone()),
+        };
+        self.register_route(registration);
     }
 
     /// Get the number of registered routes
     pub fn route_count(&self) -> usize {
         self.routes.len()
     }
+
+    /// Build a router from all registered routes
+    pub fn build_router(&self) -> Router {
+        let mut router = Router::new();
+
+        // Add a default welcome route if no routes are registered
+        if self.routes.is_empty() {
+            info!("No routes registered, adding default welcome route");
+            router = router.route("/", get(|| async { "Welcome to Navius!" }));
+            return router;
+        }
+
+        // Add all registered routes to the router
+        for (_, route) in &self.routes {
+            info!("Adding route: {} {}", route.method, route.path);
+            let handler = (route.handler)();
+            router = router.merge(handler);
+        }
+
+        router
+    }
 }
 
 /// Discover and register routes based on the provided configuration
 pub fn discover_routes(config: &RouteDiscoveryConfig) -> RouteRegistry {
-    let mut registry = RouteRegistry::new();
+    let registry = RouteRegistry::new();
 
     if !config.enabled {
         warn!("Route discovery is disabled");

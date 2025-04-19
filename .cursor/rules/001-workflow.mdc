@@ -6,6 +6,7 @@ alwaysApply: true
 # Workflow Guidelines
 
 ## First Step for Any Task
+- NEVER MAKE A mod.rs FILE EVER. Refer to ".cursor/rules/023-mod-rules.mdc"
 - Before starting work on any task, always check the `.cursor/rules/` directory for relevant guidance
 - Look for files matching your task type (e.g., `[001-roadmaps.mdc](mdc:.cursor/rules/tasks/001-roadmaps.mdc)` for Roadmap Interactions)
 - These documents contain established workflows, conventions, and requirements specific to each task type

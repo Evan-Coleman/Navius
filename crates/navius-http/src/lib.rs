@@ -21,15 +21,18 @@ pub use error::{Error, Result};
 
 // Re-export server types when the "server" feature is enabled
 #[cfg(feature = "server")]
-pub use server::{HttpServerConfig, ShutdownReceiver, ShutdownSender};
+pub use server::{
+    HttpServerConfig, ShutdownReceiver, ShutdownSender, bind_listener, create_shutdown_channel,
+    shutdown_future,
+};
 
 // Re-export route discovery types for automatic route discovery
 #[cfg(feature = "server")]
-pub use server::route_discovery::{RouteDiscoveryConfig, RouteRegistry};
+pub use server::route_discovery::{RouteDiscoveryConfig, RouteRegistration, RouteRegistry};
 
 // Re-export the WebPlugin for the Zero Boilerplate Initiative
 #[cfg(feature = "server")]
-pub use web_plugin::{AppState, WebPlugin};
+pub use web_plugin::{AppState, WebPlugin, WebPluginExt};
 
 // Re-export client types when the "client" feature is enabled
 // #[cfg(feature = "client")]
@@ -69,14 +72,39 @@ pub use middleware::{
 pub struct Version;
 
 impl Version {
-    /// Get the current version of the crate.
-    pub fn current() -> &'static str {
+    /// Get the crate version.
+    pub fn version() -> &'static str {
         env!("CARGO_PKG_VERSION")
     }
 
-    /// Get a semver compatible version string.
-    pub fn semver() -> String {
-        format!("v{}", Self::current())
+    /// Get the crate name.
+    pub fn name() -> &'static str {
+        env!("CARGO_PKG_NAME")
+    }
+
+    /// Get the crate authors.
+    pub fn authors() -> &'static str {
+        env!("CARGO_PKG_AUTHORS")
+    }
+
+    /// Get the crate description.
+    pub fn description() -> &'static str {
+        env!("CARGO_PKG_DESCRIPTION")
+    }
+
+    /// Get the crate homepage.
+    pub fn homepage() -> &'static str {
+        env!("CARGO_PKG_HOMEPAGE")
+    }
+
+    /// Get the crate repository.
+    pub fn repository() -> &'static str {
+        env!("CARGO_PKG_REPOSITORY")
+    }
+
+    /// Get the crate license.
+    pub fn license() -> &'static str {
+        env!("CARGO_PKG_LICENSE")
     }
 }
 
@@ -84,7 +112,7 @@ impl Version {
 pub fn init() {
     tracing::info!(
         target: "navius::http",
-        version = Version::current(),
+        version = Version::version(),
         "Initializing Navius HTTP"
     );
 }
@@ -96,7 +124,7 @@ mod tests {
 
     #[test]
     fn test_version() -> TestResult<()> {
-        let version = Version::current();
+        let version = Version::version();
         assert_true(!version.is_empty(), "Version should not be empty")?;
 
         let semver = Version::semver();

@@ -26,7 +26,7 @@ thiserror = { workspace = true }
 regex = "1.11.1"
 redis = { workspace = true, optional = true }
 # Config with TOML support only
-config = { workspace = true, optional = true, default-features = false, features = ["toml"] }
+config = { workspace = true, optional = true, features = ["toml"] }
 dotenvy = "0.15.7"
 
 # Time handling

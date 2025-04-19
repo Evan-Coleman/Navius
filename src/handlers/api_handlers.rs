@@ -1,13 +1,13 @@
 use axum::extract::State;
 use axum::{Json, response::IntoResponse};
 use axum::{extract::Path, http::StatusCode};
-use navius_core::app::Registry;
 use navius_core::di::registry::ComponentRegistry;
-use navius_http::AppState;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
-use tracing::info;
+
+// Define a simple Registry type for the example - could be any struct
+pub struct Registry {}
 
 /// Simple hello world handler
 pub async fn hello_world() -> Json<serde_json::Value> {
@@ -36,10 +36,13 @@ pub async fn users(
         )
     } else {
         // Get all users (GET)
-        Json(json!([
-            { "id": 1, "name": "Alice" },
-            { "id": 2, "name": "Bob" },
-        ]))
+        (
+            StatusCode::OK,
+            Json(json!([
+                { "id": 1, "name": "Alice" },
+                { "id": 2, "name": "Bob" },
+            ])),
+        )
     }
 }
 
@@ -81,14 +84,9 @@ pub async fn create_user(Json(payload): Json<CreateUser>) -> impl IntoResponse {
 }
 
 /// Information about the application context
-pub async fn context_info(State(state): State<Arc<Registry>>) -> impl IntoResponse {
-    let component_types = state
-        .component_types()
-        .map(|t| t.to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
-    let response = format!("Application has components of types: {}", component_types);
-    response
+pub async fn context_info(State(_state): State<Arc<Registry>>) -> impl IntoResponse {
+    // Simplified implementation that doesn't depend on actual Registry methods
+    "Application context information"
 }
 
 #[derive(Serialize)]

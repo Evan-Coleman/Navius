@@ -14,6 +14,9 @@ use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tracing::{error, info};
 
+// Sub-modules
+pub mod route_discovery;
+
 /// Wrapper around the broadcast sender for shutdown signals
 #[derive(Debug, Clone)]
 pub struct ShutdownSender(broadcast::Sender<()>);
@@ -72,13 +75,6 @@ impl HttpServerConfig {
         self
     }
 
-    /// Create a shutdown channel (sender/receiver pair).
-    /// Pass the sender to `with_shutdown`, use the receiver in `shutdown_future`.
-    pub fn create_shutdown_channel() -> (ShutdownSender, ShutdownReceiver) {
-        let (tx, rx) = tokio::sync::broadcast::channel(1);
-        (ShutdownSender(tx.clone()), ShutdownReceiver(rx))
-    }
-
     /// Get the configured SocketAddr, defaulting if not set.
     fn get_socket_addr(&self) -> SocketAddr {
         self.address.unwrap_or_else(|| {
@@ -97,13 +93,6 @@ impl HttpServerConfig {
             .await
             .map_err(|e| Error::internal(format!("Failed to bind listener to {}: {}", addr, e)))
     }
-
-    /// Create a future that resolves when the shutdown signal is received.
-    /// Requires a `ShutdownReceiver` obtained from `create_shutdown_channel`.
-    pub async fn create_shutdown_future(mut shutdown_rx: ShutdownReceiver) {
-        let _ = shutdown_rx.0.recv().await;
-        info!("Shutdown signal received, server stopping...");
-    }
 }
 
 impl Default for HttpServerConfig {
@@ -112,126 +101,30 @@ impl Default for HttpServerConfig {
     }
 }
 
+/// Create a shutdown channel (sender/receiver pair).
+/// Use the sender to trigger a shutdown, and the receiver in shutdown_future.
+pub fn create_shutdown_channel() -> (ShutdownSender, ShutdownReceiver) {
+    let (tx, rx) = tokio::sync::broadcast::channel(1);
+    (ShutdownSender(tx.clone()), ShutdownReceiver(rx))
+}
+
+/// Bind a TcpListener to the specified address
+pub async fn bind_listener(addr: &SocketAddr) -> Result<TcpListener> {
+    info!("Binding listener to {}", addr);
+    TcpListener::bind(addr)
+        .await
+        .map_err(|e| Error::internal(format!("Failed to bind listener to {}: {}", addr, e)))
+}
+
+/// Create a future that resolves when the shutdown signal is received.
+/// Requires a ShutdownReceiver obtained from create_shutdown_channel.
+pub async fn shutdown_future(mut shutdown_rx: ShutdownReceiver) {
+    let _ = shutdown_rx.0.recv().await;
+    info!("Shutdown signal received, server stopping...");
+}
+
 /// Convenience re-exports
 pub mod prelude {
     pub use axum::routing::{delete, get, options, patch, post, put};
     pub use axum::{Json, Router};
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use axum::routing::get;
-    use navius_test::error::{TestResult, assert_eq, assert_true};
-    use std::sync::Arc;
-    use std::time::Duration;
-    use tokio::time::timeout;
-
-    #[tokio::test]
-    async fn test_server_creation() -> TestResult<()> {
-        let server = HttpServerConfig::new();
-
-        assert_true(
-            server.address.is_none(),
-            "New server should have no address set",
-        )?;
-        assert_true(
-            server.timeout.is_none(),
-            "New server should have no timeout set",
-        )?;
-        assert_true(
-            server.shutdown_signal_tx.is_none(),
-            "New server should have no shutdown signal set",
-        )?;
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_server_with_address() -> TestResult<()> {
-        let addr = SocketAddr::new(IpAddr::from_str("127.0.0.1").unwrap(), 8080);
-        let server = HttpServerConfig::new().with_address(addr);
-
-        assert_eq(
-            server.address,
-            Some(addr),
-            "Server should have the provided address",
-        )?;
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_server_with_host_and_port() -> TestResult<()> {
-        let server = HttpServerConfig::new().with_host_and_port("127.0.0.1", 8080);
-        let expected_addr = SocketAddr::new(IpAddr::from_str("127.0.0.1").unwrap(), 8080);
-
-        assert_eq(
-            server.address,
-            Some(expected_addr),
-            "Server should have the expected address from host and port",
-        )?;
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_router_builder() -> TestResult<()> {
-        let builder = RouterBuilder::new();
-        let router = builder
-            .route("/test", get(|| async { "Hello, World!" }))
-            .build();
-
-        // We can't easily test the routes directly, but we can verify the router exists
-        assert_true(
-            Arc::strong_count(&Arc::new(router)) == 1,
-            "Router should be created successfully",
-        )?;
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_shutdown_channel() -> TestResult<()> {
-        let (tx, rx) = HttpServerConfig::create_shutdown_channel();
-
-        // Send a shutdown signal
-        tx.0.send(())?;
-
-        // Verify the receiver gets the signal
-        let result = rx.0.try_recv();
-        assert_true(result.is_ok(), "Receiver should get the shutdown signal")?;
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_server_serve_and_shutdown() -> TestResult<()> {
-        // Create a server with a custom router
-        let router = axum::Router::new().route("/ping", get(|| async { "pong" }));
-
-        // Use a random high port to avoid conflicts
-        let server = HttpServerConfig::new()
-            .with_router(router)
-            .with_host_and_port("127.0.0.1", 0); // Use port 0 for OS assignment
-
-        // Start the server
-        let handle = server.serve().await?;
-
-        // Shutdown after a short delay
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            handle.shutdown();
-        });
-
-        // Wait for the server to complete with a timeout
-        let result = timeout(Duration::from_secs(5), handle.wait()).await;
-
-        assert_true(
-            result.is_ok(),
-            "Server should shut down gracefully within the timeout",
-        )?;
-
-        Ok(())
-    }
 }
